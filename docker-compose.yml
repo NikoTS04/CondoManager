@@ -50,6 +50,39 @@ services:
     volumes:
       - minio_data:/data
 
+  # Backend API REST FastAPI (Python 3.12)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: condomanager-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-condo_user}:${POSTGRES_PASSWORD:-condo_secret}@db:5432/${POSTGRES_DB:-condomanager}
+      - REDIS_URL=redis://redis:6379/0
+      - S3_ENDPOINT_URL=http://minio:9000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Frontend Web Next.js 14 (App Router)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: condomanager-frontend
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
     driver: local
