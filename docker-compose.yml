@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Base de Datos Relacional PostgreSQL 16
+  db:
+    image: postgres:16-alpine
+    container_name: condomanager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-condo_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-condo_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-condomanager}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-condo_user} -d ${POSTGRES_DB:-condomanager}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Broker de Mensajes y Cache Redis 7
+  redis:
+    image: redis:7-alpine
+    container_name: condomanager-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Almacenamiento de Objetos S3 Compatible (MinIO) para Vouchers y Contratos
+  minio:
+    image: minio/minio:latest
+    container_name: condomanager-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-condo_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-condo_minio_secret}
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Consola Web
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local

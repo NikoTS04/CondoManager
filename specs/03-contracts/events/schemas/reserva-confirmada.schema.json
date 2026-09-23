@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReservaConfirmadaEvent",
+  "type": "object",
+  "required": ["event_id", "reserva_id", "area_id", "departamento_id", "fecha_reserva", "hora_inicio", "hora_fin"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "reserva_id": { "type": "string", "format": "uuid" },
+    "area_id": { "type": "string", "format": "uuid" },
+    "departamento_id": { "type": "string", "format": "uuid" },
+    "fecha_reserva": { "type": "string", "format": "date" },
+    "hora_inicio": { "type": "string" },
+    "hora_fin": { "type": "string" }
+  }
+}

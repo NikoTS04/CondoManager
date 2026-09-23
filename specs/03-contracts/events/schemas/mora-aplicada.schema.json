@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MoraAplicadaEvent",
+  "type": "object",
+  "required": ["event_id", "cuota_id", "departamento_id", "monto_mora", "total_exigible"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "cuota_id": { "type": "string", "format": "uuid" },
+    "departamento_id": { "type": "string", "format": "uuid" },
+    "monto_mora": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]{2})?$" },
+    "total_exigible": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]{2})?$" },
+    "bloqueo_reservas_activado": { "type": "boolean", "const": true }
+  }
+}

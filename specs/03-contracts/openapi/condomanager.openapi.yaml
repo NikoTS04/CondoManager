@@ -1,0 +1,228 @@
+openapi: 3.1.0
+info:
+  title: CondoManager API
+  description: API formal para el Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD).
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Servidor de desarrollo local
+paths:
+  /health:
+    get:
+      summary: Comprobación de estado del servicio
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+                  service: { type: string, example: "CondoManager Core API" }
+
+  /cuotas/emitir-lote:
+    post:
+      summary: Emisión masiva mensual de cuotas ordinarias
+      operationId: emitirLoteCuotas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirLoteCuotasRequest'
+      responses:
+        '201':
+          description: Lote de cuotas emitido exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmitirLoteCuotasResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '409':
+          description: Lote ya emitido previamente para este periodo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /pagos/reportar:
+    post:
+      summary: Reporte de comprobante de pago bancario por residente
+      operationId: reportarPago
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [departamento_id, banco, numero_operacion, fecha_operacion, monto]
+              properties:
+                departamento_id: { type: string, format: uuid }
+                banco: { type: string, enum: [YAPE, PLIN, BCP, INTERBANK, BBVA, SCOTIABANK] }
+                numero_operacion: { type: string, minLength: 4, maxLength: 30 }
+                fecha_operacion: { type: string, format: date }
+                monto: { type: string, pattern: '^[0-9]+(\\.[0-9]{2})?$' }
+      responses:
+        '202':
+          description: Comprobante recibido y encolado para revisión
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComprobanteRecibidoResponse'
+        '409':
+          description: Comprobante ya registrado o conciliado previamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /pagos/{id}/conciliar:
+    post:
+      summary: Aprobación o rechazo de comprobante por la Junta Directiva
+      operationId: conciliarPago
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConciliarPagoRequest'
+      responses:
+        '200':
+          description: Conciliación procesada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConciliacionResultResponse'
+
+  /reservas:
+    get:
+      summary: Consultar reservas y disponibilidad de áreas comunes
+      operationId: listarReservas
+      parameters:
+        - name: area_id
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: fecha
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Lista de reservas existentes para el área y fecha
+    post:
+      summary: Solicitud de reserva de área común (con validación de solvencia)
+      operationId: crearReserva
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearReservaRequest'
+      responses:
+        '201':
+          description: Reserva confirmada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaConfirmadaResponse'
+        '403':
+          description: Denegado por mora activa en cuotas vencidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Horario solicitado ocupado por otra reserva
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    EmitirLoteCuotasRequest:
+      type: object
+      required: [condominio_id, periodo, presupuesto_total, fecha_vencimiento]
+      properties:
+        condominio_id: { type: string, format: uuid }
+        periodo: { type: string, example: "2026-10" }
+        presupuesto_total: { type: string, example: "20000.00" }
+        fecha_vencimiento: { type: string, format: date, example: "2026-10-20" }
+
+    EmitirLoteCuotasResponse:
+      type: object
+      properties:
+        lote_id: { type: string, format: uuid }
+        periodo: { type: string }
+        total_cuotas_emitidas: { type: integer }
+        monto_total_facturado: { type: string }
+        cuotas_cubiertas_saldo_favor: { type: integer }
+
+    ComprobanteRecibidoResponse:
+      type: object
+      properties:
+        comprobante_id: { type: string, format: uuid }
+        estado: { type: string, example: "EN_REVISION" }
+        mensaje: { type: string }
+
+    ConciliarPagoRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [APROBADO, RECHAZADO, OBSERVADO] }
+        motivo_rechazo: { type: string, nullable: true }
+        notas_internas: { type: string, nullable: true }
+
+    ConciliacionResultResponse:
+      type: object
+      properties:
+        comprobante_id: { type: string, format: uuid }
+        estado_final: { type: string, example: "APROBADO" }
+        monto_imputado: { type: string }
+        nuevo_saldo_departamento: { type: string }
+
+    CrearReservaRequest:
+      type: object
+      required: [condominio_id, area_id, departamento_id, fecha_reserva, hora_inicio, hora_fin]
+      properties:
+        condominio_id: { type: string, format: uuid }
+        area_id: { type: string, format: uuid }
+        departamento_id: { type: string, format: uuid }
+        fecha_reserva: { type: string, format: date }
+        hora_inicio: { type: string, example: "19:00" }
+        hora_fin: { type: string, example: "22:00" }
+
+    ReservaConfirmadaResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        estado: { type: string, example: "CONFIRMADA" }
+        area_id: { type: string, format: uuid }
+        fecha_reserva: { type: string, format: date }
+        hora_inicio: { type: string }
+        hora_fin: { type: string }
+
+    ErrorResponse:
+      type: object
+      required: [error_code, mensaje]
+      properties:
+        error_code: { type: string, example: "DEUDA_MORA_ACTIVA" }
+        mensaje: { type: string, example: "No es posible reservar: Su departamento mantiene cuotas vencidas pendientes." }
+        detalles: { type: object }
+
+  responses:
+    Error400:
+      description: Solicitud mal formada o parámetros inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
