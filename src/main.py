@@ -21,10 +21,12 @@ app.add_middleware(
 from src.modules.cuotas.router import router as cuotas_router
 from src.modules.pagos.router import router as pagos_router
 from src.modules.reservas.router import router as reservas_router
+from src.modules.notificaciones.router import router as notificaciones_router
 
 app.include_router(cuotas_router, prefix="/api/v1")
 app.include_router(pagos_router, prefix="/api/v1")
 app.include_router(reservas_router, prefix="/api/v1")
+app.include_router(notificaciones_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["Sistema"])

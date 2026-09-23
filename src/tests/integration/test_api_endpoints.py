@@ -120,3 +120,53 @@ def test_api_reservas_flujo_completo():
     )
     assert res_cancelar.status_code == 200
     assert res_cancelar.json()["estado"] == "CANCELADA"
+
+
+@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+def test_api_notificaciones_endpoints():
+    # 1. Despacho individual
+    payload_despacho = {
+        "condominio_id": "vb3-condo",
+        "departamento_id": "105",
+        "tipo_evento": "NOTIF_PAGO_CONCILIADO",
+        "canal": "EMAIL",
+        "destinatario": "residente105@gmail.com",
+        "contexto": {
+            "nombre": "María Flores",
+            "dpto": "105",
+            "monto_abonado": "150.00",
+            "saldo_restante": "0.00",
+        },
+    }
+    res_despacho = client.post("/api/v1/notificaciones/despachar", json=payload_despacho)
+    assert res_despacho.status_code == 201
+    log_id = res_despacho.json()["id"]
+
+    # 2. Consulta de logs
+    res_logs = client.get("/api/v1/notificaciones/logs?departamento_id=105")
+    assert res_logs.status_code == 200
+    logs = res_logs.json()
+    assert len(logs) >= 1
+    assert logs[0]["id"] == log_id
+
+    # 3. Reenvío manual
+    res_reenviar = client.post(
+        f"/api/v1/notificaciones/reenviar/{log_id}",
+        json={"nuevo_destinatario": "nuevo_residente105@gmail.com"},
+    )
+    assert res_reenviar.status_code == 200
+    assert res_reenviar.json()["destinatario"] == "nuevo_residente105@gmail.com"
+
+    # 4. Comunicado masivo
+    payload_masivo = {
+        "condominio_id": "vb3-condo",
+        "titulo": "Asamblea General de Propietarios",
+        "mensaje": "Se convoca a la asamblea anual ordinaria para el próximo mes.",
+        "canal": "EMAIL",
+        "remitente": "Junta Directiva",
+    }
+    res_masivo = client.post("/api/v1/notificaciones/comunicado-masivo", json=payload_masivo)
+    assert res_masivo.status_code == 202
+    data_masivo = res_masivo.json()
+    assert data_masivo["total_destinatarios"] == 139
+    assert data_masivo["notificaciones_generadas"] == 139
