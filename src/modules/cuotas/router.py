@@ -1,6 +1,7 @@
 """Router FastAPI para el Dominio de Cuotas (Anderson - PROC-01)."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from src.core.security import require_role
 from src.modules.cuotas.schemas import (
     EmitirLoteCuotasRequest,
     EmitirLoteCuotasResponse,
@@ -19,6 +20,7 @@ LOTES_EMITIDOS = set()
     response_model=EmitirLoteCuotasResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Emisión masiva mensual de cuotas ordinarias",
+    dependencies=[Depends(require_role(["ADMIN_JUNTA", "SUPERADMIN"]))],
 )
 async def emitir_lote_cuotas(request: EmitirLoteCuotasRequest):
     """Calcula y emite las cuotas de mantenimiento para las unidades activas del condominio."""

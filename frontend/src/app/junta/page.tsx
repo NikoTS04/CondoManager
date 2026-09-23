@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 import {
   ComprobantePago,
   Departamento,
@@ -25,9 +27,16 @@ import {
   FileCheck2,
   Bell,
   RefreshCw,
+  ShieldAlert,
+  Search,
+  Lock,
 } from "lucide-react";
 
 export default function JuntaPage() {
+  const { user } = useAuth();
+  const isAuditor = user?.rol === "AUDITOR";
+  const isForbidden = user && !["ADMIN_JUNTA", "SUPERADMIN", "AUDITOR"].includes(user.rol);
+
   const [activeTab, setActiveTab] = useState<"conciliacion" | "cuotas" | "moras" | "notificaciones">("conciliacion");
 
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
@@ -117,8 +126,43 @@ export default function JuntaPage() {
 
   const enRevisionCount = comprobantes.filter((c) => c.estado === "EN_REVISION").length;
 
+  if (isForbidden) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center text-center p-8 space-y-4 bg-white rounded-2xl border border-slate-200 shadow-sm my-8">
+        <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center">
+          <ShieldAlert className="w-10 h-10" />
+        </div>
+        <div className="max-w-md space-y-2">
+          <h1 className="text-2xl font-bold text-slate-900">Acceso Restringido (403 Forbidden)</h1>
+          <p className="text-sm text-slate-600">
+            El panel administrativo está reservado para miembros de la Junta Directiva y Auditores Fiscales. Su rol actual es <strong>{user?.rol || "NO_AUTENTICADO"}</strong>.
+          </p>
+        </div>
+        <Link
+          href={`/residente?dpto=${user?.departamentos?.[0] || "102"}`}
+          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl transition shadow-sm"
+        >
+          Ir a mi Portal de Residente →
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Banner Informativo para el Auditor */}
+      {isAuditor && (
+        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-start sm:items-center gap-3 text-purple-950 shadow-sm">
+          <Search className="w-6 h-6 text-purple-600 flex-shrink-0 mt-0.5 sm:mt-0" />
+          <div className="text-xs space-y-0.5">
+            <p className="font-bold text-sm text-purple-900">Modo Auditoría Fiscal Activo (Solo Lectura)</p>
+            <p className="text-purple-700">
+              Conforme a la especificación RBAC (PROC-05), usted cuenta con inspección total e irrestricta de comprobantes, cuotas y bitácoras inmutables con hash SHA-256. Las acciones de mutación (aprobación, emisión y cálculo de moras) están reservadas para los miembros operativos de la Junta Directiva.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Encabezado del Panel de Administración */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -277,7 +321,11 @@ export default function JuntaPage() {
                       </span>
                     </td>
                     <td className="p-3 text-right">
-                      {comp.estado === "EN_REVISION" ? (
+                      {isAuditor ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-100 px-2 py-1 rounded-lg">
+                          <Search className="w-3 h-3" /> Solo Lectura
+                        </span>
+                      ) : comp.estado === "EN_REVISION" ? (
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleConciliar(comp.id, "APROBADO")}
@@ -369,13 +417,20 @@ export default function JuntaPage() {
                 </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={isEmitting}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors shadow-sm"
-              >
-                {isEmitting ? "Emitiendo Lote..." : "Emitir Lote Masivo (139 Dptos)"}
-              </button>
+              {isAuditor ? (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800 text-center font-semibold flex items-center justify-center gap-2">
+                  <Lock className="w-4 h-4 text-purple-600" />
+                  <span>Emisión reservada para la Junta Directiva (Solo Lectura)</span>
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isEmitting}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors shadow-sm"
+                >
+                  {isEmitting ? "Emitiendo Lote..." : "Emitir Lote Masivo (139 Dptos)"}
+                </button>
+              )}
             </form>
           </div>
 
@@ -440,13 +495,20 @@ export default function JuntaPage() {
                 Aplica la penalidad fija de S/ 20.00 a cuotas que superen los 2 días de gracia.
               </p>
             </div>
-            <button
-              onClick={handleEvaluarMoras}
-              className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition-colors shadow-sm flex items-center gap-2"
-            >
-              <Clock className="w-4 h-4" />
-              <span>Ejecutar Motor de Moras Ahora</span>
-            </button>
+            {isAuditor ? (
+              <span className="px-4 py-2.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl font-bold text-xs flex items-center gap-2">
+                <Search className="w-4 h-4 text-purple-600" />
+                <span>Auditoría de Moras (Solo Lectura)</span>
+              </span>
+            ) : (
+              <button
+                onClick={handleEvaluarMoras}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition-colors shadow-sm flex items-center gap-2"
+              >
+                <Clock className="w-4 h-4" />
+                <span>Ejecutar Motor de Moras Ahora</span>
+              </button>
+            )}
           </div>
 
           {morasFeedback && (
@@ -520,12 +582,19 @@ export default function JuntaPage() {
                 />
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors shadow-sm"
-              >
-                Despachar Comunicado Masivo
-              </button>
+              {isAuditor ? (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800 text-center font-semibold flex items-center justify-center gap-2">
+                  <Lock className="w-4 h-4 text-purple-600" />
+                  <span>Emisión de comunicados reservada para Junta Directiva</span>
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors shadow-sm"
+                >
+                  Despachar Comunicado Masivo
+                </button>
+              )}
             </form>
           </div>
 

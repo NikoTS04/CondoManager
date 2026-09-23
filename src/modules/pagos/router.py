@@ -3,7 +3,8 @@
 from datetime import date
 from typing import Dict
 import uuid
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from src.core.security import require_role
 from src.modules.pagos.schemas import (
     ComprobanteRecibidoResponse,
     ConciliacionResultResponse,
@@ -49,6 +50,7 @@ async def reportar_pago(request: ReportarPagoRequest):
     response_model=ConciliacionResultResponse,
     status_code=status.HTTP_200_OK,
     summary="Aprobación o rechazo de comprobante por la Junta Directiva",
+    dependencies=[Depends(require_role(["ADMIN_JUNTA", "SUPERADMIN"]))],
 )
 async def conciliar_pago(comprobante_id: uuid.UUID, request: ConciliarPagoRequest):
     """Ejecuta la conciliación bancaria y la imputación contable en orden de prelación."""

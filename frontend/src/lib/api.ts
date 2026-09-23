@@ -65,6 +65,19 @@ export interface NotificacionLog {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("condo_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  return headers;
+}
+
 // ============================================================================
 // Datos Semilla en Memoria (Villa Bonita 3 - 139 Departamentos)
 // ============================================================================
@@ -348,7 +361,7 @@ export async function conciliarComprobante(
   try {
     const res = await fetch(`${API_BASE}/pagos/${comprobanteId}/conciliar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ decision, motivo_rechazo }),
     });
     if (res.ok) return { ok: true };
@@ -374,7 +387,7 @@ export async function emitirLoteCuotas(periodo: string, presupuestoTotal: string
   try {
     const res = await fetch(`${API_BASE}/cuotas/emitir-lote`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         condominio_id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         periodo,
