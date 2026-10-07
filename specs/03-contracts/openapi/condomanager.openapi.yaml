@@ -102,6 +102,84 @@ paths:
               schema:
                 $ref: '#/components/schemas/ConciliacionResultResponse'
 
+  /usuario/crear:
+    post:
+      summary: Alta de usuario en el directorio (PROC-05)
+      operationId: crearUsuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearUsuarioRequest'
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioDTO'
+        '409':
+          description: Correo ya registrado en el directorio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /usuario/roles:
+    post:
+      summary: Asignación de rol RBAC a un usuario dentro de un condominio
+      operationId: asignarRolUsuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AsignarRolRequest'
+      responses:
+        '201':
+          description: Rol asignado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioRolDTO'
+        '404':
+          description: Usuario o condominio no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Rol ya asignado al usuario en este condominio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /condominio/crear:
+    post:
+      summary: Alta de condominio con su configuración de mora
+      operationId: crearCondominio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearCondominioRequest'
+      responses:
+        '201':
+          description: Condominio creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CondominioDTO'
+        '422':
+          description: Configuración de mora incoherente con la regla elegida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /reservas:
     get:
       summary: Consultar reservas y disponibilidad de áreas comunes
@@ -210,6 +288,75 @@ components:
         fecha_reserva: { type: string, format: date }
         hora_inicio: { type: string }
         hora_fin: { type: string }
+
+    CrearUsuarioRequest:
+      type: object
+      required: [email, password, nombre, apellido, documento_identidad]
+      properties:
+        email: { type: string, maxLength: 120, example: "residente101@gmail.com" }
+        password: { type: string, minLength: 8, maxLength: 128, description: "Se persiste únicamente como hash irreversible." }
+        nombre: { type: string, minLength: 2, maxLength: 80 }
+        apellido: { type: string, minLength: 2, maxLength: 80 }
+        documento_identidad: { type: string, minLength: 6, maxLength: 20, description: "DNI o Carnet de Extranjería (PROC-05)." }
+        telefono: { type: string, maxLength: 20, nullable: true }
+
+    UsuarioDTO:
+      type: object
+      required: [id, email, nombre, apellido, documento_identidad, esta_activo, creado_en]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        nombre: { type: string }
+        apellido: { type: string }
+        telefono: { type: string, nullable: true }
+        documento_identidad: { type: string }
+        esta_activo: { type: boolean, example: true }
+        creado_en: { type: string, format: date-time, example: "2026-10-07T06:00:00Z" }
+
+    AsignarRolRequest:
+      type: object
+      required: [usuario_id, condominio_id, rol]
+      properties:
+        usuario_id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        rol: { type: string, enum: [SUPERADMIN, ADMIN_JUNTA, AUDITOR, RESIDENTE], example: "RESIDENTE" }
+
+    UsuarioRolDTO:
+      type: object
+      required: [id, usuario_id, condominio_id, rol]
+      properties:
+        id: { type: string, format: uuid }
+        usuario_id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        rol: { type: string, example: "RESIDENTE" }
+
+    CrearCondominioRequest:
+      type: object
+      required: [nombre, direccion]
+      properties:
+        nombre: { type: string, minLength: 3, maxLength: 150, example: "Villa Bonita 3" }
+        direccion: { type: string, minLength: 5, maxLength: 300 }
+        moneda: { type: string, enum: [PEN, USD], example: "PEN" }
+        regla_mora_tipo: { type: string, enum: [MONTO_FIJO, PORCENTAJE_SALDO], example: "MONTO_FIJO" }
+        monto_mora_fijo: { type: string, pattern: '^[0-9]+(\.[0-9]{2})?$', example: "20.00", nullable: true }
+        tasa_mora_porcentaje: { type: string, pattern: '^[0-9]+(\.[0-9]{4})?$', example: "0.0000", nullable: true }
+        dias_corte: { type: integer, minimum: 1, maximum: 28, example: 20 }
+        dias_gracia: { type: integer, minimum: 0, example: 2 }
+
+    CondominioDTO:
+      type: object
+      required: [id, nombre, direccion, moneda, regla_mora_tipo, dias_corte, dias_gracia, creado_en]
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string }
+        direccion: { type: string }
+        moneda: { type: string, example: "PEN" }
+        regla_mora_tipo: { type: string, example: "MONTO_FIJO" }
+        monto_mora_fijo: { type: string, nullable: true, example: "20.00" }
+        tasa_mora_porcentaje: { type: string, nullable: true, example: "0.0000" }
+        dias_corte: { type: integer }
+        dias_gracia: { type: integer }
+        creado_en: { type: string, format: date-time }
 
     ErrorResponse:
       type: object

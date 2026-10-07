@@ -118,3 +118,88 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
 ### 2.4 Módulo de Notificaciones (Alejandro)
 - **`POST /api/v1/notificaciones/despachar`**
   - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
+
+### 2.5 Módulo de Usuarios y RBAC (Junta Directiva / PROC-05)
+- **`POST /api/v1/usuario/crear`**
+  - *Descripción:* Da de alta un usuario en el directorio validando la unicidad del correo y almacenando la contraseña únicamente como hash irreversible.
+  - *Request Body:*
+    ```json
+    {
+      "email": "residente101@gmail.com",
+      "password": "claveSegura123",
+      "nombre": "María",
+      "apellido": "Flores",
+      "documento_identidad": "74125896",
+      "telefono": "987654321"
+    }
+    ```
+  - *Response (201 Created):*
+    ```json
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "email": "residente101@gmail.com",
+      "nombre": "María",
+      "apellido": "Flores",
+      "telefono": "987654321",
+      "documento_identidad": "74125896",
+      "esta_activo": true,
+      "creado_en": "2026-10-07T06:00:00Z"
+    }
+    ```
+  - *Response (409 Conflict):* `EMAIL_YA_REGISTRADO` cuando el correo ya existe en el directorio.
+  - *Nota:* Nunca se expone `password_hash` en la respuesta.
+
+- **`POST /api/v1/usuario/roles`**
+  - *Descripción:* Asigna un rol RBAC contextual (`SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`) a un usuario dentro de un condominio.
+  - *Request Body:*
+    ```json
+    {
+      "usuario_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa7",
+      "rol": "RESIDENTE"
+    }
+    ```
+  - *Response (201 Created):*
+    ```json
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa8",
+      "usuario_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa7",
+      "rol": "RESIDENTE"
+    }
+    ```
+  - *Response (404 Not Found):* `USUARIO_NO_ENCONTRADO` o `CONDOMINIO_NO_ENCONTRADO`.
+  - *Response (409 Conflict):* `ROL_YA_ASIGNADO` por la unicidad `uq_usuario_condo_rol`.
+
+### 2.6 Módulo de Condominios
+- **`POST /api/v1/condominio/crear`**
+  - *Descripción:* Da de alta un condominio con su parametrización de mora (regla, monto/tasa, día de corte y días de gracia) usando precisión decimal estricta.
+  - *Request Body:*
+    ```json
+    {
+      "nombre": "Villa Bonita 3",
+      "direccion": "Av. Los Rosales 245, Lima",
+      "moneda": "PEN",
+      "regla_mora_tipo": "MONTO_FIJO",
+      "monto_mora_fijo": "20.00",
+      "tasa_mora_porcentaje": "0.0000",
+      "dias_corte": 20,
+      "dias_gracia": 2
+    }
+    ```
+  - *Response (201 Created):*
+    ```json
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa9",
+      "nombre": "Villa Bonita 3",
+      "direccion": "Av. Los Rosales 245, Lima",
+      "moneda": "PEN",
+      "regla_mora_tipo": "MONTO_FIJO",
+      "monto_mora_fijo": "20.00",
+      "tasa_mora_porcentaje": "0.0000",
+      "dias_corte": 20,
+      "dias_gracia": 2,
+      "creado_en": "2026-10-07T06:00:00Z"
+    }
+    ```
+  - *Response (422 Unprocessable Entity):* `CONFIGURACION_MORA_INVALIDA` cuando la regla de mora no es coherente con sus parámetros (ej. `MONTO_FIJO` sin monto mayor a 0.00).
