@@ -91,3 +91,50 @@ class CondominioDTO(BaseModel):
     dias_corte: int
     dias_gracia: int
     creado_en: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class EstadoFinancieroEnum(str, Enum):
+    AL_DIA = "AL_DIA"
+    OBSERVADO = "OBSERVADO"
+    EN_MORA = "EN_MORA"
+
+
+class CrearDepartamentoRequest(BaseModel):
+    condominio_id: uuid.UUID
+    numero: str = Field(
+        ..., min_length=1, max_length=20, json_schema_extra={"example": "101"}
+    )
+    piso: int = Field(..., ge=1, le=200, description="Piso o nivel de la unidad")
+    coeficiente_participacion: Decimal = Field(
+        ...,
+        gt=Decimal("0.0000"),
+        le=Decimal("9999.9999"),
+        max_digits=7,
+        decimal_places=4,
+        description="Alícuota de participación sobre el 100% del condominio",
+        json_schema_extra={"example": "0.6800"},
+    )
+    saldo_a_favor: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0.00"),
+        le=Decimal("9999999999.99"),
+        max_digits=12,
+        decimal_places=2,
+        description="Fondo crediticio a favor del departamento",
+    )
+    estado_financiero: EstadoFinancieroEnum = Field(
+        default=EstadoFinancieroEnum.AL_DIA,
+        description="Estado de solvencia que controla el derecho a reservar áreas comunes.",
+    )
+
+
+class DepartamentoDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    condominio_id: uuid.UUID
+    numero: str
+    piso: int
+    coeficiente_participacion: Decimal
+    saldo_a_favor: Decimal
+    estado_financiero: EstadoFinancieroEnum

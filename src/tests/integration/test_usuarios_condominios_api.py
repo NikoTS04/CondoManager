@@ -56,6 +56,9 @@ class SesiónFake:
             if hasattr(objeto, "creado_en") and getattr(objeto, "creado_en", None) is None:
                 objeto.creado_en = datetime.now(UTC)
 
+    async def commit(self):
+        """Los endpoints confirman la transacción antes de responder (no-op en la sesión fake)."""
+
     async def execute(self, stmt):
         entidad = stmt.column_descriptions[0]["entity"]
         if entidad is Usuario:

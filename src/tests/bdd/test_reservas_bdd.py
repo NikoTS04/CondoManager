@@ -107,6 +107,53 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
     @then(parsers.parse('se envía un correo de confirmación con las normas de uso del espacio'))
     def confirmacion_notificacion(context):
         pass
+
+    @given(parsers.parse('que la "{area}" está disponible para el "{fecha}" de "{hora_inicio}" a "{hora_fin}"'))
+    def area_libre(context, area, fecha, hora_inicio, hora_fin):
+        context["area"] = area
+        context["fecha"] = date.fromisoformat(fecha)
+        h_ini, m_ini = map(int, hora_inicio.split(":"))
+        h_fin, m_fin = map(int, hora_fin.split(":"))
+        context["hora_inicio"] = time(h_ini, m_ini)
+        context["hora_fin"] = time(h_fin, m_fin)
+        context["deuda_mora"] = Decimal("0.00")
+        context["disponible"] = True
+
+    @when("dos residentes solventes envían solicitudes de reserva concurrentes sobre el mismo espacio y horario")
+    def solicitudes_concurrentes(context):
+        solicitud = SolicitudReservaDTO(
+            condominio_id="vb3-condo",
+            departamento_id="201",
+            usuario_id="usr-test",
+            area_id=context["area"],
+            fecha_reserva=context["fecha"],
+            hora_inicio=context["hora_inicio"],
+            hora_fin=context["hora_fin"],
+        )
+
+        # La primera transacción gana la franja; la segunda ya la encuentra ocupada.
+        context["primera"] = GestorReservasService.validar_y_procesar_reserva(
+            solicitud=solicitud,
+            deuda_vencida_departamento=context["deuda_mora"],
+            esta_horario_disponible=context["disponible"],
+        )
+        context["segunda"] = GestorReservasService.validar_y_procesar_reserva(
+            solicitud=solicitud.model_copy(update={"departamento_id": "304"}),
+            deuda_vencida_departamento=Decimal("0.00"),
+            esta_horario_disponible=False,
+        )
+        context["resultado"] = context["primera"]
+
+    @then("la primera solicitud en confirmar la transacción es aprobada")
+    def primera_aprobada(context):
+        assert context["primera"].es_exitosa is True
+        assert context["primera"].reserva_id is not None
+
+    @then(parsers.parse('la segunda solicitud es rechazada de forma controlada con error "{error_code}"'))
+    def segunda_rechazada(context, error_code):
+        assert error_code == "HORARIO_NO_DISPONIBLE"
+        assert context["segunda"].es_exitosa is False
+        assert context["segunda"].bloqueado_por_mora is False
 else:
     def test_bdd_skipped_if_no_pytest_bdd():
         """Aviso informativo si pytest-bdd no está instalado en el entorno actual."""

@@ -36,3 +36,32 @@ Cuando el residente del dpto 201 y el residente del dpto 304 envían la solicitu
 Entonces el sistema otorga la reserva a la primera solicitud procesada por la transacción de base de datos
 Y la segunda solicitud es rechazada de manera controlada con el mensaje "El horario seleccionado acaba de ser reservado por otro residente".
 ```
+
+### Escenario 5: Alta de un área común en el catálogo
+```gherkin
+Dado que un administrador necesita publicar un nuevo espacio del condominio
+Cuando envía el alta del área "Zona de Parrilla 2" con aforo 10 y costo "25.00" al condominio "Villa Bonita 3"
+Entonces el sistema responde "201 Created" con el identificador del área
+Y el catálogo "GET /api/v1/areas" incluye "Zona de Parrilla 2" como área activa
+```
+
+### Escenario 6: Rechazo de áreas duplicadas y departamentos duplicados
+```gherkin
+Dado que el área "Salón Social" ya existe en el condominio
+Cuando el administrador intenta dar de alta otra área con el mismo nombre en ese condominio
+Entonces el sistema responde "409 Conflict" con el código de error "AREA_DUPLICADA"
+
+Dado que el departamento "302" ya existe en el condominio
+Cuando el administrador intenta dar de alta otro departamento con el número "302" en ese mismo condominio
+Entonces el sistema responde "409 Conflict" con el código de error "DEPARTAMENTO_DUPLICADO"
+```
+
+### Escenario 7: Los datos de áreas, departamentos y reservas persisten en la base de datos
+```gherkin
+Dado que el administrador dio de alta el área "Parrilla 1" y el departamento "402" en estado "EN_MORA"
+Y un residente registró una reserva confirmada en el área
+Cuando el servicio API se reinicia
+Entonces "GET /api/v1/areas" sigue listando el área "Parrilla 1"
+Y "GET /api/v1/reservas" sigue listando la reserva confirmada
+Y una nueva reserva del departamento "402" responde "403 Forbidden" con "DEUDA_MORA_ACTIVA"
+```

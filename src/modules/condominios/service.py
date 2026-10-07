@@ -6,13 +6,16 @@ seleccionada y los parámetros asociados, aplicando precisión decimal estricta 
 
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.audit import AuditoriaPayload
-from src.modules.condominios.models import Condominio
+from src.modules.condominios.models import Condominio, Departamento
 from src.modules.condominios.schemas import (
     CondominioDTO,
     CrearCondominioRequest,
+    CrearDepartamentoRequest,
+    DepartamentoDTO,
     ReglaMoraEnum,
 )
 from src.shared.decimal_types import redondear_moneda
@@ -22,6 +25,24 @@ class ConfiguracionMoraInvalidaException(Exception):
     def __init__(self, mensaje: str):
         super().__init__(mensaje)
         self.mensaje = mensaje
+
+
+class CondominioNoEncontradoException(Exception):
+    def __init__(self, condominio_id: str):
+        mensaje = f"El condominio '{condominio_id}' no existe o no fue encontrado."
+        super().__init__(mensaje)
+        self.error_code = "CONDOMINIO_NO_ENCONTRADO"
+        self.mensaje = mensaje
+        self.condominio_id = condominio_id
+
+
+class DepartamentoDuplicadoException(Exception):
+    def __init__(self, numero: str):
+        mensaje = f"El departamento '{numero}' ya está registrado en este condominio."
+        super().__init__(mensaje)
+        self.error_code = "DEPARTAMENTO_DUPLICADO"
+        self.mensaje = mensaje
+        self.numero = numero
 
 
 class CondominiosService:
@@ -94,3 +115,59 @@ class CondominiosService:
         )
 
         return condominio_dto, audit_log
+
+    @staticmethod
+    async def crear_departamento(
+        session: AsyncSession, request: CrearDepartamentoRequest
+    ) -> tuple[DepartamentoDTO, AuditoriaPayload]:
+        """Da de alta una unidad inmobiliaria validando el condominio y la unicidad del número."""
+        condominio_existe = await session.scalar(
+            select(Condominio.id).where(Condominio.id == request.condominio_id)
+        )
+        if condominio_existe is None:
+            raise CondominioNoEncontradoException(str(request.condominio_id))
+
+        numero_normalizado = request.numero.strip()
+        departamento_duplicado = await session.scalar(
+            select(Departamento.id).where(
+                Departamento.condominio_id == request.condominio_id,
+                Departamento.numero == numero_normalizado,
+            )
+        )
+        if departamento_duplicado is not None:
+            raise DepartamentoDuplicadoException(numero_normalizado)
+
+        departamento = Departamento(
+            condominio_id=request.condominio_id,
+            numero=numero_normalizado,
+            piso=request.piso,
+            coeficiente_participacion=request.coeficiente_participacion,
+            saldo_a_favor=redondear_moneda(request.saldo_a_favor),
+            estado_financiero=request.estado_financiero.value,
+        )
+        session.add(departamento)
+        await session.flush()
+
+        departamento_dto = DepartamentoDTO.model_validate(departamento)
+
+        audit_alta = AuditoriaPayload(
+            condominio_id=str(departamento_dto.condominio_id),
+            departamento_id=str(departamento_dto.id),
+            accion_ejecutada="ALTA_DEPARTAMENTO",
+            motivo=(
+                f"Alta del departamento '{departamento_dto.numero}' en piso {departamento_dto.piso} "
+                f"con alícuota {departamento_dto.coeficiente_participacion}."
+            ),
+            resultado="EXITOSO",
+            actor_tipo="ADMINISTRADOR",
+            estado_anterior={"departamento_id": None},
+            estado_posterior={
+                "departamento_id": str(departamento_dto.id),
+                "numero": departamento_dto.numero,
+                "piso": departamento_dto.piso,
+                "coeficiente_participacion": str(departamento_dto.coeficiente_participacion),
+                "estado_financiero": departamento_dto.estado_financiero.value,
+            },
+        )
+
+        return departamento_dto, audit_alta

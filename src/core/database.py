@@ -7,14 +7,19 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from src.core.config import settings
 
-# Engine asíncrono para PostgreSQL / asyncpg (o fallback SQLite para tests)
+# Engine asíncrono para PostgreSQL / asyncpg (o fallback SQLite para tests).
+# En TESTING se usa NullPool: cada sesión abre y cierra su propia conexión dentro del
+# mismo event loop, evitando que una conexión agregada al pool quede ligada al loop de
+# una petición anterior (TestClient crea un portal/event loop por request).
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
     pool_pre_ping=True,
+    poolclass=NullPool if settings.TESTING else None,
 )
 
 # Fábrica de sesiones asíncronas

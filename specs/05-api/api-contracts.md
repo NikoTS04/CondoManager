@@ -78,35 +78,91 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
   - *Response (200 OK):* Retorna la liquidación e imputación a cuotas y el nuevo saldo del departamento.
 
 ### 2.3 Módulo de Reservas (Brandon)
-- **`POST /api/v1/reservas`**
-  - *Descripción:* El residente solicita el uso de un área común.
+Todos los datos de este módulo se persisten en PostgreSQL (`areas_comunes`, `departamentos`, `reservas`).
+
+- **`GET /api/v1/areas`**
+  - *Descripción:* Catálogo de áreas comunes activas del condominio.
+  - *Response (200 OK):*
+    ```json
+    [
+      {
+        "id": "11111111-1111-1111-1111-111111111101",
+        "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "nombre": "Zona de Parrilla 1",
+        "descripcion": "Terraza piso 15",
+        "aforo_maximo": 12,
+        "costo_reserva": "25.00",
+        "esta_activa": true
+      }
+    ]
+    ```
+  - *Nota:* Retorna `[]` si todavía no existen áreas dadas de alta en el condominio.
+
+- **`POST /api/v1/areas/crear`**
+  - *Descripción:* Alta de un área común en el catálogo (valida condominio existente y nombre único por condominio).
   - *Request Body:*
     ```json
     {
-      "area_id": "parrilla-01",
-      "departamento_id": "dpto-302",
-      "fecha": "2026-10-25",
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "nombre": "Zona de Parrilla 1",
+      "descripcion": "Terraza piso 15 con parrilla de acero inoxidable",
+      "aforo_maximo": 12,
+      "costo_reserva": "25.00",
+      "esta_activa": true
+    }
+    ```
+  - *Response (201 Created):* El objeto `AreaComunDTO` recién creado.
+  - *Response (404 Not Found):* `CONDOMINIO_NO_ENCONTRADO`.
+  - *Response (409 Conflict):* `AREA_DUPLICADA` cuando el nombre ya existe en ese condominio.
+  - *Response (422 Unprocessable Entity):* validaciones de `aforo_maximo > 0`, `costo_reserva >= 0`, longitud de `nombre`.
+
+- **`GET /api/v1/reservas`**
+  - *Descripción:* Horarios ocupados de un área común (solo reservas `CONFIRMADA`).
+  - *Query params:* `area_id` (UUID, obligatorio), `fecha` (`YYYY-MM-DD`, opcional).
+  - *Response (200 OK):* Lista de `ReservaResponseDTO`.
+  - *Response (404 Not Found):* `AREA_NO_ENCONTRADA`.
+
+- **`POST /api/v1/reservas`**
+  - *Descripción:* El residente solicita el uso de un área común. Se bloquea la fila del área (`FOR UPDATE`), se valida la solvencia y la disponibilidad.
+  - *Request Body:*
+    ```json
+    {
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "area_id": "11111111-1111-1111-1111-111111111101",
+      "departamento_id": "302",
+      "fecha_reserva": "2026-10-25",
       "hora_inicio": "19:00",
       "hora_fin": "22:00"
     }
     ```
+    - `condominio_id`: informativo (la fuente de verdad es el condominio del área).
+    - `departamento_id`: UUID **o** número de departamento (ej. `"302"`).
   - *Response (201 Created) - Residente Solvente:*
     ```json
     {
-      "reserva_id": "res-9988-aabb",
+      "id": "e4f5a6b7-8c9d-4e0f-1a2b-3c4d5e6f7a8b",
       "estado": "CONFIRMADA",
-      "area": "Zona de Parrilla 1",
-      "fecha": "2026-10-25",
-      "horario": "19:00 - 22:00"
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "area_id": "11111111-1111-1111-1111-111111111101",
+      "area_nombre": "Zona de Parrilla 1",
+      "departamento_id": "0b1e2c3d-4f5a-6b7c-8d9e-0f1a2b3c4d5e",
+      "fecha_reserva": "2026-10-25",
+      "hora_inicio": "19:00:00",
+      "hora_fin": "22:00:00",
+      "costo_reserva": "25.00",
+      "creado_en": "2026-10-07T20:30:00+00:00"
     }
     ```
   - *Response (403 Forbidden) - Residente con Deuda en Mora:*
     ```json
     {
       "error_code": "DEUDA_MORA_ACTIVA",
-      "mensaje": "No es posible reservar: Su departamento mantiene cuotas vencidas pendientes."
+      "mensaje": "No es posible reservar: El departamento '...' mantiene cuotas vencidas pendientes en mora.",
+      "detalles": {"departamento_id": "...", "saldo_vencido": "170.00"}
     }
     ```
+    El bloqueo se decide con `departamentos.estado_financiero = 'EN_MORA'`.
+  - *Response (404 Not Found):* `AREA_NO_ENCONTRADA` o `DEPARTAMENTO_NO_ENCONTRADO`.
   - *Response (409 Conflict) - Horario Ocupado:*
     ```json
     {
@@ -114,6 +170,26 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
       "mensaje": "El área común ya se encuentra reservada en el horario solicitado."
     }
     ```
+  - *Response (400 Bad Request):* `HORARIO_INVALIDO` (`hora_fin <= hora_inicio`) o `AREA_INACTIVA`.
+  - *Response (422 Unprocessable Entity):* `DEPARTAMENTO_NO_PERTENECE_AL_CONDOMINIO`.
+
+- **`POST /api/v1/reservas/{reserva_id}/cancelar`**
+  - *Descripción:* Cancela una reserva confirmada y libera la franja. Residente: mínimo 24 h de anticipación; administrador (`es_admin`): sin restricción de horario.
+  - *Request Body:*
+    ```json
+    { "motivo": "Cambio de planes del residente", "es_admin": false }
+    ```
+  - *Response (200 OK):*
+    ```json
+    {
+      "id": "e4f5a6b7-8c9d-4e0f-1a2b-3c4d5e6f7a8b",
+      "estado": "CANCELADA",
+      "mensaje": "Reserva cancelada exitosamente. Motivo: Cambio de planes del residente",
+      "fecha_cancelacion": "2026-10-07T20:30:00+00:00"
+    }
+    ```
+  - *Response (404 Not Found):* `RESERVA_NO_ENCONTRADA`.
+  - *Response (422 Unprocessable Entity):* `CANCELACION_NO_PERMITIDA` (ya cancelada, estado no `CONFIRMADA` o sin las 24 h de anticipación).
 
 ### 2.4 Módulo de Notificaciones (Alejandro)
 - **`POST /api/v1/notificaciones/despachar`**
@@ -203,3 +279,32 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
     }
     ```
   - *Response (422 Unprocessable Entity):* `CONFIGURACION_MORA_INVALIDA` cuando la regla de mora no es coherente con sus parámetros (ej. `MONTO_FIJO` sin monto mayor a 0.00).
+
+- **`POST /api/v1/departamentos/crear`**
+  - *Descripción:* Da de alta una unidad inmobiliaria dentro de un condominio. El par `(condominio_id, numero)` es único y `estado_financiero` es la fuente que usa el dominio de Reservas para la invariante de solvencia.
+  - *Request Body:*
+    ```json
+    {
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "numero": "302",
+      "piso": 3,
+      "coeficiente_participacion": "0.7143",
+      "saldo_a_favor": "0.00",
+      "estado_financiero": "AL_DIA"
+    }
+    ```
+  - *Response (201 Created):*
+    ```json
+    {
+      "id": "0b1e2c3d-4f5a-6b7c-8d9e-0f1a2b3c4d5e",
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "numero": "302",
+      "piso": 3,
+      "coeficiente_participacion": "0.7143",
+      "saldo_a_favor": "0.00",
+      "estado_financiero": "AL_DIA"
+    }
+    ```
+  - *Response (404 Not Found):* `CONDOMINIO_NO_ENCONTRADO`.
+  - *Response (409 Conflict):* `DEPARTAMENTO_DUPLICADO` por la restricción `uq_condominio_departamento`.
+  - *Response (422 Unprocessable Entity):* validaciones de `piso >= 1`, `coeficiente_participacion > 0` y `saldo_a_favor >= 0`.

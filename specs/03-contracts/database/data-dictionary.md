@@ -35,9 +35,29 @@ Almacena cada unidad inmobiliaria exclusiva (departamento, flat, local).
 | `saldo_a_favor` | `NUMERIC(12,2)` | NO | `0.00` | `CHECK (saldo_a_favor >= 0.00)` | Fondo crediticio a favor del departamento por pagos en exceso. |
 | `estado_financiero` | `VARCHAR(20)` | NO | `'AL_DIA'` | `CHECK (estado_financiero IN ('AL_DIA', 'OBSERVADO', 'EN_MORA'))` | Estado de solvencia para control de reservas comunes. |
 
+> **Fuente de la invariante de solvencia (PROC-04):** `POST /api/v1/reservas` lee esta columna
+> como primer filtro. Un departamento en `EN_MORA` recibe `403 DEUDA_MORA_ACTIVA` sin importar la
+> disponibilidad del horario. El monto que se informa en el mensaje es solo informativo
+> (suma del pendiente de `cuotas_mantenimiento` en `VENCIDA`/`EN_MORA`, si existe).
+
 ---
 
-## 3. Tabla: `cuotas_mantenimiento`
+## 3. Tabla: `areas_comunes`
+Catálogo de espacios compartidos disponibles para reserva (Brandon - PROC-04).
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador único del área común. |
+| `condominio_id` | `UUID` | NO | - | `REFERENCES condominios(id) ON DELETE CASCADE` | Condominio propietario del espacio. |
+| `nombre` | `VARCHAR(100)` | NO | - | - | Nombre visible en el catálogo (único por condominio, controlado por la aplicación). |
+| `descripcion` | `TEXT` | SÍ | `NULL` | - | Detalles, reglas de uso o ubicación del espacio. |
+| `aforo_maximo` | `INT` | NO | - | `CHECK (aforo_maximo > 0)` | Máximo de personas permitidas. |
+| `costo_reserva` | `NUMERIC(12,2)` | NO | `0.00` | `CHECK (costo_reserva >= 0.00)` | Canon por turno de uso (ADR-002: cero `float`). |
+| `esta_activa` | `BOOLEAN` | NO | `TRUE` | - | Solo las activas se publican en `GET /api/v1/areas`. |
+
+---
+
+## 4. Tabla: `cuotas_mantenimiento`
 Almacena las obligaciones devengadas mensuales por cada departamento (Anderson - PROC-01).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -57,7 +77,7 @@ Almacena las obligaciones devengadas mensuales por cada departamento (Anderson -
 
 ---
 
-## 4. Tabla: `comprobantes_pago`
+## 5. Tabla: `comprobantes_pago`
 Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -77,7 +97,7 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 ---
 
-## 5. Tabla: `reservas`
+## 6. Tabla: `reservas`
 Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -90,10 +110,11 @@ Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 | `hora_fin` | `TIME` | NO | - | `CHECK (hora_fin > hora_inicio)` | Hora de término del uso. |
 | `costo_reserva` | `NUMERIC(12,2)` | NO | `0.00` | `CHECK (costo_reserva >= 0.00)` | Canon de uso o limpieza asignado. |
 | `estado` | `VARCHAR(20)` | NO | `'SOLICITADA'` | `CHECK (estado IN ('SOLICITADA', 'CONFIRMADA', 'RECHAZADA', 'CANCELADA', 'COMPLETADA'))` | Ciclo de vida de la reserva. |
+| `creado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Marca de tiempo UTC de creación. |
 
 ---
 
-## 6. Tabla: `auditoria_logs`
+## 7. Tabla: `auditoria_logs`
 Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |

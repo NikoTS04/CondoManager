@@ -191,11 +191,22 @@ paths:
           schema: { type: string, format: uuid }
         - name: fecha
           in: query
-          required: true
+          required: false
           schema: { type: string, format: date }
       responses:
         '200':
-          description: Lista de reservas existentes para el área y fecha
+          description: Lista de reservas confirmadas existentes para el área y fecha
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReservaConfirmadaResponse' }
+        '404':
+          description: AREA_NO_ENCONTRADA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: Solicitud de reserva de área común (con validación de solvencia)
       operationId: crearReserva
@@ -219,7 +230,145 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: Horario solicitado ocupado por otra reserva
+          description: HORARIO_NO_DISPONIBLE - horario solicitado ocupado por otra reserva
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: HORARIO_INVALIDO o AREA_INACTIVA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: AREA_NO_ENCONTRADA o DEPARTAMENTO_NO_ENCONTRADO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: DEPARTAMENTO_NO_PERTENECE_AL_CONDOMINIO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /reservas/{reserva_id}/cancelar:
+    post:
+      summary: Cancelar una reserva confirmada (24h de anticipación salvo administrador)
+      operationId: cancelarReserva
+      parameters:
+        - name: reserva_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelarReservaRequest'
+      responses:
+        '200':
+          description: Reserva cancelada y franja horaria liberada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelarReservaResponse'
+        '404':
+          description: RESERVA_NO_ENCONTRADA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: CANCELACION_NO_PERMITIDA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /areas:
+    get:
+      summary: Catálogo de áreas comunes activas
+      operationId: listarAreas
+      responses:
+        '200':
+          description: Áreas activas del catálogo (lista vacía si no hay altas registradas)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AreaComunDTO' }
+
+  /areas/crear:
+    post:
+      summary: Alta de un área común en el catálogo (PROC-04)
+      operationId: crearArea
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearAreaRequest'
+      responses:
+        '201':
+          description: Área creada y persistida en areas_comunes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AreaComunDTO'
+        '404':
+          description: CONDOMINIO_NO_ENCONTRADO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: AREA_DUPLICADA - ya existe el nombre en el condominio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validaciones de aforo, costo o longitud del nombre
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /departamentos/crear:
+    post:
+      summary: Alta de un departamento (unidad inmobiliaria)
+      operationId: crearDepartamento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearDepartamentoRequest'
+      responses:
+        '201':
+          description: Departamento creado y persistido en departamentos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartamentoDTO'
+        '404':
+          description: CONDOMINIO_NO_ENCONTRADO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: DEPARTAMENTO_DUPLICADO - número repetido en el condominio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validaciones de piso, coeficiente o saldo
           content:
             application/json:
               schema:
@@ -270,11 +419,21 @@ components:
 
     CrearReservaRequest:
       type: object
-      required: [condominio_id, area_id, departamento_id, fecha_reserva, hora_inicio, hora_fin]
+      required: [area_id, departamento_id, fecha_reserva, hora_inicio, hora_fin]
       properties:
-        condominio_id: { type: string, format: uuid }
+        condominio_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Informativo. La fuente de verdad es el condominio del área seleccionada.
         area_id: { type: string, format: uuid }
-        departamento_id: { type: string, format: uuid }
+        departamento_id:
+          description: UUID del departamento o su número (ej. "302").
+          oneOf:
+            - type: string
+              format: uuid
+            - type: string
+              example: "302"
         fecha_reserva: { type: string, format: date }
         hora_inicio: { type: string, example: "19:00" }
         hora_fin: { type: string, example: "22:00" }
@@ -284,10 +443,77 @@ components:
       properties:
         id: { type: string, format: uuid }
         estado: { type: string, example: "CONFIRMADA" }
+        condominio_id: { type: string, format: uuid, description: Derivado de areas_comunes.condominio_id }
         area_id: { type: string, format: uuid }
+        area_nombre: { type: string, example: "Zona de Parrilla 1" }
+        departamento_id: { type: string, format: uuid }
         fecha_reserva: { type: string, format: date }
         hora_inicio: { type: string }
         hora_fin: { type: string }
+        costo_reserva: { type: string, example: "25.00" }
+        creado_en: { type: string, format: date-time }
+
+    CrearAreaRequest:
+      type: object
+      required: [condominio_id, nombre, aforo_maximo]
+      properties:
+        condominio_id: { type: string, format: uuid }
+        nombre: { type: string, minLength: 2, maxLength: 100, example: "Zona de Parrilla 1" }
+        descripcion: { type: string, maxLength: 500, nullable: true }
+        aforo_maximo: { type: integer, minimum: 1, example: 12 }
+        costo_reserva: { type: string, example: "25.00" }
+        esta_activa: { type: boolean, default: true }
+
+    AreaComunDTO:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        nombre: { type: string }
+        descripcion: { type: string, nullable: true }
+        aforo_maximo: { type: integer }
+        costo_reserva: { type: string }
+        esta_activa: { type: boolean }
+
+    CrearDepartamentoRequest:
+      type: object
+      required: [condominio_id, numero, piso, coeficiente_participacion]
+      properties:
+        condominio_id: { type: string, format: uuid }
+        numero: { type: string, maxLength: 20, example: "302" }
+        piso: { type: integer, minimum: 1, example: 3 }
+        coeficiente_participacion: { type: string, example: "0.7143" }
+        saldo_a_favor: { type: string, example: "0.00" }
+        estado_financiero:
+          type: string
+          enum: [AL_DIA, OBSERVADO, EN_MORA]
+          default: AL_DIA
+          description: Fuente de la invariante de solvencia del dominio de reservas.
+
+    DepartamentoDTO:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        numero: { type: string }
+        piso: { type: integer }
+        coeficiente_participacion: { type: string }
+        saldo_a_favor: { type: string }
+        estado_financiero: { type: string, enum: [AL_DIA, OBSERVADO, EN_MORA] }
+
+    CancelarReservaRequest:
+      type: object
+      properties:
+        motivo: { type: string, default: "Cancelación voluntaria por residente" }
+        es_admin: { type: boolean, default: false, description: Sin restricción de 24 horas cuando es true. }
+
+    CancelarReservaResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        estado: { type: string, example: "CANCELADA" }
+        mensaje: { type: string }
+        fecha_cancelacion: { type: string, format: date-time }
 
     CrearUsuarioRequest:
       type: object

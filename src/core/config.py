@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEBUG: bool = True
 
+    # Pruebas: desactiva el pool de conexiones para evitar estados ligados a un event loop
+    TESTING: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

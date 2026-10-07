@@ -7,20 +7,28 @@ Implementa:
 4. Política Zero-Float (ADR-002) con tipos Decimal.
 """
 
-from datetime import date, datetime, time, timedelta, timezone
-from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
 import uuid
+from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
+from typing import Any
+
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.audit import AuditoriaPayload
+from src.modules.condominios.models import Condominio
+from src.modules.condominios.service import CondominioNoEncontradoException
+from src.modules.reservas.models import AreaComun
 from src.modules.reservas.schemas import (
+    AreaComunDTO,
     CancelarReservaRequest,
     CancelarReservaResponse,
+    CrearAreaRequest,
     CrearReservaRequest,
     ReservaResponseDTO,
 )
-
+from src.shared.decimal_types import redondear_moneda
 
 # ============================================================================
 # Excepciones de Dominio (PROC-04)
@@ -28,9 +36,14 @@ from src.modules.reservas.schemas import (
 
 class DeudaMoraActivaException(Exception):
     def __init__(self, departamento_id: str, saldo_vencido: Decimal):
+        detalle = (
+            f" por un total de S/ {saldo_vencido:.2f}"
+            if saldo_vencido > Decimal("0.00")
+            else ""
+        )
         mensaje = (
             f"No es posible reservar: El departamento '{departamento_id}' "
-            f"mantiene cuotas vencidas pendientes en mora por un total de S/ {saldo_vencido:.2f}."
+            f"mantiene cuotas vencidas pendientes en mora{detalle}."
         )
         super().__init__(mensaje)
         self.error_code = "DEUDA_MORA_ACTIVA"
@@ -82,6 +95,15 @@ class HorarioInvalidoException(Exception):
         self.mensaje = mensaje
 
 
+class AreaDuplicadaException(Exception):
+    def __init__(self, nombre: str):
+        mensaje = f"Ya existe un área común con el nombre '{nombre}' registrada en este condominio."
+        super().__init__(mensaje)
+        self.error_code = "AREA_DUPLICADA"
+        self.mensaje = mensaje
+        self.nombre = nombre
+
+
 # ============================================================================
 # Compatibilidad con Suite de Pruebas BDD / Unitarias Iniciales
 # ============================================================================
@@ -98,7 +120,7 @@ class SolicitudReservaDTO(BaseModel):
 
 class ResultadoReservaDTO(BaseModel):
     es_exitosa: bool
-    reserva_id: Optional[str] = None
+    reserva_id: str | None = None
     motivo: str
     bloqueado_por_mora: bool = False
 
@@ -139,6 +161,59 @@ class GestorReservasService:
 
 class ReservasService:
     @staticmethod
+    async def crear_area(
+        session: AsyncSession, request: CrearAreaRequest
+    ) -> tuple[AreaComunDTO, AuditoriaPayload]:
+        """Da de alta un área común persistiéndola en `areas_comunes` con su auditoría de alta."""
+        condominio_existe = await session.scalar(
+            select(Condominio.id).where(Condominio.id == request.condominio_id)
+        )
+        if condominio_existe is None:
+            raise CondominioNoEncontradoException(str(request.condominio_id))
+
+        nombre_normalizado = request.nombre.strip()
+        area_duplicada = await session.scalar(
+            select(AreaComun.id).where(
+                AreaComun.condominio_id == request.condominio_id,
+                AreaComun.nombre == nombre_normalizado,
+            )
+        )
+        if area_duplicada is not None:
+            raise AreaDuplicadaException(nombre_normalizado)
+
+        area = AreaComun(
+            condominio_id=request.condominio_id,
+            nombre=nombre_normalizado,
+            descripcion=request.descripcion.strip() if request.descripcion else None,
+            aforo_maximo=request.aforo_maximo,
+            costo_reserva=redondear_moneda(request.costo_reserva),
+            esta_activa=request.esta_activa,
+        )
+        session.add(area)
+        await session.flush()
+
+        area_dto = AreaComunDTO.model_validate(area)
+
+        audit_alta = AuditoriaPayload(
+            condominio_id=str(area_dto.condominio_id),
+            departamento_id="CONDOMINIO_GENERAL",
+            accion_ejecutada="ALTA_AREA_COMUN",
+            motivo=f"Alta del área común '{area_dto.nombre}' con aforo {area_dto.aforo_maximo}.",
+            resultado="EXITOSO",
+            actor_tipo="ADMINISTRADOR",
+            estado_anterior={"area_id": None},
+            estado_posterior={
+                "area_id": str(area_dto.id),
+                "nombre": area_dto.nombre,
+                "aforo_maximo": area_dto.aforo_maximo,
+                "costo_reserva": str(area_dto.costo_reserva),
+                "esta_activa": area_dto.esta_activa,
+            },
+        )
+
+        return area_dto, audit_alta
+
+    @staticmethod
     def hay_solapamiento_horario(
         inicio_a: time, fin_a: time, inicio_b: time, fin_b: time
     ) -> bool:
@@ -152,7 +227,7 @@ class ReservasService:
         fecha_reserva: date,
         hora_inicio: time,
         hora_fin: time,
-        reservas_existentes: List[Dict[str, Any]],
+        reservas_existentes: list[dict[str, Any]],
     ) -> bool:
         """Comprueba si el horario solicitado está libre respecto a reservas CONFIRMADAS."""
         for r in reservas_existentes:
@@ -171,11 +246,11 @@ class ReservasService:
     def procesar_reserva(
         cls,
         request: CrearReservaRequest,
-        area: Dict[str, Any],
+        area: dict[str, Any],
         estado_financiero_depto: str,
         saldo_mora_depto: Decimal,
-        reservas_existentes: List[Dict[str, Any]],
-    ) -> Tuple[ReservaResponseDTO, AuditoriaPayload]:
+        reservas_existentes: list[dict[str, Any]],
+    ) -> tuple[ReservaResponseDTO, AuditoriaPayload]:
         """Orquesta la creación de una reserva con validación atómica de solvencia y calendario."""
         if request.hora_fin <= request.hora_inicio:
             raise HorarioInvalidoException("La hora de fin debe ser posterior a la hora de inicio.")
@@ -228,7 +303,7 @@ class ReservasService:
         # 3. Confirmación de la Reserva
         reserva_id = uuid.uuid4()
         costo_reserva = Decimal(str(area.get("costo_reserva", "0.00")))
-        creado_en = datetime.now(timezone.utc)
+        creado_en = datetime.now(UTC)
 
         audit_confirmacion = AuditoriaPayload(
             condominio_id=str(request.condominio_id),
@@ -266,10 +341,10 @@ class ReservasService:
     @classmethod
     def procesar_cancelacion(
         cls,
-        reserva: Dict[str, Any],
+        reserva: dict[str, Any],
         request: CancelarReservaRequest,
-        momento_actual: Optional[datetime] = None,
-    ) -> Tuple[CancelarReservaResponse, AuditoriaPayload]:
+        momento_actual: datetime | None = None,
+    ) -> tuple[CancelarReservaResponse, AuditoriaPayload]:
         """Procesa la cancelación liberando el cupo en el calendario."""
         if reserva.get("estado") == "CANCELADA":
             raise CancelacionInvalidaException("La reserva ya ha sido cancelada previamente.")
@@ -279,13 +354,13 @@ class ReservasService:
                 f"No se puede cancelar una reserva en estado '{reserva.get('estado')}'."
             )
 
-        momento_actual = momento_actual or datetime.now(timezone.utc)
+        momento_actual = momento_actual or datetime.now(UTC)
 
         # Regla de 24 horas de anticipación para cancelaciones voluntarias de residentes
         if not request.es_admin:
             fecha_res = reserva["fecha_reserva"]
             hora_ini = reserva["hora_inicio"]
-            inicio_reserva_dt = datetime.combine(fecha_res, hora_ini, tzinfo=timezone.utc)
+            inicio_reserva_dt = datetime.combine(fecha_res, hora_ini, tzinfo=UTC)
 
             limite_cancelacion = inicio_reserva_dt - timedelta(hours=24)
             if momento_actual > limite_cancelacion:

@@ -3,10 +3,11 @@
 Cumple estrictamente con las especificaciones de OpenAPI 3.1 y SDD.
 """
 
+import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Dict, Optional
-import uuid
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -16,16 +17,38 @@ class AreaComunDTO(BaseModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     condominio_id: uuid.UUID
     nombre: str
-    descripcion: Optional[str] = None
+    descripcion: str | None = None
     aforo_maximo: int = Field(gt=0, description="Aforo máximo de personas permitidas")
     costo_reserva: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"), description="Costo por turno de uso en PEN")
     esta_activa: bool = True
 
 
-class CrearReservaRequest(BaseModel):
+class CrearAreaRequest(BaseModel):
     condominio_id: uuid.UUID
+    nombre: str = Field(..., min_length=2, max_length=100, description="Nombre del área común")
+    descripcion: str | None = Field(default=None, max_length=500)
+    aforo_maximo: int = Field(..., gt=0, description="Aforo máximo de personas permitidas")
+    costo_reserva: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0.00"),
+        le=Decimal("9999999999.99"),
+        max_digits=12,
+        decimal_places=2,
+        description="Costo por turno de uso en PEN",
+    )
+    esta_activa: bool = Field(default=True, description="Indica si el área queda disponible para reservar")
+
+
+class CrearReservaRequest(BaseModel):
+    condominio_id: uuid.UUID | None = Field(
+        default=None,
+        description="Informativo. La fuente de verdad es el condominio del área común seleccionada.",
+    )
     area_id: uuid.UUID
-    departamento_id: uuid.UUID
+    departamento_id: uuid.UUID | str = Field(
+        ...,
+        description="UUID del departamento o su número (ej. \"402\"). El router lo normaliza a UUID.",
+    )
     fecha_reserva: date
     hora_inicio: time
     hora_fin: time
@@ -37,7 +60,7 @@ class ReservaResponseDTO(BaseModel):
     id: uuid.UUID
     condominio_id: uuid.UUID
     area_id: uuid.UUID
-    area_nombre: Optional[str] = None
+    area_nombre: str | None = None
     departamento_id: uuid.UUID
     fecha_reserva: date
     hora_inicio: time
@@ -68,4 +91,4 @@ class CancelarReservaResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error_code: str
     mensaje: str
-    detalles: Optional[Dict[str, Any]] = None
+    detalles: dict[str, Any] | None = None

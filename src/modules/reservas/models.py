@@ -1,8 +1,9 @@
 """Modelos ORM de Áreas Comunes y Reservas (Brandon - PROC-04)."""
 
-from datetime import date, datetime, time, timezone
-from decimal import Decimal
 import uuid
+from datetime import UTC, date, datetime, time
+from decimal import Decimal
+
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -16,7 +17,8 @@ from sqlalchemy import (
     Time,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
+
 from src.core.database import Base
 
 
@@ -73,7 +75,7 @@ class Reserva(Base):
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (

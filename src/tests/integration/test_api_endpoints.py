@@ -64,62 +64,123 @@ def test_api_reportar_pago_e_idempotencia():
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
 def test_api_reservas_flujo_completo():
-    # 1. Catálogo de áreas comunes
-    res_areas = client.get("/api/v1/areas")
-    assert res_areas.status_code == 200
-    areas = res_areas.json()
-    assert len(areas) >= 4
-    area_parrilla = next(a for a in areas if "Parrilla 1" in a["nombre"])
-    area_id = area_parrilla["id"]
+    """Flujo completo contra PostgreSQL: catálogo, solvencia, conflicto, consulta y cancelación."""
+    from src.tests.integration.db_pruebas import borrar_condominio, crear_condominio_de_prueba
 
-    # 2. Intento de reserva por dpto moroso (402) -> 403 Forbidden
-    payload_moroso = {
-        "condominio_id": str(uuid.uuid4()),
-        "area_id": area_id,
-        "departamento_id": "402",
-        "fecha_reserva": "2026-10-25",
-        "hora_inicio": "19:00",
-        "hora_fin": "22:00",
-    }
-    res_moroso = client.post("/api/v1/reservas", json=payload_moroso)
-    assert res_moroso.status_code == 403
-    assert res_moroso.json()["detail"]["error_code"] == "DEUDA_MORA_ACTIVA"
+    sufijo = uuid.uuid4().hex[:8]
+    condominio = crear_condominio_de_prueba(client, sufijo)
 
-    # 3. Reserva exitosa por residente solvente (102) -> 201 Created
-    payload_solvente = {
-        "condominio_id": str(uuid.uuid4()),
-        "area_id": area_id,
-        "departamento_id": "102",
-        "fecha_reserva": "2026-10-25",
-        "hora_inicio": "19:00",
-        "hora_fin": "22:00",
-    }
-    res_solvente = client.post("/api/v1/reservas", json=payload_solvente)
-    assert res_solvente.status_code == 201
-    reserva_creada = res_solvente.json()
-    assert reserva_creada["estado"] == "CONFIRMADA"
-    reserva_id = reserva_creada["id"]
+    try:
+        # 1. Alta de áreas comunes (catálogo persistido en `areas_comunes`)
+        res_area = client.post(
+            "/api/v1/areas/crear",
+            json={
+                "condominio_id": condominio["id"],
+                "nombre": f"Parrilla 1 Pruebas {sufijo}",
+                "descripcion": "Terraza con parrilla",
+                "aforo_maximo": 12,
+                "costo_reserva": "25.00",
+            },
+        )
+        assert res_area.status_code == 201, res_area.text
+        area_id = res_area.json()["id"]
 
-    # 4. Conflicto de horario: Otro residente intenta el mismo horario -> 409 Conflict
-    payload_conflicto = {
-        "condominio_id": str(uuid.uuid4()),
-        "area_id": area_id,
-        "departamento_id": "104",
-        "fecha_reserva": "2026-10-25",
-        "hora_inicio": "20:00",
-        "hora_fin": "23:00",
-    }
-    res_conflicto = client.post("/api/v1/reservas", json=payload_conflicto)
-    assert res_conflicto.status_code == 409
-    assert res_conflicto.json()["detail"]["error_code"] == "HORARIO_NO_DISPONIBLE"
+        # 2. Alta de departamentos: dos solventes y uno en mora
+        departamentos = {}
+        lotes = (
+            (f"{sufijo[:4]}1", "AL_DIA", "solvente"),
+            (f"{sufijo[:4]}2", "EN_MORA", "moroso"),
+            (f"{sufijo[:4]}3", "AL_DIA", "competidor"),
+        )
+        for numero, estado, clave in lotes:
+            res_dpto = client.post(
+                "/api/v1/departamentos/crear",
+                json={
+                    "condominio_id": condominio["id"],
+                    "numero": numero,
+                    "piso": 1,
+                    "coeficiente_participacion": "0.6800",
+                    "estado_financiero": estado,
+                },
+            )
+            assert res_dpto.status_code == 201, res_dpto.text
+            departamentos[clave] = res_dpto.json()
 
-    # 5. Cancelación por administración -> 200 OK
-    res_cancelar = client.post(
-        f"/api/v1/reservas/{reserva_id}/cancelar",
-        json={"motivo": "Fumigación de la terraza", "es_admin": True},
-    )
-    assert res_cancelar.status_code == 200
-    assert res_cancelar.json()["estado"] == "CANCELADA"
+        # 3. Catálogo de áreas: el área creada está disponible
+        res_areas = client.get("/api/v1/areas")
+        assert res_areas.status_code == 200
+        areas = res_areas.json()
+        assert any(a["id"] == area_id for a in areas)
+
+        # 4. Departamento en mora -> 403 Forbidden
+        res_moroso = client.post(
+            "/api/v1/reservas",
+            json={
+                "condominio_id": condominio["id"],
+                "area_id": area_id,
+                "departamento_id": departamentos["moroso"]["id"],
+                "fecha_reserva": "2026-12-24",
+                "hora_inicio": "19:00",
+                "hora_fin": "22:00",
+            },
+        )
+        assert res_moroso.status_code == 403
+        assert res_moroso.json()["detail"]["error_code"] == "DEUDA_MORA_ACTIVA"
+
+        # 5. Departamento solvente -> 201 Created / CONFIRMADA
+        res_solvente = client.post(
+            "/api/v1/reservas",
+            json={
+                "condominio_id": condominio["id"],
+                "area_id": area_id,
+                "departamento_id": departamentos["solvente"]["id"],
+                "fecha_reserva": "2026-12-24",
+                "hora_inicio": "19:00",
+                "hora_fin": "22:00",
+            },
+        )
+        assert res_solvente.status_code == 201, res_solvente.text
+        reserva_creada = res_solvente.json()
+        assert reserva_creada["estado"] == "CONFIRMADA"
+        assert reserva_creada["condominio_id"] == condominio["id"]
+        reserva_id = reserva_creada["id"]
+
+        # 6. Conflicto de horario -> 409 Conflict
+        res_conflicto = client.post(
+            "/api/v1/reservas",
+            json={
+                "condominio_id": condominio["id"],
+                "area_id": area_id,
+                "departamento_id": departamentos["competidor"]["id"],
+                "fecha_reserva": "2026-12-24",
+                "hora_inicio": "20:00",
+                "hora_fin": "23:00",
+            },
+        )
+        assert res_conflicto.status_code == 409
+        assert res_conflicto.json()["detail"]["error_code"] == "HORARIO_NO_DISPONIBLE"
+
+        # 7. Consulta de disponibilidad: la reserva confirmada ocupa la franja
+        res_consulta = client.get(
+            f"/api/v1/reservas?area_id={area_id}&fecha=2026-12-24"
+        )
+        assert res_consulta.status_code == 200
+        assert [r["id"] for r in res_consulta.json()] == [reserva_id]
+
+        # 8. Cancelación por administración -> 200 OK y la franja se libera
+        res_cancelar = client.post(
+            f"/api/v1/reservas/{reserva_id}/cancelar",
+            json={"motivo": "Fumigación de la terraza", "es_admin": True},
+        )
+        assert res_cancelar.status_code == 200
+        assert res_cancelar.json()["estado"] == "CANCELADA"
+
+        res_tras_cancelar = client.get(
+            f"/api/v1/reservas?area_id={area_id}&fecha=2026-12-24"
+        )
+        assert res_tras_cancelar.json() == []
+    finally:
+        borrar_condominio(condominio["id"])
 
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
