@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import EstructuraCondominio from "@/components/EstructuraCondominio";
 import {
   ComprobantePago,
   Departamento,
@@ -15,6 +16,7 @@ import {
 import {
   ShieldCheck,
   Building,
+  Building2,
   Coins,
   CheckCircle2,
   XCircle,
@@ -28,7 +30,7 @@ import {
 } from "lucide-react";
 
 export default function JuntaPage() {
-  const [activeTab, setActiveTab] = useState<"conciliacion" | "cuotas" | "moras" | "notificaciones">("conciliacion");
+  const [activeTab, setActiveTab] = useState<"estructura" | "conciliacion" | "cuotas" | "moras" | "notificaciones">("estructura");
 
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -173,6 +175,18 @@ export default function JuntaPage() {
       {/* Pestañas del Panel de la Junta */}
       <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold overflow-x-auto">
         <button
+          onClick={() => setActiveTab("estructura")}
+          className={`pb-3 flex items-center gap-2 transition-colors border-b-2 whitespace-nowrap ${
+            activeTab === "estructura"
+              ? "border-blue-600 text-blue-700"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>Estructura del Condominio</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab("conciliacion")}
           className={`pb-3 flex items-center gap-2 transition-colors border-b-2 whitespace-nowrap ${
             activeTab === "conciliacion"
@@ -225,6 +239,9 @@ export default function JuntaPage() {
           <span>Notificaciones y Comunicados (PROC-03)</span>
         </button>
       </div>
+
+      {/* PESTAÑA 0: EDIFICIOS Y DEPARTAMENTOS (CON-3 / USR-02) */}
+      {activeTab === "estructura" && <EstructuraCondominio departamentosIniciales={departamentos} />}
 
       {/* PESTAÑA 1: CONCILIACIÓN BANCARIA */}
       {activeTab === "conciliacion" && (
