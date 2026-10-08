@@ -121,7 +121,13 @@ export default function Navbar() {
                   {user ? `${user.nombre} (${user.rol})` : "Seleccionar Rol"}
                 </span>
                 <span className="md:hidden">
-                  {user?.rol === "ADMIN_JUNTA" ? "Junta" : user?.rol === "AUDITOR" ? "Auditor" : `Dpto. ${activeDepartment}`}
+                  {user?.rol === "SUPERADMIN"
+                    ? "SuperAdmin"
+                    : user?.rol === "ADMIN_JUNTA"
+                    ? "Junta"
+                    : user?.rol === "AUDITOR"
+                    ? "Auditor"
+                    : `Dpto. ${activeDepartment}`}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
@@ -132,7 +138,7 @@ export default function Navbar() {
                   onMouseLeave={() => setDropdownOpen(false)}
                 >
                   <div className="px-3 py-2 border-b border-slate-100">
-                    <p className="text-xs font-bold text-slate-900">Perfiles de Demostración SDD</p>
+                    <p className="text-xs font-bold text-slate-900">Perfiles de demostración</p>
                     <p className="text-[11px] text-slate-500">
                       Cambie de usuario para comprobar la adaptación de cada pantalla.
                     </p>

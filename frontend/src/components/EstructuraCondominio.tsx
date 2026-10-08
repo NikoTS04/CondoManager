@@ -48,7 +48,13 @@ function escaparCsv(valor: string | number) {
   return texto.includes(",") ? `"${texto.replace(/"/g, '""')}"` : texto;
 }
 
-export default function EstructuraCondominio({ departamentosIniciales }: { departamentosIniciales: Departamento[] }) {
+export default function EstructuraCondominio({
+  departamentosIniciales,
+  soloLectura = false,
+}: {
+  departamentosIniciales: Departamento[];
+  soloLectura?: boolean;
+}) {
   const datosInicialesCargados = useRef(departamentosIniciales.length > 0);
   const [edificios, setEdificios] = useState<Edificio[]>([EDIFICIO_INICIAL]);
   const [departamentos, setDepartamentos] = useState<DepartamentoEstructura[]>(() =>
@@ -98,6 +104,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
 
   function crearEdificio(evento: FormEvent) {
     evento.preventDefault();
+    if (soloLectura) return;
     const nombre = nuevoEdificio.trim();
     if (!nombre) return;
     if (edificios.some((edificio) => edificio.nombre.toLowerCase() === nombre.toLowerCase())) {
@@ -114,11 +121,12 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
 
   function crearDepartamento(evento: FormEvent) {
     evento.preventDefault();
+    if (soloLectura) return;
     const numeroLimpio = numero.trim();
     const pisoNumerico = Number(piso);
     const coeficienteNumerico = Number(coeficiente.replace(",", "."));
 
-    if (!numeroLimpio || !piso.trim() || !Number.isInteger(pisoNumerico) || pisoNumerico < 0) {
+    if (!numeroLimpio || !piso.trim() || !Number.isInteger(pisoNumerico) || pisoNumerico < 1) {
       setFeedback({ tipo: "error", mensaje: "Ingresa un número de departamento y un piso válido." });
       return;
     }
@@ -168,7 +176,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
     const coeficienteNumerico = Number(coeficienteCsv.replace(",", "."));
 
     if (!numeroCsv) errores.push(`Fila ${numeroFila}: falta el número`);
-    if (!pisoCsv || !Number.isInteger(pisoNumerico) || pisoNumerico < 0) errores.push(`Fila ${numeroFila}: piso inválido`);
+    if (!pisoCsv || !Number.isInteger(pisoNumerico) || pisoNumerico < 1) errores.push(`Fila ${numeroFila}: piso inválido`);
     if (!edificioCsv) errores.push(`Fila ${numeroFila}: falta el edificio`);
     if (!Number.isFinite(coeficienteNumerico) || coeficienteNumerico <= 0 || coeficienteNumerico > 100) {
       errores.push(`Fila ${numeroFila}: coeficiente inválido`);
@@ -198,6 +206,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
   }
 
   async function seleccionarArchivo(evento: ChangeEvent<HTMLInputElement>) {
+    if (soloLectura) return;
     const archivo = evento.target.files?.[0];
     if (!archivo) return;
     setNombreArchivo(archivo.name);
@@ -225,11 +234,14 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
   }
 
   function confirmarImportacion() {
-    if (!filasImportacion.length || filasImportacion.some((fila) => fila.errores.length > 0)) return;
+    if (soloLectura) return;
+    const filasValidas = filasImportacion.filter((fila) => fila.errores.length === 0);
+    const filasInvalidas = filasImportacion.filter((fila) => fila.errores.length > 0);
+    if (!filasValidas.length) return;
 
     const nuevosEdificios = [...edificios];
     const nuevosDepartamentos: DepartamentoEstructura[] = [];
-    filasImportacion.forEach((fila, indice) => {
+    filasValidas.forEach((fila, indice) => {
       let edificio = nuevosEdificios.find(
         (actual) => actual.nombre.toLowerCase() === fila.edificio.toLowerCase()
       );
@@ -251,10 +263,17 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
 
     setEdificios(nuevosEdificios);
     setDepartamentos((actuales) => [...actuales, ...nuevosDepartamentos]);
-    setFilasImportacion([]);
-    setNombreArchivo("");
-    if (inputArchivoRef.current) inputArchivoRef.current.value = "";
-    setFeedback({ tipo: "exito", mensaje: `${nuevosDepartamentos.length} departamentos fueron importados.` });
+    setFilasImportacion(filasInvalidas);
+    if (filasInvalidas.length === 0) {
+      setNombreArchivo("");
+      if (inputArchivoRef.current) inputArchivoRef.current.value = "";
+    }
+    setFeedback({
+      tipo: "exito",
+      mensaje: filasInvalidas.length
+        ? `${nuevosDepartamentos.length} departamentos válidos fueron importados. ${filasInvalidas.length} filas con errores no fueron procesadas.`
+        : `${nuevosDepartamentos.length} departamentos fueron importados.`,
+    });
   }
 
   function descargarPlantilla() {
@@ -287,7 +306,8 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
     URL.revokeObjectURL(enlace.href);
   }
 
-  const importacionValida = filasImportacion.length > 0 && filasImportacion.every((fila) => fila.errores.length === 0);
+  const cantidadFilasValidas = filasImportacion.filter((fila) => fila.errores.length === 0).length;
+  const cantidadFilasInvalidas = filasImportacion.length - cantidadFilasValidas;
 
   return (
     <div className="space-y-6">
@@ -332,6 +352,13 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
         </div>
       )}
 
+      {soloLectura && (
+        <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
+          <p className="font-bold">Modo auditoría: solo lectura</p>
+          <p className="mt-1 text-xs">Puede consultar y exportar la estructura, pero no registrar edificios, departamentos ni importaciones.</p>
+        </div>
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
         <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div>
@@ -361,7 +388,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
             })}
           </div>
 
-          <form onSubmit={crearEdificio} className="space-y-2 border-t border-slate-100 pt-4">
+          {!soloLectura && <form onSubmit={crearEdificio} className="space-y-2 border-t border-slate-100 pt-4">
             <label className="text-xs font-semibold text-slate-700" htmlFor="nombre-edificio">
               Nuevo edificio
             </label>
@@ -375,7 +402,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
             <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800">
               <Plus className="h-4 w-4" /> Agregar edificio
             </button>
-          </form>
+          </form>}
         </aside>
 
         <section className="space-y-6">
@@ -395,7 +422,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
               </button>
             </div>
 
-            <form onSubmit={crearDepartamento} className="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-[1fr_0.7fr_1fr_auto]">
+            {!soloLectura && <form onSubmit={crearDepartamento} className="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-[1fr_0.7fr_1fr_auto]">
               <label className="text-xs font-semibold text-slate-700">
                 Número
                 <input
@@ -409,7 +436,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
                 Piso
                 <input
                   type="number"
-                  min="0"
+                  min="1"
                   value={piso}
                   onChange={(evento) => setPiso(evento.target.value)}
                   placeholder="15"
@@ -429,7 +456,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
               <button className="mt-auto flex h-[42px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-bold text-white hover:bg-blue-700">
                 <Plus className="h-4 w-4" /> Registrar
               </button>
-            </form>
+            </form>}
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -483,7 +510,7 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
             </div>
           </div>
 
-          <div className="rounded-2xl border border-dashed border-blue-300 bg-blue-50/50 p-5">
+          {!soloLectura && <div className="rounded-2xl border border-dashed border-blue-300 bg-blue-50/50 p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="flex items-center gap-2 font-bold text-slate-900">
@@ -509,8 +536,8 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
                     <p className="text-sm font-bold text-slate-900">Vista previa: {nombreArchivo}</p>
                     <p className="text-xs text-slate-500">{filasImportacion.length} filas encontradas</p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${importacionValida ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
-                    {importacionValida ? "LISTO PARA IMPORTAR" : "REQUIERE CORRECCIÓN"}
+                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${cantidadFilasInvalidas === 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                    {cantidadFilasValidas} VÁLIDAS · {cantidadFilasInvalidas} CON ERROR
                   </span>
                 </div>
                 <div className="max-h-64 overflow-auto">
@@ -538,16 +565,16 @@ export default function EstructuraCondominio({ departamentosIniciales }: { depar
                 <div className="flex justify-end border-t border-slate-200 p-3">
                   <button
                     type="button"
-                    disabled={!importacionValida}
+                    disabled={cantidadFilasValidas === 0}
                     onClick={confirmarImportacion}
                     className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
-                    Confirmar importación
+                    Importar {cantidadFilasValidas} filas válidas
                   </button>
                 </div>
               </div>
             )}
-          </div>
+          </div>}
         </section>
       </div>
     </div>

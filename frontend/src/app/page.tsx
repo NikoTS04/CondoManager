@@ -28,7 +28,7 @@ export default function Home() {
           </h1>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
             CondoManager sustituye hojas de Excel y validaciones manuales por un motor guiado por eventos,
-            precisión decimal sin flotantes (ADR-002), conciliación bancaria instantánea y control estricto de solvencia para áreas comunes.
+            cálculos monetarios precisos, conciliación bancaria y control de solvencia para áreas comunes.
           </p>
         </div>
 
@@ -154,12 +154,12 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Banner Explicativo de Invariantes SDD */}
+      {/* Banner explicativo de reglas automáticas */}
       <div className="bg-slate-100 border border-slate-200 rounded-xl p-5 sm:p-6 text-sm text-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <p className="font-bold text-slate-900 flex items-center gap-2">
             <History className="w-4 h-4 text-indigo-600" />
-            Demostración en Vivo de las Invariantes SDD
+            Demostración de reglas automáticas del sistema
           </p>
           <p className="text-slate-600 text-xs sm:text-sm">
             Prueba cambiar entre el <strong>Dpto. 102</strong> (Al Día / Solvente) y el <strong>Dpto. 402</strong> (En Mora). Verás cómo el sistema bloquea inmediatamente las reservas de parrilla aplicando la regla matemática del Dominio 04.

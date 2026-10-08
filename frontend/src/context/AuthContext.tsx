@@ -28,6 +28,14 @@ export interface DemoPersona {
 
 export const DEMO_PERSONAS: DemoPersona[] = [
   {
+    key: "superadmin",
+    label: "SuperAdmin de Plataforma",
+    email: "superadmin@condomanager.pe",
+    rol: "SUPERADMIN",
+    badgeColor: "bg-slate-900 text-white",
+    description: "Configura condominios, reglas generales y accesos globales",
+  },
+  {
     key: "admin",
     label: "Junta Directiva",
     email: "admin@villabonita3.pe",
@@ -59,7 +67,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     rol: "PROPIETARIO",
     depto: "402",
     badgeColor: "bg-rose-600 text-white",
-    description: "En mora: bloqueado automáticamente en reservas (DOM-04)",
+    description: "En mora: bloqueado automáticamente para realizar reservas",
   },
   {
     key: "inquilino504",

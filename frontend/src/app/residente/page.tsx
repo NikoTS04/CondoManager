@@ -285,7 +285,7 @@ function ResidenteContent() {
               </h2>
               <p className="text-sm text-slate-600 mt-1 max-w-xl">
                 {estaEnMora
-                  ? `Su departamento registra S/ ${deptoActual.deuda_vencida || "170.00"} en cuotas vencidas. Conforme a la invariante SDD PROC-04, no podrá reservar áreas comunes hasta cancelar su deuda.`
+                  ? `Su departamento registra S/ ${deptoActual.deuda_vencida || "170.00"} en cuotas vencidas. No podrá reservar áreas comunes hasta cancelar su deuda.`
                   : "No registra penalidades ni deudas vencidas pendientes. Puede reservar parrillas y salones con total normalidad."}
               </p>
             </div>
@@ -433,7 +433,7 @@ function ResidenteContent() {
                   <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
                     <p className="text-xs text-rose-800 font-semibold flex items-center gap-1.5">
                       <ShieldAlert className="w-4 h-4 text-rose-600" />
-                      Invariante PROC-04 Activada
+                      Reserva bloqueada por deuda pendiente
                     </p>
                     <p className="text-[11px] text-rose-700 leading-snug">
                       Botón inhabilitado: Su departamento mantiene mora. Debe regularizar su estado de cuenta para desbloquear reservas.
