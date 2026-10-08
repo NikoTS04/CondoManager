@@ -8,6 +8,7 @@ Esta matriz garantiza la cobertura total del ciclo de vida del software en **Con
 
 | ID Req. Negocio | Funcionalidad / Directiva de Automatización | Especificación SDD | Modelo de Datos | Contrato API | Criterio BDD | Módulo en `src/` | Responsable |
 | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :---: |
+| **REQ-00 / CON-2** | Configuración inicial y aislamiento de condominios | `proc-05-gestion-usuarios.md`, `02-domains/05-usuarios-rbac/spec.md` | `condominios` | `POST /api/v1/condominios`, `GET /api/v1/condominios/{condominio_id}` | `02-domains/05-usuarios-rbac/features/condominios.feature` | `src/modules/condominios/` | **Gerardo** |
 | **REQ-01** | Emisión mensual de cuotas, alícuotas y estados | `proc-01-cuotas-mantenimiento.md` | `cuotas_mantenimiento` | `POST /api/v1/cuotas/emitir` | `cuotas-y-moras.feature.md` (Esc. 1) | `src/modules/cuotas/` | **Anderson** |
 | **REQ-02** | Reporte de comprobante de pago (Yape/CCI) | `proc-02-pagos-y-morosidad.md` | `comprobantes_pago` | `POST /api/v1/pagos/reportar` | `cuotas-y-moras.feature.md` (Esc. 3) | `src/modules/pagos/` | **Tarqui** |
 | **REQ-03** | Bandeja de conciliación y validación de pagos | `proc-02-pagos-y-morosidad.md` | `imputaciones_pago` | `POST /api/v1/pagos/{id}/conciliar`| `cuotas-y-moras.feature.md` (Esc. 4) | `src/modules/pagos/` | **Tarqui** |

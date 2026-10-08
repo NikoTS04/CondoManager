@@ -39,6 +39,8 @@ export default function LoginPage() {
         } else {
           router.push("/residente");
         }
+      } else {
+        setError("Correo o contraseña incorrectos, o la API no está disponible.");
       }
     } catch {
       setError("Error al iniciar sesión.");
@@ -47,13 +49,20 @@ export default function LoginPage() {
     }
   }
 
-  function handleQuickLogin(personaKey: string, role: UserRole) {
-    switchDemoPersona(personaKey);
-    if (role === "ADMIN_JUNTA" || role === "AUDITOR" || role === "SUPERADMIN") {
-      router.push("/junta");
-    } else {
-      router.push("/residente");
+  async function handleQuickLogin(personaKey: string, role: UserRole) {
+    setLoading(true);
+    setError(null);
+    const ok = await switchDemoPersona(personaKey);
+    setLoading(false);
+    if (!ok) {
+      setError("No se pudo obtener una sesión demo desde la API.");
+      return;
     }
+    router.push(
+      role === "ADMIN_JUNTA" || role === "AUDITOR" || role === "SUPERADMIN"
+        ? "/junta"
+        : "/residente"
+    );
   }
 
   return (
@@ -148,7 +157,8 @@ export default function LoginPage() {
               return (
                 <button
                   key={persona.key}
-                  onClick={() => handleQuickLogin(persona.key, persona.rol)}
+                  onClick={() => void handleQuickLogin(persona.key, persona.rol)}
+                  disabled={loading}
                   className="w-full text-left p-3.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-400 hover:shadow-sm transition-all group flex items-start justify-between gap-3"
                 >
                   <div className="space-y-1">

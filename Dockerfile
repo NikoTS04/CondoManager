@@ -21,6 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código fuente y scripts
 COPY src/ ./src/
 COPY scripts/ ./scripts/
+COPY migrations/ ./migrations/
+COPY alembic.ini ./alembic.ini
 
 # Crear usuario sin privilegios por seguridad
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
@@ -33,4 +35,4 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
 # Comando de inicio del servidor ASGI
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn src.main:app --host 0.0.0.0 --port 8000"]

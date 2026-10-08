@@ -2,35 +2,27 @@
 
 import { FormEvent, useState } from "react";
 import { Building2, CheckCircle2, CircleDollarSign, Info, Save, Settings2 } from "lucide-react";
-
-type Moneda = "PEN" | "USD";
-type ReglaMora = "MONTO_FIJO" | "PORCENTAJE_SALDO";
-
-type ConfiguracionGuardada = {
-  nombre: string;
-  direccion: string;
-  moneda: Moneda;
-  reglaMora: ReglaMora;
-  montoMoraFijo: string;
-  tasaMoraPorcentaje: string;
-  diaCorte: number;
-  diasGracia: number;
-  activo: true;
-};
+import {
+  Condominio,
+  crearCondominio,
+  Moneda,
+  ReglaMoraTipo,
+} from "@/lib/api";
 
 export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: boolean }) {
   const [nombre, setNombre] = useState("Villa Bonita 3");
   const [direccion, setDireccion] = useState("Av. Principal 123, Lima");
   const [moneda, setMoneda] = useState<Moneda>("PEN");
-  const [reglaMora, setReglaMora] = useState<ReglaMora>("MONTO_FIJO");
+  const [reglaMora, setReglaMora] = useState<ReglaMoraTipo>("MONTO_FIJO");
   const [montoMoraFijo, setMontoMoraFijo] = useState("20.00");
   const [tasaMoraPorcentaje, setTasaMoraPorcentaje] = useState("0.0000");
-  const [diaCorte, setDiaCorte] = useState("20");
+  const [diaVencimiento, setDiaVencimiento] = useState("20");
   const [diasGracia, setDiasGracia] = useState("2");
   const [error, setError] = useState<string | null>(null);
-  const [configuracion, setConfiguracion] = useState<ConfiguracionGuardada | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [configuracion, setConfiguracion] = useState<Condominio | null>(null);
 
-  function guardarConfiguracion(evento: FormEvent) {
+  async function guardarConfiguracion(evento: FormEvent) {
     evento.preventDefault();
     setError(null);
 
@@ -39,43 +31,51 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
       return;
     }
 
-    const corte = Number(diaCorte);
+    const vencimiento = Number(diaVencimiento);
     const gracia = Number(diasGracia);
-    const moraFija = Number(montoMoraFijo);
-    const tasa = Number(tasaMoraPorcentaje);
 
     if (!nombre.trim() || !direccion.trim()) {
       setError("El nombre y la dirección del condominio son obligatorios.");
       return;
     }
-    if (!Number.isInteger(corte) || corte < 1 || corte > 28) {
-      setError("El día de corte debe ser un número entero entre 1 y 28.");
+    if (!Number.isInteger(vencimiento) || vencimiento < 1 || vencimiento > 28) {
+      setError("El día de vencimiento debe ser un número entero entre 1 y 28.");
       return;
     }
-    if (!Number.isInteger(gracia) || gracia < 0) {
-      setError("Los días de gracia deben ser un número entero mayor o igual que cero.");
+    if (!Number.isInteger(gracia) || gracia < 0 || gracia > 30) {
+      setError("Los días de gracia deben ser un número entero entre 0 y 30.");
       return;
     }
-    if (reglaMora === "MONTO_FIJO" && (!Number.isFinite(moraFija) || moraFija < 0)) {
-      setError("El monto fijo de mora debe ser un importe válido mayor o igual que cero.");
+    if (reglaMora === "MONTO_FIJO" && !/^\d+\.\d{2}$/.test(montoMoraFijo)) {
+      setError("El monto fijo debe enviarse con dos decimales, por ejemplo 20.00.");
       return;
     }
-    if (reglaMora === "PORCENTAJE_SALDO" && (!Number.isFinite(tasa) || tasa < 0 || tasa > 100)) {
-      setError("La tasa de mora debe encontrarse entre 0 y 100 por ciento.");
+    if (
+      reglaMora === "PORCENTAJE_SALDO" &&
+      !/^(100\.0000|\d{1,2}\.\d{4})$/.test(tasaMoraPorcentaje)
+    ) {
+      setError("La tasa debe estar entre 0.0000 y 100.0000 y tener cuatro decimales.");
       return;
     }
 
-    setConfiguracion({
+    setGuardando(true);
+    const resultado = await crearCondominio({
       nombre: nombre.trim(),
       direccion: direccion.trim(),
       moneda,
-      reglaMora,
-      montoMoraFijo: moraFija.toFixed(2),
-      tasaMoraPorcentaje: tasa.toFixed(4),
-      diaCorte: corte,
-      diasGracia: gracia,
-      activo: true,
+      regla_mora_tipo: reglaMora,
+      monto_mora_fijo: reglaMora === "MONTO_FIJO" ? montoMoraFijo : null,
+      tasa_mora_porcentaje:
+        reglaMora === "PORCENTAJE_SALDO" ? tasaMoraPorcentaje : null,
+      dia_vencimiento: vencimiento,
+      dias_gracia: gracia,
     });
+    setGuardando(false);
+    if (!resultado.ok || !resultado.data) {
+      setError(resultado.error || "No se pudo guardar la configuración.");
+      return;
+    }
+    setConfiguracion(resultado.data);
   }
 
   return (
@@ -92,7 +92,7 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
             </p>
           </div>
           <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold text-amber-800">
-            PROTOTIPO FRONTEND
+            CONECTADO A API
           </span>
         </div>
 
@@ -145,7 +145,7 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
                 Regla de mora
                 <select
                   value={reglaMora}
-                  onChange={(evento) => setReglaMora(evento.target.value as ReglaMora)}
+                  onChange={(evento) => setReglaMora(evento.target.value as ReglaMoraTipo)}
                   disabled={!puedeEditar}
                   className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal disabled:bg-slate-100"
                 >
@@ -184,13 +184,13 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
               )}
 
               <label className="text-xs font-semibold text-slate-700">
-                Día de corte mensual
+                Día de vencimiento mensual
                 <input
                   type="number"
                   min="1"
                   max="28"
-                  value={diaCorte}
-                  onChange={(evento) => setDiaCorte(evento.target.value)}
+                  value={diaVencimiento}
+                  onChange={(evento) => setDiaVencimiento(evento.target.value)}
                   disabled={!puedeEditar}
                   className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal disabled:bg-slate-100"
                 />
@@ -200,6 +200,7 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
                 <input
                   type="number"
                   min="0"
+                  max="30"
                   value={diasGracia}
                   onChange={(evento) => setDiasGracia(evento.target.value)}
                   disabled={!puedeEditar}
@@ -210,8 +211,11 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
           </div>
 
           {puedeEditar ? (
-            <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700">
-              <Save className="h-4 w-4" /> Guardar configuración
+            <button
+              disabled={guardando}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+            >
+              <Save className="h-4 w-4" /> {guardando ? "Guardando..." : "Guardar configuración"}
             </button>
           ) : (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center text-xs font-semibold text-slate-600">
@@ -226,9 +230,9 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
             <div>
-              <p className="font-bold">Integración pendiente</p>
+              <p className="font-bold">Persistencia y autorización activas</p>
               <p className="mt-1 text-xs leading-relaxed text-blue-800">
-                Esta pantalla ya permite validar el flujo, pero todavía no guarda datos de forma permanente. El backend deberá devolver el identificador del condominio y confirmar que quedó activo.
+                El alta se envía al backend con el JWT activo. Solo un SuperAdmin puede crear el condominio y recibir su UUID persistente.
               </p>
             </div>
           </div>
@@ -240,23 +244,24 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
             <div className="mt-4 space-y-3 text-xs">
               <div className="flex items-center gap-2 text-emerald-700">
                 <CheckCircle2 className="h-5 w-5" />
-                <span className="font-bold">Validación de frontend completada</span>
+                <span className="font-bold">Condominio persistido y activo</span>
               </div>
               <div className="rounded-xl bg-slate-50 p-4 text-slate-700">
                 <p className="font-bold text-slate-900">{configuracion.nombre}</p>
                 <p className="mt-1">{configuracion.direccion}</p>
                 <p className="mt-2">Moneda: {configuracion.moneda}</p>
-                <p>Día de corte: {configuracion.diaCorte}</p>
-                <p>Días de gracia: {configuracion.diasGracia}</p>
+                <p>Día de vencimiento: {configuracion.dia_vencimiento}</p>
+                <p>Días de gracia: {configuracion.dias_gracia}</p>
+                <p className="mt-2 break-all font-mono text-[10px]">UUID: {configuracion.id}</p>
                 <span className="mt-3 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-800">
-                  ACTIVO · PENDIENTE DE API
+                  ACTIVO · API CONFIRMADA
                 </span>
               </div>
             </div>
           ) : (
             <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-slate-400">
               <Building2 className="h-8 w-8" />
-              <p className="mt-2 text-xs">Completa el formulario para previsualizar la configuración.</p>
+              <p className="mt-2 text-xs">Completa el formulario para crear el condominio.</p>
             </div>
           )}
         </div>
