@@ -5,7 +5,7 @@ Este backlog traduce las especificaciones funcionales de CondoManager a elemento
 ## Resumen
 
 - **9 épicas**.
-- **59 historias de usuario base**.
+- **60 historias de usuario base**.
 - Las historias cubren el alcance funcional completo documentado.
 - Las tareas puramente técnicas —crear tablas, endpoints, componentes o pruebas— deberían registrarse en Jira como subtareas de la historia correspondiente.
 
@@ -28,7 +28,7 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 | Generar obligaciones | Aprobar presupuesto → emitir cuotas → aplicar saldos → consultar cuenta | CUE-01 a CUE-06 |
 | Recaudar y conciliar | Reportar voucher → detectar duplicados → revisar → aprobar/rechazar → imputar | PAG-01 a PAG-07 |
 | Gestionar morosidad | Detectar vencimiento → proteger pagos en revisión → aplicar mora → corregir excepciones | PAG-08 a PAG-10 |
-| Comunicar resultados | Crear aviso → seleccionar canal → enviar → comprobar entrega → reintentar | NOT-01 a NOT-07 |
+| Comunicar resultados | Crear aviso → seleccionar canal → ejecutar bot RPA → verificar persistencia → enviar → comprobar entrega → reintentar y reportar | NOT-01 a NOT-08 |
 | Reservar áreas | Consultar disponibilidad → validar solvencia → reservar → pagar/cancelar | RES-01 a RES-09 |
 | Administrar gastos | Registrar proveedor → contrato → egreso → pago → controlar vencimiento | EGR-01 a EGR-05 |
 | Atender incidencias | Reportar → clasificar → asignar → resolver → confirmar cierre | TIC-01 a TIC-05 |
@@ -51,7 +51,7 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 ### Entrega 2 — Operación administrativa completa
 
 - Cuotas extraordinarias y correcciones.
-- Notificaciones multicanal y comunicaciones masivas.
+- Notificaciones multicanal, comunicaciones masivas y bot RPA de recordatorios por WhatsApp.
 - Reglas avanzadas y cancelación de reservas.
 - Proveedores, contratos y egresos.
 - Tickets de incidencias.
@@ -378,6 +378,67 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 - El administrador puede seleccionar audiencia, canal, asunto y contenido.
 - Antes de confirmar se muestra la cantidad de destinatarios.
 - El resultado permite conocer entregas, reintentos y fallos permanentes.
+
+## NOT-08 — Ejecutar y controlar el bot RPA de recordatorios por WhatsApp
+
+**Historia:** Como administrador del condominio, quiero que un bot RPA identifique las cuotas próximas a vencer, registre y verifique las notificaciones antes de enviarlas por WhatsApp, para reducir la morosidad y disponer de evidencia de que todos los registros del proceso fueron tratados correctamente.
+
+**Valor de negocio:** Automatizar una tarea repetitiva de cobranza preventiva, reducir omisiones manuales y ofrecer un control de calidad cuantificable sobre cada ejecución masiva.
+
+**Disparador:** El bot se ejecuta automáticamente a la hora configurada —por defecto, a las 08:00, tres días antes del vencimiento— o manualmente por un administrador autorizado.
+
+**Flujo RPA requerido:**
+
+1. **Solicitud:** recibe la ejecución programada o manual y genera un identificador único de proceso.
+2. **Leer datos:** consulta las cuotas con saldo pendiente cuya fecha de vencimiento se encuentre dentro del rango configurado, junto con el residente y su número de WhatsApp.
+3. **Validar:** comprueba que la cuota continúe pendiente, que el destinatario sea válido, que exista autorización de contacto y que la notificación no haya sido procesada previamente.
+4. **Registrar:** crea un lote de ejecución y persiste una notificación en estado `EN_COLA` por cada cuota válida, antes de realizar el envío.
+5. **Verificar:** compara los registros esperados con los persistidos, identifica faltantes, duplicados o datos incompletos y solo autoriza el envío cuando el lote sea consistente.
+6. **Reportar:** informa los totales leídos, válidos, guardados, enviados, entregados, pendientes, omitidos y fallidos, junto con los motivos de cada excepción.
+
+**Criterios de aceptación:**
+
+- Cada ejecución genera un `proceso_id` único y registra la fecha, hora, disparador y parámetros utilizados.
+- Solo se seleccionan cuotas con saldo pendiente que se encuentren dentro del rango de proximidad al vencimiento configurado.
+- Una cuota pagada, un contacto inválido o una notificación ya procesada no produce un nuevo envío; la exclusión queda registrada con su motivo.
+- Antes de enviar mensajes, el bot registra el lote y sus detalles en PostgreSQL dentro de una transacción.
+- El control de persistencia compara `total_esperado`, `total_guardado` y `total_unicos`, y calcula las cantidades de registros faltantes, duplicados e inválidos.
+- Si el proceso genera 100 notificaciones válidas, la verificación solo es exitosa cuando existen 100 registros persistidos, 100 claves de negocio distintas, 0 faltantes y 0 duplicados.
+- La comprobación se repite desde una nueva sesión de base de datos después de confirmar la transacción, para demostrar que los registros no permanecen únicamente en memoria.
+- Si la cantidad guardada no coincide con la esperada, el lote queda `FALLIDO_CONTROL`, no se informa un éxito general y se genera una alerta con los identificadores faltantes o duplicados.
+- Cada detalle utiliza una clave de idempotencia; reejecutar el mismo proceso no crea registros ni mensajes duplicados.
+- Después de superar el control, el bot envía el mensaje mediante el proveedor de WhatsApp y conserva el identificador y la respuesta retornados por dicho proveedor.
+- Cada notificación termina en uno de los estados `ENTREGADO`, `REINTENTANDO`, `FALLIDO_PERMANENTE` u `OMITIDO`.
+- Los errores temporales siguen la política de reintentos definida en NOT-06 y los errores permanentes se remiten a revisión manual.
+- El reporte final diferencia claramente entre registros guardados y mensajes entregados; tener 100 registros persistidos no implica que los 100 mensajes hayan sido entregados.
+- La ejecución y su resultado quedan vinculados con la bitácora de auditoría para reconstruir quién o qué inició el proceso, qué datos se procesaron y cuál fue el resultado.
+
+**Ejemplo de reporte de control:**
+
+```text
+Proceso: RPA-WSP-2026-10-07-001
+Cuotas leídas:                  105
+Notificaciones válidas:         100
+Registros esperados:             100
+Registros guardados:             100
+Claves únicas:                   100
+Faltantes:                         0
+Duplicados:                        0
+Mensajes entregados:              98
+Pendientes de reintento:           1
+Fallidos permanentes:              1
+Control de persistencia: VERIFICADO
+Resultado general: COMPLETADO CON OBSERVACIONES
+```
+
+**Respuesta ante excepciones:**
+
+- Si falla la lectura de datos, el proceso se detiene y reporta el componente no disponible.
+- Si falla la transacción de registro, se ejecuta `ROLLBACK` y no se envían mensajes del lote incompleto.
+- Si la verificación posterior encuentra diferencias, el proceso conserva la evidencia, queda en excepción y permite reintentar solamente los elementos faltantes.
+- Si falla WhatsApp después de guardar correctamente el lote, los registros permanecen disponibles para reintento sin duplicar la notificación.
+
+**Dependencias:** NOT-02 — Recordatorios de vencimiento; NOT-06 — Reintentos; CUE-06 — Estado de cuenta; TRV-01 — Auditoría; TRV-05 — Idempotencia de tareas automáticas.
 
 ---
 

@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import ConfiguracionCondominio from "@/components/ConfiguracionCondominio";
 import EstructuraCondominio from "@/components/EstructuraCondominio";
+import PresupuestoMensual, { PresupuestoAprobado } from "@/components/PresupuestoMensual";
 import {
   ComprobantePago,
   Departamento,
@@ -32,14 +34,17 @@ import {
   ShieldAlert,
   Search,
   Lock,
+  Settings2,
+  ClipboardCheck,
 } from "lucide-react";
 
 export default function JuntaPage() {
   const { user } = useAuth();
   const isAuditor = user?.rol === "AUDITOR";
+  const isSuperAdmin = user?.rol === "SUPERADMIN";
   const isForbidden = user && !["ADMIN_JUNTA", "SUPERADMIN", "AUDITOR"].includes(user.rol);
 
-  const [activeTab, setActiveTab] = useState<"estructura" | "conciliacion" | "cuotas" | "moras" | "notificaciones">("estructura");
+  const [activeTab, setActiveTab] = useState<"configuracion" | "estructura" | "presupuesto" | "conciliacion" | "cuotas" | "moras" | "notificaciones">("estructura");
 
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -48,6 +53,7 @@ export default function JuntaPage() {
   // Estados de Emisión de Cuotas
   const [periodoEmision, setPeriodoEmision] = useState<string>("2026-11");
   const [presupuestoTotal, setPresupuestoTotal] = useState<string>("20850.00");
+  const [presupuestoAprobado, setPresupuestoAprobado] = useState<PresupuestoAprobado | null>(null);
   const [emisionFeedback, setEmisionFeedback] = useState<string | null>(null);
   const [isEmitting, setIsEmitting] = useState<boolean>(false);
 
@@ -74,6 +80,17 @@ export default function JuntaPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === "configuracion" && !isSuperAdmin) setActiveTab("estructura");
+  }, [activeTab, isSuperAdmin]);
+
+  function handlePresupuestoAprobado(presupuesto: PresupuestoAprobado) {
+    setPresupuestoAprobado(presupuesto);
+    setPeriodoEmision(presupuesto.periodo);
+    setPresupuestoTotal(presupuesto.montoTotal);
+    setEmisionFeedback(null);
+  }
+
   // Conciliar pago
   async function handleConciliar(id: string, decision: "APROBADO" | "RECHAZADO") {
     let motivo: string | undefined = undefined;
@@ -93,6 +110,10 @@ export default function JuntaPage() {
   // Emitir lote masivo
   async function handleEmitirLote(e: React.FormEvent) {
     e.preventDefault();
+    if (!presupuestoAprobado) {
+      setEmisionFeedback("Error: primero debe registrar y aprobar el presupuesto del periodo.");
+      return;
+    }
     setIsEmitting(true);
     setEmisionFeedback(null);
 
@@ -159,7 +180,7 @@ export default function JuntaPage() {
           <div className="text-xs space-y-0.5">
             <p className="font-bold text-sm text-purple-900">Modo Auditoría Fiscal Activo (Solo Lectura)</p>
             <p className="text-purple-700">
-              Conforme a la especificación RBAC (PROC-05), usted cuenta con inspección total e irrestricta de comprobantes, cuotas y bitácoras inmutables con hash SHA-256. Las acciones de mutación (aprobación, emisión y cálculo de moras) están reservadas para los miembros operativos de la Junta Directiva.
+              Como auditor, usted cuenta con acceso de consulta a comprobantes, cuotas y bitácoras. Las acciones de aprobación, emisión y cálculo de moras están reservadas para los miembros operativos de la Junta Directiva.
             </p>
           </div>
         </div>
@@ -218,6 +239,20 @@ export default function JuntaPage() {
 
       {/* Pestañas del Panel de la Junta */}
       <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold overflow-x-auto">
+        {isSuperAdmin && (
+          <button
+            onClick={() => setActiveTab("configuracion")}
+            className={`pb-3 flex items-center gap-2 transition-colors border-b-2 whitespace-nowrap ${
+              activeTab === "configuracion"
+                ? "border-blue-600 text-blue-700"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Settings2 className="w-4 h-4" />
+            <span>Configurar Condominio</span>
+          </button>
+        )}
+
         <button
           onClick={() => setActiveTab("estructura")}
           className={`pb-3 flex items-center gap-2 transition-colors border-b-2 whitespace-nowrap ${
@@ -228,6 +263,18 @@ export default function JuntaPage() {
         >
           <Building2 className="w-4 h-4" />
           <span>Estructura del Condominio</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("presupuesto")}
+          className={`pb-3 flex items-center gap-2 transition-colors border-b-2 whitespace-nowrap ${
+            activeTab === "presupuesto"
+              ? "border-blue-600 text-blue-700"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <ClipboardCheck className="w-4 h-4" />
+          <span>Presupuesto Mensual</span>
         </button>
 
         <button
@@ -256,7 +303,7 @@ export default function JuntaPage() {
           }`}
         >
           <Coins className="w-4 h-4" />
-          <span>Emisión Masiva de Cuotas (PROC-01)</span>
+          <span>Emisión Masiva de Cuotas</span>
         </button>
 
         <button
@@ -268,7 +315,7 @@ export default function JuntaPage() {
           }`}
         >
           <Clock className="w-4 h-4" />
-          <span>Motor de Moras (PROC-02)</span>
+          <span>Control de Moras</span>
         </button>
 
         <button
@@ -280,12 +327,26 @@ export default function JuntaPage() {
           }`}
         >
           <Bell className="w-4 h-4" />
-          <span>Notificaciones y Comunicados (PROC-03)</span>
+          <span>Notificaciones y Comunicados</span>
         </button>
       </div>
 
-      {/* PESTAÑA 0: EDIFICIOS Y DEPARTAMENTOS (CON-3 / USR-02) */}
-      {activeTab === "estructura" && <EstructuraCondominio departamentosIniciales={departamentos} />}
+      {/* CONFIGURACIÓN DEL CONDOMINIO */}
+      {activeTab === "configuracion" && isSuperAdmin && <ConfiguracionCondominio puedeEditar={isSuperAdmin} />}
+
+      {/* EDIFICIOS Y DEPARTAMENTOS */}
+      {activeTab === "estructura" && (
+        <EstructuraCondominio departamentosIniciales={departamentos} soloLectura={isAuditor} />
+      )}
+
+      {/* PRESUPUESTO MENSUAL */}
+      {activeTab === "presupuesto" && (
+        <PresupuestoMensual
+          condominioId={user?.condominio_id || "vb3-condo"}
+          puedeEditar={!isAuditor}
+          onAprobar={handlePresupuestoAprobado}
+        />
+      )}
 
       {/* PESTAÑA 1: CONCILIACIÓN BANCARIA */}
       {activeTab === "conciliacion" && (
@@ -398,6 +459,39 @@ export default function JuntaPage() {
               </div>
             )}
 
+            {!presupuestoAprobado && !isAuditor && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2">
+                <p className="font-bold">Falta aprobar el presupuesto del periodo.</p>
+                <p>
+                  Registre y apruebe primero el presupuesto mensual. La emisión usará
+                  automáticamente ese periodo y monto.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("presupuesto")}
+                  className="font-bold text-amber-950 underline underline-offset-2"
+                >
+                  Ir a Presupuesto Mensual
+                </button>
+              </div>
+            )}
+
+            {presupuestoAprobado && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-bold">Presupuesto aprobado</p>
+                  <p>
+                    {presupuestoAprobado.periodo} · {presupuestoAprobado.moneda} {" "}
+                    {Number(presupuestoAprobado.montoTotal).toLocaleString("es-PE", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleEmitirLote} className="space-y-3.5 text-sm">
               <div>
                 <label className="block font-medium text-slate-700 text-xs mb-1">
@@ -406,9 +500,9 @@ export default function JuntaPage() {
                 <input
                   type="text"
                   value={periodoEmision}
-                  onChange={(e) => setPeriodoEmision(e.target.value)}
                   placeholder="2026-11"
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800"
+                  readOnly
+                  className="w-full border border-slate-200 bg-slate-100 rounded-lg p-2.5 text-slate-700 cursor-not-allowed"
                   required
                 />
               </div>
@@ -421,8 +515,8 @@ export default function JuntaPage() {
                   type="number"
                   step="0.01"
                   value={presupuestoTotal}
-                  onChange={(e) => setPresupuestoTotal(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800"
+                  readOnly
+                  className="w-full border border-slate-200 bg-slate-100 rounded-lg p-2.5 text-slate-700 cursor-not-allowed"
                   required
                 />
               </div>
@@ -442,10 +536,14 @@ export default function JuntaPage() {
               ) : (
                 <button
                   type="submit"
-                  disabled={isEmitting}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors shadow-sm"
+                  disabled={isEmitting || !presupuestoAprobado}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm transition-colors shadow-sm"
                 >
-                  {isEmitting ? "Emitiendo Lote..." : "Emitir Lote Masivo (139 Dptos)"}
+                  {isEmitting
+                    ? "Emitiendo Lote..."
+                    : presupuestoAprobado
+                    ? "Emitir Lote Masivo (139 Dptos)"
+                    : "Apruebe un presupuesto primero"}
                 </button>
               )}
             </form>
@@ -535,7 +633,7 @@ export default function JuntaPage() {
           )}
 
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-            <h4 className="font-bold text-slate-900 text-sm">Reglas de Protección (PROC-02):</h4>
+            <h4 className="font-bold text-slate-900 text-sm">Reglas para el cálculo de moras:</h4>
             <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
               <li>
                 <strong>2 Días de Gracia:</strong> Si la cuota vence el día 20, la mora no se aplica hasta las 00:00 del día 23.
@@ -616,7 +714,7 @@ export default function JuntaPage() {
           </div>
 
           <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
-            <h3 className="font-bold text-slate-900 text-lg">Bitácora de Envíos (notificaciones_logs)</h3>
+            <h3 className="font-bold text-slate-900 text-lg">Historial de envíos</h3>
             <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
               {notificaciones.map((n) => (
                 <div key={n.id} className="py-3 flex items-center justify-between gap-4 text-xs">

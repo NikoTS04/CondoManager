@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
-  title: "CondoManager - Sistema Automatizado para Condominios (SDD)",
+  title: "CondoManager - Sistema Automatizado para Condominios",
   description:
     "Gestión contable, conciliación bancaria, control de solvencia financiera y reservas de áreas comunes para Villa Bonita 3 (139 departamentos).",
 };
@@ -25,9 +25,9 @@ export default function RootLayout({
         </AuthProvider>
         <footer className="bg-slate-900 text-slate-400 text-xs py-6 border-t border-slate-800 text-center">
           <div className="max-w-7xl mx-auto px-4">
-            <p className="font-medium text-slate-300">CondoManager • Spec-Driven Development (SDD)</p>
+            <p className="font-medium text-slate-300">CondoManager • Gestión automatizada de condominios</p>
             <p className="mt-1 text-slate-500">
-              Arquitectura de Cero Pérdida Decimal (ADR-002) • Invariantes de Solvencia Financiera • 139 Departamentos Piloto
+              Cálculos financieros precisos • Control de solvencia • 139 departamentos piloto
             </p>
           </div>
         </footer>
