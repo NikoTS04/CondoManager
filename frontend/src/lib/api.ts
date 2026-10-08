@@ -63,6 +63,42 @@ export interface NotificacionLog {
   fecha_creacion: string;
 }
 
+export type Moneda = "PEN" | "USD";
+export type ReglaMoraTipo = "MONTO_FIJO" | "PORCENTAJE_SALDO";
+
+export interface CrearCondominioPayload {
+  nombre: string;
+  direccion: string;
+  moneda: Moneda;
+  regla_mora_tipo: ReglaMoraTipo;
+  monto_mora_fijo: string | null;
+  tasa_mora_porcentaje: string | null;
+  dia_vencimiento: number;
+  dias_gracia: number;
+}
+
+export interface Condominio extends CrearCondominioPayload {
+  id: string;
+  activo: boolean;
+  creado_en: string;
+}
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  rol: "SUPERADMIN" | "ADMIN_JUNTA" | "AUDITOR" | "PROPIETARIO" | "INQUILINO";
+  condominio_id: string | null;
+  departamentos: string[];
+  tipo_relacion?: string;
+}
+
+export interface LoginResult {
+  access_token: string;
+  usuario: AuthenticatedUser;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 function getAuthHeaders(): Record<string, string> {
@@ -76,6 +112,75 @@ function getAuthHeaders(): Record<string, string> {
     }
   }
   return headers;
+}
+
+function obtenerMensajeError(data: unknown, fallback: string): string {
+  if (!data || typeof data !== "object") return fallback;
+  const payload = data as {
+    mensaje?: string;
+    detail?: { mensaje?: string } | string;
+  };
+  if (payload.mensaje) return payload.mensaje;
+  if (typeof payload.detail === "string") return payload.detail;
+  return payload.detail?.mensaje || fallback;
+}
+
+export async function iniciarSesion(email: string, password: string): Promise<LoginResult> {
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(obtenerMensajeError(data, "No se pudo iniciar sesión."));
+  }
+  return data as LoginResult;
+}
+
+export async function crearCondominio(
+  payload: CrearCondominioPayload
+): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/condominios`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo guardar el condominio."),
+      };
+    }
+    return { ok: true, data: data as Condominio };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo conectar con la API. La configuración no fue guardada.",
+    };
+  }
+}
+
+export async function obtenerCondominio(
+  condominioId: string
+): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/condominios/${condominioId}`, {
+      headers: getAuthHeaders(),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo consultar el condominio."),
+      };
+    }
+    return { ok: true, data: data as Condominio };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API." };
+  }
 }
 
 // ============================================================================

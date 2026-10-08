@@ -142,7 +142,8 @@ Campos mínimos registrados en `auditoria_logs`:
 
 ## 7. Verificación de CON-2
 
-La automatización debe cubrir los escenarios BDD definidos en
-`specs/04-acceptance-criteria/auth-and-rbac.feature.md`: alta exitosa, rechazo sin
-autenticación, rechazo por rol, consulta persistente, validación condicional de mora y
-aislamiento entre dos condominios.
+La automatización debe ejecutar
+`specs/02-domains/05-usuarios-rbac/features/condominios.feature`. El documento
+`specs/04-acceptance-criteria/auth-and-rbac.feature.md` conserva el detalle legible de
+los criterios: alta exitosa, rechazo sin autenticación, rechazo por rol, consulta
+persistente, validación condicional de mora y aislamiento entre dos condominios.

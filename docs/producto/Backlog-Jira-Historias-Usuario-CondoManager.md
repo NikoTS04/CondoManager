@@ -81,7 +81,7 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 - Un usuario sin permisos de SuperAdmin no puede crear condominios.
 - Los datos de un condominio no deben mezclarse con los de otro.
 
-**Trazabilidad:** [especificación de dominio](../../specs/02-domains/05-usuarios-rbac/spec.md), [proceso PROC-05](../../specs/02-processes-and-automations/proc-05-gestion-usuarios.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [contrato de API](../../specs/05-api/api-contracts.md), [OpenAPI](../../specs/03-contracts/openapi/condomanager.openapi.yaml), [escenarios BDD](../../specs/04-acceptance-criteria/auth-and-rbac.feature.md), [matriz de trazabilidad](../../specs/00-core/traceability-matrix.md).
+**Trazabilidad:** [especificación de dominio](../../specs/02-domains/05-usuarios-rbac/spec.md), [proceso PROC-05](../../specs/02-processes-and-automations/proc-05-gestion-usuarios.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [contrato de API](../../specs/05-api/api-contracts.md), [OpenAPI](../../specs/03-contracts/openapi/condomanager.openapi.yaml), [BDD ejecutable](../../specs/02-domains/05-usuarios-rbac/features/condominios.feature), [criterios BDD detallados](../../specs/04-acceptance-criteria/auth-and-rbac.feature.md), [matriz de trazabilidad](../../specs/00-core/traceability-matrix.md).
 
 ## USR-02 — Registrar edificios y departamentos
 

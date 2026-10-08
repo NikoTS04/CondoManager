@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { iniciarSesion } from "@/lib/api";
 
 export type UserRole = "SUPERADMIN" | "ADMIN_JUNTA" | "AUDITOR" | "PROPIETARIO" | "INQUILINO";
 
@@ -11,7 +12,7 @@ export interface UserProfile {
   nombre: string;
   apellido: string;
   rol: UserRole;
-  condominio_id: string;
+  condominio_id: string | null;
   departamentos: string[];
   tipo_relacion?: string;
 }
@@ -20,6 +21,7 @@ export interface DemoPersona {
   key: string;
   label: string;
   email: string;
+  password: string;
   rol: UserRole;
   depto?: string;
   badgeColor: string;
@@ -31,6 +33,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     key: "superadmin",
     label: "SuperAdmin de Plataforma",
     email: "superadmin@condomanager.pe",
+    password: "SuperAdmin123!",
     rol: "SUPERADMIN",
     badgeColor: "bg-slate-900 text-white",
     description: "Configura condominios, reglas generales y accesos globales",
@@ -39,6 +42,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     key: "admin",
     label: "Junta Directiva",
     email: "admin@villabonita3.pe",
+    password: "Admin123!",
     rol: "ADMIN_JUNTA",
     badgeColor: "bg-blue-600 text-white",
     description: "Gestión total: emisión masiva, conciliación de pagos y moras",
@@ -47,6 +51,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     key: "auditor",
     label: "Auditor Fiscal",
     email: "auditor@villabonita3.pe",
+    password: "Auditor123!",
     rol: "AUDITOR",
     badgeColor: "bg-purple-600 text-white",
     description: "Solo lectura irrestricta: inspección de bitácora y balances",
@@ -55,6 +60,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     key: "residente102",
     label: "Propietario Solvente (Dpto. 102)",
     email: "residente102@villabonita3.pe",
+    password: "Residente123!",
     rol: "PROPIETARIO",
     depto: "102",
     badgeColor: "bg-emerald-600 text-white",
@@ -64,6 +70,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     key: "moroso402",
     label: "Propietario Moroso (Dpto. 402)",
     email: "moroso402@villabonita3.pe",
+    password: "Moroso123!",
     rol: "PROPIETARIO",
     depto: "402",
     badgeColor: "bg-rose-600 text-white",
@@ -73,6 +80,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     key: "inquilino504",
     label: "Inquilino (Dpto. 504)",
     email: "inquilino504@villabonita3.pe",
+    password: "Inquilino123!",
     rol: "INQUILINO",
     depto: "504",
     badgeColor: "bg-teal-600 text-white",
@@ -87,7 +95,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password?: string) => Promise<boolean>;
   logout: () => void;
-  switchDemoPersona: (personaKey: string) => void;
+  switchDemoPersona: (personaKey: string) => Promise<boolean>;
   setActiveDepartment: (depto: string) => void;
 }
 
@@ -116,67 +124,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     }
 
-    // Por defecto, inicializar como Junta Directiva para demostración directa
-    switchDemoPersona("admin");
+    // Por defecto, solicita a la API un JWT real para la Junta Directiva demo.
+    void switchDemoPersona("admin");
   }, []);
 
-  function switchDemoPersona(personaKey: string) {
+  async function switchDemoPersona(personaKey: string): Promise<boolean> {
     const persona = DEMO_PERSONAS.find((p) => p.key === personaKey) || DEMO_PERSONAS[0];
-    const newUser: UserProfile = {
-      id: `usr-${persona.key}`,
-      email: persona.email,
-      nombre: persona.label.split(" ")[0],
-      apellido: persona.label.split(" ").slice(1).join(" ") || "Demo",
-      rol: persona.rol,
-      condominio_id: "vb3-condo",
-      departamentos: persona.depto ? [persona.depto] : [],
-      tipo_relacion: persona.rol === "INQUILINO" ? "INQUILINO" : persona.rol === "PROPIETARIO" ? "PROPIETARIO_TITULAR" : "ADMINISTRADOR",
-    };
-
-    const mockToken = `jwt-mock-token-${persona.key}-${Date.now()}`;
-    setUser(newUser);
-    setToken(mockToken);
-    const depto = persona.depto || (persona.rol === "ADMIN_JUNTA" ? "102" : "102");
-    setActiveDepartment(depto);
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("condo_token", mockToken);
-      localStorage.setItem("condo_user", JSON.stringify(newUser));
-      localStorage.setItem("condo_depto", depto);
-    }
+    return login(persona.email, persona.password);
   }
 
-  async function login(email: string, password = "Password123!"): Promise<boolean> {
+  async function login(email: string, password = ""): Promise<boolean> {
     const cleanEmail = email.trim().toLowerCase();
-    const persona = DEMO_PERSONAS.find((p) => p.email.toLowerCase() === cleanEmail);
+    try {
+      const session = await iniciarSesion(cleanEmail, password);
+      const newUser = session.usuario as UserProfile;
+      const depto = newUser.departamentos[0] || "102";
+      setUser(newUser);
+      setToken(session.access_token);
+      setActiveDepartment(depto);
 
-    if (persona) {
-      switchDemoPersona(persona.key);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("condo_token", session.access_token);
+        localStorage.setItem("condo_user", JSON.stringify(newUser));
+        localStorage.setItem("condo_depto", depto);
+      }
       return true;
+    } catch {
+      return false;
     }
-
-    // Fallback genérico para correo nuevo
-    const newUser: UserProfile = {
-      id: `usr-${Date.now()}`,
-      email: cleanEmail,
-      nombre: "Usuario",
-      apellido: "Residente",
-      rol: "PROPIETARIO",
-      condominio_id: "vb3-condo",
-      departamentos: ["102"],
-      tipo_relacion: "PROPIETARIO_TITULAR",
-    };
-    const mockToken = `jwt-token-${Date.now()}`;
-    setUser(newUser);
-    setToken(mockToken);
-    setActiveDepartment("102");
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("condo_token", mockToken);
-      localStorage.setItem("condo_user", JSON.stringify(newUser));
-      localStorage.setItem("condo_depto", "102");
-    }
-    return true;
   }
 
   function logout() {

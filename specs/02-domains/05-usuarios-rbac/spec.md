@@ -117,4 +117,5 @@ CON-2 se considera terminada únicamente cuando:
 4. La respuesta de creación contiene UUID, `activo = true` y `creado_en`.
 5. La auditoría se registra atómicamente.
 6. Una prueba con dos condominios confirma el aislamiento.
-7. Los escenarios BDD de CON-2 y las pruebas unitarias y de integración pasan.
+7. Los escenarios ejecutables de
+   `features/condominios.feature` y las pruebas unitarias y de integración pasan.
