@@ -11,6 +11,14 @@ Cuando un proveedor de transporte externo (ej. SendGrid o Meta WhatsApp API) dev
 | **3** | +10 minutos | Segundo reintento asíncrono. |
 | **4 (Final)** | +30 minutos | Tercer y último reintento. |
 
+### Ejecución de un reintento programado
+
+- Solo se despacha un registro en estado `REINTENTANDO` cuya fecha `proximo_reintento` haya llegado. Los demás registros permanecen sin cambios.
+- El contador existente identifica el intento programado; no se reinicia como en un reenvío manual.
+- Si el envío resulta exitoso, pasa a `ENTREGADO`, registra el identificador del proveedor y limpia el error y la fecha de reintento. No vuelve a enviarse en una ejecución posterior.
+- Si falla, aplica la misma política de errores temporales o definitivos. Una excepción del transporte se considera un fallo temporal.
+- Este paso del servicio no incorpora todavía un worker, persistencia ni protección frente a ejecuciones concurrentes.
+
 ---
 
 ## 2. Gestión de Errores Definitivos (Hard Bounces / Dead-Letter Queue)

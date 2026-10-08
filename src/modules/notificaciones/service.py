@@ -149,6 +149,44 @@ class NotificacionesService:
         return log
 
     @classmethod
+    def reintentar_notificacion_programada(
+        cls,
+        log: NotificacionLogDTO,
+        transport_fn: Optional[Callable] = None,
+        momento_actual: Optional[datetime] = None,
+    ) -> NotificacionLogDTO:
+        """Ejecuta solo reintentos vencidos sin reiniciar el contador de intentos."""
+        momento_actual = momento_actual or datetime.now(timezone.utc)
+        if (
+            log.estado != EstadoNotificacionEnum.REINTENTANDO
+            or log.proximo_reintento is None
+            or log.proximo_reintento > momento_actual
+        ):
+            return log
+
+        transport = transport_fn or mock_transport_default
+        log.fecha_actualizacion = momento_actual
+        try:
+            resultado = transport(log.destinatario, log.canal, log.asunto, log.cuerpo)
+            status_code = resultado.get("status", 200)
+            if status_code == 200:
+                log.estado = EstadoNotificacionEnum.ENTREGADO
+                log.proveedor_message_id = resultado.get("message_id")
+                log.error_mensaje = None
+                log.proximo_reintento = None
+            else:
+                cls.procesar_fallo(
+                    log,
+                    status_code,
+                    resultado.get("error") or "Fallo al reintentar",
+                    momento_actual,
+                )
+        except Exception as exc:
+            cls.procesar_fallo(log, 500, str(exc), momento_actual)
+
+        return log
+
+    @classmethod
     def reenviar_notificacion_manual(
         cls,
         log: NotificacionLogDTO,
