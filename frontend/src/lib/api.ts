@@ -83,6 +83,37 @@ export interface Condominio extends CrearCondominioPayload {
   creado_en: string;
 }
 
+export type EstadoPresupuesto = "BORRADOR" | "APROBADO";
+
+export interface DatosPresupuestoPayload {
+  periodo: string;
+  moneda: Moneda;
+  monto_total: string;
+  fecha_vencimiento: string;
+}
+
+export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
+  condominio_id: string;
+}
+
+export interface PresupuestoMensual extends CrearPresupuestoPayload {
+  id: string;
+  estado: EstadoPresupuesto;
+  creado_por: string;
+  creado_en: string;
+  aprobado_por: string | null;
+  aprobado_en: string | null;
+  actualizado_en: string;
+}
+
+export interface PresupuestoApiResult {
+  ok: boolean;
+  data?: PresupuestoMensual;
+  error?: string;
+  errorCode?: string;
+  notFound?: boolean;
+}
+
 export interface AuthenticatedUser {
   id: string;
   email: string;
@@ -123,6 +154,15 @@ function obtenerMensajeError(data: unknown, fallback: string): string {
   if (payload.mensaje) return payload.mensaje;
   if (typeof payload.detail === "string") return payload.detail;
   return payload.detail?.mensaje || fallback;
+}
+
+function obtenerCodigoError(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const payload = data as {
+    error_code?: string;
+    detail?: { error_code?: string };
+  };
+  return payload.error_code || payload.detail?.error_code;
 }
 
 export async function iniciarSesion(email: string, password: string): Promise<LoginResult> {
@@ -178,6 +218,111 @@ export async function obtenerCondominio(
       };
     }
     return { ok: true, data: data as Condominio };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API." };
+  }
+}
+
+export async function crearPresupuesto(
+  payload: CrearPresupuestoPayload
+): Promise<PresupuestoApiResult> {
+  try {
+    const response = await fetch(`${API_BASE}/presupuestos`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo guardar el presupuesto."),
+        errorCode: obtenerCodigoError(data),
+      };
+    }
+    return { ok: true, data: data as PresupuestoMensual };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo conectar con la API. El presupuesto no fue guardado.",
+    };
+  }
+}
+
+export async function actualizarPresupuesto(
+  presupuestoId: string,
+  payload: DatosPresupuestoPayload
+): Promise<PresupuestoApiResult> {
+  try {
+    const response = await fetch(`${API_BASE}/presupuestos/${presupuestoId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo actualizar el presupuesto."),
+        errorCode: obtenerCodigoError(data),
+      };
+    }
+    return { ok: true, data: data as PresupuestoMensual };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo conectar con la API. El presupuesto no fue actualizado.",
+    };
+  }
+}
+
+export async function aprobarPresupuesto(
+  presupuestoId: string
+): Promise<PresupuestoApiResult> {
+  try {
+    const response = await fetch(`${API_BASE}/presupuestos/${presupuestoId}/aprobar`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo aprobar el presupuesto."),
+        errorCode: obtenerCodigoError(data),
+      };
+    }
+    return { ok: true, data: data as PresupuestoMensual };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo conectar con la API. El presupuesto no fue aprobado.",
+    };
+  }
+}
+
+export async function obtenerPresupuestoPorPeriodo(
+  condominioId: string,
+  periodo: string
+): Promise<PresupuestoApiResult> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/condominios/${condominioId}/presupuestos/${encodeURIComponent(periodo)}`,
+      { headers: getAuthHeaders() }
+    );
+    const data = await response.json();
+    const errorCode = obtenerCodigoError(data);
+    if (response.status === 404 && errorCode === "PRESUPUESTO_NO_ENCONTRADO") {
+      return { ok: true, notFound: true };
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo consultar el presupuesto."),
+        errorCode,
+      };
+    }
+    return { ok: true, data: data as PresupuestoMensual };
   } catch {
     return { ok: false, error: "No se pudo conectar con la API." };
   }

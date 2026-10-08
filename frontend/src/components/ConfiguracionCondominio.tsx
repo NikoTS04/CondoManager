@@ -9,7 +9,15 @@ import {
   ReglaMoraTipo,
 } from "@/lib/api";
 
-export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: boolean }) {
+type ConfiguracionCondominioProps = {
+  puedeEditar: boolean;
+  onCondominioCreado?: (condominioId: string) => void;
+};
+
+export default function ConfiguracionCondominio({
+  puedeEditar,
+  onCondominioCreado,
+}: ConfiguracionCondominioProps) {
   const [nombre, setNombre] = useState("Villa Bonita 3");
   const [direccion, setDireccion] = useState("Av. Principal 123, Lima");
   const [moneda, setMoneda] = useState<Moneda>("PEN");
@@ -76,6 +84,7 @@ export default function ConfiguracionCondominio({ puedeEditar }: { puedeEditar: 
       return;
     }
     setConfiguracion(resultado.data);
+    onCondominioCreado?.(resultado.data.id);
   }
 
   return (

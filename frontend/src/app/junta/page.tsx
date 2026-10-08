@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import ConfiguracionCondominio from "@/components/ConfiguracionCondominio";
@@ -49,6 +49,7 @@ export default function JuntaPage() {
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [notificaciones, setNotificaciones] = useState<NotificacionLog[]>([]);
+  const [condominioActivoId, setCondominioActivoId] = useState<string | null>(null);
 
   // Estados de Emisión de Cuotas
   const [periodoEmision, setPeriodoEmision] = useState<string>("2026-11");
@@ -81,15 +82,34 @@ export default function JuntaPage() {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
+    if (user.rol === "SUPERADMIN") {
+      const guardado = localStorage.getItem("condo_active_id");
+      setCondominioActivoId(guardado);
+      return;
+    }
+    setCondominioActivoId(user.condominio_id);
+  }, [user]);
+
+  useEffect(() => {
     if (activeTab === "configuracion" && !isSuperAdmin) setActiveTab("estructura");
   }, [activeTab, isSuperAdmin]);
 
-  function handlePresupuestoAprobado(presupuesto: PresupuestoAprobado) {
+  const handleCondominioCreado = useCallback((condominioId: string) => {
+    setCondominioActivoId(condominioId);
+    localStorage.setItem("condo_active_id", condominioId);
+  }, []);
+
+  const handlePresupuestoAprobado = useCallback((presupuesto: PresupuestoAprobado | null) => {
     setPresupuestoAprobado(presupuesto);
+    if (!presupuesto) {
+      setEmisionFeedback(null);
+      return;
+    }
     setPeriodoEmision(presupuesto.periodo);
     setPresupuestoTotal(presupuesto.montoTotal);
     setEmisionFeedback(null);
-  }
+  }, []);
 
   // Conciliar pago
   async function handleConciliar(id: string, decision: "APROBADO" | "RECHAZADO") {
@@ -332,7 +352,12 @@ export default function JuntaPage() {
       </div>
 
       {/* CONFIGURACIÓN DEL CONDOMINIO */}
-      {activeTab === "configuracion" && isSuperAdmin && <ConfiguracionCondominio puedeEditar={isSuperAdmin} />}
+      {activeTab === "configuracion" && isSuperAdmin && (
+        <ConfiguracionCondominio
+          puedeEditar={isSuperAdmin}
+          onCondominioCreado={handleCondominioCreado}
+        />
+      )}
 
       {/* EDIFICIOS Y DEPARTAMENTOS */}
       {activeTab === "estructura" && (
@@ -342,9 +367,9 @@ export default function JuntaPage() {
       {/* PRESUPUESTO MENSUAL */}
       {activeTab === "presupuesto" && (
         <PresupuestoMensual
-          condominioId={user?.condominio_id || "vb3-condo"}
-          puedeEditar={!isAuditor}
-          onAprobar={handlePresupuestoAprobado}
+          condominioId={condominioActivoId}
+          puedeEditar={user?.rol === "ADMIN_JUNTA" || user?.rol === "SUPERADMIN"}
+          onCambioAprobado={handlePresupuestoAprobado}
         />
       )}
 

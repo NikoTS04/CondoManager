@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # Contexto del catálogo piloto; debe configurarse con el UUID creado por CON-2.
+    CONDOMINIO_PILOTO_ID: str = ""
+
     # Servidor
     HOST: str = "0.0.0.0"
     PORT: int = 8000
