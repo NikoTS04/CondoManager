@@ -25,7 +25,13 @@ except ImportError:
     def HTTPBearer(**kwargs):  # type: ignore
         return None
 
-import jwt
+try:
+    import jwt
+except ImportError:
+    try:
+        from jose import jwt
+    except ImportError:
+        jwt = None
 
 # ============================================================================
 # Configuración Criptográfica
@@ -96,12 +102,12 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except jwt.ExpiredSignatureError:
+    except getattr(jwt, "ExpiredSignatureError", Exception):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error_code": "TOKEN_EXPIRADO", "mensaje": "La sesión ha expirado. Vuelva a iniciar sesión."},
         )
-    except jwt.InvalidTokenError:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error_code": "TOKEN_INVALIDO", "mensaje": "Token de autenticación inválido o corrupto."},
