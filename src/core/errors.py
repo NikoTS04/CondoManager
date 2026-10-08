@@ -37,8 +37,17 @@ async def api_error_handler(_request: Request, exc: APIError) -> JSONResponse:
 
 
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """Conserva el comportamiento existente salvo para el contrato de CON-2."""
+    """Adapta validaciones de FastAPI a los contratos públicos de CON-2 y CON-9."""
 
+    if request.url.path.startswith("/api/v1/presupuestos") or "/presupuestos/" in request.url.path:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error_code": "DATOS_PRESUPUESTO_INVALIDOS",
+                "mensaje": "Los datos del presupuesto no cumplen el contrato.",
+                "detalles": jsonable_encoder(exc.errors()),
+            },
+        )
     if request.url.path.startswith("/api/v1/condominios"):
         return JSONResponse(
             status_code=422,
