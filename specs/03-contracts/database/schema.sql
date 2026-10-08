@@ -9,12 +9,22 @@ CREATE TABLE condominios (
     nombre VARCHAR(150) NOT NULL,
     direccion TEXT NOT NULL,
     moneda VARCHAR(3) NOT NULL DEFAULT 'PEN' CHECK (moneda IN ('PEN', 'USD')),
-    regla_mora_tipo VARCHAR(20) NOT NULL DEFAULT 'MONTO_FIJO' CHECK (regla_mora_tipo IN ('MONTO_FIJO', 'PORCENTAJE_SALDO')),
-    monto_mora_fijo NUMERIC(12,2) DEFAULT 20.00 CHECK (monto_mora_fijo >= 0.00),
-    tasa_mora_porcentaje NUMERIC(6,4) DEFAULT 0.0000 CHECK (tasa_mora_porcentaje >= 0.0000),
-    dias_corte SMALLINT NOT NULL DEFAULT 20 CHECK (dias_corte BETWEEN 1 AND 28),
-    dias_gracia SMALLINT NOT NULL DEFAULT 2 CHECK (dias_gracia >= 0),
-    creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+    regla_mora_tipo VARCHAR(20) NOT NULL CHECK (regla_mora_tipo IN ('MONTO_FIJO', 'PORCENTAJE_SALDO')),
+    monto_mora_fijo NUMERIC(12,2) CHECK (monto_mora_fijo >= 0.00),
+    tasa_mora_porcentaje NUMERIC(7,4) CHECK (tasa_mora_porcentaje BETWEEN 0.0000 AND 100.0000),
+    dia_vencimiento SMALLINT NOT NULL CHECK (dia_vencimiento BETWEEN 1 AND 28),
+    dias_gracia SMALLINT NOT NULL CHECK (dias_gracia BETWEEN 0 AND 30),
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    CONSTRAINT ck_condominio_configuracion_mora CHECK (
+        (regla_mora_tipo = 'MONTO_FIJO'
+            AND monto_mora_fijo IS NOT NULL
+            AND tasa_mora_porcentaje IS NULL)
+        OR
+        (regla_mora_tipo = 'PORCENTAJE_SALDO'
+            AND tasa_mora_porcentaje IS NOT NULL
+            AND monto_mora_fijo IS NULL)
+    )
 );
 
 -- 2. Tabla de Departamentos / Unidades

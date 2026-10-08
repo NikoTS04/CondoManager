@@ -51,13 +51,22 @@ CondoManager implementa un esquema de **Control de Acceso Basado en Roles (RBAC)
      - `sub`: UUID del usuario.
      - `email`: Correo electrónico institucional o personal.
      - `rol`: `"SUPERADMIN"` | `"ADMIN_JUNTA"` | `"AUDITOR"` | `"PROPIETARIO"` | `"INQUILINO"`.
-     - `condominio_id`: Identificador del condominio activo.
+     - `condominio_id`: Identificador del condominio activo. Puede ser `null` únicamente
+       para un `SUPERADMIN` que ejecuta operaciones globales como el alta de un
+       condominio; para los demás roles es obligatorio.
      - `departamentos`: Lista de números de departamento asignados (ej. `["102"]`).
      - `tipo_relacion`: `"PROPIETARIO_TITULAR"` | `"INQUILINO"` | `"COPROPIETARIO"` | `"ADMINISTRADOR"`.
    - Refresh Tokens almacenados con hash en base de datos y rotación automática.
 2. **Multi-Tenancy y Context Isolation:**
-   - Cada solicitud HTTP incluye el `condominio_id` verificado mediante los claims del token JWT.
-   - Prohibida la consulta cruzada de datos entre condominios distintos (Row-Level Security o filtros forzados en el ORM).
+   - Cada solicitud contextual usa el `condominio_id` verificado mediante los claims
+     del token JWT o una asignación consultada en base de datos.
+   - Un `condominio_id` enviado en ruta, query o body selecciona un recurso, pero nunca
+     concede autorización por sí solo.
+   - Prohibida la consulta cruzada de datos entre condominios distintos (Row-Level
+     Security o filtros forzados en el ORM).
+   - `POST /api/v1/condominios` y `GET /api/v1/condominios/{condominio_id}` son
+     operaciones globales exclusivas de `SUPERADMIN`; la creación no requiere un
+     condominio activo previo.
 3. **Múltiples Propiedades por Usuario:**
    - Un propietario que posee 2 o más departamentos dentro del mismo condominio (o en condominios distintos) puede alternar su vista sin requerir cuentas de correo separadas.
    - El estado de morosidad se evalúa a nivel de **unidad habitacional (departamento)** para no bloquear injustamente una propiedad que se encuentra al día si otra presenta atraso, salvo política expresa del condominio.

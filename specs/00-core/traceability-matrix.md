@@ -8,6 +8,7 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 | ID Req. | Funcionalidad de Negocio | Especificación de Dominio (L2) | Contrato API (L3) | Criterio BDD Ejecutable (L4) | Módulo en `src/` | Responsable |
 | :---: | :--- | :--- | :--- | :--- | :--- | :---: |
+| **REQ-00 / CON-2** | Configuración y aislamiento de condominios | `02-domains/05-usuarios-rbac/spec.md` | `POST /api/v1/condominios`, `GET /api/v1/condominios/{condominio_id}` | `04-acceptance-criteria/auth-and-rbac.feature.md` (Esc. 6-12) | `src/modules/condominios/` | **Gerardo** |
 | **REQ-01** | Emisión mensual de cuotas y alícuotas | `02-domains/01-cuotas/spec.md` | `POST /api/v1/cuotas/emitir-lote` | `02-domains/01-cuotas/features/cuotas.feature` | `src/modules/cuotas/` | **Anderson** |
 | **REQ-02** | Reporte de comprobante de pago (Yape/CCI) | `02-domains/02-pagos-y-moras/spec.md` | `POST /api/v1/pagos/reportar` | `02-domains/02-pagos-y-moras/features/pagos_y_moras.feature` | `src/modules/pagos/` | **Tarqui** |
 | **REQ-03** | Bandeja de conciliación y validación de pagos | `02-domains/02-pagos-y-moras/spec.md` | `POST /api/v1/pagos/{id}/conciliar` | `02-domains/02-pagos-y-moras/features/pagos_y_moras.feature` | `src/modules/pagos/` | **Tarqui** |

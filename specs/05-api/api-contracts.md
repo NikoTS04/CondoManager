@@ -24,7 +24,70 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
 
 ## 2. Contratos Principales por Módulo
 
-### 2.1 Módulo de Cuotas (Anderson)
+### 2.1 Módulo de Condominios (CON-2 / PROC-05)
+
+Todos los endpoints de esta sección requieren `Authorization: Bearer <token>` y rol
+global `SUPERADMIN`. La ausencia de credenciales responde `401 NO_AUTENTICADO`; un rol
+distinto responde `403 ACCESO_DENEGADO`.
+
+- **`POST /api/v1/condominios`**
+  - *Descripción:* Crea la raíz persistente de un nuevo contexto multi-condominio y
+    registra la auditoría `CONDOMINIO_CREADO` en la misma transacción.
+  - *Request Body:*
+    ```json
+    {
+      "nombre": "Villa Bonita 3",
+      "direccion": "Av. Principal 123, Lima",
+      "moneda": "PEN",
+      "regla_mora_tipo": "MONTO_FIJO",
+      "monto_mora_fijo": "20.00",
+      "tasa_mora_porcentaje": null,
+      "dia_vencimiento": 20,
+      "dias_gracia": 2
+    }
+    ```
+  - *Reglas condicionales:*
+    - `MONTO_FIJO`: `monto_mora_fijo` es obligatorio y
+      `tasa_mora_porcentaje` debe ser `null`.
+    - `PORCENTAJE_SALDO`: `tasa_mora_porcentaje` es obligatoria y
+      `monto_mora_fijo` debe ser `null`.
+    - `activo`, `id` y `creado_en` son campos de servidor y se rechazan si el cliente
+      intenta incluirlos.
+  - *Response (201 Created):*
+    ```json
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "nombre": "Villa Bonita 3",
+      "direccion": "Av. Principal 123, Lima",
+      "moneda": "PEN",
+      "regla_mora_tipo": "MONTO_FIJO",
+      "monto_mora_fijo": "20.00",
+      "tasa_mora_porcentaje": null,
+      "dia_vencimiento": 20,
+      "dias_gracia": 2,
+      "activo": true,
+      "creado_en": "2026-10-08T15:30:00Z"
+    }
+    ```
+  - *Response (422 Unprocessable Entity):* `DATOS_CONDOMINIO_INVALIDOS` cuando los
+    campos no cumplen sus rangos o la combinación de mora es inconsistente.
+
+- **`GET /api/v1/condominios/{condominio_id}`**
+  - *Descripción:* Recupera exactamente el condominio persistido con el UUID indicado.
+  - *Parámetro de ruta:* `condominio_id`, UUID obligatorio.
+  - *Response (200 OK):* Mismo objeto de respuesta del alta.
+  - *Response (404 Not Found):*
+    ```json
+    {
+      "error_code": "CONDOMINIO_NO_ENCONTRADO",
+      "mensaje": "No existe un condominio con el identificador solicitado.",
+      "detalles": {
+        "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      }
+    }
+    ```
+
+### 2.2 Módulo de Cuotas (Anderson)
 - **`POST /api/v1/cuotas/emitir-lote`**
   - *Descripción:* Genera las cuotas del mes para todas las unidades activas del condominio.
   - *Request Body:*
@@ -46,7 +109,7 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
     }
     ```
 
-### 2.2 Módulo de Pagos y Moras (Tarqui)
+### 2.3 Módulo de Pagos y Moras (Tarqui)
 - **`POST /api/v1/pagos/reportar`**
   - *Descripción:* El residente carga un comprobante de pago bancario (Yape/CCI).
   - *Request Body (Multipart/Form-Data):*
@@ -77,7 +140,7 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
     ```
   - *Response (200 OK):* Retorna la liquidación e imputación a cuotas y el nuevo saldo del departamento.
 
-### 2.3 Módulo de Reservas (Brandon)
+### 2.4 Módulo de Reservas (Brandon)
 - **`POST /api/v1/reservas`**
   - *Descripción:* El residente solicita el uso de un área común.
   - *Request Body:*
@@ -115,11 +178,11 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
     }
     ```
 
-### 2.4 Módulo de Notificaciones (Alejandro)
+### 2.5 Módulo de Notificaciones (Alejandro)
 - **`POST /api/v1/notificaciones/despachar`**
   - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
 
-### 2.5 Módulo de Autenticación y RBAC (PROC-05)
+### 2.6 Módulo de Autenticación y RBAC (PROC-05)
 - **`POST /api/v1/auth/login`**
   - *Descripción:* Autentica a un usuario y genera su token de acceso JWT con sus claims y permisos.
   - *Request Body:*

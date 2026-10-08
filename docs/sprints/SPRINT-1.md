@@ -48,7 +48,7 @@ CON-22 ───────────────> CON-23
 
 **Se considera terminada cuando:** un SuperAdmin puede crear y consultar el condominio; un usuario sin autorización recibe un rechazo; y una prueba confirma que los datos de dos condominios no se mezclan.
 
-**Trazabilidad:** [backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md), [lenguaje del dominio](../../specs/00-core/ubiquitous-language.md), [modelo de entidades](../../specs/03-data-models/domain-entities.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [seguridad y RBAC](../../specs/01-architecture/security-and-rbac.md).
+**Trazabilidad:** [backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md), [especificación de dominio](../../specs/02-domains/05-usuarios-rbac/spec.md), [proceso PROC-05](../../specs/02-processes-and-automations/proc-05-gestion-usuarios.md), [lenguaje del dominio](../../specs/00-core/ubiquitous-language.md), [modelo de entidades](../../specs/03-data-models/domain-entities.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [contrato de API](../../specs/05-api/api-contracts.md), [OpenAPI](../../specs/03-contracts/openapi/condomanager.openapi.yaml), [escenarios BDD](../../specs/04-acceptance-criteria/auth-and-rbac.feature.md), [seguridad y RBAC](../../specs/01-architecture/security-and-rbac.md).
 
 ## CON-3 — Registrar edificios y departamentos
 

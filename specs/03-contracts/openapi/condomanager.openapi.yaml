@@ -22,6 +22,61 @@ paths:
                   status: { type: string, example: "ok" }
                   service: { type: string, example: "CondoManager Core API" }
 
+  /condominios:
+    post:
+      summary: Crear y configurar un condominio
+      description: >-
+        Crea la raíz de un contexto multi-condominio y su auditoría en una sola
+        transacción. Operación exclusiva del rol global SUPERADMIN.
+      operationId: crearCondominio
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearCondominioRequest'
+      responses:
+        '201':
+          description: Condominio creado, activo y auditado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CondominioResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '422':
+          $ref: '#/components/responses/Error422'
+
+  /condominios/{condominio_id}:
+    get:
+      summary: Consultar un condominio por UUID
+      description: Devuelve exactamente la configuración persistida para el UUID solicitado.
+      operationId: obtenerCondominio
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: condominio_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Condominio encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CondominioResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+
   /cuotas/emitir-lote:
     post:
       summary: Emisión masiva mensual de cuotas ordinarias
@@ -148,7 +203,78 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
+    CrearCondominioRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - nombre
+        - direccion
+        - moneda
+        - regla_mora_tipo
+        - dia_vencimiento
+        - dias_gracia
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 150, example: "Villa Bonita 3" }
+        direccion: { type: string, minLength: 1, maxLength: 500, example: "Av. Principal 123, Lima" }
+        moneda: { type: string, enum: [PEN, USD] }
+        regla_mora_tipo: { type: string, enum: [MONTO_FIJO, PORCENTAJE_SALDO] }
+        monto_mora_fijo:
+          type: [string, 'null']
+          pattern: '^[0-9]+(\.[0-9]{2})$'
+          example: "20.00"
+        tasa_mora_porcentaje:
+          type: [string, 'null']
+          pattern: '^(100\.0000|[0-9]{1,2}\.[0-9]{4})$'
+          example: null
+        dia_vencimiento: { type: integer, minimum: 1, maximum: 28, example: 20 }
+        dias_gracia: { type: integer, minimum: 0, maximum: 30, example: 2 }
+      oneOf:
+        - title: Mora por monto fijo
+          properties:
+            regla_mora_tipo: { const: MONTO_FIJO }
+            monto_mora_fijo: { type: string }
+            tasa_mora_porcentaje: { type: 'null' }
+          required: [monto_mora_fijo]
+        - title: Mora porcentual sobre saldo
+          properties:
+            regla_mora_tipo: { const: PORCENTAJE_SALDO }
+            monto_mora_fijo: { type: 'null' }
+            tasa_mora_porcentaje: { type: string }
+          required: [tasa_mora_porcentaje]
+
+    CondominioResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - nombre
+        - direccion
+        - moneda
+        - regla_mora_tipo
+        - dia_vencimiento
+        - dias_gracia
+        - activo
+        - creado_en
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string }
+        direccion: { type: string }
+        moneda: { type: string, enum: [PEN, USD] }
+        regla_mora_tipo: { type: string, enum: [MONTO_FIJO, PORCENTAJE_SALDO] }
+        monto_mora_fijo: { type: [string, 'null'], example: "20.00" }
+        tasa_mora_porcentaje: { type: [string, 'null'], example: null }
+        dia_vencimiento: { type: integer, minimum: 1, maximum: 28 }
+        dias_gracia: { type: integer, minimum: 0, maximum: 30 }
+        activo: { type: boolean, const: true }
+        creado_en: { type: string, format: date-time }
+
     EmitirLoteCuotasRequest:
       type: object
       required: [condominio_id, periodo, presupuesto_total, fecha_vencimiento]
@@ -226,3 +352,43 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+
+    Error401:
+      description: Bearer Token ausente, inválido o expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: NO_AUTENTICADO
+            mensaje: Se requiere un Bearer Token válido.
+
+    Error403:
+      description: El rol autenticado no está autorizado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: ACCESO_DENEGADO
+            mensaje: La operación requiere el rol SUPERADMIN.
+
+    Error404:
+      description: Condominio no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: CONDOMINIO_NO_ENCONTRADO
+            mensaje: No existe un condominio con el identificador solicitado.
+
+    Error422:
+      description: Datos del condominio inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: DATOS_CONDOMINIO_INVALIDOS
+            mensaje: La configuración de mora no corresponde con la modalidad seleccionada.

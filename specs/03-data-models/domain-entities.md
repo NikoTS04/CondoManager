@@ -31,7 +31,7 @@
 ## 2. Definición Detallada de Tablas / Entidades
 
 ### 2.1 Estructura Inmobiliaria
-- **`condominios`**: `id (UUID)`, `nombre (VARCHAR)`, `direccion (TEXT)`, `moneda (VARCHAR(3))`, `regla_mora_tipo (VARCHAR)`, `tasa_mora (NUMERIC(6,4))`, `dias_corte (INT)`, `dias_gracia (INT)`.
+- **`condominios`**: `id (UUID)`, `nombre (VARCHAR(150))`, `direccion (TEXT)`, `moneda (VARCHAR(3))`, `regla_mora_tipo (VARCHAR)`, `monto_mora_fijo (NUMERIC(12,2) nullable)`, `tasa_mora_porcentaje (NUMERIC(7,4) nullable)`, `dia_vencimiento (SMALLINT)`, `dias_gracia (SMALLINT)`, `activo (BOOLEAN)`, `creado_en (TIMESTAMP TZ)`. `monto_mora_fijo` y `tasa_mora_porcentaje` son mutuamente excluyentes y el valor aplicable es obligatorio según `regla_mora_tipo`.
 - **`edificios`**: `id (UUID)`, `condominio_id (FK)`, `nombre_bloque (VARCHAR)`, `total_pisos (INT)`.
 - **`departamentos`**: `id (UUID)`, `edificio_id (FK)`, `numero (VARCHAR)`, `piso (INT)`, `coeficiente_participacion (NUMERIC(6,4))`, `saldo_a_favor (NUMERIC(12,2))`, `estado_financiero (VARCHAR: AL_DIA, OBSERVADO, EN_MORA)`.
 

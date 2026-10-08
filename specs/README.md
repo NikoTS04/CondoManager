@@ -59,7 +59,7 @@ specs/
 │   │   ├── spec.md                              # Catálogo, aforos e invariante de solvencia
 │   │   ├── state-machine.md                     # Ciclo de vida de la reserva
 │   │   └── features/reservas.feature            # Criterios BDD ejecutables
-│   ├── 05-usuarios-rbac/spec.md                 # Identidad, asignación departamento-residente
+│   ├── 05-usuarios-rbac/spec.md                 # Condominios, identidad y asignación departamento-residente
 │   ├── 06-egresos-proveedores/spec.md           # Clasificación de gastos y alertas a 30/60 días
 │   ├── 07-tickets-incidencias/spec.md           # Mesa de ayuda de mantenimiento en áreas comunes
 │   └── 08-reportes-kpis/spec.md                 # Métricas de morosidad y balances mensuales en PDF
@@ -97,7 +97,7 @@ specs/
 | **Pagos, Vouchers y Moras** | **Tarqui** | [`specs/02-domains/02-pagos-y-moras/`](./02-domains/02-pagos-y-moras/) | `src/modules/pagos/` |
 | **Notificaciones y Alertas** | **Alejandro** | [`specs/02-domains/03-notificaciones/`](./02-domains/03-notificaciones/) | `src/modules/notificaciones/` |
 | **Reservas y Solvencia** | **Brandon** | [`specs/02-domains/04-reservas/`](./02-domains/04-reservas/) | `src/modules/reservas/` |
-| **Usuarios y Roles (RBAC)** | *Junta Directiva* | [`specs/02-domains/05-usuarios-rbac/`](./02-domains/05-usuarios-rbac/) | `src/modules/usuarios/` |
+| **Condominios, Usuarios y Roles (RBAC)** | *Junta Directiva* | [`specs/02-domains/05-usuarios-rbac/`](./02-domains/05-usuarios-rbac/) | `src/modules/condominios/`, `src/modules/usuarios/` |
 | **Egresos y Proveedores** | *Tesorería* | [`specs/02-domains/06-egresos-proveedores/`](./02-domains/06-egresos-proveedores/) | `src/modules/egresos/` |
 | **Mesa de Ayuda (Tickets)** | *Mantenimiento* | [`specs/02-domains/07-tickets-incidencias/`](./02-domains/07-tickets-incidencias/) | `src/modules/tickets/` |
 | **Reportería y Balances** | *Junta Directiva* | [`specs/02-domains/08-reportes-kpis/`](./02-domains/08-reportes-kpis/) | `src/modules/reportes/` |

@@ -13,12 +13,27 @@ Almacena las comunidades inmobiliarias o edificios matrices.
 | `nombre` | `VARCHAR(150)` | NO | - | - | Nombre comercial del edificio (ej. "Edificio 3 - Villa Bonita 3"). |
 | `direccion` | `TEXT` | NO | - | - | Ubicación geográfica formal. |
 | `moneda` | `VARCHAR(3)` | NO | `'PEN'` | `CHECK (moneda IN ('PEN', 'USD'))` | Moneda oficial para cobro de cuotas y libros contables. |
-| `regla_mora_tipo` | `VARCHAR(20)` | NO | `'MONTO_FIJO'` | `CHECK (regla_mora_tipo IN ('MONTO_FIJO', 'PORCENTAJE_SALDO'))` | Mecanismo de recargo punitorio por mora. |
-| `monto_mora_fijo` | `NUMERIC(12,2)` | SÍ | `20.00` | `CHECK (monto_mora_fijo >= 0.00)` | Importe de penalidad fija si aplica modalidad fija. |
-| `tasa_mora_porcentaje`| `NUMERIC(6,4)` | SÍ | `0.0000` | `CHECK (tasa_mora_porcentaje >= 0.0000)` | Tasa mensual de interés punitorio si aplica porcentaje. |
-| `dias_corte` | `SMALLINT` | NO | `20` | `CHECK (dias_corte BETWEEN 1 AND 28)` | Día calendario de vencimiento regular de la cuota mensual. |
-| `dias_gracia` | `SMALLINT` | NO | `2` | `CHECK (dias_gracia >= 0)` | Días de tolerancia antes de ejecutar la penalidad de mora. |
+| `regla_mora_tipo` | `VARCHAR(20)` | NO | - | `CHECK (regla_mora_tipo IN ('MONTO_FIJO', 'PORCENTAJE_SALDO'))` | Mecanismo de recargo punitorio por mora. |
+| `monto_mora_fijo` | `NUMERIC(12,2)` | SÍ | `NULL` | `CHECK (monto_mora_fijo >= 0.00)` | Importe de penalidad fija; obligatorio solo para `MONTO_FIJO`. |
+| `tasa_mora_porcentaje`| `NUMERIC(7,4)` | SÍ | `NULL` | `CHECK (tasa_mora_porcentaje BETWEEN 0.0000 AND 100.0000)` | Tasa mensual; obligatoria solo para `PORCENTAJE_SALDO`. |
+| `dia_vencimiento` | `SMALLINT` | NO | - | `CHECK (dia_vencimiento BETWEEN 1 AND 28)` | Día calendario de vencimiento regular. Nombre canónico que reemplaza `dias_corte`. |
+| `dias_gracia` | `SMALLINT` | NO | - | `CHECK (dias_gracia BETWEEN 0 AND 30)` | Días calendario de tolerancia antes de ejecutar la penalidad de mora. |
+| `activo` | `BOOLEAN` | NO | `TRUE` | - | Habilita el contexto del condominio; el cliente no lo establece durante el alta. |
 | `creado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Auditoría de creación de registro. |
+
+Restricción condicional `ck_condominio_configuracion_mora`:
+
+```sql
+CHECK (
+    (regla_mora_tipo = 'MONTO_FIJO'
+        AND monto_mora_fijo IS NOT NULL
+        AND tasa_mora_porcentaje IS NULL)
+    OR
+    (regla_mora_tipo = 'PORCENTAJE_SALDO'
+        AND tasa_mora_porcentaje IS NOT NULL
+        AND monto_mora_fijo IS NULL)
+)
+```
 
 ---
 
