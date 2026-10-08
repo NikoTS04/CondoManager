@@ -5,7 +5,7 @@ Los roles representan la responsabilidad principal de cada integrante durante lo
 | Integrante | Rol principal | Responsabilidades |
 |---|---|---|
 | **Gerardo** | Product Owner y coordinador del sprint | Priorizar el backlog, aclarar historias y criterios de aceptación, coordinar el avance y validar los resultados del sprint. |
-| **Gerson** | Arquitectura técnica y base de datos | Velar por la arquitectura, el modelo de datos, las migraciones, los contratos técnicos y la consistencia entre módulos. |
+| **Jerson** | Arquitectura técnica y base de datos | Velar por la arquitectura, el modelo de datos, las migraciones, los contratos técnicos y la consistencia entre módulos. |
 | **Anderson** | Full Stack Developer | Implementar historias de usuario en frontend y backend, además de participar en integraciones y revisiones de código. |
 | **Brandon** | Full Stack Developer | Implementar historias de usuario en frontend y backend, además de participar en integraciones y revisiones de código. |
 | **Alejandro** | QA y automatización de pruebas | Definir y ejecutar pruebas, automatizar escenarios y verificar el cumplimiento de los criterios de aceptación. |
