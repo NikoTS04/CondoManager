@@ -27,7 +27,46 @@ CREATE TABLE condominios (
     )
 );
 
--- 2. Tabla de Departamentos / Unidades
+-- 2. Tabla de Presupuestos Mensuales (CON-9)
+CREATE TABLE presupuestos_mensuales (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
+    periodo VARCHAR(7) NOT NULL,
+    moneda VARCHAR(3) NOT NULL CHECK (moneda IN ('PEN', 'USD')),
+    monto_total NUMERIC(12,2) NOT NULL CHECK (monto_total > 0.00),
+    fecha_vencimiento DATE NOT NULL,
+    estado VARCHAR(20) NOT NULL DEFAULT 'BORRADOR'
+        CHECK (estado IN ('BORRADOR', 'APROBADO')),
+    creado_por VARCHAR(100) NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    aprobado_por VARCHAR(100),
+    aprobado_en TIMESTAMP WITH TIME ZONE,
+    actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    CONSTRAINT uq_presupuesto_condominio_periodo UNIQUE (condominio_id, periodo),
+    CONSTRAINT ck_presupuesto_periodo CHECK (
+        periodo ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'
+    ),
+    CONSTRAINT ck_presupuesto_vencimiento_periodo CHECK (
+        CASE
+            WHEN periodo ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' THEN
+                EXTRACT(YEAR FROM fecha_vencimiento) =
+                    CAST(SUBSTRING(periodo FROM 1 FOR 4) AS INTEGER)
+                AND EXTRACT(MONTH FROM fecha_vencimiento) =
+                    CAST(SUBSTRING(periodo FROM 6 FOR 2) AS INTEGER)
+            ELSE FALSE
+        END
+    ),
+    CONSTRAINT ck_presupuesto_aprobacion CHECK (
+        (estado = 'BORRADOR' AND aprobado_por IS NULL AND aprobado_en IS NULL)
+        OR
+        (estado = 'APROBADO' AND aprobado_por IS NOT NULL AND aprobado_en IS NOT NULL)
+    )
+);
+
+-- La coincidencia entre presupuestos_mensuales.moneda y condominios.moneda,
+-- así como la inmutabilidad de un presupuesto aprobado, se validan en el servicio.
+
+-- 3. Tabla de Departamentos / Unidades
 CREATE TABLE departamentos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
@@ -39,7 +78,7 @@ CREATE TABLE departamentos (
     CONSTRAINT uq_condominio_departamento UNIQUE (condominio_id, numero)
 );
 
--- 3. Tabla de Cuotas de Mantenimiento (Anderson - PROC-01)
+-- 4. Tabla de Cuotas de Mantenimiento (Anderson - PROC-01)
 CREATE TABLE cuotas_mantenimiento (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,
@@ -56,7 +95,7 @@ CREATE TABLE cuotas_mantenimiento (
     CONSTRAINT uq_departamento_periodo UNIQUE (departamento_id, periodo)
 );
 
--- 4. Tabla de Comprobantes de Pago (Tarqui - PROC-02)
+-- 5. Tabla de Comprobantes de Pago (Tarqui - PROC-02)
 CREATE TABLE comprobantes_pago (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,
@@ -73,7 +112,7 @@ CREATE TABLE comprobantes_pago (
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
--- 5. Tabla de Áreas Comunes
+-- 6. Tabla de Áreas Comunes
 CREATE TABLE areas_comunes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
@@ -84,7 +123,7 @@ CREATE TABLE areas_comunes (
     esta_activa BOOLEAN NOT NULL DEFAULT TRUE
 );
 
--- 6. Tabla de Reservas (Brandon - PROC-04)
+-- 7. Tabla de Reservas (Brandon - PROC-04)
 CREATE TABLE reservas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     area_id UUID NOT NULL REFERENCES areas_comunes(id) ON DELETE RESTRICT,
@@ -97,7 +136,7 @@ CREATE TABLE reservas (
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
--- 7. Bitácora Inmutable de Auditoría (7 campos obligatorios)
+-- 8. Bitácora Inmutable de Auditoría (7 campos obligatorios)
 CREATE TABLE auditoria_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
@@ -115,6 +154,8 @@ CREATE TABLE auditoria_logs (
 );
 
 -- Índices de Rendimiento y Concurrencia
+CREATE INDEX idx_presupuestos_condominio_estado
+    ON presupuestos_mensuales(condominio_id, estado);
 CREATE INDEX idx_cuotas_depto_estado ON cuotas_mantenimiento(departamento_id, estado);
 CREATE INDEX idx_comprobantes_hash ON comprobantes_pago(idempotency_hash);
 CREATE INDEX idx_reservas_bloqueo ON reservas(area_id, fecha_reserva, hora_inicio, hora_fin) WHERE estado = 'CONFIRMADA';

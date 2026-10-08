@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: API formal para el Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD).
-  version: 1.0.0
+  version: 1.1.0
 servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
@@ -76,6 +76,147 @@ paths:
           $ref: '#/components/responses/Error403'
         '404':
           $ref: '#/components/responses/Error404'
+
+  /presupuestos:
+    post:
+      summary: Registrar un presupuesto mensual en borrador
+      description: >-
+        Crea un único presupuesto ordinario por condominio y periodo. Disponible
+        para SUPERADMIN y ADMIN_JUNTA dentro de su contexto autorizado.
+      operationId: crearPresupuestoMensual
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearPresupuestoRequest'
+      responses:
+        '201':
+          description: Presupuesto creado en estado BORRADOR y auditado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresupuestoResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/ErrorPresupuesto403'
+        '404':
+          $ref: '#/components/responses/ErrorPresupuesto404'
+        '409':
+          $ref: '#/components/responses/ErrorPresupuesto409'
+        '422':
+          $ref: '#/components/responses/ErrorPresupuesto422'
+
+  /presupuestos/{id}:
+    put:
+      summary: Modificar un presupuesto mensual en borrador
+      description: >-
+        Reemplaza los datos editables. El identificador y el condominio son
+        inmutables; un presupuesto APROBADO responde 409.
+      operationId: actualizarPresupuestoMensual
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarPresupuestoRequest'
+      responses:
+        '200':
+          description: Borrador reemplazado y modificación auditada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresupuestoResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/ErrorPresupuesto403'
+        '404':
+          $ref: '#/components/responses/ErrorPresupuesto404'
+        '409':
+          $ref: '#/components/responses/ErrorPresupuesto409'
+        '422':
+          $ref: '#/components/responses/ErrorPresupuesto422'
+
+  /presupuestos/{id}/aprobar:
+    post:
+      summary: Aprobar un presupuesto mensual
+      description: >-
+        Ejecuta la transición BORRADOR a APROBADO y registra el claim sub del
+        actor y la fecha UTC dentro de la misma transacción de auditoría.
+      operationId: aprobarPresupuestoMensual
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Presupuesto aprobado y auditado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresupuestoResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/ErrorPresupuesto403'
+        '404':
+          $ref: '#/components/responses/ErrorPresupuesto404'
+        '409':
+          $ref: '#/components/responses/ErrorPresupuesto409'
+        '422':
+          $ref: '#/components/responses/ErrorPresupuesto422'
+
+  /condominios/{condominio_id}/presupuestos/{periodo}:
+    get:
+      summary: Consultar el presupuesto de un condominio y periodo
+      description: >-
+        Devuelve el BORRADOR o APROBADO existente sin cruzar contextos. AUDITOR
+        puede usar esta consulta dentro de su condominio. CON-11 debe aceptar el
+        resultado como fuente de emisión únicamente cuando estado sea APROBADO.
+      operationId: obtenerPresupuestoPorPeriodo
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: condominio_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: periodo
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+            example: '2026-10'
+      responses:
+        '200':
+          description: Presupuesto encontrado dentro del contexto autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresupuestoResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/ErrorPresupuesto403'
+        '404':
+          $ref: '#/components/responses/ErrorPresupuesto404'
+        '422':
+          $ref: '#/components/responses/ErrorPresupuesto422'
 
   /cuotas/emitir-lote:
     post:
@@ -275,6 +416,71 @@ components:
         activo: { type: boolean, const: true }
         creado_en: { type: string, format: date-time }
 
+    CrearPresupuestoRequest:
+      type: object
+      additionalProperties: false
+      required: [condominio_id, periodo, moneda, monto_total, fecha_vencimiento]
+      properties:
+        condominio_id: { type: string, format: uuid }
+        periodo:
+          type: string
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          example: '2026-10'
+        moneda: { type: string, enum: [PEN, USD] }
+        monto_total:
+          type: string
+          pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
+          not: { const: '0.00' }
+          example: '20000.00'
+        fecha_vencimiento: { type: string, format: date, example: '2026-10-20' }
+
+    ActualizarPresupuestoRequest:
+      type: object
+      additionalProperties: false
+      required: [periodo, moneda, monto_total, fecha_vencimiento]
+      properties:
+        periodo:
+          type: string
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          example: '2026-10'
+        moneda: { type: string, enum: [PEN, USD] }
+        monto_total:
+          type: string
+          pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
+          not: { const: '0.00' }
+          example: '20500.00'
+        fecha_vencimiento: { type: string, format: date, example: '2026-10-20' }
+
+    PresupuestoResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - condominio_id
+        - periodo
+        - moneda
+        - monto_total
+        - fecha_vencimiento
+        - estado
+        - creado_por
+        - creado_en
+        - aprobado_por
+        - aprobado_en
+        - actualizado_en
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        periodo: { type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }
+        moneda: { type: string, enum: [PEN, USD] }
+        monto_total: { type: string, example: '20000.00' }
+        fecha_vencimiento: { type: string, format: date }
+        estado: { type: string, enum: [BORRADOR, APROBADO] }
+        creado_por: { type: string }
+        creado_en: { type: string, format: date-time }
+        aprobado_por: { type: [string, 'null'] }
+        aprobado_en: { type: [string, 'null'], format: date-time }
+        actualizado_en: { type: string, format: date-time }
+
     EmitirLoteCuotasRequest:
       type: object
       required: [condominio_id, periodo, presupuesto_total, fecha_vencimiento]
@@ -392,3 +598,55 @@ components:
           example:
             error_code: DATOS_CONDOMINIO_INVALIDOS
             mensaje: La configuración de mora no corresponde con la modalidad seleccionada.
+
+    ErrorPresupuesto403:
+      description: Rol no autorizado o condominio fuera del contexto del JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: PRESUPUESTO_ACCESO_DENEGADO
+            mensaje: No tiene permisos sobre los presupuestos del condominio solicitado.
+
+    ErrorPresupuesto404:
+      description: Condominio o presupuesto solicitado no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            presupuestoNoEncontrado:
+              value:
+                error_code: PRESUPUESTO_NO_ENCONTRADO
+                mensaje: No existe un presupuesto para el identificador o periodo solicitado.
+            condominioNoEncontrado:
+              value:
+                error_code: CONDOMINIO_NO_ENCONTRADO
+                mensaje: No existe un condominio con el identificador solicitado.
+
+    ErrorPresupuesto409:
+      description: Presupuesto duplicado o transición incompatible con su estado actual
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            periodoDuplicado:
+              value:
+                error_code: PRESUPUESTO_PERIODO_DUPLICADO
+                mensaje: Ya existe un presupuesto para el condominio y periodo indicados.
+            presupuestoNoEditable:
+              value:
+                error_code: PRESUPUESTO_NO_EDITABLE
+                mensaje: Un presupuesto aprobado no puede modificarse ni aprobarse nuevamente.
+
+    ErrorPresupuesto422:
+      description: Periodo, moneda, monto o vencimiento inválido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: DATOS_PRESUPUESTO_INVALIDOS
+            mensaje: El vencimiento debe pertenecer al periodo y la moneda debe coincidir con el condominio.
