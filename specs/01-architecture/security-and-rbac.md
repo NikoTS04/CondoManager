@@ -46,7 +46,14 @@ CondoManager implementa un esquema de **Control de Acceso Basado en Roles (RBAC)
 ## 3. Políticas de Autenticación y Autorización
 
 1. **Autenticación Basada en Tokens (JWT):**
-   - Access Tokens con expiración corta (15 a 60 minutos).
+   - Access Tokens con expiración corta (15 a 60 minutos) firmados con algoritmo HS256.
+   - Claims obligatorios en el Payload del JWT:
+     - `sub`: UUID del usuario.
+     - `email`: Correo electrónico institucional o personal.
+     - `rol`: `"SUPERADMIN"` | `"ADMIN_JUNTA"` | `"AUDITOR"` | `"PROPIETARIO"` | `"INQUILINO"`.
+     - `condominio_id`: Identificador del condominio activo.
+     - `departamentos`: Lista de números de departamento asignados (ej. `["102"]`).
+     - `tipo_relacion`: `"PROPIETARIO_TITULAR"` | `"INQUILINO"` | `"COPROPIETARIO"` | `"ADMINISTRADOR"`.
    - Refresh Tokens almacenados con hash en base de datos y rotación automática.
 2. **Multi-Tenancy y Context Isolation:**
    - Cada solicitud HTTP incluye el `condominio_id` verificado mediante los claims del token JWT.
@@ -57,7 +64,32 @@ CondoManager implementa un esquema de **Control de Acceso Basado en Roles (RBAC)
 
 ---
 
-## 4. Módulo de Transición y Documentación Interna (Gobernanza)
+## 4. Matriz de Elementos de Interfaz de Usuario (UI Elements por Pantalla y Rol)
+
+| Pantalla / Vista | Elemento de Interfaz | `SUPERADMIN` | `ADMIN_JUNTA` | `AUDITOR` | `PROPIETARIO` | `INQUILINO` |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **Header Global** | Enlace / Acceso `/junta` | ✅ | ✅ | ✅ (Solo Lectura) | ❌ (Oculto) | ❌ (Oculto) |
+| | Enlace / Acceso `/residente` | ✅ | ✅ (Soporte) | ❌ (Oculto) | ✅ | ✅ |
+| | Selector de Departamentos | ❌ | ❌ | ❌ | ✅ (Si tiene >1) | ❌ (Fijo a 1) |
+| | Badge de Rol Activo | ✅ ("SISTEMA") | ✅ ("JUNTA") | ✅ ("AUDITORÍA")| ✅ ("PROPIETARIO")| ✅ ("INQUILINO") |
+| **Portal Residente** | Widget Estado de Cuenta | ✅ | ✅ (Cualquiera)| 👁️ (Lectura) | ✅ (Sus dptos) | ✅ (Su dpto) |
+| | Formulario Reporte Pago | ❌ | ✅ (Manual) | ❌ | ✅ | ✅ |
+| | Botón Reservar Área Común | ❌ | ✅ (Manual) | ❌ | ✅ (Solvente) / 🔒 (Mora) | ✅ (Solvente) / 🔒 (Mora) |
+| | Botón Cancelar Reserva | ❌ | ✅ | ❌ | ✅ (>24h antes) | ✅ (>24h antes) |
+| **Portal Junta** | Botón Emitir Lote Cuotas | ✅ | ✅ | ❌ (Oculto/Inactivo)| ❌ | ❌ |
+| | Botón Ejecutar Motor Moras| ✅ | ✅ | ❌ (Oculto/Inactivo)| ❌ | ❌ |
+| | Botón Aprobar Comprobante | ✅ | ✅ | ❌ (Oculto/Inactivo)| ❌ | ❌ |
+| | Botón Rechazar Comprobante| ✅ | ✅ | ❌ (Oculto/Inactivo)| ❌ | ❌ |
+| | Banner Informativo de Modo| ❌ | ❌ | ✅ ("Modo Auditor") | ❌ | ❌ |
+| **Auditoría** | Visualización 7 Campos | ✅ | ✅ | ✅ | ❌ | ❌ |
+| | Botón Validar Hash SHA256| ✅ | ✅ | ✅ | ❌ | ❌ |
+| | Exportar Bitácora Criptográfica | ✅ | ✅ | ✅ | ❌ | ❌ |
+
+*Leyenda: ✅ Permitido / Visible | ❌ Denegado / Oculto | 🔒 Deshabilitado por Invariante de Negocio | 👁️ Solo Lectura*
+
+---
+
+## 5. Módulo de Transición y Documentación Interna (Gobernanza)
 
 Para mitigar el riesgo de pérdida de conocimiento o traumatismo operativo al renovar la Junta Directiva (Riesgo 1.4 de la plantilla de negocio):
 

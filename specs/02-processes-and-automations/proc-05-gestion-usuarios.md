@@ -36,21 +36,31 @@ El diseño garantiza la escalabilidad multi-edificio, permitiendo que un usuario
 - Los residentes (propietarios e inquilinos) **únicamente** pueden visualizar los estados de cuenta, comprobantes y datos de su propio departamento.
 - La Junta Directiva y el Auditor pueden consultar la información consolidada de todas las unidades del condominio.
 
+### 4.3 Autenticación y Resolución de Contexto de Sesión
+- Toda solicitud a rutas protegidas requiere un Bearer Token JWT en el encabezado `Authorization`.
+- El backend resuelve automáticamente el usuario activo (`get_current_user`) y valida que:
+  1. Si invoca acciones de administración (`ADMIN_JUNTA`, `SUPERADMIN`), su claim `rol` coincida exactamente.
+  2. Si es `AUDITOR`, sus peticiones estén restringidas estrictamente a métodos de lectura idempotente (`GET`), rechazando cualquier mutación con `403 Forbidden`.
+  3. Si es `PROPIETARIO` o `INQUILINO`, cualquier operación sobre un `departamento_id` pertenezca a la lista de `departamentos` autorizados en su token.
+
 ---
 
-## 5. Ciclo de Automatización
+## 5. Ciclo de Automatización de Autenticación y Acceso
 
 ```
- [ Administrador ingresa DNI y Correo ]
+ [ Usuario ingresa Email y Contraseña ]
                   │
                   ▼
- [ Sistema valida unicidad de Correo ] ──▶ [ Genera Token de Activación ]
+ [ API valida credenciales contra hash bcrypt ]
                   │
                   ▼
- [ Asigna Rol y Departamento ] ──▶ [ Despacha Invitación a PROC-03 (Alejandro) ]
+ [ Resuelve Roles y Departamentos asociados ]
                   │
                   ▼
- [ Residente activa contraseña e inicia sesión ]
+ [ Emite JWT con claims {sub, email, rol, departamentos} ]
+                  │
+                  ▼
+ [ Frontend adapta elementos de UI según el Rol ]
 ```
 
 ---

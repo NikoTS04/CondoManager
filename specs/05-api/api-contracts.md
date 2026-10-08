@@ -118,3 +118,55 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
 ### 2.4 Módulo de Notificaciones (Alejandro)
 - **`POST /api/v1/notificaciones/despachar`**
   - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
+
+### 2.5 Módulo de Autenticación y RBAC (PROC-05)
+- **`POST /api/v1/auth/login`**
+  - *Descripción:* Autentica a un usuario y genera su token de acceso JWT con sus claims y permisos.
+  - *Request Body:*
+    ```json
+    {
+      "email": "admin@villabonita3.pe",
+      "password": "Password123!"
+    }
+    ```
+  - *Response (200 OK):*
+    ```json
+    {
+      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "token_type": "bearer",
+      "expires_in": 3600,
+      "usuario": {
+        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "email": "admin@villabonita3.pe",
+        "nombre": "Carlos",
+        "apellido": "Mendoza",
+        "rol": "ADMIN_JUNTA",
+        "condominio_id": "vb3-condo",
+        "departamentos": []
+      }
+    }
+    ```
+  - *Response (401 Unauthorized):*
+    ```json
+    {
+      "error_code": "CREDENCIALES_INVALIDAS",
+      "mensaje": "Correo o contraseña incorrectos."
+    }
+    ```
+
+- **`GET /api/v1/auth/me`**
+  - *Descripción:* Retorna el perfil y contexto activo del usuario autenticado vía Bearer Token.
+  - *Headers:* `Authorization: Bearer <token>`
+  - *Response (200 OK):*
+    ```json
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "email": "residente102@villabonita3.pe",
+      "nombre": "Ana",
+      "apellido": "Gómez",
+      "rol": "PROPIETARIO",
+      "condominio_id": "vb3-condo",
+      "departamentos": ["102"]
+    }
+    ```
+

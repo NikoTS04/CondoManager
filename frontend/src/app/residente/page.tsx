@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import {
   AreaComun,
   Departamento,
@@ -28,13 +29,18 @@ import {
   PlusCircle,
   Building,
   User,
+  Search,
+  Lock,
 } from "lucide-react";
 
 function ResidenteContent() {
   const searchParams = useSearchParams();
-  const dptoParam = searchParams.get("dpto") || "102";
+  const dptoParam = searchParams.get("dpto");
+  const { user, activeDepartment, setActiveDepartment } = useAuth();
 
-  const [departamentoNumero, setDepartamentoNumero] = useState(dptoParam);
+  const [departamentoNumero, setDepartamentoNumero] = useState(
+    dptoParam || activeDepartment || "102"
+  );
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [activeTab, setActiveTab] = useState<"reservas" | "pagos" | "cuenta">("reservas");
 
@@ -178,40 +184,69 @@ function ResidenteContent() {
           </div>
         </div>
 
-        {/* Switcher rápido de departamento para pruebas */}
-        <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs">
-          <span className="font-semibold text-slate-600 px-2">Cambiar Unidad:</span>
-          <button
-            onClick={() => setDepartamentoNumero("102")}
-            className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-              departamentoNumero === "102"
-                ? "bg-emerald-600 text-white shadow-xs"
-                : "text-slate-700 hover:bg-white"
-            }`}
-          >
-            102 (Al Día)
-          </button>
-          <button
-            onClick={() => setDepartamentoNumero("302")}
-            className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-              departamentoNumero === "302"
-                ? "bg-emerald-600 text-white shadow-xs"
-                : "text-slate-700 hover:bg-white"
-            }`}
-          >
-            302 (Saldo +)
-          </button>
-          <button
-            onClick={() => setDepartamentoNumero("402")}
-            className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-              departamentoNumero === "402"
-                ? "bg-rose-600 text-white shadow-xs"
-                : "text-rose-700 hover:bg-rose-100"
-            }`}
-          >
-            402 (En Mora)
-          </button>
-        </div>
+        {/* Switcher contextual según rol */}
+        {user?.rol === "ADMIN_JUNTA" || user?.rol === "SUPERADMIN" ? (
+          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs">
+            <span className="font-semibold text-slate-600 px-2 flex items-center gap-1">
+              <Search className="w-3.5 h-3.5 text-blue-600" />
+              Soporte Junta:
+            </span>
+            <button
+              onClick={() => {
+                setDepartamentoNumero("102");
+                setActiveDepartment("102");
+              }}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                departamentoNumero === "102"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "text-slate-700 hover:bg-white"
+              }`}
+            >
+              102 (Al Día)
+            </button>
+            <button
+              onClick={() => {
+                setDepartamentoNumero("302");
+                setActiveDepartment("302");
+              }}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                departamentoNumero === "302"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "text-slate-700 hover:bg-white"
+              }`}
+            >
+              302 (Saldo +)
+            </button>
+            <button
+              onClick={() => {
+                setDepartamentoNumero("402");
+                setActiveDepartment("402");
+              }}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                departamentoNumero === "402"
+                  ? "bg-rose-600 text-white shadow-xs"
+                  : "text-rose-700 hover:bg-rose-100"
+              }`}
+            >
+              402 (En Mora)
+            </button>
+          </div>
+        ) : user?.rol === "INQUILINO" ? (
+          <div className="flex items-center gap-2 bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-200 text-xs text-teal-800 font-semibold">
+            <User className="w-4 h-4 text-teal-600" />
+            <span>Arrendatario Registrado • Dpto. {deptoActual.numero}</span>
+          </div>
+        ) : user?.rol === "AUDITOR" ? (
+          <div className="flex items-center gap-2 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200 text-xs text-purple-800 font-semibold">
+            <Search className="w-4 h-4 text-purple-600" />
+            <span>Vista de Auditoría • Dpto. {deptoActual.numero}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 text-xs text-emerald-800 font-semibold">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>Propietario Titular • Dpto. {deptoActual.numero}</span>
+          </div>
+        )}
       </div>
 
       {/* Tarjeta de Estado Financiero y Solvencia */}
