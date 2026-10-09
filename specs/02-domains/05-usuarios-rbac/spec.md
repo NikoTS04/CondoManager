@@ -63,8 +63,21 @@ usar `float` para validarlos, persistirlos o serializarlos.
 6. `GET /api/v1/condominios/{condominio_id}` devuelve exactamente un condominio o
    `404 CONDOMINIO_NO_ENCONTRADO`; nunca sustituye el recurso solicitado por uno
    predeterminado.
+7. `GET /api/v1/condominios` permite al `SUPERADMIN` listar únicamente los
+   condominios activos para seleccionar el contexto operativo.
 
-### 3.4 Aislamiento multi-condominio
+### 3.4 Selección del contexto activo
+
+- Un `SUPERADMIN` puede listar y seleccionar cualquier condominio activo.
+- Si la lista contiene un único condominio, el cliente puede seleccionarlo
+  automáticamente.
+- Si contiene más de uno, el cliente exige una selección explícita y no asume el
+  primero creado ni el más reciente.
+- Al crear un nuevo condominio, este se convierte en el contexto activo del cliente.
+- `ADMIN_JUNTA`, `AUDITOR`, `PROPIETARIO` e `INQUILINO` no utilizan el listado global:
+  su contexto se obtiene del claim `condominio_id` validado.
+
+### 3.5 Aislamiento multi-condominio
 
 - `condominio_id` es la raíz de partición lógica de todos los datos de negocio.
 - Toda tabla dependiente debe incluir directa o indirectamente una relación obligatoria
@@ -77,7 +90,7 @@ usar `float` para validarlos, persistirlos o serializarlos.
 - Las pruebas de integración deben crear al menos dos condominios y demostrar que la
   consulta de uno no devuelve ni modifica datos del otro.
 
-### 3.5 Auditoría
+### 3.6 Auditoría
 
 La creación registra una entrada inmutable con:
 
@@ -111,7 +124,7 @@ La creación registra una entrada inmutable con:
 CON-2 se considera terminada únicamente cuando:
 
 1. El contrato OpenAPI y el diccionario de datos coinciden con esta especificación.
-2. Un `SUPERADMIN` puede crear y consultar un condominio persistente.
+2. Un `SUPERADMIN` puede crear, listar, seleccionar y consultar un condominio persistente.
 3. Las solicitudes anónimas y de roles no autorizados reciben `401` y `403`,
    respectivamente.
 4. La respuesta de creación contiene UUID, `activo = true` y `creado_en`.

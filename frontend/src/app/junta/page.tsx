@@ -16,6 +16,7 @@ import {
   fetchComprobantes,
   fetchDepartamentos,
   fetchNotificaciones,
+  listarCondominios,
 } from "@/lib/api";
 import {
   ShieldCheck,
@@ -81,24 +82,47 @@ export default function JuntaPage() {
     loadData();
   }, []);
 
+  const handleCondominioSeleccionado = useCallback((condominioId: string | null) => {
+    setCondominioActivoId(condominioId);
+    if (condominioId) {
+      localStorage.setItem("condo_active_id", condominioId);
+    } else {
+      localStorage.removeItem("condo_active_id");
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
-    if (user.rol === "SUPERADMIN") {
-      const guardado = localStorage.getItem("condo_active_id");
-      setCondominioActivoId(guardado);
+    if (user.rol !== "SUPERADMIN") {
+      handleCondominioSeleccionado(user.condominio_id);
       return;
     }
-    setCondominioActivoId(user.condominio_id);
-  }, [user]);
+
+    let cancelado = false;
+    async function resolverContextoSuperadmin() {
+      const guardado = localStorage.getItem("condo_active_id");
+      const resultado = await listarCondominios();
+      if (cancelado || !resultado.ok || !resultado.data) {
+        setCondominioActivoId(guardado);
+        return;
+      }
+      const guardadoValido = resultado.data.some((item) => item.id === guardado);
+      const seleccionado = guardadoValido
+        ? guardado
+        : resultado.data.length === 1
+          ? resultado.data[0].id
+          : null;
+      handleCondominioSeleccionado(seleccionado);
+    }
+    void resolverContextoSuperadmin();
+    return () => {
+      cancelado = true;
+    };
+  }, [handleCondominioSeleccionado, user]);
 
   useEffect(() => {
     if (activeTab === "configuracion" && !isSuperAdmin) setActiveTab("estructura");
   }, [activeTab, isSuperAdmin]);
-
-  const handleCondominioCreado = useCallback((condominioId: string) => {
-    setCondominioActivoId(condominioId);
-    localStorage.setItem("condo_active_id", condominioId);
-  }, []);
 
   const handlePresupuestoAprobado = useCallback((presupuesto: PresupuestoAprobado | null) => {
     setPresupuestoAprobado(presupuesto);
@@ -355,7 +379,8 @@ export default function JuntaPage() {
       {activeTab === "configuracion" && isSuperAdmin && (
         <ConfiguracionCondominio
           puedeEditar={isSuperAdmin}
-          onCondominioCreado={handleCondominioCreado}
+          condominioActivoId={condominioActivoId}
+          onCondominioSeleccionado={handleCondominioSeleccionado}
         />
       )}
 

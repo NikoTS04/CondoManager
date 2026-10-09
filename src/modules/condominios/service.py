@@ -80,3 +80,6 @@ class CondominiosService:
 
     async def obtener(self, condominio_id: UUID) -> Condominio | None:
         return await self._repository.obtener_por_id(condominio_id)
+
+    async def listar_activos(self) -> list[Condominio]:
+        return await self._repository.listar_activos()

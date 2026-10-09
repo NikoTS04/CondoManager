@@ -30,6 +30,15 @@ Todos los endpoints de esta sección requieren `Authorization: Bearer <token>` y
 global `SUPERADMIN`. La ausencia de credenciales responde `401 NO_AUTENTICADO`; un rol
 distinto responde `403 ACCESO_DENEGADO`.
 
+- **`GET /api/v1/condominios`**
+  - *Descripción:* Lista los condominios activos para que el `SUPERADMIN` seleccione
+    el contexto operativo antes de ingresar a procesos como presupuesto mensual.
+  - *Response (200 OK):* Arreglo de objetos `CondominioResponse`, ordenado desde el
+    condominio creado más recientemente.
+  - La lista vacía indica que debe iniciarse el alta del primer condominio.
+  - Otros roles reciben `403 ACCESO_DENEGADO`; sus contextos proceden del JWT y no
+    pueden escoger arbitrariamente otro condominio.
+
 - **`POST /api/v1/condominios`**
   - *Descripción:* Crea la raíz persistente de un nuevo contexto multi-condominio y
     registra la auditoría `CONDOMINIO_CREADO` en la misma transacción.

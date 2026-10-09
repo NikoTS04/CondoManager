@@ -44,6 +44,7 @@ CON-22 ───────────────> CON-23
 - Configuración del día de vencimiento, días de gracia y modalidad de mora.
 - Acceso de creación restringido al rol `SUPERADMIN`.
 - Persistencia del condominio como entidad activa y devolución de su identificador.
+- Listado y selección del contexto activo para `SUPERADMIN`; selección automática si solo existe uno.
 - Aislamiento: las consultas y operaciones deben conservar el contexto del condominio correspondiente.
 
 **Se considera terminada cuando:** un SuperAdmin puede crear y consultar el condominio; un usuario sin autorización recibe un rechazo; y una prueba confirma que los datos de dos condominios no se mezclan.

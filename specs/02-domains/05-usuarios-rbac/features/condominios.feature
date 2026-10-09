@@ -40,3 +40,9 @@ Característica: Configuración y aislamiento de condominios
     Y están registrados "Condominio Norte" y "Condominio Sur"
     Cuando consulta ambos condominios por sus UUID
     Entonces cada respuesta conserva su propia configuración
+
+  Escenario: Selección entre condominios activos
+    Dado que existe un usuario autenticado con rol "SUPERADMIN"
+    Y están registrados "Condominio Norte" y "Condominio Sur"
+    Cuando lista los condominios activos
+    Entonces obtiene ambos condominios como contextos seleccionables

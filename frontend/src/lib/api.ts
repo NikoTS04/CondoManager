@@ -203,6 +203,28 @@ export async function crearCondominio(
   }
 }
 
+export async function listarCondominios(): Promise<{
+  ok: boolean;
+  data?: Condominio[];
+  error?: string;
+}> {
+  try {
+    const response = await fetch(`${API_BASE}/condominios`, {
+      headers: getAuthHeaders(),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudieron consultar los condominios."),
+      };
+    }
+    return { ok: true, data: data as Condominio[] };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API." };
+  }
+}
+
 export async function obtenerCondominio(
   condominioId: string
 ): Promise<{ ok: boolean; data?: Condominio; error?: string }> {

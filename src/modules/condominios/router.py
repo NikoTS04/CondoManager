@@ -53,6 +53,20 @@ def get_condominio_repository(
     return SQLAlchemyCondominioRepository(session)
 
 
+@router.get(
+    "",
+    response_model=list[CondominioResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Listar condominios activos",
+)
+async def listar_condominios(
+    _current_user: Annotated[dict[str, Any], Depends(require_superadmin)],
+    repository: Annotated[CondominioRepository, Depends(get_condominio_repository)],
+) -> list[CondominioResponse]:
+    condominios = await CondominiosService(repository).listar_activos()
+    return [CondominioResponse.model_validate(condominio) for condominio in condominios]
+
+
 @router.post(
     "",
     response_model=CondominioResponse,

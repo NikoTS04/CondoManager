@@ -21,6 +21,13 @@ class FakeCondominioRepository:
     async def obtener_por_id(self, condominio_id: UUID) -> Condominio | None:
         return self.condominios.get(condominio_id)
 
+    async def listar_activos(self) -> list[Condominio]:
+        return sorted(
+            (condominio for condominio in self.condominios.values() if condominio.activo),
+            key=lambda condominio: condominio.creado_en,
+            reverse=True,
+        )
+
 
 class FakePresupuestoRepository:
     """Persistencia en memoria con las mismas reglas observables que CON-9."""

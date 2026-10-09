@@ -139,3 +139,34 @@ def test_dos_condominios_permanecen_aislados(client):
     assert consulta_norte["moneda"] == "PEN"
     assert consulta_sur["nombre"] == "Condominio Sur"
     assert consulta_sur["moneda"] == "USD"
+
+
+def test_superadmin_lista_condominios_y_otro_rol_no_puede_hacerlo(client):
+    creado_norte = client.post(
+        "/api/v1/condominios",
+        json=payload("Condominio Norte"),
+        headers=auth_headers(),
+    ).json()
+    creado_sur = client.post(
+        "/api/v1/condominios",
+        json=payload("Condominio Sur"),
+        headers=auth_headers(),
+    ).json()
+
+    listado = client.get("/api/v1/condominios", headers=auth_headers())
+
+    assert listado.status_code == 200
+    assert {condominio["id"] for condominio in listado.json()} == {
+        creado_norte["id"],
+        creado_sur["id"],
+    }
+
+    sin_token = client.get("/api/v1/condominios")
+    rol_incorrecto = client.get(
+        "/api/v1/condominios",
+        headers=auth_headers("ADMIN_JUNTA"),
+    )
+    assert sin_token.status_code == 401
+    assert sin_token.json()["error_code"] == "NO_AUTENTICADO"
+    assert rol_incorrecto.status_code == 403
+    assert rol_incorrecto.json()["error_code"] == "ACCESO_DENEGADO"

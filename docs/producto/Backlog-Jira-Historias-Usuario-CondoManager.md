@@ -78,6 +78,7 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 **Criterios de aceptación:**
 
 - Dado un usuario SuperAdmin, cuando registra nombre, dirección, moneda y reglas generales válidas, entonces el condominio queda creado y activo.
+- El SuperAdmin puede listar los condominios activos y seleccionar el contexto sobre el cual operará.
 - Un usuario sin permisos de SuperAdmin no puede crear condominios.
 - Los datos de un condominio no deben mezclarse con los de otro.
 
