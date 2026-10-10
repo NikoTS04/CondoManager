@@ -30,6 +30,15 @@ Todos los endpoints de esta sección requieren `Authorization: Bearer <token>` y
 global `SUPERADMIN`. La ausencia de credenciales responde `401 NO_AUTENTICADO`; un rol
 distinto responde `403 ACCESO_DENEGADO`.
 
+- **`GET /api/v1/condominios`**
+  - *Descripción:* Lista los condominios activos para que el `SUPERADMIN` seleccione
+    el contexto operativo antes de ingresar a procesos como presupuesto mensual.
+  - *Response (200 OK):* Arreglo de objetos `CondominioResponse`, ordenado desde el
+    condominio creado más recientemente.
+  - La lista vacía indica que debe iniciarse el alta del primer condominio.
+  - Otros roles reciben `403 ACCESO_DENEGADO`; sus contextos proceden del JWT y no
+    pueden escoger arbitrariamente otro condominio.
+
 - **`POST /api/v1/condominios`**
   - *Descripción:* Crea la raíz persistente de un nuevo contexto multi-condominio y
     registra la auditoría `CONDOMINIO_CREADO` en la misma transacción.
@@ -87,7 +96,93 @@ distinto responde `403 ACCESO_DENEGADO`.
     }
     ```
 
-### 2.2 Módulo de Cuotas (Anderson)
+### 2.2 Presupuestos mensuales (CON-9)
+
+Todos los endpoints requieren `Authorization: Bearer <token>`. `SUPERADMIN` puede
+operar cualquier condominio; `ADMIN_JUNTA` puede crear, modificar, aprobar y
+consultar solo el condominio de su JWT; `AUDITOR` dispone únicamente del `GET` para
+su condominio. Los demás roles y todo cruce de contexto reciben
+`403 PRESUPUESTO_ACCESO_DENEGADO`.
+
+- **`POST /api/v1/presupuestos`**
+  - *Descripción:* Crea un presupuesto mensual ordinario en `BORRADOR` y registra
+    `PRESUPUESTO_CREADO` en la misma transacción.
+  - *Request Body:*
+    ```json
+    {
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "periodo": "2026-10",
+      "moneda": "PEN",
+      "monto_total": "20000.00",
+      "fecha_vencimiento": "2026-10-20"
+    }
+    ```
+  - *Response (201 Created):* Devuelve `PresupuestoResponse` con UUID, estado,
+    actor y fechas del servidor.
+
+- **`PUT /api/v1/presupuestos/{id}`**
+  - *Descripción:* Reemplaza `periodo`, `moneda`, `monto_total` y
+    `fecha_vencimiento` mientras el presupuesto esté en `BORRADOR`. `id` y
+    `condominio_id` no pueden modificarse. Registra `PRESUPUESTO_MODIFICADO` con
+    las fotografías anterior y posterior.
+  - *Request Body:*
+    ```json
+    {
+      "periodo": "2026-10",
+      "moneda": "PEN",
+      "monto_total": "20500.00",
+      "fecha_vencimiento": "2026-10-20"
+    }
+    ```
+  - *Response (200 OK):* Devuelve el borrador actualizado.
+
+- **`POST /api/v1/presupuestos/{id}/aprobar`**
+  - *Descripción:* Ejecuta una sola vez la transición `BORRADOR -> APROBADO`,
+    asigna `aprobado_por` desde el claim `sub`, registra `aprobado_en` en UTC y
+    crea `PRESUPUESTO_APROBADO` atómicamente.
+  - *Request Body:* No tiene.
+  - *Response (200 OK):* Devuelve el presupuesto aprobado.
+
+- **`GET /api/v1/condominios/{condominio_id}/presupuestos/{periodo}`**
+  - *Descripción:* Recupera el presupuesto existente, sea `BORRADOR` o
+    `APROBADO`, para el contexto autorizado. El periodo usa `YYYY-MM`.
+  - *Response (200 OK):*
+    ```json
+    {
+      "id": "c21b2dc9-b7d4-47d5-b947-90e3ea900f5c",
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "periodo": "2026-10",
+      "moneda": "PEN",
+      "monto_total": "20000.00",
+      "fecha_vencimiento": "2026-10-20",
+      "estado": "APROBADO",
+      "creado_por": "6a4a78de-c704-44fb-a8b1-9d387ff67c92",
+      "creado_en": "2026-10-08T15:30:00Z",
+      "aprobado_por": "6a4a78de-c704-44fb-a8b1-9d387ff67c92",
+      "aprobado_en": "2026-10-08T16:00:00Z",
+      "actualizado_en": "2026-10-08T16:00:00Z"
+    }
+    ```
+
+Reglas comunes: `periodo` debe ser válido; `monto_total` es una cadena decimal
+positiva con dos posiciones y capacidad `NUMERIC(12,2)`; la moneda es `PEN` o
+`USD` y coincide con la del condominio; el vencimiento pertenece al periodo; y
+solo existe una fila por `(condominio_id, periodo)`.
+
+| HTTP | `error_code` | Uso |
+| :---: | :--- | :--- |
+| `401` | `NO_AUTENTICADO` | Token ausente, inválido o expirado. |
+| `403` | `PRESUPUESTO_ACCESO_DENEGADO` | Rol no permitido o condominio fuera del contexto autorizado. |
+| `404` | `PRESUPUESTO_NO_ENCONTRADO` / `CONDOMINIO_NO_ENCONTRADO` | No existe el recurso solicitado. |
+| `409` | `PRESUPUESTO_PERIODO_DUPLICADO` | Ya existe el par condominio-periodo. |
+| `409` | `PRESUPUESTO_NO_EDITABLE` | El registro ya está aprobado. |
+| `422` | `DATOS_PRESUPUESTO_INVALIDOS` | Periodo, moneda, monto o vencimiento incumple el contrato. |
+
+Contrato para CON-11: la emisión recibe `condominio_id + periodo`, recupera el
+registro persistido y solo continúa si `estado == APROBADO`. El cliente no puede
+reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
+
+### 2.3 Módulo de Cuotas (Anderson)
 - **`POST /api/v1/cuotas/emitir-lote`**
   - *Descripción:* Genera las cuotas del mes para todas las unidades activas del condominio.
   - *Request Body:*
@@ -109,7 +204,7 @@ distinto responde `403 ACCESO_DENEGADO`.
     }
     ```
 
-### 2.3 Módulo de Pagos y Moras (Tarqui)
+### 2.4 Módulo de Pagos y Moras (Tarqui)
 - **`POST /api/v1/pagos/reportar`**
   - *Descripción:* El residente carga un comprobante de pago bancario (Yape/CCI).
   - *Request Body (Multipart/Form-Data):*
@@ -140,7 +235,7 @@ distinto responde `403 ACCESO_DENEGADO`.
     ```
   - *Response (200 OK):* Retorna la liquidación e imputación a cuotas y el nuevo saldo del departamento.
 
-### 2.4 Módulo de Reservas (Brandon)
+### 2.5 Módulo de Reservas (Brandon)
 - **`POST /api/v1/reservas`**
   - *Descripción:* El residente solicita el uso de un área común.
   - *Request Body:*
@@ -178,11 +273,11 @@ distinto responde `403 ACCESO_DENEGADO`.
     }
     ```
 
-### 2.5 Módulo de Notificaciones (Alejandro)
+### 2.6 Módulo de Notificaciones (Alejandro)
 - **`POST /api/v1/notificaciones/despachar`**
   - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
 
-### 2.6 Módulo de Autenticación y RBAC (PROC-05)
+### 2.7 Módulo de Autenticación y RBAC (PROC-05)
 - **`POST /api/v1/auth/login`**
   - *Descripción:* Autentica a un usuario y genera su token de acceso JWT con sus claims y permisos.
   - *Request Body:*

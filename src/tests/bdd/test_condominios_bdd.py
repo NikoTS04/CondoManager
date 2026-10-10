@@ -125,6 +125,13 @@ if HAS_BDD_RUNTIME and FEATURE_FILE.exists():
             for condominio in context["creados"]
         ]
 
+    @when("lista los condominios activos")
+    def listar_condominios_activos(context, client):
+        context["response"] = client.get(
+            "/api/v1/condominios",
+            headers=context["headers"],
+        )
+
     @then(parsers.parse("la API responde con código {codigo:d}"))
     def verificar_codigo(context, codigo):
         assert context["response"].status_code == codigo
@@ -155,6 +162,13 @@ if HAS_BDD_RUNTIME and FEATURE_FILE.exists():
         assert norte["moneda"] == "PEN"
         assert sur["nombre"] == "Condominio Sur"
         assert sur["moneda"] == "USD"
+
+    @then("obtiene ambos condominios como contextos seleccionables")
+    def verificar_listado_seleccionable(context):
+        assert context["response"].status_code == 200
+        assert {item["id"] for item in context["response"].json()} == {
+            item["id"] for item in context["creados"]
+        }
 else:
 
     def test_bdd_skipped_if_runtime_is_unavailable():

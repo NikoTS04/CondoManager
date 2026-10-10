@@ -15,6 +15,8 @@ class CondominioRepository(Protocol):
 
     async def obtener_por_id(self, condominio_id: UUID) -> Condominio | None: ...
 
+    async def listar_activos(self) -> list[Condominio]: ...
+
 
 class SQLAlchemyCondominioRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -32,3 +34,11 @@ class SQLAlchemyCondominioRepository:
             select(Condominio).where(Condominio.id == condominio_id)
         )
         return resultado.scalar_one_or_none()
+
+    async def listar_activos(self) -> list[Condominio]:
+        resultado = await self._session.execute(
+            select(Condominio)
+            .where(Condominio.activo.is_(True))
+            .order_by(Condominio.creado_en.desc(), Condominio.id)
+        )
+        return list(resultado.scalars().all())

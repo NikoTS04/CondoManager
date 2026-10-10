@@ -19,7 +19,7 @@ class UsuarioDTO(BaseModel):
     nombre: str
     apellido: str
     rol: str = Field(..., description="SUPERADMIN, ADMIN_JUNTA, AUDITOR, PROPIETARIO, INQUILINO")
-    condominio_id: str
+    condominio_id: Optional[str]
     departamentos: List[str] = Field(default_factory=list, description="Lista de números de departamentos vinculados")
     tipo_relacion: Optional[str] = Field(default=None, description="PROPIETARIO_TITULAR, INQUILINO, ADMINISTRADOR")
 
@@ -39,6 +39,6 @@ class UserContextResponse(BaseModel):
     nombre: str
     apellido: str
     rol: str
-    condominio_id: str
+    condominio_id: Optional[str]
     departamentos: List[str]
     tipo_relacion: Optional[str] = None

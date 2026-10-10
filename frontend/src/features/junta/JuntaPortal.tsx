@@ -29,6 +29,7 @@ import {
   fetchComprobantes,
   fetchDepartamentos,
   fetchNotificaciones,
+  listarCondominios,
   type ComprobantePago,
   type Departamento,
   type NotificacionLog,
@@ -50,6 +51,7 @@ export default function JuntaPortal() {
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [notificaciones, setNotificaciones] = useState<NotificacionLog[]>([]);
+  const [condominioActivoId, setCondominioActivoId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [presupuesto, setPresupuesto] = useState<PresupuestoAprobado | null>(null);
@@ -85,6 +87,48 @@ export default function JuntaPortal() {
     void loadData();
   }, [loadData]);
 
+  const seleccionarCondominio = useCallback((condominioId: string | null) => {
+    setCondominioActivoId(condominioId);
+    setPresupuesto(null);
+    if (condominioId) {
+      localStorage.setItem("condo_active_id", condominioId);
+    } else {
+      localStorage.removeItem("condo_active_id");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.rol !== "SUPERADMIN") {
+      seleccionarCondominio(user.condominio_id);
+      return;
+    }
+
+    let cancelado = false;
+    async function resolverContextoSuperadmin() {
+      const guardado = localStorage.getItem("condo_active_id");
+      const resultado = await listarCondominios();
+      if (cancelado) return;
+      if (!resultado.ok || !resultado.data) {
+        setCondominioActivoId(guardado);
+        return;
+      }
+
+      const guardadoValido = resultado.data.some((item) => item.id === guardado);
+      const seleccionado = guardadoValido
+        ? guardado
+        : resultado.data.length === 1
+          ? resultado.data[0].id
+          : null;
+      seleccionarCondominio(seleccionado);
+    }
+
+    void resolverContextoSuperadmin();
+    return () => {
+      cancelado = true;
+    };
+  }, [seleccionarCondominio, user]);
+
   const pendientes = useMemo(
     () => comprobantes.filter((comprobante) => comprobante.estado === "EN_REVISION"),
     [comprobantes],
@@ -95,10 +139,10 @@ export default function JuntaPortal() {
   );
   const navActual = JUNTA_NAV_ITEMS.find((item) => item.id === section);
 
-  function aprobarPresupuesto(nuevoPresupuesto: PresupuestoAprobado) {
+  const manejarPresupuestoAprobado = useCallback((nuevoPresupuesto: PresupuestoAprobado | null) => {
     setPresupuesto(nuevoPresupuesto);
     setFeedback(null);
-  }
+  }, []);
 
   function solicitarEmision(event: FormEvent) {
     event.preventDefault();
@@ -204,7 +248,7 @@ export default function JuntaPortal() {
     <div className="space-y-6">
       <PageHeader
         title="Portal de Junta"
-        description={`Villa Bonita 3 · ${seccionTitulo}`}
+        description={`${condominioActivoId ? "Condominio seleccionado" : "Sin condominio seleccionado"} · ${seccionTitulo}`}
         actions={(
           <Button
             variant="secondary"
@@ -271,7 +315,11 @@ export default function JuntaPortal() {
             />
           )}
           {section === "configuracion" && isSuperAdmin && (
-            <ConfiguracionCondominio puedeEditar={isSuperAdmin} />
+            <ConfiguracionCondominio
+              puedeEditar={isSuperAdmin}
+              condominioActivoId={condominioActivoId}
+              onCondominioSeleccionado={seleccionarCondominio}
+            />
           )}
           {section === "estructura" && (
             <EstructuraCondominio
@@ -288,9 +336,9 @@ export default function JuntaPortal() {
                 distribucionAprobada={alicuotasValidas}
               />
               <PresupuestoMensual
-                condominioId={user?.condominio_id || "vb3-condo"}
-                puedeEditar={!isAuditor}
-                onAprobar={aprobarPresupuesto}
+                condominioId={condominioActivoId}
+                puedeEditar={user?.rol === "ADMIN_JUNTA" || user?.rol === "SUPERADMIN"}
+                onCambioAprobado={manejarPresupuestoAprobado}
               />
             </>
           )}

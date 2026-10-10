@@ -1,22 +1,42 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { Building2, CircleDollarSign, Info, Save, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Building2, CircleDollarSign, Info, Plus, Save, Settings2 } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/Feedback";
 import { Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { MoneyInput } from "@/components/ui/MoneyInput";
-import { EmptyState } from "@/components/ui/Feedback";
-import { crearCondominio, type Condominio, type Moneda, type ReglaMoraTipo } from "@/lib/api";
+import {
+  crearCondominio,
+  listarCondominios,
+  type Condominio,
+  type Moneda,
+  type ReglaMoraTipo,
+} from "@/lib/api";
 import { isValidMoney } from "@/lib/money";
 
 interface ConfiguracionCondominioProps {
   puedeEditar: boolean;
+  condominioActivoId: string | null;
+  onCondominioSeleccionado: (condominioId: string | null) => void;
 }
 
-export default function ConfiguracionCondominio({ puedeEditar }: ConfiguracionCondominioProps) {
+export default function ConfiguracionCondominio({
+  puedeEditar,
+  condominioActivoId,
+  onCondominioSeleccionado,
+}: ConfiguracionCondominioProps) {
+  const [condominios, setCondominios] = useState<Condominio[]>([]);
+  const [configuracion, setConfiguracion] = useState<Condominio | null>(null);
+  const [modoCreacion, setModoCreacion] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+
   const [nombre, setNombre] = useState("Villa Bonita 3");
   const [direccion, setDireccion] = useState("Av. Principal 123, Lima");
   const [moneda, setMoneda] = useState<Moneda>("PEN");
@@ -25,13 +45,69 @@ export default function ConfiguracionCondominio({ puedeEditar }: ConfiguracionCo
   const [tasaMoraPorcentaje, setTasaMoraPorcentaje] = useState("0.0000");
   const [diaVencimiento, setDiaVencimiento] = useState("20");
   const [diasGracia, setDiasGracia] = useState("2");
-  const [error, setError] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState(false);
-  const [configuracion, setConfiguracion] = useState<Condominio | null>(null);
+
+  const seleccionar = useCallback((condominio: Condominio) => {
+    setConfiguracion(condominio);
+    setModoCreacion(false);
+    setError(null);
+    setMensaje(null);
+    onCondominioSeleccionado(condominio.id);
+  }, [onCondominioSeleccionado]);
+
+  const cargarCondominios = useCallback(async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      const resultado = await listarCondominios();
+      if (!resultado.ok || !resultado.data) {
+        setError(resultado.error || "No se pudieron cargar los condominios existentes.");
+        return;
+      }
+
+      setCondominios(resultado.data);
+      const guardado = resultado.data.find((item) => item.id === condominioActivoId);
+      const automatico = guardado || (resultado.data.length === 1 ? resultado.data[0] : null);
+      if (automatico) {
+        setConfiguracion(automatico);
+        setModoCreacion(false);
+        if (automatico.id !== condominioActivoId) {
+          onCondominioSeleccionado(automatico.id);
+        }
+        return;
+      }
+
+      setConfiguracion(null);
+      setModoCreacion(resultado.data.length === 0);
+      if (condominioActivoId) onCondominioSeleccionado(null);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "No se pudieron cargar los condominios.");
+    } finally {
+      setCargando(false);
+    }
+  }, [condominioActivoId, onCondominioSeleccionado]);
+
+  useEffect(() => {
+    void cargarCondominios();
+  }, [cargarCondominios]);
+
+  function iniciarCreacion() {
+    setNombre("Villa Bonita 3");
+    setDireccion("Av. Principal 123, Lima");
+    setMoneda("PEN");
+    setReglaMora("MONTO_FIJO");
+    setMontoMoraFijo("20.00");
+    setTasaMoraPorcentaje("0.0000");
+    setDiaVencimiento("20");
+    setDiasGracia("2");
+    setError(null);
+    setMensaje(null);
+    setModoCreacion(true);
+  }
 
   async function guardarConfiguracion(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setMensaje(null);
 
     if (!puedeEditar) {
       setError("Solo un usuario SuperAdmin puede configurar un condominio.");
@@ -41,22 +117,14 @@ export default function ConfiguracionCondominio({ puedeEditar }: ConfiguracionCo
       setError("El nombre y la dirección del condominio son obligatorios.");
       return;
     }
-    if (!/^\d{1,2}$/.test(diaVencimiento)) {
-      setError("El día de vencimiento debe ser un entero entre 1 y 28.");
-      return;
-    }
-    if (!/^\d{1,2}$/.test(diasGracia)) {
-      setError("Los días de gracia deben ser un entero entre 0 y 30.");
-      return;
-    }
 
-    const vencimiento = Number.parseInt(diaVencimiento, 10);
-    const gracia = Number.parseInt(diasGracia, 10);
-    if (vencimiento < 1 || vencimiento > 28) {
+    const vencimiento = Number(diaVencimiento);
+    const gracia = Number(diasGracia);
+    if (!Number.isInteger(vencimiento) || vencimiento < 1 || vencimiento > 28) {
       setError("El día de vencimiento debe ser un entero entre 1 y 28.");
       return;
     }
-    if (gracia < 0 || gracia > 30) {
+    if (!Number.isInteger(gracia) || gracia < 0 || gracia > 30) {
       setError("Los días de gracia deben ser un entero entre 0 y 30.");
       return;
     }
@@ -64,10 +132,7 @@ export default function ConfiguracionCondominio({ puedeEditar }: ConfiguracionCo
       setError("Ingresa un monto de mora válido con hasta dos decimales.");
       return;
     }
-    if (
-      reglaMora === "PORCENTAJE_SALDO" &&
-      !/^(100\.0000|\d{1,2}\.\d{4})$/.test(tasaMoraPorcentaje)
-    ) {
+    if (reglaMora === "PORCENTAJE_SALDO" && !/^(100\.0000|\d{1,2}\.\d{4})$/.test(tasaMoraPorcentaje)) {
       setError("La tasa debe estar entre 0.0000 y 100.0000 y tener cuatro decimales.");
       return;
     }
@@ -88,7 +153,11 @@ export default function ConfiguracionCondominio({ puedeEditar }: ConfiguracionCo
         setError(resultado.error || "No se pudo guardar la configuración.");
         return;
       }
-      setConfiguracion(resultado.data);
+
+      const creado = resultado.data;
+      setCondominios((actuales) => [creado, ...actuales.filter((item) => item.id !== creado.id)]);
+      seleccionar(creado);
+      setMensaje("Condominio creado y seleccionado como contexto activo.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "No se pudo guardar la configuración.");
     } finally {
@@ -100,113 +169,112 @@ export default function ConfiguracionCondominio({ puedeEditar }: ConfiguracionCo
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(16rem,0.8fr)]">
       <Card>
         <CardHeader
-          title="Configurar un condominio"
-          description="Define la identidad, moneda y reglas financieras generales."
+          title="Contexto del condominio"
+          description="Selecciona un condominio existente o registra uno nuevo de forma explícita."
           icon={<Settings2 className="h-5 w-5" aria-hidden="true" />}
           actions={<Badge tone="info">Conectado a la API</Badge>}
         />
-        <CardBody>
-          {!puedeEditar && (
-            <div className="mb-4 rounded-lg border border-audit-200 bg-audit-50 p-3">
-              <Badge tone="audit">Solo lectura</Badge>
-            </div>
-          )}
-          {error && <Alert tone="danger" title="No se pudo guardar">{error}</Alert>}
-          <form onSubmit={guardarConfiguracion} className="mt-4 space-y-5">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Nombre del condominio" required>
-                <Input
-                  value={nombre}
-                  onChange={(event) => setNombre(event.target.value)}
-                  disabled={!puedeEditar}
-                  autoComplete="organization"
-                />
-              </Field>
-              <Field label="Moneda principal" required>
+        <CardBody className="space-y-5">
+          {error && <Alert tone="danger" title="No se pudo completar la operación">{error}</Alert>}
+          {mensaje && <Alert tone="success" title="Configuración actualizada">{mensaje}</Alert>}
+
+          <div className="rounded-xl border border-line bg-canvas p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <Field label="Condominio activo" className="flex-1">
                 <Select
-                  value={moneda}
-                  onChange={(event) => setMoneda(event.target.value as Moneda)}
-                  disabled={!puedeEditar}
+                  value={configuracion?.id || ""}
+                  onChange={(event) => {
+                    const elegido = condominios.find((item) => item.id === event.target.value);
+                    if (elegido) seleccionar(elegido);
+                    else {
+                      setConfiguracion(null);
+                      onCondominioSeleccionado(null);
+                    }
+                  }}
+                  disabled={cargando}
                 >
-                  <option value="PEN">PEN — Sol peruano</option>
-                  <option value="USD">USD — Dólar estadounidense</option>
+                  <option value="">
+                    {cargando
+                      ? "Cargando condominios..."
+                      : condominios.length > 1
+                        ? "Seleccione un condominio"
+                        : "Sin condominios disponibles"}
+                  </option>
+                  {condominios.map((condominio) => (
+                    <option key={condominio.id} value={condominio.id}>
+                      {condominio.nombre} — {condominio.direccion}
+                    </option>
+                  ))}
                 </Select>
               </Field>
+              {puedeEditar && !modoCreacion && (
+                <Button type="button" variant="secondary" onClick={iniciarCreacion} icon={<Plus className="h-4 w-4" aria-hidden="true" />}>
+                  Nuevo condominio
+                </Button>
+              )}
             </div>
+          </div>
 
-            <Field label="Dirección" required>
-              <Textarea
-                value={direccion}
-                onChange={(event) => setDireccion(event.target.value)}
-                disabled={!puedeEditar}
-                rows={2}
-              />
-            </Field>
+          {modoCreacion && (
+            <form onSubmit={guardarConfiguracion} className="space-y-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-semibold">Registrar nuevo condominio</h3>
+                {condominios.length > 0 && (
+                  <Button type="button" variant="ghost" onClick={() => setModoCreacion(false)}>Cancelar</Button>
+                )}
+              </div>
 
-            <section className="rounded-xl border border-line bg-canvas p-4">
-              <h3 className="flex items-center gap-2 text-sm font-semibold">
-                <CircleDollarSign className="h-4 w-4 text-warning-600" aria-hidden="true" />
-                Reglas generales de cobranza
-              </h3>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Field label="Regla de mora" required>
-                  <Select
-                    value={reglaMora}
-                    onChange={(event) => setReglaMora(event.target.value as ReglaMoraTipo)}
-                    disabled={!puedeEditar}
-                  >
-                    <option value="MONTO_FIJO">Monto fijo</option>
-                    <option value="PORCENTAJE_SALDO">Porcentaje sobre saldo</option>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Nombre del condominio" required>
+                  <Input value={nombre} onChange={(event) => setNombre(event.target.value)} />
+                </Field>
+                <Field label="Moneda principal" required>
+                  <Select value={moneda} onChange={(event) => setMoneda(event.target.value as Moneda)}>
+                    <option value="PEN">PEN — Sol peruano</option>
+                    <option value="USD">USD — Dólar estadounidense</option>
                   </Select>
                 </Field>
-                {reglaMora === "MONTO_FIJO" ? (
-                  <Field label="Monto fijo de mora" required>
-                    <MoneyInput
-                      value={montoMoraFijo}
-                      onValueChange={setMontoMoraFijo}
-                      moneda={moneda}
-                      disabled={!puedeEditar}
-                    />
-                  </Field>
-                ) : (
-                  <Field label="Tasa de mora (%)" required>
-                    <Input
-                      inputMode="decimal"
-                      value={tasaMoraPorcentaje}
-                      onChange={(event) => setTasaMoraPorcentaje(event.target.value)}
-                      disabled={!puedeEditar}
-                    />
-                  </Field>
-                )}
-                <Field label="Día de vencimiento mensual" required>
-                  <Input
-                    inputMode="numeric"
-                    value={diaVencimiento}
-                    onChange={(event) => setDiaVencimiento(event.target.value)}
-                    disabled={!puedeEditar}
-                  />
-                </Field>
-                <Field label="Días de gracia" required>
-                  <Input
-                    inputMode="numeric"
-                    value={diasGracia}
-                    onChange={(event) => setDiasGracia(event.target.value)}
-                    disabled={!puedeEditar}
-                  />
-                </Field>
               </div>
-            </section>
 
-            {puedeEditar && (
-              <Button
-                type="submit"
-                loading={guardando}
-                icon={<Save className="h-4 w-4" aria-hidden="true" />}
-              >
+              <Field label="Dirección" required>
+                <Textarea value={direccion} onChange={(event) => setDireccion(event.target.value)} rows={2} />
+              </Field>
+
+              <section className="rounded-xl border border-line bg-canvas p-4">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <CircleDollarSign className="h-4 w-4 text-warning-600" aria-hidden="true" />
+                  Reglas generales de cobranza
+                </h3>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <Field label="Regla de mora" required>
+                    <Select value={reglaMora} onChange={(event) => setReglaMora(event.target.value as ReglaMoraTipo)}>
+                      <option value="MONTO_FIJO">Monto fijo</option>
+                      <option value="PORCENTAJE_SALDO">Porcentaje sobre saldo</option>
+                    </Select>
+                  </Field>
+                  {reglaMora === "MONTO_FIJO" ? (
+                    <Field label="Monto fijo de mora" required>
+                      <MoneyInput value={montoMoraFijo} onValueChange={setMontoMoraFijo} moneda={moneda} />
+                    </Field>
+                  ) : (
+                    <Field label="Tasa de mora (%)" required>
+                      <Input inputMode="decimal" value={tasaMoraPorcentaje} onChange={(event) => setTasaMoraPorcentaje(event.target.value)} />
+                    </Field>
+                  )}
+                  <Field label="Día de vencimiento mensual" required>
+                    <Input inputMode="numeric" value={diaVencimiento} onChange={(event) => setDiaVencimiento(event.target.value)} />
+                  </Field>
+                  <Field label="Días de gracia" required>
+                    <Input inputMode="numeric" value={diasGracia} onChange={(event) => setDiasGracia(event.target.value)} />
+                  </Field>
+                </div>
+              </section>
+
+              <Button type="submit" loading={guardando} icon={<Save className="h-4 w-4" aria-hidden="true" />}>
                 Guardar configuración
               </Button>
-            )}
-          </form>
+            </form>
+          )}
         </CardBody>
       </Card>
 
@@ -214,16 +282,15 @@ export default function ConfiguracionCondominio({ puedeEditar }: ConfiguracionCo
         <Alert tone="info" title="Persistencia y autorización">
           <span className="inline-flex items-start gap-2">
             <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            El alta se envía al backend con la sesión activa. La autorización también se
-            valida en el servidor.
+            La selección se conserva para la sesión del SuperAdmin. La autorización también se valida en el servidor.
           </span>
         </Alert>
         <Card>
-          <CardHeader title="Estado de configuración" />
+          <CardHeader title="Condominio seleccionado" />
           <CardBody>
             {configuracion ? (
               <div className="space-y-3 text-sm">
-                <Badge tone="success">Condominio activo</Badge>
+                <Badge tone="success">Contexto activo</Badge>
                 <div className="rounded-lg bg-canvas p-4">
                   <p className="font-semibold">{configuracion.nombre}</p>
                   <p className="mt-1 text-muted">{configuracion.direccion}</p>
@@ -236,8 +303,10 @@ export default function ConfiguracionCondominio({ puedeEditar }: ConfiguracionCo
             ) : (
               <EmptyState
                 icon={Building2}
-                title="Sin configuración persistida"
-                description="Completa el formulario para crear el condominio."
+                title="Sin condominio seleccionado"
+                description={condominios.length > 1
+                  ? "Selecciona el condominio con el que deseas trabajar."
+                  : "Completa el formulario para crear el primer condominio."}
               />
             )}
           </CardBody>

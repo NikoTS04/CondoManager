@@ -118,3 +118,15 @@ Entonces cada respuesta contiene únicamente la configuración asociada al UUID 
 Y ningún dato de "Condominio Norte" aparece en la respuesta de "Condominio Sur"
 Y ningún dato de "Condominio Sur" aparece en la respuesta de "Condominio Norte".
 ```
+
+### Escenario 13: Selección del condominio activo por SuperAdmin
+
+```gherkin
+Dado que un usuario autenticado tiene rol global "SUPERADMIN"
+Y existen uno o más condominios activos
+Cuando consulta GET "/api/v1/condominios"
+Entonces la API responde con código HTTP 200 OK
+Y devuelve los condominios activos como contextos seleccionables
+Y si existe más de uno la interfaz exige una selección explícita
+Y los usuarios sin rol "SUPERADMIN" no pueden utilizar el listado global.
+```

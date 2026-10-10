@@ -79,6 +79,7 @@ CondoManager implementa un esquema de **Control de Acceso Basado en Roles (RBAC)
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Header Global** | Enlace / Acceso `/junta` | ✅ | ✅ | ✅ (Solo Lectura) | ❌ (Oculto) | ❌ (Oculto) |
 | | Enlace / Acceso `/residente` | ✅ | ✅ (Soporte) | ❌ (Oculto) | ✅ | ✅ |
+| | Selector de Condominio Activo | ✅ (Si tiene >1) | ❌ (Fijo por JWT) | ❌ (Fijo por JWT) | ❌ (Fijo por JWT) | ❌ (Fijo por JWT) |
 | | Selector de Departamentos | ❌ | ❌ | ❌ | ✅ (Si tiene >1) | ❌ (Fijo a 1) |
 | | Badge de Rol Activo | ✅ ("SISTEMA") | ✅ ("JUNTA") | ✅ ("AUDITORÍA")| ✅ ("PROPIETARIO")| ✅ ("INQUILINO") |
 | **Portal Residente** | Widget Estado de Cuenta | ✅ | ✅ (Cualquiera)| 👁️ (Lectura) | ✅ (Sus dptos) | ✅ (Su dpto) |

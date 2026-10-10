@@ -109,6 +109,9 @@ export interface LoginResult {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -127,13 +130,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (savedToken && savedUser) {
           try {
             const parsed = JSON.parse(savedUser) as UserProfile;
-            setUser(parsed);
-            setToken(savedToken);
-            if (savedDepto) setActiveDepartment(savedDepto);
-            else if (parsed.departamentos?.length > 0) {
-              setActiveDepartment(parsed.departamentos[0]);
+            const contextoValido =
+              parsed.rol === "SUPERADMIN" || UUID_PATTERN.test(parsed.condominio_id || "");
+            if (contextoValido) {
+              setUser(parsed);
+              setToken(savedToken);
+              if (savedDepto) setActiveDepartment(savedDepto);
+              else if (parsed.departamentos?.length > 0) {
+                setActiveDepartment(parsed.departamentos[0]);
+              }
+              return;
             }
-            return;
+            localStorage.removeItem("condo_token");
+            localStorage.removeItem("condo_user");
+            localStorage.removeItem("condo_active_id");
           } catch {
             // Si la sesión guardada no se puede leer, continúa con el modo configurado.
           }
@@ -183,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("condo_token");
       localStorage.removeItem("condo_user");
       localStorage.removeItem("condo_depto");
+      localStorage.removeItem("condo_active_id");
     }
     router.push("/login");
   }

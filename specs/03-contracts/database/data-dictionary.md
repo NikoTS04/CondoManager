@@ -37,7 +37,38 @@ CHECK (
 
 ---
 
-## 2. Tabla: `departamentos`
+## 2. Tabla: `presupuestos_mensuales`
+
+Almacena el presupuesto ordinario de cada condominio y periodo (CON-9).
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador único del presupuesto. |
+| `condominio_id` | `UUID` | NO | - | `REFERENCES condominios(id) ON DELETE RESTRICT` | Condominio propietario del presupuesto. |
+| `periodo` | `VARCHAR(7)` | NO | - | Formato `YYYY-MM`; `UNIQUE (condominio_id, periodo)` | Mes contable del presupuesto. |
+| `moneda` | `VARCHAR(3)` | NO | - | `CHECK (moneda IN ('PEN', 'USD'))` | Debe coincidir con `condominios.moneda`; la aplicación valida esta regla transrelacional. |
+| `monto_total` | `NUMERIC(12,2)` | NO | - | `CHECK (monto_total > 0.00)` | Total ordinario aprobado para distribuir. |
+| `fecha_vencimiento` | `DATE` | NO | - | Debe pertenecer a `periodo` | Fecha límite de pago de las cuotas resultantes. |
+| `estado` | `VARCHAR(20)` | NO | `'BORRADOR'` | `CHECK (estado IN ('BORRADOR', 'APROBADO'))` | Estado del ciclo de vida. |
+| `creado_por` | `VARCHAR(100)` | NO | - | - | Claim `sub` del actor que creó el borrador. |
+| `creado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Fecha y hora UTC de creación. |
+| `aprobado_por` | `VARCHAR(100)` | SÍ | `NULL` | - | Claim `sub` del actor que aprobó. |
+| `aprobado_en` | `TIMESTAMP TZ` | SÍ | `NULL` | - | Fecha y hora UTC de aprobación. |
+| `actualizado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Última modificación UTC. |
+
+Restricciones adicionales:
+
+- `ck_presupuesto_periodo`: valida el patrón `YYYY-MM` y un mes entre `01` y `12`.
+- `ck_presupuesto_vencimiento_periodo`: compara año y mes de
+  `fecha_vencimiento` con `periodo`.
+- `ck_presupuesto_aprobacion`: exige ambos campos de aprobación en estado
+  `APROBADO` y ambos nulos en `BORRADOR`.
+- La coincidencia de moneda con el condominio y la inmutabilidad posterior a la
+  aprobación se aplican transaccionalmente en el servicio.
+
+---
+
+## 3. Tabla: `departamentos`
 Almacena cada unidad inmobiliaria exclusiva (departamento, flat, local).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -52,7 +83,7 @@ Almacena cada unidad inmobiliaria exclusiva (departamento, flat, local).
 
 ---
 
-## 3. Tabla: `cuotas_mantenimiento`
+## 4. Tabla: `cuotas_mantenimiento`
 Almacena las obligaciones devengadas mensuales por cada departamento (Anderson - PROC-01).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -72,7 +103,7 @@ Almacena las obligaciones devengadas mensuales por cada departamento (Anderson -
 
 ---
 
-## 4. Tabla: `comprobantes_pago`
+## 5. Tabla: `comprobantes_pago`
 Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -92,7 +123,7 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 ---
 
-## 5. Tabla: `reservas`
+## 6. Tabla: `reservas`
 Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -108,7 +139,7 @@ Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 
 ---
 
-## 6. Tabla: `auditoria_logs`
+## 7. Tabla: `auditoria_logs`
 Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
