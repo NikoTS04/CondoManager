@@ -1,25 +1,4 @@
-
-
 services:
-  # Base de Datos Relacional PostgreSQL 16
-  db:
-    image: postgres:16-alpine
-    container_name: condomanager-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-condo_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-condo_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-condomanager}
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-condo_user} -d ${POSTGRES_DB:-condomanager}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   # Broker de Mensajes y Cache Redis 7
   redis:
     image: redis:7-alpine
@@ -58,15 +37,16 @@ services:
     container_name: condomanager-backend
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-condo_user}:${POSTGRES_PASSWORD:-condo_secret}@db:5432/${POSTGRES_DB:-condomanager}
+      # Inyecta la conexión a Supabase definida en tu archivo .env
+      - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379/0
       - S3_ENDPOINT_URL=http://minio:9000
       - CONDOMINIO_PILOTO_ID=${CONDOMINIO_PILOTO_ID:-}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
     ports:
       - "8000:8000"
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -85,8 +65,6 @@ services:
       - backend
 
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
     driver: local
   minio_data:

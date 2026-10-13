@@ -28,6 +28,7 @@ build/
 .env.*.local
 *.pem
 *.key
+condomanager_schema.sql
 
 # Archivos temporales de IDE y SO
 .vscode/
