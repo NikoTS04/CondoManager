@@ -24,6 +24,40 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
 
 ## 2. Contratos Principales por Módulo
 
+### Distribución de cuotas (CON-10)
+
+Base: `/api/v1/condominios/{condominio_id}/distribucion`. Requiere Bearer Token.
+`SUPERADMIN` opera sobre cualquier condominio; `ADMIN_JUNTA` solo sobre el suyo;
+`AUDITOR` solo consulta el suyo. Los demás roles no acceden.
+
+| Método | Entrada | Respuesta |
+| :--- | :--- | :--- |
+| `PUT` | `{"metodo": "POR_ALICUOTA"}` o `{"metodo": "EQUITATIVA"}`; sin campos extra | `200`, configuración persistida y validada. |
+| `GET` | Sin cuerpo | `200`, configuración vigente; consultar no garantiza que los departamentos sigan siendo válidos. |
+
+Respuesta: `id` y `condominio_id` UUID, `metodo`, `actualizado_por` (claim `sub`)
+y `actualizado_en` (fecha UTC). El PUT repetido con el mismo método vuelve a validar
+los departamentos y, si es válido, conserva respuesta y auditoría anteriores.
+Una modificación registra `DISTRIBUCION_CONFIGURADA` transaccionalmente.
+
+Errores con `error_code` y `mensaje`:
+- `401 NO_AUTENTICADO` / `TOKEN_INVALIDO` por credenciales ausentes o inválidas.
+- `403 DISTRIBUCION_ACCESO_DENEGADO` por rol o contexto ajeno/inválido.
+- `404 CONDOMINIO_NO_ENCONTRADO` / `DISTRIBUCION_NO_CONFIGURADA`.
+- `422 DATOS_DISTRIBUCION_INVALIDOS` por cuerpo o identificador inválido.
+- `422 DISTRIBUCION_SIN_DEPARTAMENTOS` para ambas modalidades.
+- `422 DISTRIBUCION_COEFICIENTES_INVALIDOS` si la suma no es exactamente
+  `100.0000` o un coeficiente no es válido. Una suma incorrecta incluye
+  `detalles.suma_coeficientes` y `detalles.suma_requerida` como cadenas.
+
+Contrato interno CON-11: `DistribucionService.obtener_para_emision(condominio_id)`
+revalida y devuelve `DistribucionParaEmision(configuracion_id, metodo, departamentos)`;
+cada departamento contiene `id` y `coeficiente: Decimal`. Debe llamarse en la
+transacción de emisión. `calcular_distribucion(presupuesto: Decimal, departamentos,
+metodo)` devuelve `dict[UUID, Decimal]` ordenado por UUID, sin ajuste residual.
+La configuración es vigente por condominio, no versionada por periodo; CON-11
+conserva la instantánea del lote y realiza su control de concurrencia.
+
 ### 2.1 Módulo de Condominios (CON-2 / PROC-05)
 
 Todos los endpoints de esta sección requieren `Authorization: Bearer <token>` y rol
@@ -327,4 +361,3 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
       "departamentos": ["102"]
     }
     ```
-
