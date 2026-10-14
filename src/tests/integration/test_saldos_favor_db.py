@@ -86,7 +86,10 @@ async def crear_cuota(session):
         fecha_emision=date(2026, 10, 1),
         fecha_vencimiento=date(2026, 10, 20),
     )
-    session.add_all([condominio, departamento, cuota])
+    # Sin relationship entre cuota y departamento, el flush no garantiza el orden de INSERT.
+    session.add_all([condominio, departamento])
+    await session.flush()
+    session.add(cuota)
     await session.flush()
     return cuota, departamento
 

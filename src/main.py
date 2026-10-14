@@ -27,7 +27,7 @@ app.add_exception_handler(RequestValidationError, request_validation_handler)
 from src.modules.condominios.router import router as condominios_router
 from src.modules.cuotas.router import router as cuotas_router
 from src.modules.cuotas.presupuestos.router import router as presupuestos_router
-from src.modules.cuotas.distribucion.router import router as distribucion_router
+from src.modules.cuotas.distribucion.router import router as distribucion_router  # noqa: E402
 from src.modules.notificaciones.router import router as notificaciones_router
 from src.modules.pagos.router import router as pagos_router
 from src.modules.reservas.router import router as reservas_router
