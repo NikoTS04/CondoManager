@@ -1,0 +1,70 @@
+name: Convenciones
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: convenciones-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  titulo:
+    name: Convenciones / Título del PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar Conventional Commits
+        if: github.event_name == 'pull_request'
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # CONTRIBUTING.md más los tipos de infraestructura y rendimiento.
+          types: |
+            feat
+            fix
+            docs
+            test
+            refactor
+            chore
+            ci
+            build
+            perf
+      - name: Push a rama principal
+        if: github.event_name == 'push'
+        run: echo 'La convención del título se valida al abrir o actualizar un PR.'
+
+  rama:
+    name: Convenciones / Nombre de rama
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar prefijo de rama de trabajo
+        if: github.event_name == 'pull_request'
+        env:
+          RAMA: ${{ github.head_ref }}
+          DESTINO: ${{ github.base_ref }}
+        run: |
+          # develop -> main es el flujo de publicación de CONTRIBUTING.md.
+          if [[ "$RAMA" == develop && "$DESTINO" == main ]]; then
+            echo 'Publicación de develop a main: rama principal permitida.'
+          elif [[ "$RAMA" =~ ^dependabot/[A-Za-z0-9_@.+-]+(/[A-Za-z0-9_@.+-]+)*$ ]]; then
+            # Dependabot usa segmentos internos para ecosistema, paquetes y versiones.
+            echo 'Rama de actualización de Dependabot permitida.'
+          elif [[ "$RAMA" =~ ^(feat|fix|docs|refactor|hotfix|ci|test|chore)/[A-Za-z0-9]+(-[A-Za-z0-9]+)*$ ]]; then
+            echo 'Nombre de rama válido.'
+          else
+            echo '::error::Usa feat/, fix/, docs/, refactor/, hotfix/, ci/, test/ o chore/ seguido de un nombre separado por guiones, o dependabot/ para actualizaciones automáticas.'
+            exit 1
+          fi
+      - name: Push a rama principal
+        if: github.event_name == 'push'
+        run: echo 'La convención de ramas de trabajo se valida en el PR.'
