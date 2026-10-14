@@ -1,0 +1,22 @@
+# Nunca enviar secretos locales ni historial al contexto de construcción.
+.git
+.github
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+frontend
+data
+uploads
+**/node_modules
+**/.next
+**/*.log

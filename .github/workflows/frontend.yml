@@ -1,0 +1,59 @@
+name: Frontend
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  frontend:
+    name: Frontend / Lint, tipos y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      # No filtrar el trigger: el check obligatorio debe finalizar incluso sin cambios.
+      - name: Detectar cambios del frontend
+        id: cambios
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/frontend.yml'
+      - name: Preparar Node.js 22 (frontend/Dockerfile)
+        if: steps.cambios.outputs.frontend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias
+        if: steps.cambios.outputs.frontend == 'true'
+        run: npm ci
+      - name: Lint no interactivo
+        if: steps.cambios.outputs.frontend == 'true'
+        run: npm run lint
+      - name: Comprobar tipos
+        if: steps.cambios.outputs.frontend == 'true'
+        run: npx --no-install tsc --noEmit
+      - name: Compilar Next.js
+        if: steps.cambios.outputs.frontend == 'true'
+        run: npm run build
+      - name: Sin cambios del frontend
+        if: steps.cambios.outputs.frontend != 'true'
+        run: echo 'No hay cambios del frontend; check obligatorio completado.'

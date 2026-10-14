@@ -1,0 +1,38 @@
+title = "CondoManager: secretos con excepciones de desarrollo exactas"
+
+[extend]
+useDefault = true
+
+# Solo literales públicos de ejemplo, NO archivos completos ni .env reales.
+# TODO: eliminar los defaults inseguros en src/core/config.py y exigir secretos
+# externos en producción. CI reemplaza estos valores por secretos aleatorios.
+[allowlist]
+description = "Credenciales ficticias existentes de desarrollo; nunca producción"
+regexTarget = "secret"
+regexes = [
+  '''^condo_secret$''',
+  '''^condo_minio_secret$''',
+  '''^super_secret_condo_manager_jwt_key_development_only_2026_xyz$''',
+]
+
+# Falsos positivos comprobados en el historial: fixtures y JWT truncado de ejemplo.
+# La regla base se hereda; solo ampliar sus excepciones con literal Y ruta.
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Contraseña ficticia usada por tests y contratos históricos"
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^src/tests/(unit/test_usuarios_condominios_service|integration/test_usuarios_condominios_api)\.py$''',
+  '''^specs/05-api/api-contracts\.md$''',
+]
+regexes = ['''^claveSegura123$''']
+
+[[rules.allowlists]]
+description = "Cabecera JWT truncada, no un token utilizable"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^specs/05-api/api-contracts\.md$''']
+regexes = ['''^eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.{0,3}$''']
