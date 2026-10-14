@@ -1,8 +1,9 @@
 """Modelos ORM de Cuotas de Mantenimiento (Anderson - PROC-01)."""
 
+import uuid
 from datetime import date
 from decimal import Decimal
-import uuid
+
 from sqlalchemy import (
     CheckConstraint,
     Date,
@@ -12,7 +13,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
+
 from src.core.database import Base
 
 
@@ -49,6 +51,11 @@ class CuotaMantenimiento(Base):
     estado: Mapped[str] = mapped_column(
         String(20), nullable=False, default="EMITIDA"
     )
+
+    @property
+    def monto_pendiente(self) -> Decimal:
+        """Neto por pagar; el crédito amortizado no reduce el bruto exigible."""
+        return self.monto_total_exigible - self.monto_pagado
 
     __table_args__ = (
         UniqueConstraint("departamento_id", "periodo", name="uq_departamento_periodo"),
