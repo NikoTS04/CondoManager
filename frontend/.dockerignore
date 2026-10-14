@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+node_modules
+.next
+out
+coverage
+*.log
