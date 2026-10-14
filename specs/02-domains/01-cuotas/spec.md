@@ -59,21 +59,73 @@ El dominio de Cuotas de Mantenimiento es responsable de:
 $$\text{CuotaBruta}(u) = \text{PresupuestoTotal} \times \left( \frac{\text{Coeficiente}(u)}{100.0000} \right)$$
 $$\text{CuotaRedondeada}(u) = \text{round\_half\_up}(\text{CuotaBruta}(u), 2)$$
 
-- **Invariante de Cierre:** Al finalizar la emisión del lote, la diferencia entre la suma de todas las cuotas redondeadas y el presupuesto total no puede exceder $N \times 0.01$ soles. Si existe un descuadre por centavos residuales, el ajuste se imputa al departamento con mayor alícuota o a la cuenta de ajuste por redondeo.
+- CON-10 persiste una configuración vigente por condominio, con `metodo` igual a
+  `POR_ALICUOTA` o `EQUITATIVA`, actor y fecha UTC de la última modificación.
+  CON-11 lee esta configuración al emitir el periodo; CON-10 no mantiene versiones
+  por periodo ni modifica lotes ya emitidos.
+- `POR_ALICUOTA` exige al menos un departamento y la suma exacta de sus coeficientes
+  `Decimal` igual a `100.0000`, sin tolerancia ni redondeo previo de la suma.
+  `99.9999` y `100.0001` se rechazan. Cada coeficiente debe ser finito,
+  ser mayor que cero y menor o igual a cien y tener como máximo cuatro decimales.
+- Se consideran todos los departamentos del condominio mientras CON-3 no integre
+  el campo de actividad. Este criterio queda aislado en
+  `listar_departamentos_para_distribucion` del repositorio.
+- El PUT valida antes de persistir. Los errores `DISTRIBUCION_SIN_DEPARTAMENTOS`
+  y `DISTRIBUCION_COEFICIENTES_INVALIDOS` devuelven `422` con mensaje explicativo.
+  CON-11 debe revalidar los departamentos actuales antes de usar la configuración.
+- Escritura para `SUPERADMIN` y `ADMIN_JUNTA`; lectura también para `AUDITOR`.
+  Salvo `SUPERADMIN`, el condominio debe coincidir con el claim del JWT.
+- Cada cambio genera auditoría de siete campos, estados anterior/posterior y hash
+  encadenado en la misma transacción. Repetir el mismo PUT válido conserva el
+  identificador, actor, fecha y auditoría anteriores.
+- El cálculo puro `calcular_distribucion` devuelve montos por identificador con
+  `Decimal` y `ROUND_HALF_UP` a dos posiciones, sin usar `float`.
+  La suma individual puede diferir del presupuesto por centavos: el cierre exacto
+  y el ajuste residual determinista del lote pertenecen exclusivamente a CON-11.
 
 ### 3.4 Modalidad Cuota Fija Equitativa
 $$\text{Cuota}(u) = \text{round\_half\_up}\left(\frac{\text{PresupuestoTotal}}{N_{\text{unidades}}}, 2\right)$$
 
+- `EQUITATIVA` exige al menos un departamento y no utiliza sus coeficientes.
+- La selección y revalidación usan el mismo conjunto de departamentos que alícuota.
+- El presupuesto del cálculo debe ser un `Decimal` finito no negativo; los
+  identificadores de departamentos no pueden repetirse. La función no consulta
+  persistencia, no aplica saldos a favor ni ajusta centavos residuales.
+
 ### 3.5 Amortización con Saldo a Favor
-Si el departamento registra un `saldo_a_favor > 0.00`:
-- Si $\text{saldo\_a\_favor} \ge \text{CuotaEmitida}$:
-  - La cuota pasa inmediatamente a estado `PAGADA`.
-  - $\text{saldo\_a\_favor\_restante} = \text{saldo\_a\_favor} - \text{CuotaEmitida}$.
-  - Se registra el movimiento de amortización en la bitácora inmutable.
-- Si $\text{saldo\_a\_favor} < \text{CuotaEmitida}$:
-  - La cuota pasa a estado `PENDIENTE`.
-  - $\text{monto\_total\_exigible} = \text{CuotaEmitida} - \text{saldo\_a\_favor}$.
-  - $\text{saldo\_a\_favor\_restante} = 0.00$.
+- CON-13 aplica el crédito **después** de fijar el bruto definitivo, incluido el
+  ajuste de centavos de CON-11. Solo acepta `Decimal` finitos, no negativos,
+  redondeados a dos posiciones mediante `ROUND_HALF_UP`.
+- `aplicado = min(monto_cuota, saldo_disponible)`;
+  `pendiente = monto_cuota - aplicado`; `saldo_restante = saldo_disponible - aplicado`.
+- El crédito es un **pago**, no un descuento: `monto_total_exigible` conserva el
+  bruto, `monto_pagado = aplicado` y `monto_descuento = 0.00`. El neto pendiente
+  se consulta como `monto_total_exigible - monto_pagado`.
+- Si el pendiente es cero queda `PAGADA` (también una cuota de bruto cero);
+  en otro caso queda `PENDIENTE`, incluso con saldo cero o aplicación parcial.
+- Esta decisión sigue `AMORTIZAR_TOTAL` de la máquina de estados y el escenario
+  de liquidación de `cuotas.feature`: evita contabilizar dos veces el crédito,
+  respeta el CHECK de pagos y conserva el total bruto distribuido del presupuesto.
+- La aplicación persiste en `aplicaciones_saldo_favor`, con `UNIQUE(cuota_id)`.
+  Incluso el saldo cero genera un registro: un reintento devuelve la aplicación
+  original sin consumir créditos posteriores ni duplicar auditorías.
+- Se bloquea primero el condominio, luego el departamento y finalmente la cuota
+  con `SELECT FOR UPDATE`. El bloqueo del condominio serializa la lectura del
+  último hash y la escritura de auditoría, incluso entre departamentos distintos,
+  y comparte el orden de CON-9/CON-10 para conservar una cadena lineal;
+  se releen los valores bajo bloqueo. Cuota, saldo, aplicación y auditoría de siete
+  campos (con actor, saldo previo, aplicado, restante y estados) se guardan juntos.
+- Contrato CON-11: dentro de `async with session.begin()`, crear y hacer `flush`
+  de la cuota `EMITIDA`, sin pagos ni descuentos, con bruto definitivo, y llamar
+  `SaldosFavorService(SQLAlchemySaldoFavorRepository(session)).aplicar_a_cuota_emitida(cuota, actor)`.
+  El servicio usa un savepoint, nunca hace `commit` y exige transacción externa;
+  cualquier fallo del lote debe revertir la transacción completa. En lotes se
+  procesa por ID de departamento ascendente para conservar el orden de bloqueos.
+  Es un contrato interno, no agrega endpoint ni sustituye la emisión persistente.
+- La migración `20261014_0004` crea la aplicación sin FK a cuotas porque esa tabla
+  todavía pertenece a CON-11. La migración de CON-11 que cree `cuotas_mantenimiento`
+  debe añadir `fk_aplicacion_saldo_cuota` (`cuota_id` → `cuotas_mantenimiento.id`,
+  `ON DELETE RESTRICT`). El ORM conserva la FK; UNIQUE y CHECKs ya se aplican.
 
 ---
 

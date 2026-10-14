@@ -68,6 +68,25 @@ Restricciones adicionales:
 
 ---
 
+## Tabla: `configuraciones_distribucion` (CON-10)
+
+Una configuración vigente por condominio, sin versionado por periodo.
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador de configuración. |
+| `condominio_id` | `UUID` | NO | - | FK `condominios(id) ON DELETE RESTRICT`; `uq_distribucion_condominio` UNIQUE | Contexto propietario. |
+| `metodo` | `VARCHAR(20)` | NO | - | `ck_distribucion_metodo`: `POR_ALICUOTA` o `EQUITATIVA` | Modalidad vigente. |
+| `actualizado_por` | `VARCHAR(100)` | NO | - | - | Claim `sub` del último actor que cambió el método. |
+| `actualizado_en` | `TIMESTAMP TZ` | NO | - | - | Fecha UTC asignada por el servicio. |
+
+El servicio valida departamentos y suma porcentual, registra auditoría en la misma
+transacción y bloquea el condominio para serializar PUT concurrentes. Un PUT sin
+cambio no modifica actor, fecha ni auditoría. Migración `20261014_0003`, sobre
+`20261008_0002`. No se modifica el modelo Departamento en esta historia.
+
+---
+
 ## 3. Tabla: `departamentos`
 Almacena cada unidad inmobiliaria exclusiva (departamento, flat, local).
 
@@ -100,6 +119,37 @@ Almacena las obligaciones devengadas mensuales por cada departamento (Anderson -
 | `fecha_emision` | `DATE` | NO | - | - | Fecha formal de devengo (día 1 del mes). |
 | `fecha_vencimiento`| `DATE` | NO | - | - | Fecha límite de pago oportuno (día de corte). |
 | `estado` | `VARCHAR(20)` | NO | `'EMITIDA'` | `CHECK (estado IN ('EMITIDA', 'PENDIENTE', 'PAGO_PARCIAL', 'PAGADA', 'VENCIDA', 'EN_MORA'))` | Ciclo de vida de la obligación. |
+
+---
+
+## Tabla: `aplicaciones_saldo_favor` (CON-13)
+
+Evidencia histórica de la amortización inicial, incluso si el crédito aplicado es cero.
+El departamento y condominio se obtienen mediante la cuota; no se duplican claves.
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador de aplicación. |
+| `cuota_id` | `UUID` | NO | - | UNIQUE; FK diferida a CON-11 | Clave de idempotencia. |
+| `saldo_previo` | `NUMERIC(12,2)` | NO | - | >= 0 | Crédito antes del consumo. |
+| `monto_aplicado` | `NUMERIC(12,2)` | NO | - | >= 0 | Pago con crédito, no descuento. |
+| `monto_pendiente` | `NUMERIC(12,2)` | NO | - | >= 0 | Neto después de amortizar. |
+| `saldo_restante` | `NUMERIC(12,2)` | NO | - | >= 0 | Remanente conservado. |
+| `estado_anterior` | `VARCHAR(20)` | NO | - | EMITIDA | Estado antes de amortizar. |
+| `estado_posterior` | `VARCHAR(20)` | NO | - | PAGADA / PENDIENTE | Estado resultante. |
+| `creado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Fecha UTC de aplicación. |
+
+Checks: `saldo_previo = monto_aplicado + saldo_restante`; `PAGADA` exige pendiente
+cero y `PENDIENTE` exige pendiente positivo. La cuota conserva el bruto exigible y
+descuento cero; su `monto_pagado` aumenta por el crédito aplicado. Esta regla de
+CON-13 prevalece sobre la descripción histórica de descuentos por saldo a favor.
+Cuota, departamento, registro y auditoría se escriben en una sola transacción.
+
+La migración `20261014_0004` no declara la FK porque todavía no existe la tabla
+`cuotas_mantenimiento` en las migraciones. La migración de CON-11 que la cree debe
+añadir `fk_aplicacion_saldo_cuota` (`cuota_id` → `cuotas_mantenimiento.id`,
+`ON DELETE RESTRICT`). El modelo ORM conserva esta relación. Los bloqueos siguen
+el orden condominio → departamento → cuota para mantener lineal la cadena auditada.
 
 ---
 
