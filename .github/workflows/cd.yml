@@ -1,0 +1,85 @@
+name: Publicación y CD
+
+on:
+  push:
+    branches: [develop, main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    name: CD / Publicar (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            context: .
+          - image: web
+            context: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalizar propietario de GHCR
+        id: registro
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "owner=${OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Autenticar en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Calcular etiquetas
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.registro.outputs.owner }}/condomanager-${{ matrix.image }}
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - name: Publicar imagen, procedencia y SBOM
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  despliegue:
+    name: CD / Despliegue pendiente
+    needs: publicar
+    # Variables de repositorio (no de environment: se evalúan antes de entrar al job).
+    if: >-
+      (github.ref == 'refs/heads/develop' && vars.STAGING_DEPLOY_TARGET != '') ||
+      (github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_TARGET != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: ${{ github.ref == 'refs/heads/develop' && 'staging' || 'production' }}
+    steps:
+      - name: Documentar integración de despliegue pendiente
+        # TODO: configurar destino, credenciales del environment, aprobaciones,
+        # descarga por digest, migraciones, healthchecks y rollback antes de desplegar.
+        # Este placeholder NO contacta el destino ni afirma haber desplegado.
+        run: |
+          echo '::warning::Despliegue no implementado: faltan transporte, credenciales y política de rollback.'
+          echo 'Las imágenes se publicaron en GHCR; este job no realiza un despliegue.' >> "$GITHUB_STEP_SUMMARY"

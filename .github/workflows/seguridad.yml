@@ -1,0 +1,218 @@
+name: Seguridad
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  schedule:
+    - cron: '41 5 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seguridad-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dependencias:
+    name: Seguridad / Revisión de dependencias
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bloquear nuevas vulnerabilidades altas o críticas
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  python:
+    name: Seguridad / Auditoría Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar auditor
+        run: python -m pip install 'pip-audit==2.10.0'
+      - name: Auditar requirements.txt
+        id: auditoria
+        # ecdsa: CVE-2024-23342 no tiene parche upstream. src/core/security.py
+        # firma con HS256 y decodifica con algorithms=[ALGORITHM]; no usa ECDSA.
+        # Revisar esta excepción si cambian los algoritmos o se añade firma ECDSA.
+        # TODO: resolver CVE-2026-85394, presente incluso en python-jose 3.5.0
+        # (última versión). No exceptuarla; retirar continue-on-error cuando pase.
+        continue-on-error: true
+        run: pip-audit -r requirements.txt --ignore-vuln CVE-2024-23342
+      - name: Advertir deuda de seguridad Python
+        if: always() && steps.auditoria.outcome == 'failure'
+        run: |
+          echo '::warning::Auditoría Python falló. Revisar hallazgos; paso temporalmente no bloqueante.'
+          echo 'TODO: resolver CVE-2026-85394 de python-jose (sin parche en 3.5.0) y cualquier nuevo hallazgo; retirar continue-on-error cuando pase.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Única excepción: CVE-2024-23342 (ecdsa sin parche; el proyecto utiliza HS256, no ECDSA).' >> "$GITHUB_STEP_SUMMARY"
+
+  npm:
+    name: Seguridad / Auditoría npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias sin scripts
+        run: npm ci --ignore-scripts --no-audit
+      - name: Auditar dependencias npm
+        id: auditoria
+        # TODO: actualizar Next 14.2.15 y dependencias transitivas vulnerables.
+        continue-on-error: true
+        run: npm audit --audit-level=high
+      - name: Advertir deuda de seguridad npm
+        if: steps.auditoria.outcome == 'failure'
+        run: |
+          echo '::warning::Auditoría npm falló. Revisar hallazgos; paso temporalmente no bloqueante.'
+          echo 'TODO: resolver hallazgos npm y retirar continue-on-error.' >> "$GITHUB_STEP_SUMMARY"
+
+  secretos:
+    name: Seguridad / Secretos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Instalar Gitleaks con checksum
+        env:
+          VERSION: '8.24.3'
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}"
+          archive="gitleaks_${VERSION}_linux_x64.tar.gz"
+          cd "$RUNNER_TEMP"
+          curl --fail --silent --show-error --location "$base/$archive" -o "$archive"
+          curl --fail --silent --show-error --location "$base/gitleaks_${VERSION}_checksums.txt" -o checksums.txt
+          grep " $archive\$" checksums.txt | sha256sum --check --strict
+          tar -xzf "$archive" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Detectar secretos en todo el historial Git
+        # .env local está ignorado por Git; NO permitir rutas .env completas.
+        # .gitleaks.toml exceptúa defaults ficticios exactos y fixtures históricos
+        # limitados por literal Y ruta; nunca credenciales reales ni rutas completas.
+        run: gitleaks git --config .gitleaks.toml --redact --verbose --log-opts="--all"
+
+  imagenes:
+    name: Seguridad / Imágenes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Construir API para auditoría
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: condomanager-api:seguridad
+          cache-from: type=gha,scope=api
+      - name: Construir web para auditoría
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          load: true
+          push: false
+          tags: condomanager-web:seguridad
+          cache-from: type=gha,scope=web
+      - name: Auditar imagen API
+        id: api
+        # TODO: hacer bloqueante tras remediar dependencias y verificar imágenes.
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: condomanager-api:seguridad
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: sarif
+          output: trivy-api.sarif
+          limit-severities-for-sarif: true
+          scanners: vuln
+      - name: Auditar imagen web
+        id: web
+        # TODO: actualizar Next vulnerable y hacer bloqueante tras verificar imágenes.
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: condomanager-web:seguridad
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: sarif
+          output: trivy-web.sarif
+          limit-severities-for-sarif: true
+          scanners: vuln
+      - name: Resumir hallazgos de ambas imágenes
+        if: always()
+        env:
+          ESTADO_API: ${{ steps.api.outcome }}
+          ESTADO_WEB: ${{ steps.web.outcome }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def texto(valor):
+              return " ".join(str(valor).split()).replace("|", "\\|").replace("<", "&lt;").replace(">", "&gt;")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as resumen:
+              resumen.write("## Trivy: vulnerabilidades de imágenes\n\n")
+              resumen.write("Filtro: HIGH/CRITICAL con corrección disponible (`ignore-unfixed`). "
+                            "Auditorías temporalmente no bloqueantes; informes completos en Security / Code scanning.\n\n")
+              for imagen in ("api", "web"):
+                  archivo = Path(f"trivy-{imagen}.sarif")
+                  estado = os.environ.get(f"ESTADO_{imagen.upper()}", "sin ejecutar")
+                  resumen.write(f"### {imagen} — estado: {texto(estado)}\n\n")
+                  if not archivo.is_file():
+                      resumen.write("**Sin informe: el escaneo no terminó. No equivale a cero vulnerabilidades.**\n\n")
+                      continue
+                  informe = json.loads(archivo.read_text(encoding="utf-8"))
+                  resultados = [resultado for ejecucion in informe.get("runs", [])
+                                for resultado in ejecucion.get("results", [])]
+                  resumen.write(f"**{len(resultados)} hallazgos** (máximo 100 mostrados aquí).\n\n")
+                  if resultados:
+                      resumen.write("| Vulnerabilidad | Detalle |\n| --- | --- |\n")
+                      for resultado in resultados[:100]:
+                          identificador = texto(resultado.get("ruleId", "desconocida"))
+                          detalle = texto(resultado.get("message", {}).get("text", ""))[:1500]
+                          resumen.write(f"| {identificador} | {detalle} |\n")
+                  resumen.write("\n")
+          PY
+      - name: Publicar SARIF de API en Code scanning
+        if: always() && hashFiles('trivy-api.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-api.sarif
+          category: trivy-api
+      - name: Publicar SARIF de web en Code scanning
+        if: always() && hashFiles('trivy-web.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-web.sarif
+          category: trivy-web
+      - name: Advertir deuda de seguridad de imágenes
+        if: always() && (steps.api.outcome == 'failure' || steps.web.outcome == 'failure')
+        run: |
+          echo '::warning::Trivy falló. Consultar ambos informes; auditorías temporalmente no bloqueantes.'
+          echo 'TODO: resolver hallazgos Trivy y retirar continue-on-error en ambas imágenes.' >> "$GITHUB_STEP_SUMMARY"
