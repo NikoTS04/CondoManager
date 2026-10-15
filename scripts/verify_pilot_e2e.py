@@ -98,7 +98,8 @@ def main():
     )
     print(f"• Dpto. 302 (Saldo previo S/ 200.00): Cuota bruta S/ {cuota_302['monto_ordinario']:.2f} -> Estado: {cuota_302['estado']}, Exigible: S/ {cuota_302['monto_total_exigible']:.2f}")
     assert cuota_302["estado"] == "PAGADA", "La cuota del Dpto. 302 debió quedar PAGADA por amortización."
-    assert cuota_302["monto_total_exigible"] == Decimal("0.00")
+    # CON-13: el saldo se registra como pago; el bruto exigible no se reduce.
+    assert cuota_302["monto_pagado"] == cuota_302["monto_total_exigible"] > Decimal("0.00")
     print("✅ Invariante de cierre contable y amortización validada con éxito.")
 
     # ------------------------------------------------------------------------

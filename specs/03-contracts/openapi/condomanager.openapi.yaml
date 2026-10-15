@@ -7,6 +7,68 @@ servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
 paths:
+  /condominios/{condominio_id}/distribucion:
+    parameters:
+      - name: condominio_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      summary: Configurar el método de distribución (CON-10)
+      operationId: configurarDistribucion
+      description: >-
+        SUPERADMIN o ADMIN_JUNTA del condominio. Valida departamentos y suma exacta
+        100.0000 para POR_ALICUOTA; EQUITATIVA requiere al menos un departamento.
+        El mismo método válido conserva actor, fecha y auditoría. Cada cambio
+        se audita transaccionalmente. No versiona por periodo ni ajusta residuos.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigurarDistribucionRequest'
+      responses:
+        '200':
+          description: Configuración vigente validada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistribucionResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          description: DISTRIBUCION_ACCESO_DENEGADO por rol o condominio ajeno
+        '404':
+          description: CONDOMINIO_NO_ENCONTRADO
+        '422':
+          description: >-
+            DATOS_DISTRIBUCION_INVALIDOS, DISTRIBUCION_SIN_DEPARTAMENTOS o
+            DISTRIBUCION_COEFICIENTES_INVALIDOS; error_code y mensaje claros.
+    get:
+      summary: Consultar el método de distribución (CON-10)
+      operationId: obtenerDistribucion
+      description: >-
+        Lectura para SUPERADMIN, ADMIN_JUNTA y AUDITOR; salvo SUPERADMIN se exige
+        contexto propio. Devuelve configuración persistida sin revalidar departamentos.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Configuración vigente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistribucionResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          description: DISTRIBUCION_ACCESO_DENEGADO
+        '404':
+          description: CONDOMINIO_NO_ENCONTRADO o DISTRIBUCION_NO_CONFIGURADA
+        '422':
+          description: DATOS_DISTRIBUCION_INVALIDOS por UUID inválido
   /health:
     get:
       summary: Comprobación de estado del servicio
@@ -372,6 +434,25 @@ components:
       bearerFormat: JWT
 
   schemas:
+    ConfigurarDistribucionRequest:
+      type: object
+      additionalProperties: false
+      required: [metodo]
+      properties:
+        metodo:
+          type: string
+          enum: [POR_ALICUOTA, EQUITATIVA]
+    DistribucionResponse:
+      type: object
+      required: [id, condominio_id, metodo, actualizado_por, actualizado_en]
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        metodo:
+          type: string
+          enum: [POR_ALICUOTA, EQUITATIVA]
+        actualizado_por: { type: string }
+        actualizado_en: { type: string, format: date-time }
     CrearCondominioRequest:
       type: object
       additionalProperties: false

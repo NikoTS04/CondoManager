@@ -27,6 +27,17 @@ CREATE TABLE condominios (
     )
 );
 
+-- Configuración vigente de distribución (CON-10)
+CREATE TABLE configuraciones_distribucion (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
+    metodo VARCHAR(20) NOT NULL,
+    actualizado_por VARCHAR(100) NOT NULL,
+    actualizado_en TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT uq_distribucion_condominio UNIQUE (condominio_id),
+    CONSTRAINT ck_distribucion_metodo CHECK (metodo IN ('POR_ALICUOTA', 'EQUITATIVA'))
+);
+
 -- 2. Tabla de Presupuestos Mensuales (CON-9)
 CREATE TABLE presupuestos_mensuales (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -96,6 +107,33 @@ CREATE TABLE cuotas_mantenimiento (
 );
 
 -- 5. Tabla de Comprobantes de Pago (Tarqui - PROC-02)
+-- CON-13: evidencia única incluso para aplicación cero; el crédito es un pago.
+-- La migración 0004 difiere la FK: cuotas_mantenimiento aún no existe en Alembic.
+-- La migración de CON-11 que cree cuotas_mantenimiento debe añadir:
+-- ALTER TABLE aplicaciones_saldo_favor ADD CONSTRAINT fk_aplicacion_saldo_cuota
+--     FOREIGN KEY (cuota_id) REFERENCES cuotas_mantenimiento(id) ON DELETE RESTRICT;
+CREATE TABLE aplicaciones_saldo_favor (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cuota_id UUID NOT NULL,
+    saldo_previo NUMERIC(12,2) NOT NULL,
+    monto_aplicado NUMERIC(12,2) NOT NULL,
+    monto_pendiente NUMERIC(12,2) NOT NULL,
+    saldo_restante NUMERIC(12,2) NOT NULL,
+    estado_anterior VARCHAR(20) NOT NULL,
+    estado_posterior VARCHAR(20) NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_aplicacion_saldo_cuota UNIQUE (cuota_id),
+    CONSTRAINT ck_aplicacion_saldo_importes CHECK (
+        saldo_previo >= 0 AND monto_aplicado >= 0 AND monto_pendiente >= 0
+        AND saldo_restante >= 0 AND saldo_previo = monto_aplicado + saldo_restante
+    ),
+    CONSTRAINT ck_aplicacion_saldo_estados CHECK (
+        estado_anterior = 'EMITIDA' AND
+        ((estado_posterior = 'PAGADA' AND monto_pendiente = 0) OR
+         (estado_posterior = 'PENDIENTE' AND monto_pendiente > 0))
+    )
+);
+
 CREATE TABLE comprobantes_pago (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,

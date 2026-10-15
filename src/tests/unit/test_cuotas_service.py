@@ -1,6 +1,7 @@
+import uuid
 from datetime import date
 from decimal import Decimal
-import uuid
+
 import pytest
 
 from scripts.seed_condominio_piloto import generar_datos_departamentos
@@ -44,12 +45,13 @@ def test_amortizacion_cuota_con_saldo_a_favor_total():
 
     # Cuota = 20,000 * 0.75% = S/ 150.00. Saldo previo: 200.00
     assert resultado["monto_ordinario"] == Decimal("150.00")
-    assert resultado["monto_descuento"] == Decimal("150.00")
-    assert resultado["monto_total_exigible"] == Decimal("0.00")
+    assert resultado["monto_descuento"] == Decimal("0.00")
+    assert resultado["monto_total_exigible"] == Decimal("150.00")
     assert resultado["monto_pagado"] == Decimal("150.00")
     assert resultado["estado"] == "PAGADA"
     assert resultado["nuevo_saldo_a_favor"] == Decimal("50.00")
     assert resultado["cubierta_saldo_favor"] is True
+    assert resultado["monto_pendiente"] == Decimal("0.00")
 
 
 def test_emision_masiva_139_departamentos_suma_exacta():
