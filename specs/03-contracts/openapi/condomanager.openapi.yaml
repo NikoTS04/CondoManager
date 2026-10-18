@@ -7,6 +7,149 @@ servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
 paths:
+  /condominios/{condominio_id}/edificios:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+    get:
+      operationId: listarEdificios
+      summary: Listar edificios del condominio
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Edificios persistidos del contexto autorizado
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EdificioResponse' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio activo no encontrado }
+    post:
+      operationId: crearEdificio
+      summary: Registrar edificio (CON-3)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearEdificioRequest' }
+      responses:
+        '201':
+          description: Edificio persistido con auditoría
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EdificioResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio activo no encontrado }
+        '409': { description: EDIFICIO_DUPLICADO o ESTRUCTURA_DUPLICADA }
+        '422': { description: DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/departamentos:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+    get:
+      operationId: listarDepartamentos
+      summary: Listar unidades persistidas, incluyendo inactivas
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: edificio_id, in: query, schema: { type: string, format: uuid } }
+        - { name: activo, in: query, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Padrón contextual
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DepartamentoResponse' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o edificio no encontrado en el contexto }
+        '422': { description: DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/edificios/{edificio_id}/departamentos:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+      - { name: edificio_id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: crearDepartamento
+      summary: Registrar departamento activo (CON-3)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearDepartamentoRequest' }
+      responses:
+        '201':
+          description: Unidad persistida con saldo cero y estado AL_DIA
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DepartamentoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o edificio no encontrado }
+        '409': { description: DEPARTAMENTO_DUPLICADO o ESTRUCTURA_DUPLICADA }
+        '422': { description: DATOS_ESTRUCTURA_INVALIDOS o PISO_INVALIDO }
+  /condominios/{condominio_id}/departamentos/{departamento_id}/estado:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+      - { name: departamento_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: cambiarEstadoDepartamento
+      summary: Activar o desactivar conservando el historial
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [activo]
+              properties: { activo: { type: boolean } }
+      responses:
+        '200':
+          description: Estado vigente; un estado idéntico no duplica auditoría
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DepartamentoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o departamento no encontrado }
+        '422': { description: DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/importaciones/previsualizar:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+    post:
+      operationId: previsualizarEstructura
+      summary: Validar CSV sin escrituras (administradores)
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/ArchivoEstructura' }
+      responses:
+        '200':
+          description: Vista previa con estado y errores por fila
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportacionEstructuraResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio activo no encontrado }
+        '422': { description: CSV_INVALIDO o DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/importaciones/confirmar:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+    post:
+      operationId: confirmarEstructura
+      summary: Revalidar CSV e importar filas válidas sin duplicados
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/ArchivoEstructura' }
+      responses:
+        '200':
+          description: Resultado persistido; datos existentes diferentes se reportan como error por fila
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportacionEstructuraResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio activo no encontrado }
+        '422': { description: CSV_INVALIDO o DATOS_ESTRUCTURA_INVALIDOS }
   /condominios/{condominio_id}/distribucion:
     parameters:
       - name: condominio_id
@@ -427,6 +570,25 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  parameters:
+    ContextoEstructura:
+      name: condominio_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  requestBodies:
+    ArchivoEstructura:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [archivo]
+            properties:
+              archivo:
+                type: string
+                format: binary
+                description: CSV UTF-8, máximo 2 MiB y 5000 filas; numero,piso,edificio,coeficiente,total_pisos
   securitySchemes:
     bearerAuth:
       type: http
@@ -434,6 +596,68 @@ components:
       bearerFormat: JWT
 
   schemas:
+    CrearEdificioRequest:
+      type: object
+      additionalProperties: false
+      required: [nombre_bloque, total_pisos]
+      properties:
+        nombre_bloque: { type: string, minLength: 1, maxLength: 100 }
+        total_pisos: { type: integer, minimum: 1, maximum: 32767 }
+    EdificioResponse:
+      type: object
+      required: [id, condominio_id, nombre_bloque, total_pisos]
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        nombre_bloque: { type: string }
+        total_pisos: { type: integer, minimum: 1, maximum: 32767 }
+    CrearDepartamentoRequest:
+      type: object
+      additionalProperties: false
+      required: [numero, piso, coeficiente_participacion]
+      properties:
+        numero: { type: string, minLength: 1, maxLength: 20 }
+        piso: { type: integer, minimum: 1, maximum: 32767 }
+        coeficiente_participacion:
+          type: string
+          pattern: '^[0-9]{1,3}(\.[0-9]{1,4})?$'
+          description: Decimal mayor que cero y menor o igual que 100, como porcentaje
+          example: '0.7200'
+    DepartamentoResponse:
+      type: object
+      required: [id, edificio_id, numero, piso, coeficiente_participacion, saldo_a_favor, estado_financiero, activo]
+      properties:
+        id: { type: string, format: uuid }
+        edificio_id: { type: string, format: uuid }
+        numero: { type: string }
+        piso: { type: integer }
+        coeficiente_participacion: { type: string, pattern: '^[0-9]+\.[0-9]{4}$' }
+        saldo_a_favor: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        estado_financiero: { type: string, enum: [AL_DIA, OBSERVADO, EN_MORA] }
+        activo: { type: boolean }
+    ImportacionEstructuraResponse:
+      type: object
+      required: [total_filas, nuevas, creadas, ya_existentes, rechazadas, filas]
+      properties:
+        total_filas: { type: integer }
+        nuevas: { type: integer }
+        creadas: { type: integer }
+        ya_existentes: { type: integer }
+        rechazadas: { type: integer }
+        filas:
+          type: array
+          items:
+            type: object
+            required: [fila, numero, piso, edificio, coeficiente, total_pisos, estado, errores]
+            properties:
+              fila: { type: integer }
+              numero: { type: string }
+              piso: { type: [integer, 'null'] }
+              edificio: { type: string }
+              coeficiente: { type: string }
+              total_pisos: { type: [integer, 'null'] }
+              estado: { type: string, enum: [NUEVA, YA_EXISTENTE, ERROR, CREADA] }
+              errores: { type: array, items: { type: string } }
     ConfigurarDistribucionRequest:
       type: object
       additionalProperties: false

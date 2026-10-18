@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import CheckConstraint, MetaData, Table, UniqueConstraint
 from sqlalchemy.dialects import postgresql
 
-from src.modules.condominios.models import Departamento
+from src.modules.condominios.models import Departamento, Edificio
 from src.modules.cuotas.models import CuotaMantenimiento
 from src.modules.cuotas.saldos.exceptions import (
     AccesoSaldoDenegadoError,
@@ -32,7 +32,10 @@ from src.modules.cuotas.service import CuotasService
 class FakeSaldoFavorRepository:
     def __init__(self, saldo="150.00"):
         self.departamento = Departamento(
-            id=uuid4(), condominio_id=uuid4(), numero="101", saldo_a_favor=Decimal(saldo)
+            id=uuid4(),
+            edificio=Edificio(id=uuid4(), condominio_id=uuid4()),
+            numero="101",
+            saldo_a_favor=Decimal(saldo),
         )
         self.cuotas = {}
         self.departamentos = {self.departamento.id: self.departamento}
@@ -57,7 +60,7 @@ class FakeSaldoFavorRepository:
             departamentos = {
                 id_: d.saldo_a_favor
                 for id_, d in self.departamentos.items()
-                if d.condominio_id == condominio_id
+                if d.edificio.condominio_id == condominio_id
             }
             cuotas = {
                 id_: (c.estado, c.monto_pagado)
@@ -89,13 +92,13 @@ class FakeSaldoFavorRepository:
             self.espera.set()
             await self.continuar.wait()
         departamento = self.departamentos.get(departamento_id)
-        if departamento and departamento.condominio_id == condominio_id:
+        if departamento and departamento.edificio.condominio_id == condominio_id:
             return departamento
         return None
 
     async def bloquear_cuota(self, cuota_id, departamento_id):
         departamento = self.departamentos[departamento_id]
-        assert self.locks_condominio[departamento.condominio_id].locked()
+        assert self.locks_condominio[departamento.edificio.condominio_id].locked()
         self.bloqueos.append("cuota")
         cuota = self.cuotas.get(cuota_id)
         return cuota if cuota and cuota.departamento_id == departamento_id else None
@@ -131,7 +134,7 @@ class FakeSaldoFavorRepository:
 
     def actor(self):
         return ActorSaldoFavor(
-            "CON11_WORKER", "SISTEMA_AUTOMATICO", self.departamento.condominio_id
+            "CON11_WORKER", "SISTEMA_AUTOMATICO", self.departamento.edificio.condominio_id
         )
 
 
@@ -256,7 +259,7 @@ async def test_lock_por_condominio_conserva_cadena_lineal_entre_departamentos():
     repo = FakeSaldoFavorRepository()
     otro = Departamento(
         id=uuid4(),
-        condominio_id=repo.departamento.condominio_id,
+        edificio=repo.departamento.edificio,
         numero="102",
         saldo_a_favor=Decimal("200.00"),
     )
@@ -371,7 +374,7 @@ async def test_repositorio_sql_bloquea_condominio_departamento_y_cuota():
         assert "FOR UPDATE" in sql
         assert consulta.get_execution_options()["populate_existing"] is True
     assert "condominios.id" in str(consultas[0])
-    assert "departamentos.condominio_id" in str(consultas[1])
+    assert "edificios.condominio_id" in str(consultas[1])
     assert "cuotas_mantenimiento.departamento_id" in str(consultas[2])
 
 

@@ -29,15 +29,9 @@ def test_api_emitir_lote_cuotas():
         "fecha_vencimiento": "2026-11-20",
     }
     response = client.post("/api/v1/cuotas/emitir-lote", json=payload)
-    assert response.status_code == 201
-    data = response.json()
-    assert data["periodo"] == "2026-11"
-    assert data["total_cuotas_emitidas"] == 139
-    assert Decimal(data["monto_total_facturado"]) == Decimal("20850.00")
-
-    # Intentar emitir el mismo periodo de nuevo debe dar 409 Conflict
-    response_dup = client.post("/api/v1/cuotas/emitir-lote", json=payload)
-    assert response_dup.status_code == 409
+    # El emisor consume ahora el padrón persistente de CON-3 y exige contexto autenticado.
+    # El conteo activo y la idempotencia por condominio se verifican con PostgreSQL real.
+    assert response.status_code == 401
 
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")

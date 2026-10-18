@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.models_audit import AuditoriaLogORM
-from src.modules.condominios.models import Condominio, Departamento
+from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.cuotas.models import CuotaMantenimiento
 from src.modules.cuotas.saldos.exceptions import AccesoSaldoDenegadoError
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor
@@ -64,11 +64,12 @@ class SQLAlchemySaldoFavorRepository:
     ) -> Departamento | None:
         resultado = await self._session.execute(
             select(Departamento)
+            .join(Edificio, Edificio.id == Departamento.edificio_id)
             .where(
                 Departamento.id == departamento_id,
-                Departamento.condominio_id == condominio_id,
+                Edificio.condominio_id == condominio_id,
             )
-            .with_for_update()
+            .with_for_update(of=Departamento)
             .execution_options(populate_existing=True)
         )
         return resultado.scalar_one_or_none()

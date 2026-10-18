@@ -142,6 +142,24 @@ jobs:
     name: Backend / Pruebas
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: condomanager_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d condomanager_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # CON-3 requiere persistencia y concurrencia reales también en la cobertura.
+      CON3_TEST_DATABASE_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/condomanager_ci
+      CON13_TEST_DATABASE_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/condomanager_ci
     # Python 3.12 coincide con Dockerfile; una matriz no aporta otra plataforma de despliegue hoy.
     steps:
       - uses: actions/checkout@v4

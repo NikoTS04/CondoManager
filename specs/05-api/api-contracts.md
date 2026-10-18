@@ -361,3 +361,21 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
       "departamentos": ["102"]
     }
     ```
+# Estructura inmobiliaria (CON-3 / USR-02)
+
+Contrato detallado: [estructura-inmobiliaria.md](../02-domains/05-usuarios-rbac/estructura-inmobiliaria.md).
+Prefijo `/api/v1/condominios/{condominio_id}`; JWT obligatorio.
+
+| Método | Ruta relativa | Respuesta |
+|---|---|---|
+| GET / POST | `/edificios` | Lista / recurso 201 con UUID, condominio_id, nombre_bloque, total_pisos |
+| GET | `/departamentos` | Lista con filtros opcionales edificio_id y activo |
+| POST | `/edificios/{edificio_id}/departamentos` | 201; entrada numero, piso, coeficiente_participacion (string) |
+| PATCH | `/departamentos/{departamento_id}/estado` | 200; entrada activo (boolean), no-op si no cambia |
+| POST | `/importaciones/previsualizar` | 200; multipart archivo CSV; ninguna escritura |
+| POST | `/importaciones/confirmar` | 200; revalida el archivo y guarda filas válidas |
+
+Importación devuelve `total_filas`, `nuevas`, `creadas`, `ya_existentes`, `rechazadas`
+y `filas`, cada una con `fila`, `numero`, `piso`, `edificio`, `coeficiente`,
+`total_pisos`, `estado` y `errores`. Máximo 2 MiB / 5000 filas. Errores de estructura
+usan el sobre `error_code`, `mensaje`, `detalles` opcional; estados 401/403/404/409/422.

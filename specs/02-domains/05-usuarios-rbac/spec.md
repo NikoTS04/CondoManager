@@ -1,5 +1,8 @@
 # Dominio 05: Condominios, Usuarios, Roles (RBAC) y Departamentos
 
+La implementación de CON-3 / USR-02 y su columna `departamentos.activo` se define
+en [estructura-inmobiliaria.md](estructura-inmobiliaria.md).
+
 ## 1. Ficha del Dominio
 
 - **Identificador:** DOM-05 / PROC-05

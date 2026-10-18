@@ -9,11 +9,15 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
+    Integer,
     Numeric,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
+    func,
+    true,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -41,8 +45,8 @@ class Condominio(Base):
     )
 
     # Relaciones
-    departamentos: Mapped[list["Departamento"]] = relationship(
-        "Departamento", back_populates="condominio", cascade="all, delete-orphan"
+    edificios: Mapped[list["Edificio"]] = relationship(
+        "Edificio", back_populates="condominio", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
@@ -68,14 +72,41 @@ class Condominio(Base):
     )
 
 
-class Departamento(Base):
-    __tablename__ = "departamentos"
+class Edificio(Base):
+    __tablename__ = "edificios"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     condominio_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("condominios.id", ondelete="CASCADE"),
         nullable=False,
+    )
+    nombre_bloque: Mapped[str] = mapped_column(String(100), nullable=False)
+    total_pisos: Mapped[int] = mapped_column(Integer, nullable=False)
+    condominio: Mapped["Condominio"] = relationship(back_populates="edificios")
+    departamentos: Mapped[list["Departamento"]] = relationship(
+        back_populates="edificio", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("condominio_id", "nombre_bloque", name="uq_edificio_condominio_bloque"),
+        CheckConstraint("total_pisos >= 1", name="ck_edificio_pisos"),
+        Index("idx_edificios_condominio", "condominio_id"),
+        Index(
+            "uq_edificio_nombre_normalizado",
+            "condominio_id",
+            func.lower(func.btrim(nombre_bloque)),
+            unique=True,
+        ),
+    )
+
+
+class Departamento(Base):
+    __tablename__ = "departamentos"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    edificio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("edificios.id", ondelete="CASCADE"), nullable=False
     )
     numero: Mapped[str] = mapped_column(String(20), nullable=False)
     piso: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -84,14 +115,27 @@ class Departamento(Base):
         Numeric(12, 2), nullable=False, default=Decimal("0.00")
     )
     estado_financiero: Mapped[str] = mapped_column(String(20), nullable=False, default="AL_DIA")
+    activo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
 
     # Relaciones
-    condominio: Mapped["Condominio"] = relationship("Condominio", back_populates="departamentos")
+    edificio: Mapped["Edificio"] = relationship(back_populates="departamentos")
 
     __table_args__ = (
-        UniqueConstraint("condominio_id", "numero", name="uq_condominio_departamento"),
+        UniqueConstraint("edificio_id", "numero", name="uq_edificio_departamento"),
+        Index("idx_departamentos_edificio", "edificio_id"),
+        Index(
+            "uq_departamento_numero_normalizado",
+            "edificio_id",
+            func.upper(func.btrim(numero)),
+            unique=True,
+        ),
         CheckConstraint("piso >= 1", name="ck_departamento_piso"),
         CheckConstraint("coeficiente_participacion > 0.0000", name="ck_departamento_coeficiente"),
+        CheckConstraint(
+            "coeficiente_participacion <= 100.0000", name="ck_departamento_coeficiente_maximo"
+        ),
         CheckConstraint("saldo_a_favor >= 0.00", name="ck_departamento_saldo_favor"),
         CheckConstraint(
             "estado_financiero IN ('AL_DIA', 'OBSERVADO', 'EN_MORA')",

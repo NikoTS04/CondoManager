@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
 import { Alert } from "@/components/ui/Alert";
@@ -27,11 +27,12 @@ import {
   emitirLoteCuotas,
   enviarComunicadoMasivo,
   fetchComprobantes,
-  fetchDepartamentos,
+  listarDepartamentos,
+  departamentoParaPortal,
   fetchNotificaciones,
   listarCondominios,
   type ComprobantePago,
-  type Departamento,
+  type DepartamentoRegistrado,
   type NotificacionLog,
 } from "@/lib/api";
 import { isPositiveMoney, normalizeMoney } from "@/lib/money";
@@ -49,7 +50,8 @@ export default function JuntaPortal() {
 
   const [section, setSection] = useState<JuntaSection>("resumen");
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
-  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [departamentosRegistrados, setDepartamentosRegistrados] = useState<DepartamentoRegistrado[]>([]);
+  const departamentos = useMemo(() => departamentosRegistrados.filter((d) => d.activo).map(departamentoParaPortal), [departamentosRegistrados]);
   const [notificaciones, setNotificaciones] = useState<NotificacionLog[]>([]);
   const [condominioActivoId, setCondominioActivoId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,32 +64,42 @@ export default function JuntaPortal() {
   const [motivo, setMotivo] = useState("");
   const [busy, setBusy] = useState(false);
   const [morasFeedback, setMorasFeedback] = useState<string | null>(null);
+  const cargaActual = useRef(0);
+  const contextoActual = useRef(condominioActivoId);
+  contextoActual.current = condominioActivoId;
 
   const loadData = useCallback(async () => {
+    if (contextoActual.current !== condominioActivoId) return;
+    const solicitud = ++cargaActual.current;
     setLoading(true);
     setLoadError(null);
 
     try {
       const [nuevosComprobantes, nuevosDepartamentos, nuevasNotificaciones] = await Promise.all([
         fetchComprobantes(),
-        fetchDepartamentos(),
+        condominioActivoId ? listarDepartamentos(condominioActivoId) : Promise.resolve([]),
         fetchNotificaciones(),
       ]);
+      if (solicitud !== cargaActual.current) return;
       setComprobantes(nuevosComprobantes);
-      setDepartamentos(nuevosDepartamentos);
+      setDepartamentosRegistrados(nuevosDepartamentos);
       setNotificaciones(nuevasNotificaciones);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "No se pudieron cargar los datos.");
+      if (solicitud === cargaActual.current) setLoadError(error instanceof Error ? error.message : "No se pudieron cargar los datos.");
     } finally {
-      setLoading(false);
+      if (solicitud === cargaActual.current) setLoading(false);
     }
-  }, []);
+  }, [condominioActivoId]);
 
   useEffect(() => {
     void loadData();
+    const contador = cargaActual;
+    return () => { contador.current++; };
   }, [loadData]);
 
   const seleccionarCondominio = useCallback((condominioId: string | null) => {
+    cargaActual.current++;
+    setDepartamentosRegistrados([]);
     setCondominioActivoId(condominioId);
     setPresupuesto(null);
     if (condominioId) {
@@ -190,6 +202,8 @@ export default function JuntaPortal() {
         const resultado = await emitirLoteCuotas(
           presupuestoActual.periodo,
           presupuestoActual.montoTotal,
+          presupuestoActual.condominioId,
+          presupuestoActual.fechaVencimiento,
         );
         setFeedback(resultado.ok
           ? `Emisión de ${presupuestoActual.periodo} completada para ${departamentos.length} departamentos.`
@@ -308,7 +322,7 @@ export default function JuntaPortal() {
           {section === "resumen" && (
             <ResumenSection
               loading={loading}
-              departamentos={departamentos.length}
+              departamentos={departamentosRegistrados.length}
               comprobantesPendientes={pendientes.length}
               presupuesto={presupuesto}
               onNavigate={setSection}
@@ -323,9 +337,12 @@ export default function JuntaPortal() {
           )}
           {section === "estructura" && (
             <EstructuraCondominio
-              departamentosIniciales={departamentos}
+              key={condominioActivoId ?? "sin-condominio"}
+              condominioId={condominioActivoId}
+              departamentos={departamentosRegistrados}
               soloLectura={isAuditor}
               cargando={loading}
+              onActualizar={loadData}
             />
           )}
           {section === "presupuesto" && (

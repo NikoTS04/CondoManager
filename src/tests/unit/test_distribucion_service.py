@@ -263,7 +263,8 @@ async def test_repositorio_sql_aisla_departamentos_y_conserva_decimal():
     assert resultado[0].coeficiente is coeficiente
     consulta = sesion.execute.call_args.args[0]
     sql = str(consulta.compile(dialect=postgresql.dialect()))
-    assert "departamentos.condominio_id =" in sql
+    assert "edificios.condominio_id =" in sql
+    assert "departamentos.activo IS true" in sql
     assert "ORDER BY departamentos.id" in sql
     assert condominio_id in consulta.compile().params.values()
 

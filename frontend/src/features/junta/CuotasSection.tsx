@@ -110,7 +110,7 @@ export function CuotasSection({
                       : null;
 
                     return (
-                      <tr key={departamento.numero} className="border-b border-line">
+                      <tr key={departamento.id ?? departamento.numero} className="border-b border-line">
                         <th scope="row" className="p-3 text-left">
                           {departamento.numero}
                         </th>

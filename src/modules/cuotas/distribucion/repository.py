@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.models_audit import AuditoriaLogORM
-from src.modules.condominios.models import Condominio, Departamento
+from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.cuotas.distribucion.models import ConfiguracionDistribucion
 
 
@@ -64,10 +64,11 @@ class SQLAlchemyDistribucionRepository:
     async def listar_departamentos_para_distribucion(
         self, condominio_id: UUID
     ) -> list[DepartamentoDistribucion]:
-        """Criterio provisional: todos; añadir aquí el filtro activo al integrar CON-3."""
+        """Padrón persistente activo de todas las torres del condominio (CON-3)."""
         resultado = await self._session.execute(
             select(Departamento.id, Departamento.coeficiente_participacion)
-            .where(Departamento.condominio_id == condominio_id)
+            .join(Edificio, Edificio.id == Departamento.edificio_id)
+            .where(Edificio.condominio_id == condominio_id, Departamento.activo.is_(True))
             .order_by(Departamento.id)
         )
         return [DepartamentoDistribucion(id=fila[0], coeficiente=fila[1]) for fila in resultado]

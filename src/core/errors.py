@@ -48,6 +48,18 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
                 "detalles": jsonable_encoder(exc.errors()),
             },
         )
+    if request.url.path.startswith("/api/v1/condominios") and any(
+        segmento in request.url.path
+        for segmento in ("/edificios", "/departamentos", "/importaciones")
+    ):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error_code": "DATOS_ESTRUCTURA_INVALIDOS",
+                "mensaje": "Los datos de estructura no cumplen el contrato.",
+                "detalles": jsonable_encoder(exc.errors()),
+            },
+        )
     if request.url.path.startswith("/api/v1/condominios"):
         return JSONResponse(
             status_code=422,

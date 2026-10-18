@@ -6,12 +6,58 @@
  */
 
 export interface Departamento {
+  id?: string;
+  edificio_id?: string;
+  activo?: boolean;
   numero: string;
   piso: number;
   coeficiente: string;
   saldo_a_favor: string;
   estado_financiero: "AL_DIA" | "EN_MORA" | "OBSERVADO";
   deuda_vencida?: string;
+}
+
+export interface Edificio {
+  id: string;
+  condominio_id: string;
+  nombre_bloque: string;
+  total_pisos: number;
+}
+
+export interface DepartamentoRegistrado {
+  id: string;
+  edificio_id: string;
+  numero: string;
+  piso: number;
+  coeficiente_participacion: string;
+  saldo_a_favor: string;
+  estado_financiero: "AL_DIA" | "EN_MORA" | "OBSERVADO";
+  activo: boolean;
+}
+
+export interface FilaImportacion {
+  fila: number;
+  numero: string;
+  piso: number | null;
+  edificio: string;
+  coeficiente: string;
+  total_pisos: number | null;
+  estado: "NUEVA" | "CREADA" | "YA_EXISTENTE" | "ERROR";
+  errores: string[];
+}
+
+export interface ResultadoImportacion {
+  total_filas: number;
+  nuevas: number;
+  creadas: number;
+  ya_existentes: number;
+  rechazadas: number;
+  filas: FilaImportacion[];
+}
+
+/** Adaptador para las vistas de cuotas que usan el nombre histórico coeficiente. */
+export function departamentoParaPortal(departamento: DepartamentoRegistrado): Departamento {
+  return { ...departamento, coeficiente: departamento.coeficiente_participacion };
 }
 
 export interface AreaComun {
@@ -176,6 +222,58 @@ export async function iniciarSesion(email: string, password: string): Promise<Lo
     throw new Error(obtenerMensajeError(data, "No se pudo iniciar sesión."));
   }
   return data as LoginResult;
+}
+
+async function estructuraRequest<T>(condominioId: string, ruta: string, init: RequestInit = {}): Promise<T> {
+  const headers = getAuthHeaders();
+  if (init.body instanceof FormData) delete headers["Content-Type"];
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/condominios/${encodeURIComponent(condominioId)}${ruta}`, {
+      ...init, headers,
+    });
+  } catch {
+    throw new Error("No se pudo conectar con la API. Comprueba la conexión e inténtalo de nuevo.");
+  }
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo completar la operación de estructura."));
+  return data as T;
+}
+
+export function listarEdificios(condominioId: string): Promise<Edificio[]> {
+  return estructuraRequest(condominioId, "/edificios");
+}
+
+export function registrarEdificio(condominioId: string, nombre_bloque: string, total_pisos: number): Promise<Edificio> {
+  return estructuraRequest(condominioId, "/edificios", {
+    method: "POST", body: JSON.stringify({ nombre_bloque, total_pisos }),
+  });
+}
+
+export function listarDepartamentos(condominioId: string): Promise<DepartamentoRegistrado[]> {
+  return estructuraRequest(condominioId, "/departamentos");
+}
+
+export function registrarDepartamento(condominioId: string, edificioId: string, datos: {
+  numero: string; piso: number; coeficiente_participacion: string;
+}): Promise<DepartamentoRegistrado> {
+  return estructuraRequest(condominioId, `/edificios/${encodeURIComponent(edificioId)}/departamentos`, {
+    method: "POST", body: JSON.stringify(datos),
+  });
+}
+
+export function cambiarEstadoDepartamento(condominioId: string, departamentoId: string, activo: boolean): Promise<DepartamentoRegistrado> {
+  return estructuraRequest(condominioId, `/departamentos/${encodeURIComponent(departamentoId)}/estado`, {
+    method: "PATCH", body: JSON.stringify({ activo }),
+  });
+}
+
+export function importarEstructura(condominioId: string, archivo: File, confirmar = false): Promise<ResultadoImportacion> {
+  const body = new FormData();
+  body.append("archivo", archivo);
+  return estructuraRequest(condominioId, `/importaciones/${confirmar ? "confirmar" : "previsualizar"}`, {
+    method: "POST", body,
+  });
 }
 
 export async function crearCondominio(
@@ -655,16 +753,16 @@ export async function conciliarComprobante(
   return { ok: false, error: "Comprobante no hallado." };
 }
 
-export async function emitirLoteCuotas(periodo: string, presupuestoTotal: string): Promise<{ ok: boolean; error?: string; total?: number }> {
+export async function emitirLoteCuotas(periodo: string, presupuestoTotal: string, condominioId: string, fechaVencimiento: string): Promise<{ ok: boolean; error?: string; total?: number }> {
   try {
     const res = await fetch(`${API_BASE}/cuotas/emitir-lote`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({
-        condominio_id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        condominio_id: condominioId,
         periodo,
         presupuesto_total: presupuestoTotal,
-        fecha_vencimiento: `${periodo}-20`,
+        fecha_vencimiento: fechaVencimiento,
       }),
     });
     if (res.ok) {
@@ -672,9 +770,9 @@ export async function emitirLoteCuotas(periodo: string, presupuestoTotal: string
       return { ok: true, total: data.total_cuotas_emitidas };
     }
     const err = await res.json();
-    return { ok: false, error: err.detail?.mensaje };
+    return { ok: false, error: obtenerMensajeError(err, "No se pudo emitir el lote.") };
   } catch {
-    return { ok: true, total: 139 };
+    return { ok: false, error: "No se pudo conectar con la API para emitir el lote." };
   }
 }
 

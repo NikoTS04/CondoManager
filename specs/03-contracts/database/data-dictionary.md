@@ -87,18 +87,32 @@ cambio no modifica actor, fecha ni auditoría. Migración `20261014_0003`, sobre
 
 ---
 
+## Tabla: `edificios` (CON-3)
+
+| Columna | Tipo | Nulo | Restricción |
+|---|---|---|---|
+| `id` | UUID | NO | PK, generado por servidor |
+| `condominio_id` | UUID | NO | FK condominios(id), ON DELETE CASCADE |
+| `nombre_bloque` | VARCHAR(100) | NO | Único por condominio; índice único normalizado lower(btrim(nombre_bloque)) |
+| `total_pisos` | INTEGER | NO | CHECK >=1; API máximo 32767 |
+
 ## 3. Tabla: `departamentos`
 Almacena cada unidad inmobiliaria exclusiva (departamento, flat, local).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
 | :--- | :--- | :---: | :---: | :--- | :--- |
 | `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador único de la unidad. |
-| `condominio_id` | `UUID` | NO | - | `REFERENCES condominios(id) ON DELETE CASCADE` | Condominio al que pertenece. |
-| `numero` | `VARCHAR(20)` | NO | - | `UNIQUE (condominio_id, numero)` | Número identificador del departamento (ej. "101", "504B"). |
+| `edificio_id` | `UUID` | NO | - | `REFERENCES edificios(id) ON DELETE CASCADE` | El condominio se obtiene a través del edificio. |
+| `numero` | `VARCHAR(20)` | NO | - | `UNIQUE (edificio_id, numero)` e índice único normalizado | Número identificador del departamento (ej. "101", "504B"). |
 | `piso` | `SMALLINT` | NO | - | `CHECK (piso >= 1)` | Piso o nivel en el que se ubica la unidad. |
-| `coeficiente_participacion` | `NUMERIC(7,4)` | NO | - | `CHECK (coeficiente_participacion > 0.0000)` | Alícuota porcentual de participación sobre el 100%. |
+| `coeficiente_participacion` | `NUMERIC(7,4)` | NO | - | `CHECK (>0 AND <=100)` | Alícuota porcentual; cadena decimal en API. |
 | `saldo_a_favor` | `NUMERIC(12,2)` | NO | `0.00` | `CHECK (saldo_a_favor >= 0.00)` | Fondo crediticio a favor del departamento por pagos en exceso. |
 | `estado_financiero` | `VARCHAR(20)` | NO | `'AL_DIA'` | `CHECK (estado_financiero IN ('AL_DIA', 'OBSERVADO', 'EN_MORA'))` | Estado de solvencia para control de reservas comunes. |
+| `activo` | `BOOLEAN` | NO | `TRUE` | - | Estado operativo; inactivos se excluyen de futuras distribuciones sin perder el historial. |
+
+Migración `20261018_0005`: adopta el esquema existente de Supabase tras verificarlo,
+o lo crea en instalaciones nuevas. El piso máximo se valida contra el edificio en
+el servicio. Los registros y cambios de actividad se auditan transaccionalmente.
 
 ---
 
