@@ -3,6 +3,8 @@ import uuid
 import pytest
 import os
 
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
+
 try:
     from fastapi.testclient import TestClient
     from src.main import app

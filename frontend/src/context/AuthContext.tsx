@@ -78,7 +78,7 @@ interface AuthContextType {
   activeDepartment: string;
   authReady: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password?: string) => Promise<LoginResult>;
+  login: (email: string, password?: string, condominioId?: string) => Promise<LoginResult>;
   logout: () => void;
   switchDemoPersona: (personaKey: string) => Promise<boolean>;
   setActiveDepartment: (depto: string) => void;
@@ -103,9 +103,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authReady, setAuthReady] = useState(false);
   const router = useRouter();
 
-  const login = useCallback(async (email: string, password = ""): Promise<LoginResult> => {
+  const login = useCallback(async (email: string, password = "", condominioId?: string): Promise<LoginResult> => {
     try {
-      const session = await iniciarSesion(email.trim().toLowerCase(), password);
+      const session = await iniciarSesion(email.trim().toLowerCase(), password, condominioId);
       if (!isSessionUser(session.usuario)) throw new Error("Contrato de sesión incompatible. Inicia sesión de nuevo.");
       const newUser = session.usuario;
       const depto = seleccionarUnidad(newUser);
@@ -121,6 +121,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { ok: false, error };
     }
   }, []);
+
+  useEffect(() => {
+    function revocar() {
+      limpiarSesion();
+      setUser(null);
+      setToken(null);
+      actualizarDepartamento("");
+      router.replace("/login");
+    }
+    window.addEventListener("condomanager:sesion-revocada", revocar);
+    return () => window.removeEventListener("condomanager:sesion-revocada", revocar);
+  }, [router]);
 
   // La caché no concede permisos: restaurar siempre contra /auth/me.
   useEffect(() => {

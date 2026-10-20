@@ -22,6 +22,7 @@ import { MorasSection } from "@/features/junta/MorasSection";
 import { PresupuestoMensual, type PresupuestoAprobado } from "@/features/junta/PresupuestoMensual";
 import { ResumenSection } from "@/features/junta/ResumenSection";
 import ConfiguracionCondominio from "@/features/junta/ConfiguracionCondominio";
+import { UsuariosSection } from "@/features/junta/UsuariosSection";
 import {
   conciliarComprobante,
   emitirLoteCuotas,
@@ -284,6 +285,7 @@ export default function JuntaPortal() {
             <JuntaNav
               section={section}
               isSuperAdmin={isSuperAdmin}
+              isAuditor={isAuditor}
               pendientes={pendientes.length}
               onNavigate={setSection}
             />
@@ -339,6 +341,9 @@ export default function JuntaPortal() {
               cargando={loading}
               onActualizar={loadData}
             />
+          )}
+          {section === "usuarios" && !isAuditor && (
+            <UsuariosSection key={condominioActivoId ?? "sin-condominio"} condominioId={condominioActivoId} esSuperAdmin={isSuperAdmin} />
           )}
           {section === "presupuesto" && (
             <>

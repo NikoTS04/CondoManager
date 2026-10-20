@@ -1,5 +1,18 @@
 # Criterios de Aceptación: Autenticación y Control de Acceso (RBAC) (BDD / Gherkin)
 
+## CON-04 — Alta inactiva y habilitación manual
+
+Contrato: [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
+Escenarios ejecutables: [alta_usuarios.feature](../02-domains/05-usuarios-rbac/features/alta_usuarios.feature).
+
+- El administrador crea una cuenta con contraseña inicial y estado inactivo.
+- Solo SuperAdmin habilita o deshabilita la cuenta desde la aplicación.
+- Login, autorización y restauración consultan la identidad persistida.
+- Desactivar/reactivar invalida las sesiones anteriores; repetir un estado es un no-op.
+- Correo y documento normalizados no se duplican, tampoco concurrentemente.
+- Alta, asignación inicial y auditoría se confirman o revierten conjuntamente.
+- La activación administrativa es independiente de una futura verificación por correo.
+
 ## Característica: Autenticación JWT y Control Granular de Pantallas por Rol
 
 ### Escenario 1: Inicio de sesión exitoso y generación de claims

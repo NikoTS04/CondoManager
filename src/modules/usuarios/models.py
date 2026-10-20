@@ -8,8 +8,10 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -30,12 +32,22 @@ class Usuario(Base):
     apellido: Mapped[str] = mapped_column(String(80), nullable=False)
     telefono: Mapped[str] = mapped_column(String(20), nullable=True)
     documento_identidad: Mapped[str] = mapped_column(String(20), nullable=False)
-    esta_activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    esta_activo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    auth_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    es_superadmin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+
+    __table_args__ = (CheckConstraint("auth_revision >= 1", name="ck_usuario_auth_revision"),)
 
 
 class UsuarioDepartamento(Base):

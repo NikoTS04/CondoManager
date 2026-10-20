@@ -12,7 +12,7 @@ Todo Pull Request hacia `develop` o `main` pasa por los workflows de `.github/wo
 | `frontend.yml` | Frontend / Lint, tipos y build | `next lint`, `tsc --noEmit`, `next build` | Sí |
 | `specs.yml` | Specs / Cumplimiento SDD | `scripts/verify_sdd_compliance.py` | Sí |
 | | Specs / OpenAPI | Spectral sobre `specs/03-contracts/openapi/condomanager.openapi.yaml` (`.spectral.yaml`) | Sí |
-| | Specs / Contrato API | Schemathesis contra la app FastAPI (`scripts/ci/verify_api_contract.py`) | Parcial (ver deudas) |
+| | Specs / Contrato API | Schemathesis contra la app FastAPI con PostgreSQL efímero y migraciones aplicadas (`scripts/ci/verify_api_contract.py`) | Parcial (ver deudas) |
 | `convenciones-pr.yml` | Convenciones / Título del PR | Conventional Commits en el título del PR | Sí |
 | | Convenciones / Nombre de rama | Prefijos de rama de `CONTRIBUTING.md` (+ `ci/`, `test/`, `chore/`, `dependabot/`) | Sí |
 | `seguridad.yml` | Seguridad / Revisión de dependencias | Dependencias nuevas con vulnerabilidades altas en el PR | Sí |

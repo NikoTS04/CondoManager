@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Settings2,
   Clock3,
+  Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
@@ -17,6 +18,7 @@ export type JuntaSection =
   | "resumen"
   | "configuracion"
   | "estructura"
+  | "usuarios"
   | "presupuesto"
   | "cuotas"
   | "conciliacion"
@@ -27,6 +29,7 @@ const NAV_ITEMS = [
   { id: "resumen", label: "Resumen", Icon: LayoutDashboard },
   { id: "configuracion", label: "Configuración", Icon: Settings2, superAdmin: true },
   { id: "estructura", label: "Estructura", Icon: Building2 },
+  { id: "usuarios", label: "Usuarios", Icon: Users, administracion: true },
   { id: "presupuesto", label: "Presupuesto", Icon: ClipboardCheck },
   { id: "cuotas", label: "Distribución y emisión", Icon: Coins },
   { id: "conciliacion", label: "Conciliación", Icon: FileCheck2 },
@@ -37,12 +40,13 @@ const NAV_ITEMS = [
 interface JuntaNavProps {
   section: JuntaSection;
   isSuperAdmin: boolean;
+  isAuditor: boolean;
   pendientes: number;
   onNavigate: (section: JuntaSection) => void;
 }
 
-export function JuntaNav({ section, isSuperAdmin, pendientes, onNavigate }: JuntaNavProps) {
-  const items = NAV_ITEMS.filter((item) => !("superAdmin" in item) || isSuperAdmin);
+export function JuntaNav({ section, isSuperAdmin, isAuditor, pendientes, onNavigate }: JuntaNavProps) {
+  const items = NAV_ITEMS.filter((item) => (!("superAdmin" in item) || isSuperAdmin) && (!("administracion" in item) || !isAuditor));
 
   return (
     <nav

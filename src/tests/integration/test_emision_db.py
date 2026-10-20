@@ -33,6 +33,8 @@ from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorServic
 from src.modules.cuotas.schemas import EmitirLoteRequest
 from src.modules.cuotas.worker import emitir_pendientes, publicar_pendientes
 
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
+
 REVISIONES = (
     "20261008_0001_crear_condominios_y_auditoria",
     "20261008_0002_crear_presupuestos_mensuales",

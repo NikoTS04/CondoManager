@@ -13,7 +13,8 @@ from src.modules.notificaciones import router as notificaciones
 from src.modules.pagos import router as pagos
 from src.modules.reservas import router as reservas
 from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
-from src.modules.usuarios.service import UsuariosService
+
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada", "identidad_piloto")
 
 client = TestClient(app)
 CID = str(CONDOMINIO_PILOTO_ID)
@@ -80,15 +81,15 @@ def test_consultas_sin_autenticacion_rechazadas(ruta):
     assert client.get("/api/v1" + ruta).status_code == 401
 
 
-def test_sesion_con_relaciones_mixtas_solo_ve_sus_vinculos_activos(monkeypatch):
-    origen = UsuariosService.USUARIOS_PILOTO["residente102@villabonita3.pe"]
+def test_sesion_con_relaciones_mixtas_solo_ve_sus_vinculos_activos(monkeypatch, identidad_piloto):
+    origen = identidad_piloto.perfiles["residente102@villabonita3.pe"]
     datos = {
         **origen,
         "departamentos": [vinculo_piloto("102", "PROPIETARIO_TITULAR"),
                           vinculo_piloto("504", "INQUILINO"),
                           vinculo_piloto("302", "COPROPIETARIO", es_activo=False)],
     }
-    monkeypatch.setitem(UsuariosService.USUARIOS_PILOTO, origen["email"], datos)
+    monkeypatch.setitem(identidad_piloto.perfiles, origen["email"], datos)
     session = client.post("/api/v1/auth/login", json={
         "email": origen["email"], "password": "Residente123!",
     }).json()

@@ -10,7 +10,7 @@ El Sprint 2 contiene **20 elementos: 15 historias de usuario y 5 entregas técni
 
 | Jira | Historia / entrega | ID funcional | Puntos | Responsable | Dependencias |
 |---|---|---|---:|---|---|
-| **CON-04** | Crear usuario | USR-03 | Por estimar | **Jerson** | CON-2; contrato de invitaciones de CON-72 |
+| **CON-04** | Crear usuario y habilitar su acceso | USR-03 | Por estimar | **Jerson** | CON-2 y contratos de identidad de CON-72 |
 | **CON-05** | Vincular usuarios con departamentos | USR-04 | Por estimar | **Jerson** | CON-3 y CON-04 |
 | **CON-06** | Asignar roles y permisos | USR-05 | Por estimar | **Jerson** | CON-2 y CON-04; contrato de identidad vigente |
 | **CON-22** | Reportar un comprobante de pago | PAG-01 | 5 | **Anderson** | CON-05 y CON-06; contratos de CON-23, CON-70 y CON-72 |
@@ -79,7 +79,7 @@ CON-74: integración progresiva de la interfaz con las API
 CON-75: pruebas de errores y evidencia durante todo el sprint
 ```
 
-- **Identidad y acceso:** la creación de usuarios puede avanzar con el contrato de invitaciones; los vínculos necesitan departamentos existentes. La asignación de un rol administrativo no exige inventar una relación de tenencia.
+- **Identidad y acceso:** CON-04 utiliza habilitación manual por SuperAdmin; el administrador establece la contraseña inicial. La invitación y verificación por correo quedan para una evolución posterior. Los vínculos necesitan departamentos existentes y un rol administrativo no exige una relación de tenencia.
 - **Pagos:** reporte y deduplicación se desarrollan sobre un contrato compartido y se integran con CON-70. La protección concurrente debe probarse en PostgreSQL, no únicamente en un diccionario local.
 - **Reservas:** disponibilidad, solvencia y exclusión de horarios forman parte de una misma operación transaccional al integrarse. CON-42 y CON-43 pueden desarrollar y probar sus reglas antes del cierre de CON-41.
 - **Notificaciones:** las plantillas, los adaptadores y los reintentos pueden probarse con eventos de contrato. El cierre exige consumir eventos de operaciones confirmadas y guardar su estado de entrega.
@@ -109,19 +109,19 @@ CON-75: pruebas de errores y evidencia durante todo el sprint
 
 ## CON-04 — Crear usuario
 
-**Historia:** Como administrador autorizado, quiero crear e invitar usuarios, para que activen su cuenta y accedan a las operaciones del condominio.
+**Historia:** Como administrador autorizado, quiero registrar usuarios con contraseña inicial y que un SuperAdmin habilite su acceso desde la aplicación.
 
 **Debe incluir:**
 
 - Registro persistente de identidad, nombres, documento y correo, con validación y reglas de unicidad documentadas.
 - Alta restringida a usuarios autorizados y al contexto de condominio permitido.
-- Cuenta inactiva hasta completar la activación y establecer una contraseña almacenada mediante hash.
-- Token de activación de un solo uso, con vencimiento y procedimiento de renovación definidos en el contrato.
-- Solicitud de invitación mediante el evento acordado en CON-72 e integración de su comunicación con CON-36.
-- Inicio de sesión de la cuenta activada utilizando el usuario persistido y el contrato vigente de sesión.
-- Auditoría del alta y rechazo controlado de datos duplicados, invitaciones vencidas o activaciones repetidas.
+- Contraseña inicial establecida por el administrador y almacenada únicamente mediante hash.
+- Cuenta inactiva por defecto en API, ORM y PostgreSQL; estado editable exclusivamente por SuperAdmin desde la aplicación.
+- Login persistente y rechazo de cuentas inactivas; desactivar invalida sesiones anteriores y reactivar exige un nuevo login.
+- Auditoría atómica del alta y de los cambios reales de estado; rechazo controlado de datos duplicados.
+- Invitaciones y verificación por correo previstas para una evolución posterior, independientes del estado administrativo.
 
-**Se considera terminada cuando:** un administrador puede registrar e invitar a una persona, esta activa su cuenta e inicia sesión con sus datos persistidos, y los intentos inválidos o no autorizados se rechazan sin crear cuentas duplicadas.
+**Se considera terminada cuando:** un administrador registra una cuenta inactiva, un SuperAdmin la habilita o deshabilita desde la aplicación y solo una cuenta activa accede con sus credenciales persistidas; los intentos inválidos se rechazan y los cambios quedan auditados. Contrato: [alta administrativa](../../specs/02-domains/05-usuarios-rbac/alta-administrativa.md).
 
 **Trazabilidad:** [USR-03 del backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#usr-03--crear-e-invitar-usuarios), [dominio de usuarios](../../specs/02-domains/05-usuarios-rbac/spec.md), [PROC-05](../../specs/02-processes-and-automations/proc-05-gestion-usuarios.md), [contrato de identidad](../../specs/02-domains/05-usuarios-rbac/identidad-y-alcances.md), [seguridad y RBAC](../../specs/01-architecture/security-and-rbac.md).
 
@@ -239,7 +239,7 @@ CON-75: pruebas de errores y evidencia durante todo el sprint
 
 - Confirmación de reserva con área, fecha, horario, costo y normas de uso.
 - Aviso de cancelación con liberación del horario e información del ajuste económico cuando corresponda.
-- Invitación de activación de CON-04 y plantillas diferenciadas para las demás operaciones incluidas en el contrato.
+- Plantillas diferenciadas para las operaciones incluidas en el contrato; la invitación de CON-04 se difiere junto con la verificación por correo.
 - Registro de destinatario, canal, operación de origen, estado e intentos.
 - Consumo idempotente de eventos confirmados y protección de la información privada de otros residentes.
 - Integración con la persistencia de CON-73 y los reintentos de CON-37.
@@ -396,7 +396,7 @@ CON-75: pruebas de errores y evidencia durante todo el sprint
 **Debe incluir:**
 
 - Alineación entre OpenAPI, DTO, ejemplos, documentación y consumo del frontend.
-- Contratos de alta y activación de usuarios, vínculos, asignación de roles, comprobantes, catálogo, disponibilidad, reservas y cancelación.
+- Contratos de alta y habilitación administrativa de usuarios, vínculos, asignación de roles, comprobantes, catálogo, disponibilidad, reservas y cancelación.
 - Decisión explícita del contrato de carga del voucher y de las respuestas para comprobantes nuevos, duplicados en revisión y ya conciliados.
 - Catálogo de eventos con productor, consumidor, versión, identificador, contexto y campos requeridos para cuotas, pagos, invitaciones y reservas.
 - Reglas de publicación posterior al commit, reentrega, deduplicación, reintento y conservación de errores.

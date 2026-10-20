@@ -4,6 +4,25 @@ Este documento especifica a nivel de campo y columna todas las tablas relacional
 
 ---
 
+## Identidad persistente — CON-04
+
+Contrato: [alta administrativa](../../02-domains/05-usuarios-rbac/alta-administrativa.md).
+
+`usuarios` conserva sus campos originales y añade:
+
+| Columna | Tipo | Nulo | Default | Regla |
+|---|---|---|---|---|
+| `esta_activo` | BOOLEAN | NO | `false` | Solo SuperAdmin cambia su estado mediante API. |
+| `auth_revision` | INTEGER | NO | `1` | Positivo; cambia atómicamente con el estado e invalida JWT previos. |
+| `es_superadmin` | BOOLEAN | NO | `false` | Concesión global provisionada por CLI, no por API. |
+
+`email` usa índice único `lower(btrim(email))`; `documento_identidad` usa índice
+único `upper(btrim(documento_identidad))`. Se validan duplicados históricos al adoptar
+las tablas. `password_hash` guarda PBKDF2-SHA256 y nunca se expone.
+`usuario_roles` mantiene una asignación por `(usuario_id, condominio_id)` y
+`usuario_departamentos` un vínculo por `(usuario_id, departamento_id)`, ambos
+con claves foráneas y checks de los catálogos canónicos.
+
 ## 1. Tabla: `condominios`
 Almacena las comunidades inmobiliarias o edificios matrices.
 
