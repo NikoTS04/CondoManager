@@ -208,6 +208,47 @@ CREATE TABLE comprobantes_pago (
 );
 
 -- 6. Tabla de Áreas Comunes
+-- CON-70: extensiones aditivas. Las migraciones Alembic son la fuente ejecutable.
+CREATE TABLE imputaciones_pago (
+    id UUID PRIMARY KEY,
+    comprobante_id UUID NOT NULL REFERENCES comprobantes_pago(id) ON DELETE RESTRICT,
+    cuota_id UUID NOT NULL REFERENCES cuotas_mantenimiento(id) ON DELETE RESTRICT,
+    monto_aplicado NUMERIC(12,2) NOT NULL CHECK (monto_aplicado > 0.00),
+    fecha_imputacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE archivos_voucher (
+    nombre TEXT PRIMARY KEY,
+    departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,
+    usuario_id UUID NOT NULL,
+    content_type VARCHAR(30) NOT NULL CHECK (content_type IN ('image/png', 'image/jpeg', 'application/pdf')),
+    size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 5242880),
+    creado_en TIMESTAMPTZ NOT NULL,
+    comprobante_id UUID UNIQUE REFERENCES comprobantes_pago(id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_voucher_pendientes ON archivos_voucher(comprobante_id, creado_en);
+
+CREATE TABLE revisiones_pago (
+    id UUID PRIMARY KEY,
+    comprobante_id UUID NOT NULL REFERENCES comprobantes_pago(id) ON DELETE RESTRICT,
+    decision VARCHAR(20) NOT NULL CHECK (decision IN ('APROBADO', 'OBSERVADO', 'RECHAZADO')),
+    motivo TEXT,
+    actor_id UUID NOT NULL,
+    creado_en TIMESTAMPTZ NOT NULL,
+    resultado JSONB NOT NULL
+);
+CREATE INDEX idx_revision_comprobante_fecha ON revisiones_pago(comprobante_id, creado_en);
+
+CREATE TABLE eventos_pago_outbox (
+    id UUID PRIMARY KEY,
+    comprobante_id UUID NOT NULL REFERENCES comprobantes_pago(id) ON DELETE RESTRICT,
+    payload JSONB NOT NULL,
+    creado_en TIMESTAMPTZ NOT NULL,
+    publicado_en TIMESTAMPTZ
+);
+CREATE INDEX idx_evento_pago_pendiente ON eventos_pago_outbox(publicado_en, creado_en);
+
+-- 6. Tabla de Áreas Comunes
 CREATE TABLE areas_comunes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,

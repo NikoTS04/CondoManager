@@ -83,6 +83,12 @@ intento, independientemente para cada unidad de un usuario.
 
 ## Verificación
 
+La demostración financiera es opt-in: `scripts.seed_pagos_sprint2_demo` requiere
+DEMO_MODE y confirmación explícita, usa solo el condominio/identidades demo ya
+provisionados y no sobrescribe cuotas existentes. No se ejecuta automáticamente
+al arrancar servicios ni durante migraciones. La prueba de navegador apunta a una
+base de demostración aislada; no se registran vouchers de prueba en bases del equipo.
+
 Migraciones en PostgreSQL vacío y con tablas preexistentes, conservación de datos,
 sesiones independientes, reinicios, rollback, carreras de reporte/revisión,
 seguridad del archivo, aislamiento por unidad y cuatro roles. Cada mutación usa

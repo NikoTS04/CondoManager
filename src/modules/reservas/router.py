@@ -15,6 +15,7 @@ from src.core.authorization import (
 )
 from src.core.roles import ROLES_ADMINISTRATIVOS
 from src.core.security import get_current_user
+from src.modules.pagos.solvencia import get_solvencia_service
 from src.modules.reservas.schemas import (
     AreaComunDTO,
     CancelarReservaRequest,
@@ -73,6 +74,7 @@ DEPARTAMENTOS_MAP = DEPARTAMENTOS_PILOTO
 # Endpoints de Áreas Comunes
 # ============================================================================
 
+
 @router.get(
     "/areas",
     response_model=List[AreaComunDTO],
@@ -109,6 +111,7 @@ async def disponibilidad_area(
 # ============================================================================
 # Endpoints de Reservas
 # ============================================================================
+
 
 @router.get(
     "/reservas",
@@ -150,41 +153,40 @@ async def listar_reservas(
     status_code=status.HTTP_201_CREATED,
     summary="Solicitud de reserva de área común (con filtro de solvencia)",
 )
-async def crear_reserva(request: CrearReservaRequest, user: dict = Depends(get_current_user)):
+async def crear_reserva(
+    request: CrearReservaRequest,
+    user: dict = Depends(get_current_user),
+    solvencia=Depends(get_solvencia_service),
+):
     """Crea una reserva validando la solvencia financiera del departamento y la disponibilidad de horario."""
-    autorizar_departamento(
-        user, request.departamento_id, request.condominio_id, escritura=True
-    )
+    autorizar_departamento(user, request.departamento_id, request.condominio_id, escritura=True)
     # 1. Comprobar existencia del área
     area = AREAS_REGISTRADAS.get(request.area_id)
     if not area:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "AREA_NO_ENCONTRADA", "mensaje": f"Área común '{request.area_id}' no encontrada."},
+            detail={
+                "error_code": "AREA_NO_ENCONTRADA",
+                "mensaje": f"Área común '{request.area_id}' no encontrada.",
+            },
         )
 
     if area["condominio_id"] != request.condominio_id:
-        raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO", "mensaje": "Área de otro condominio."})
-
-    # 2. Consultar estado financiero de una unidad conocida y autorizada.
-    depto_id_str = str(request.departamento_id)
-    depto = DEPARTAMENTOS_MAP.get(depto_id_str)
-    if not depto:
-        raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
-    if depto["condominio_id"] != request.condominio_id or not depto["activo"]:
-        raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO"})
-    estado_financiero = depto["estado_financiero"]
-    saldo_mora = depto["deuda_vencida"]
+        raise HTTPException(
+            403, detail={"error_code": "ACCESO_DENEGADO", "mensaje": "Área de otro condominio."}
+        )
 
     try:
-        reserva_dto, _ = ReservasService.procesar_reserva(
-            request=request,
-            area=area,
-            estado_financiero_depto=estado_financiero,
-            saldo_mora_depto=saldo_mora,
-            reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
-        )
-        # Guardar en memoria
+        # CON-42: consultar deuda real; el guard admite persistir CON-41 con su sesión.
+        async with solvencia.para_reserva(request, user) as evaluacion:
+            reserva_dto, _ = ReservasService.procesar_reserva(
+                request=request,
+                area=area,
+                estado_financiero_depto="AL_DIA",
+                saldo_mora_depto=evaluacion.saldo_vencido,
+                reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
+            )
+        # Se conserva el calendario existente: su persistencia corresponde a CON-73.
         RESERVAS_REGISTRADAS[reserva_dto.id] = reserva_dto.model_dump()
         return reserva_dto
 
@@ -194,7 +196,10 @@ async def crear_reserva(request: CrearReservaRequest, user: dict = Depends(get_c
             detail={
                 "error_code": exc.error_code,
                 "mensaje": exc.mensaje,
-                "detalles": {"departamento_id": exc.departamento_id, "saldo_vencido": str(exc.saldo_vencido)},
+                "detalles": {
+                    "departamento_id": exc.departamento_id,
+                    "saldo_vencido": str(exc.saldo_vencido),
+                },
             },
         )
     except ConflictoHorarioException as exc:

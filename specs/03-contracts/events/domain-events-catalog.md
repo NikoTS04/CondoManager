@@ -54,3 +54,8 @@ que CON-11, con `version: 1` y `event_id` estable. No cambia el relay de cuotas.
 motivo; en revisiones añade revision_id y resultado financiero persistido.
 Los importes son strings decimales. Los consumidores deduplican por event_id;
 confirmar publicación en SQL después de Redis permite reentrega, no pérdida.
+El envelope versionado se valida contra `schemas/pago-sprint-2.schema.json`.
+PagoConciliadoEvent también conserva los campos planos del contrato histórico
+(`monto_conciliado`, `saldo_restante_departamento`, `desbloqueo_reservas_habilitado`
+y UUID de comprobante/unidad), tanto en la raíz como en `data`, sin modificar el
+esquema histórico ni exigir una migración inmediata a los consumidores.
