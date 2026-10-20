@@ -13,43 +13,64 @@ El Sprint 2 contiene **20 elementos: 15 historias de usuario y 5 entregas técni
 | **CON-04** | Crear usuario | USR-03 | Por estimar | **Jerson** | CON-2; contrato de invitaciones de CON-72 |
 | **CON-05** | Vincular usuarios con departamentos | USR-04 | Por estimar | **Jerson** | CON-3 y CON-04 |
 | **CON-06** | Asignar roles y permisos | USR-05 | Por estimar | **Jerson** | CON-2 y CON-04; contrato de identidad vigente |
-| **CON-22** | Reportar un comprobante de pago | PAG-01 | 5 | **Anderson** | CON-05 y CON-06; contrato de persistencia de CON-70 |
+| **CON-22** | Reportar un comprobante de pago | PAG-01 | 5 | **Anderson** | CON-05 y CON-06; contratos de CON-23, CON-70 y CON-72 |
 | **CON-23** | Evitar comprobantes duplicados | PAG-02 | 5 | **Brandon** | Contratos de CON-22, CON-70 y CON-72 |
-| **CON-32** | Notificar la emisión de una cuota | NOT-01 | Por estimar | Por asignar | CON-11, CON-72 y CON-73 |
-| **CON-34** | Comunicar el resultado de un pago | NOT-03 | Por estimar | Por asignar | CON-22; resultado persistente de revisión en CON-70; CON-72 y CON-73 |
-| **CON-36** | Notificar reservas y otras operaciones | NOT-05 | Por estimar | Por asignar | Eventos de CON-04, CON-41 y CON-46; CON-72 y CON-73 |
-| **CON-37** | Reintentar notificaciones fallidas | NOT-06 | Por estimar | Por asignar | Contratos de notificaciones de CON-32, CON-34 y CON-36; CON-73 |
+| **CON-32** | Notificar la emisión de una cuota | NOT-01 | Por estimar | **Alejandro** | CON-05 y CON-11; CON-72 y CON-73 |
+| **CON-34** | Comunicar el resultado de un pago | NOT-03 | Por estimar | **Alejandro** | CON-05 y CON-22; resultado persistente de revisión en CON-70; CON-72 y CON-73 |
+| **CON-36** | Notificar reservas y otras operaciones | NOT-05 | Por estimar | **Alejandro** | Eventos de CON-04, CON-41 y CON-46; CON-72 y CON-73 |
+| **CON-37** | Reintentar notificaciones fallidas | NOT-06 | Por estimar | **Alejandro** | Contratos de notificaciones de CON-32, CON-34 y CON-36; CON-73 |
 | **CON-39** | Administrar el catálogo de áreas comunes | RES-01 | Por estimar | **Jerson** | CON-2 y CON-06; contrato de persistencia de CON-73 |
-| **CON-40** | Consultar disponibilidad | RES-02 | Por estimar | Por asignar | CON-39; contrato de reservas persistentes de CON-73 |
-| **CON-41** | Reservar siendo un departamento solvente | RES-03 | Por estimar | Por asignar | CON-05, CON-06, CON-40, CON-42, CON-43 y CON-73 |
-| **CON-42** | Bloquear reservas por deuda vencida | RES-04 | Por estimar | Por asignar | Cuotas y deuda persistentes de CON-70; contrato de creación de CON-41 |
-| **CON-43** | Evitar reservas simultáneas | RES-05 | Por estimar | Por asignar | CON-40; contratos de reserva y transacción de CON-41 y CON-73 |
-| **CON-46** | Cancelar una reserva | RES-08 | Por estimar | Por asignar | CON-41; contratos de cancelación y eventos de CON-72 y CON-73 |
-| **CON-70** | Persistir el flujo inicial de cuotas y pagos | Transversal | Por estimar | Por asignar | Base de CON-3, CON-9, CON-10, CON-11 y CON-13; contratos de CON-22, CON-23 y CON-72 |
-| **CON-72** | Consolidar contratos API y reglas de eventos | Transversal | Por estimar | Por asignar | Especificaciones vigentes y acuerdos entre las historias del sprint |
-| **CON-73** | Persistir áreas, reservas y notificaciones | Transversal | Por estimar | Por asignar | CON-2, CON-3 y CON-72; contratos de catálogo, reservas y notificaciones |
-| **CON-74** | Integrar frontend y backend del prototipo | Transversal | Por estimar | Por asignar | CON-72 y contratos funcionales; integración final con CON-70 y CON-73 |
-| **CON-75** | Preparar errores y evidencia del prototipo | Transversal | Por estimar | Por asignar | CON-72; evidencias de CON-70, CON-73, CON-74 y de las historias funcionales |
+| **CON-40** | Consultar disponibilidad | RES-02 | Por estimar | **Gerardo** | CON-39; contrato de reservas persistentes de CON-73 |
+| **CON-41** | Reservar siendo un departamento solvente | RES-03 | Por estimar | **Brandon** | CON-05, CON-06, CON-40, CON-42, CON-43 y CON-73 |
+| **CON-42** | Bloquear reservas por deuda vencida | RES-04 | Por estimar | **Anderson** | Cuotas y deuda persistentes de CON-70; contrato de creación de CON-41 |
+| **CON-43** | Evitar reservas simultáneas | RES-05 | Por estimar | **Brandon** | CON-40; contratos de reserva y transacción de CON-41 y CON-73 |
+| **CON-46** | Cancelar una reserva | RES-08 | Por estimar | **Gerardo** | CON-41; contratos de cancelación y eventos de CON-72 y CON-73 |
+| **CON-70** | Persistir el flujo inicial de cuotas y pagos | Transversal | Por estimar | **Anderson** | Base de CON-3, CON-9, CON-10, CON-11 y CON-13; contratos de CON-22, CON-23 y CON-72 |
+| **CON-72** | Consolidar contratos API y reglas de eventos | Transversal | Por estimar | **Gerardo** | Especificaciones vigentes y acuerdos entre las historias del sprint |
+| **CON-73** | Persistir áreas, reservas y notificaciones | Transversal | Por estimar | **Nicolás (Tarqui)** | CON-2, CON-3 y CON-72; contratos de catálogo, reservas y notificaciones |
+| **CON-74** | Integrar frontend y backend del prototipo | Transversal | Por estimar | **Nicolás (Tarqui)** | CON-72 y contratos funcionales; integración final con CON-70 y CON-73 |
+| **CON-75** | Preparar errores y evidencia del prototipo | Transversal | Por estimar | **Gerardo** | CON-72; evidencias de CON-70, CON-73, CON-74 y de las historias funcionales |
 
 - CON-04, CON-05, CON-06 y CON-39 se asignan expresamente a **Jerson**.
-- CON-22 conserva a **Anderson** y CON-23 a **Brandon**, según el [Sprint 1](SPRINT-1.md). Los demás responsables quedan **Por asignar**.
+- CON-22 conserva a **Anderson** y CON-23 a **Brandon**, según el [Sprint 1](SPRINT-1.md). Las demás asignaciones corresponden al reparto acordado para el Sprint 2.
 - Los 5 puntos de CON-22 y los 5 de CON-23 son las estimaciones previas. Deben revisarse contra el trabajo pendiente; no representan una nueva estimación ni el total del Sprint 2.
 - Las correspondencias funcionales siguen los títulos del [backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md). Las cinco entregas transversales mantienen las claves indicadas para este sprint, sin inventar historias funcionales adicionales.
 - CON-22 y CON-23 se incluyen como **continuidad del Sprint 1**: se retoma el avance disponible y se completa su integración, almacenamiento y protección durable frente a duplicados.
 - A diferencia del alcance exclusivamente funcional del Sprint 1, este sprint incorpora expresamente las cinco entregas técnicas solicitadas para cerrar el prototipo.
 
+### Resumen por integrante
+
+| Integrante | Historias de usuario | Entregas técnicas | Foco de trabajo |
+|---|---|---|---|
+| **Jerson** | CON-04, CON-05, CON-06 y CON-39 | — | Identidad, permisos y catálogo de áreas. |
+| **Anderson** | CON-22 y CON-42 | CON-70 | Comprobantes, persistencia financiera y consulta de deuda. |
+| **Brandon** | CON-23, CON-41 y CON-43 | — | Deduplicación de pagos y creación segura de reservas. |
+| **Alejandro** | CON-32, CON-34, CON-36 y CON-37 | — | Motor común de notificaciones, plantillas y reintentos. |
+| **Gerardo** | CON-40 y CON-46 | CON-72 y CON-75 | Disponibilidad, cancelación, coordinación de contratos y evidencia. |
+| **Nicolás (Tarqui)** | — | CON-73 y CON-74 | Persistencia de reservas y notificaciones e integración del prototipo. |
+
+El reparto agrupa lógica relacionada y conserva la continuidad del trabajo pendiente. El número de tickets no equivale a la carga: CON-73 y CON-74 abarcan varios módulos. Las estimaciones y el avance real de CON-22 y CON-23 deben revisarse antes de comprometer la capacidad del sprint.
+
 ## Dependencias y trabajo en paralelo
+
+Las flechas resumen las dependencias de integración; la columna **Dependencias** detalla los requisitos de cada entrega. Un contrato acordado permite desarrollar y probar en paralelo, aunque la aceptación final exige integrar las implementaciones reales.
 
 ```text
 Base del Sprint 1: condominio, departamentos, presupuesto, distribución y cuotas
-          |
-          +--> CON-04 --> CON-05 / CON-06 --> acceso contextual a las operaciones
-          |
-          +--> CON-22 / CON-23 <--> CON-70 --> CON-32 / CON-34
-          |
-          +--> CON-39 --> CON-40 --> CON-42 / CON-43 --> CON-41 --> CON-46
-                                                             |
-                                                             +--> CON-36
+  |
+  +--> CON-04 --> CON-05 / CON-06 --> acceso contextual a pagos y reservas
+  |
+  +--> CON-22 / CON-23 <--> CON-70 --> CON-42 --+
+  |                                          |
+  +--> CON-39 --> CON-40 ---------------------+--> CON-41 --> CON-46
+                     CON-43 -----------------+
+
+CON-41 integra acceso, disponibilidad (CON-40), solvencia (CON-42),
+exclusión de horarios (CON-43) y persistencia (CON-73).
+
+CON-11 ------------------> CON-32 --+
+CON-22 / CON-70 ----------> CON-34 --+--> CON-37
+CON-04 / CON-41 / CON-46 -> CON-36 --+
 
 CON-72: contratos API y eventos acordados desde el inicio para todas las líneas
 CON-73: persistencia de catálogo, reservas y notificaciones durante su desarrollo
@@ -65,6 +86,15 @@ CON-75: pruebas de errores y evidencia durante todo el sprint
 - **Contratos y persistencia:** las referencias a contratos permiten trabajo en paralelo; no obligan a esperar el cierre completo de otra historia. Los contratos se acuerdan primero y la integración persistente se verifica al final.
 - **Resultado de pagos:** CON-34 necesita un productor real del resultado de revisión. CON-72 debe identificar su contrato y CON-70 persistir el resultado utilizado por el prototipo. Emitir manualmente un evento de prueba no demuestra esa integración.
 - **Base disponible:** se reutilizan el flujo persistente de cuotas y el contrato de cuatro roles ya documentados. El alta de usuarios reales y la persistencia de pagos, reservas y notificaciones tienen sus propios criterios de cierre en este sprint.
+
+### Coordinación y orden de implementación
+
+1. **Contratos mínimos al inicio:** Gerardo coordina CON-72 con cada responsable para acordar identidad, carga de voucher, deduplicación, solvencia, horarios, cancelación y eventos. Los acuerdos se incorporan progresivamente; no es necesario cerrar todo CON-72 antes de comenzar las historias.
+2. **Persistencia desde el comienzo:** Anderson inicia CON-70 sobre la base financiera existente y Nicolás inicia CON-73 con los contratos de Jerson, Brandon, Gerardo y Alejandro. Se acuerda quién modifica cada migración, repositorio y restricción para evitar cambios incompatibles.
+3. **Cierre conjunto de los pendientes:** Anderson y Brandon integran CON-22 y CON-23 con CON-70. Brandon prioriza ese cierre antes de concentrarse en CON-41 y CON-43; Anderson prepara en paralelo el cálculo de deuda de CON-42, que Brandon integra dentro de la operación de reserva.
+4. **Reservas en paralelo:** Gerardo desarrolla CON-40 y prepara CON-46 contra los contratos acordados. Brandon implementa CON-41 y CON-43, coordinando con Gerardo los intervalos y las transiciones de estado. La cancelación se verifica finalmente sobre reservas reales persistidas.
+5. **Notificaciones con un motor común:** Alejandro desarrolla las plantillas y los reintentos con eventos de contrato y el repositorio de CON-73. Para cerrar CON-34, Anderson debe integrar una operación real de revisión que produzca el resultado persistido y su evento; Alejandro consume ese resultado sin sustituirlo por datos simulados.
+6. **Integración y evidencia continuas:** Nicolás coordina CON-74 y Gerardo coordina CON-75 durante todo el sprint. Cada responsable entrega el frontend aplicable, las pruebas y la evidencia de sus propias historias; ambos coordinadores integran los recorridos y reúnen los resultados con apoyo de Alejandro en QA. Las pantallas, las pruebas y las correcciones no se acumulan para una sola persona al final.
 
 ## Reglas comunes del sprint
 
@@ -449,4 +479,4 @@ Una historia o entrega técnica se considera terminada cuando:
 9. Forma parte de un recorrido demostrable con datos identificables, resultados verificables y errores controlados en CON-75.
 10. Pasa la revisión de otro integrante y cuenta con validación funcional de la entrega.
 
-Los responsables **Por asignar**, las estimaciones pendientes y los acuerdos de contrato deben resolverse durante la planificación y registrarse antes de comprometer la capacidad final del sprint.
+Los responsables quedan definidos en este documento. Las estimaciones pendientes, las fechas, la capacidad disponible y los acuerdos de contrato deben registrarse durante la planificación antes de comprometer la capacidad final del sprint.
