@@ -36,3 +36,21 @@ worker publica un campo `event` con el envelope JSON. `event_type` es
 y el resumen HTTP del lote. Entrega al menos una vez: el consumidor debe deduplicar
 por `event_id` estable. `publicado_en` solo se confirma tras el XADD exitoso.
 El consumidor de avisos individuales queda en el dominio de notificaciones.
+
+## Integración de pagos de CON-70
+
+El productor real es `src.modules.pagos.persistencia.PagosPersistentesService`.
+El relay `python -m src.modules.pagos.worker` publica en el mismo Stream y envelope
+que CON-11, con `version: 1` y `event_id` estable. No cambia el relay de cuotas.
+
+| Evento | Origen confirmado | Consumidor |
+|---|---|---|
+| PagoReportadoEvent | Comprobante nuevo EN_REVISION | CON-34 / notificaciones |
+| PagoConciliadoEvent | Aprobación e imputaciones confirmadas | CON-34 / notificaciones |
+| PagoObservadoEvent | Observación con motivo, sin imputaciones | CON-34 / notificaciones |
+| PagoRechazadoEvent | Rechazo con motivo, sin imputaciones | CON-34 / notificaciones |
+
+`data` incluye comprobante_id, departamento_id, condominio_id, estado, monto y
+motivo; en revisiones añade revision_id y resultado financiero persistido.
+Los importes son strings decimales. Los consumidores deduplican por event_id;
+confirmar publicación en SQL después de Redis permite reentrega, no pérdida.

@@ -266,3 +266,23 @@ Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 - CON-11 crea `cuotas_mantenimiento` y completa `fk_aplicacion_saldo_cuota` con
   `ON DELETE RESTRICT`; `monto_total_exigible` conserva el bruto y `monto_pagado`
   incluye el crédito aplicado por CON-13. Migración `20261019_0006`.
+# Extensión financiera Sprint 2 (CON-22 / CON-70)
+
+Contrato: `specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md`.
+`comprobantes_pago.url_voucher` conserva TEXT; las nuevas filas almacenan solamente
+un nombre local UUID con extensión. El condominio se obtiene por departamento →
+edificio, sin añadir campos incompatibles al modelo existente.
+
+- `imputaciones_pago`: UUID PK, comprobante_id y cuota_id FK RESTRICT,
+  monto_aplicado NUMERIC(12,2) positivo, fecha_imputacion TIMESTAMPTZ.
+- `archivos_voucher`: nombre TEXT PK, departamento_id FK RESTRICT, usuario_id UUID,
+  content_type, size_bytes (1..5242880), creado_en TIMESTAMPTZ,
+  comprobante_id UUID único nullable FK RESTRICT. NULL representa una subida pendiente.
+- `revisiones_pago`: UUID PK, comprobante_id FK RESTRICT, decision, motivo nullable,
+  actor_id UUID, creado_en TIMESTAMPTZ y resultado JSONB con importes como strings.
+- `eventos_pago_outbox`: UUID PK, comprobante_id FK RESTRICT, payload JSONB,
+  creado_en TIMESTAMPTZ, publicado_en TIMESTAMPTZ nullable. No contiene el archivo.
+
+La revisión Alembic nueva crea o valida/adopta comprobantes e imputaciones sin
+borrar filas. El downgrade no elimina tablas adoptadas. No se alteran revisiones
+ya aplicadas ni tablas de reservas/notificaciones.

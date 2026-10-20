@@ -21,6 +21,12 @@ El dominio de Reservas es responsable de:
 
 ## 3. Invariante Innegociable de Solvencia Financiera
 
+CON-42 proporciona un guard transaccional sobre cuotas y departamentos PostgreSQL,
+según [integración financiera Sprint 2](../02-pagos-y-moras/sprint-2-anderson.md).
+CON-41 debe usarlo antes de ocupar el horario, sin sustituir deuda real por datos
+piloto ni asumir solvencia para unidades inexistentes. La persistencia del calendario
+y la exclusión horaria continúan bajo sus responsables originales.
+
 $$\forall\ d \in \text{Departamentos},\ \text{DeudaMora}(d) > 0.00 \implies \text{AccesoReservas}(d) = \text{DENEGADO}$$
 
 El servicio ejecuta la comprobación de solvencia como primer filtro obligatorio antes de consultar disponibilidad física:

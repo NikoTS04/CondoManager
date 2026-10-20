@@ -1,5 +1,9 @@
 # PROC-04: Gestión de Reservas de Áreas Comunes y Control de Solvencia
 
+CON-42 integra la evaluación de deuda persistida mediante el
+[contrato financiero Sprint 2](../02-domains/02-pagos-y-moras/sprint-2-anderson.md).
+No altera el catálogo, la cancelación ni la política de intervalos de otros tickets.
+
 ## 1. Ficha del Proceso
 - **Identificador:** PROC-04
 - **Responsable del Módulo:** **Brandon**
