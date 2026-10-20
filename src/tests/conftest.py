@@ -15,7 +15,7 @@ from src.main import app
 from src.modules.usuarios.repository import get_usuarios_repository
 from src.tests.identidad import RepositorioIdentidadDemo
 
-pytest_plugins = ["src.tests.usuarios_db"]
+pytest_plugins = ["src.tests.usuarios_db", "src.tests.finanzas_contrato", "src.tests.pagos_db"]
 
 
 @pytest.fixture
