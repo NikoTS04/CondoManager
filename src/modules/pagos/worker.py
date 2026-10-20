@@ -10,6 +10,8 @@ from sqlalchemy import select
 
 from src.core.config import settings
 from src.core.database import AsyncSessionLocal
+from src.modules.condominios.models import Departamento  # noqa: F401 — registrar FK en proceso propio
+from src.modules.pagos.models import ComprobantePago
 from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutbox
 from src.modules.pagos.storage import NOMBRE, VoucherStorage
 
@@ -66,8 +68,6 @@ async def limpiar_pendientes(
             subida = await session.get(ArchivoVoucher, ruta.name)
             if subida is None:
                 # Una referencia preexistente también es evidencia, aunque no tenga subida.
-                from src.modules.pagos.models import ComprobantePago
-
                 referencia = await session.scalar(
                     select(ComprobantePago.id)
                     .where(ComprobantePago.url_voucher == ruta.name)
