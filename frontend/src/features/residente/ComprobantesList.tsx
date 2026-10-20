@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/Alert";
 import { SkeletonList, EmptyState } from "@/components/ui/Feedback";
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
 import { ComprobanteStatusChip } from "@/components/domain/ComprobanteStatusChip";
+import { VoucherDownloadButton } from "@/components/domain/VoucherDownloadButton";
 import { formatDate } from "@/lib/format";
 import type { ComprobantePago } from "@/lib/api";
 
@@ -87,6 +88,7 @@ export function ComprobantesList({
 
                 <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                   <ComprobanteStatusChip status={comp.estado} />
+                  <VoucherDownloadButton comprobante={comp} />
                 </div>
               </div>
             ))}

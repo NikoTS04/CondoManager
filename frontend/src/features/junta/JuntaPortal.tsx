@@ -41,7 +41,7 @@ import { RefreshCw } from "lucide-react";
 
 type Confirmacion =
   | { kind: "emitir" }
-  | { kind: "comprobante"; id: string; decision: "APROBADO" | "RECHAZADO" }
+  | { kind: "comprobante"; id: string; decision: "APROBADO" | "RECHAZADO" | "OBSERVADO" }
   | { kind: "comunicado" };
 
 export default function JuntaPortal() {
@@ -145,7 +145,7 @@ export default function JuntaPortal() {
   }, [seleccionarCondominio, user]);
 
   const pendientes = useMemo(
-    () => comprobantes.filter((comprobante) => comprobante.estado === "EN_REVISION"),
+    () => comprobantes.filter((comprobante) => comprobante.estado === "EN_REVISION" || comprobante.estado === "OBSERVADO"),
     [comprobantes],
   );
   const presupuestoActual = presupuesto;
@@ -187,10 +187,10 @@ export default function JuntaPortal() {
     if (!confirmacion) return;
     if (
       confirmacion.kind === "comprobante" &&
-      confirmacion.decision === "RECHAZADO" &&
+      confirmacion.decision !== "APROBADO" &&
       !motivo.trim()
     ) {
-      setFeedback("Indica el motivo para rechazar el comprobante.");
+      setFeedback("Indica el motivo para observar o rechazar el comprobante.");
       return;
     }
 
@@ -208,7 +208,7 @@ export default function JuntaPortal() {
         const resultado = await conciliarComprobante(
           confirmacion.id,
           confirmacion.decision,
-          confirmacion.decision === "RECHAZADO" ? motivo.trim() : undefined,
+          confirmacion.decision !== "APROBADO" ? motivo.trim() : undefined,
         );
         if (resultado.ok) {
           setFeedback("La conciliación del comprobante se actualizó correctamente.");
@@ -438,8 +438,8 @@ export default function JuntaPortal() {
                 ? <MoneyAmount value={comprobanteConfirmado.monto} />
                 : "—"}. La decisión actualizará su estado contable.
             </p>
-            {confirmacion.decision === "RECHAZADO" && (
-              <Field label="Motivo del rechazo" required>
+            {confirmacion.decision !== "APROBADO" && (
+              <Field label="Motivo de la observación o rechazo" required>
                 <Textarea
                   autoFocus
                   value={motivo}
@@ -464,12 +464,12 @@ function tituloConfirmacion(confirmacion: Confirmacion | null) {
   if (!confirmacion) return "Confirmar acción";
   if (confirmacion.kind === "emitir") return "Emitir cuotas";
   if (confirmacion.kind === "comunicado") return "Enviar comunicado masivo";
-  return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : "Rechazar comprobante";
+  return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : confirmacion.decision === "OBSERVADO" ? "Observar comprobante" : "Rechazar comprobante";
 }
 
 function etiquetaConfirmacion(confirmacion: Confirmacion | null) {
   if (!confirmacion) return "Confirmar";
   if (confirmacion.kind === "emitir") return "Emitir cuotas";
   if (confirmacion.kind === "comunicado") return "Enviar comunicado";
-  return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : "Rechazar comprobante";
+  return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : confirmacion.decision === "OBSERVADO" ? "Observar comprobante" : "Rechazar comprobante";
 }
