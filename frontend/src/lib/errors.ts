@@ -10,6 +10,8 @@ const MENSAJES: Record<string, string> = {
   ACCESO_DENEGADO: "No tienes permisos para realizar esta acción.",
   CREDENCIALES_INVALIDAS: "Revisa tus credenciales. Tu cuenta debe estar habilitada por un SuperAdmin.",
   SESION_REVOCADA: "Tu cuenta o tus permisos cambiaron. Inicia sesión nuevamente.",
+  ROL_NO_ENCONTRADO: "El usuario no tiene una asignación en este condominio.",
+  DATOS_ROL_INVALIDOS: "Selecciona Admin/Junta, Auditor o Residente y verifica el UUID del usuario.",
   DATOS_CONDOMINIO_INVALIDOS: "Algunos datos del condominio no son válidos. Revisa los campos marcados.",
   CONDOMINIO_NO_ENCONTRADO: "No encontramos el condominio solicitado.",
   VOUCHER_YA_CONCILIADO: "Este comprobante ya fue aprobado anteriormente. No necesitas reportarlo de nuevo.",

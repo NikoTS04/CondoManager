@@ -185,7 +185,38 @@ export interface CrearUsuarioPayload {
   documento_identidad: string;
 }
 
-export function listarUsuarios(condominioId: string, limit = 50, offset = 0): Promise<CuentaUsuario[]> {
+export type RolContextual = "ADMIN_JUNTA" | "AUDITOR" | "RESIDENTE";
+
+export interface AsignacionRol {
+  usuario_id: string;
+  condominio_id: string;
+  rol: RolContextual | "SUPERADMIN";
+  es_activo: boolean;
+}
+
+export interface CuentaUsuarioConRol extends CuentaUsuario {
+  rol: AsignacionRol["rol"];
+  rol_activo: boolean;
+  es_superadmin: boolean;
+}
+
+function rutaRol(condominioId: string, usuarioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/usuarios/${encodeURIComponent(usuarioId)}/rol`;
+}
+
+export function consultarRolUsuario(condominioId: string, usuarioId: string): Promise<AsignacionRol> {
+  return recursoRequest(rutaRol(condominioId, usuarioId));
+}
+
+export function asignarRolUsuario(condominioId: string, usuarioId: string, rol: RolContextual): Promise<AsignacionRol> {
+  return recursoRequest(rutaRol(condominioId, usuarioId), { method: "PUT", body: JSON.stringify({ rol }) });
+}
+
+export function revocarRolUsuario(condominioId: string, usuarioId: string): Promise<AsignacionRol> {
+  return recursoRequest(rutaRol(condominioId, usuarioId), { method: "DELETE" });
+}
+
+export function listarUsuarios(condominioId: string, limit = 50, offset = 0): Promise<CuentaUsuarioConRol[]> {
   return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/usuarios?limit=${limit}&offset=${offset}`);
 }
 
@@ -253,15 +284,18 @@ export function obtenerSesion(): Promise<AuthenticatedUser> {
   return recursoRequest("/auth/me");
 }
 
-async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE}${ruta}`, { ...init, headers: getAuthHeaders() });
-  const data = await response.json();
-  if (!response.ok) {
-    if (response.status === 401 && typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-      window.dispatchEvent(new Event("condomanager:sesion-revocada"));
-    }
-    throw new Error(obtenerMensajeError(data, "No se pudo completar la operación."));
+async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response> {
+  const response = await fetch(`${API_BASE}${ruta}`, init);
+  if (response.status === 401 && typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new Event("condomanager:sesion-revocada"));
   }
+  return response;
+}
+
+async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetchProtegido(ruta, { ...init, headers: getAuthHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo completar la operación."));
   return data as T;
 }
 
@@ -274,7 +308,7 @@ async function estructuraRequest<T>(condominioId: string, ruta: string, init: Re
   if (init.body instanceof FormData) delete headers["Content-Type"];
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/condominios/${encodeURIComponent(condominioId)}${ruta}`, {
+    response = await fetchProtegido(`/condominios/${encodeURIComponent(condominioId)}${ruta}`, {
       ...init, headers,
     });
   } catch {
@@ -325,7 +359,7 @@ export async function crearCondominio(
   payload: CrearCondominioPayload
 ): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/condominios`, {
+    const response = await fetchProtegido(`/condominios`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -352,7 +386,7 @@ export async function listarCondominios(): Promise<{
   error?: string;
 }> {
   try {
-    const response = await fetch(`${API_BASE}/condominios`, {
+    const response = await fetchProtegido(`/condominios`, {
       headers: getAuthHeaders(),
     });
     const data = await response.json();
@@ -372,7 +406,7 @@ export async function obtenerCondominio(
   condominioId: string
 ): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/condominios/${condominioId}`, {
+    const response = await fetchProtegido(`/condominios/${condominioId}`, {
       headers: getAuthHeaders(),
     });
     const data = await response.json();
@@ -392,7 +426,7 @@ export async function crearPresupuesto(
   payload: CrearPresupuestoPayload
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetch(`${API_BASE}/presupuestos`, {
+    const response = await fetchProtegido(`/presupuestos`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -419,7 +453,7 @@ export async function actualizarPresupuesto(
   payload: DatosPresupuestoPayload
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetch(`${API_BASE}/presupuestos/${presupuestoId}`, {
+    const response = await fetchProtegido(`/presupuestos/${presupuestoId}`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -445,7 +479,7 @@ export async function aprobarPresupuesto(
   presupuestoId: string
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetch(`${API_BASE}/presupuestos/${presupuestoId}/aprobar`, {
+    const response = await fetchProtegido(`/presupuestos/${presupuestoId}/aprobar`, {
       method: "POST",
       headers: getAuthHeaders(),
     });
@@ -471,8 +505,8 @@ export async function obtenerPresupuestoPorPeriodo(
   periodo: string
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetch(
-      `${API_BASE}/condominios/${condominioId}/presupuestos/${encodeURIComponent(periodo)}`,
+    const response = await fetchProtegido(
+      `/condominios/${condominioId}/presupuestos/${encodeURIComponent(periodo)}`,
       { headers: getAuthHeaders() }
     );
     const data = await response.json();
@@ -587,7 +621,7 @@ export async function conciliarComprobante(
 
 export async function emitirLoteCuotas(periodo: string, condominioId: string): Promise<{ ok: boolean; error?: string; total?: number }> {
   try {
-    const res = await fetch(`${API_BASE}/cuotas/emitir-lote`, {
+    const res = await fetchProtegido(`/cuotas/emitir-lote`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({

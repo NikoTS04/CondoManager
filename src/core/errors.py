@@ -39,6 +39,15 @@ async def api_error_handler(_request: Request, exc: APIError) -> JSONResponse:
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Adapta validaciones de FastAPI a los contratos públicos de CON-2 y CON-9."""
 
+    if request.url.path.startswith("/api/v1/condominios/") and request.url.path.endswith("/rol"):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error_code": "DATOS_ROL_INVALIDOS",
+                "mensaje": "Indique un rol contextual válido y UUID válidos.",
+                "detalles": [{"campo": list(e["loc"]), "tipo": e["type"]} for e in exc.errors()],
+            },
+        )
     if request.url.path.startswith(
         ("/api/v1/usuarios", "/api/v1/auth")
     ) or request.url.path.endswith("/usuarios"):

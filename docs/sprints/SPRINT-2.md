@@ -145,6 +145,12 @@ CON-75: pruebas de errores y evidencia durante todo el sprint
 
 ## CON-06 — Asignar roles y permisos
 
+Contrato implementable: [roles y permisos](../../specs/02-domains/05-usuarios-rbac/roles-y-permisos.md).
+Gestión por SuperAdmin y Junta según autoridad; revocación lógica de asignaciones,
+auditoría atómica y renovación obligatoria de sesiones. SuperAdmin global sigue
+provisionado por CLI. BDD: `roles_permisos.feature`.
+Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
+
 **Historia:** Como administrador autorizado, quiero asignar roles y permisos, para controlar las funciones y los datos que utiliza cada usuario.
 
 **Debe incluir:**

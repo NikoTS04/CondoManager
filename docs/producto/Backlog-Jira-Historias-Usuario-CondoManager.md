@@ -122,7 +122,12 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 
 **Criterios de aceptación:**
 
-- Se admiten los roles SuperAdmin, Admin/Junta, Auditor, Propietario e Inquilino.
+- Roles canónicos: `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`. Propietario,
+  copropietario e inquilino son relaciones por departamento.
+- SuperAdmin administra roles contextuales; Junta solo Auditor/Residente de su
+  condominio, sin autoasignación ni elevación. La concesión global es independiente.
+- Revocar conserva la asignación y sus vínculos, invalida sesiones y queda auditado.
+- Contrato CON-06: [roles y permisos](../../specs/02-domains/05-usuarios-rbac/roles-y-permisos.md).
 - Cada operación protegida valida el rol y el condominio del usuario.
 - Un residente solo puede consultar y modificar información de sus departamentos vinculados.
 

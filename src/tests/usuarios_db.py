@@ -30,6 +30,7 @@ REVISIONES = (
     "20261018_0005_estructura_inmobiliaria",
     "20261019_0006_emision_cuotas",
     "20261020_0007_alta_usuarios",
+    "20261020_0008_roles_revocables",
 )
 
 
@@ -75,7 +76,11 @@ async def borrar_base(base):
 
 @pytest.fixture
 def db_usuarios(monkeypatch):
-    url = os.getenv("CON04_TEST_DATABASE_URL") or os.getenv("CON13_TEST_DATABASE_URL")
+    url = (
+        os.getenv("CON06_TEST_DATABASE_URL")
+        or os.getenv("CON04_TEST_DATABASE_URL")
+        or os.getenv("CON13_TEST_DATABASE_URL")
+    )
     if not url:
         pytest.skip("Defina CON04_TEST_DATABASE_URL con una base PostgreSQL de pruebas.")
     base = asyncio.run(crear_base(url))

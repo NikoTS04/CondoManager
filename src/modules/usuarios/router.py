@@ -9,8 +9,11 @@ from src.core.errors import APIError
 from src.core.security import get_current_user
 from src.modules.usuarios.repository import get_usuarios_repository
 from src.modules.usuarios.schemas import (
+    AsignacionRolResponse,
+    AsignarRolRequest,
     CambiarEstadoUsuarioRequest,
     CrearUsuarioRequest,
+    CuentaUsuarioConRolResponse,
     CuentaUsuarioResponse,
     LoginRequest,
     TokenResponse,
@@ -67,7 +70,9 @@ async def crear_usuario(
     return await UsuariosService(repository).crear(condominio_id, request, actor)
 
 
-@router.get("/condominios/{condominio_id}/usuarios", response_model=list[CuentaUsuarioResponse])
+@router.get(
+    "/condominios/{condominio_id}/usuarios", response_model=list[CuentaUsuarioConRolResponse]
+)
 async def listar_usuarios(
     condominio_id: UUID,
     limit: int = Query(50, ge=1, le=100),
@@ -76,6 +81,45 @@ async def listar_usuarios(
     repository=Depends(get_usuarios_repository),
 ):
     return await UsuariosService(repository).listar(condominio_id, actor, limit, offset)
+
+
+@router.get(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def consultar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).consultar_rol(condominio_id, usuario_id, actor)
+
+
+@router.put(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def asignar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    request: AsignarRolRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_rol(
+        condominio_id, usuario_id, request.rol, actor
+    )
+
+
+@router.delete(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def revocar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_rol(condominio_id, usuario_id, None, actor)
 
 
 @router.patch("/usuarios/{usuario_id}/estado", response_model=CuentaUsuarioResponse)

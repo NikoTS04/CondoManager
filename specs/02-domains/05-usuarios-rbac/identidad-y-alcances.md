@@ -6,6 +6,11 @@ Los UUID de usuario proceden de la base de datos; los identificadores `usr-*` de
 ejemplos históricos no son identidades de login persistentes. El JWT v2 incorpora
 `auth_revision`, comprobada en cada petición protegida.
 
+CON-06 incorpora `usuario_roles.es_activo`. Login y `/auth/me` solo resuelven
+asignaciones activas en condominios activos; revocar o cambiar un rol invalida
+las sesiones previas de la identidad. Contrato de gestión:
+[roles-y-permisos.md](roles-y-permisos.md).
+
 Fuente de verdad: checks `ck_rol_nombre` y `ck_tipo_relacion` de
 `condomanager_schema.sql`. No se requiere migración de roles: el ORM/SQL ya usan
 `RESIDENTE`; se actualizan el directorio piloto, JWT y cliente.

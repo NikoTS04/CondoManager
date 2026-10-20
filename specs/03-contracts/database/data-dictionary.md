@@ -13,7 +13,7 @@ Contrato: [alta administrativa](../../02-domains/05-usuarios-rbac/alta-administr
 | Columna | Tipo | Nulo | Default | Regla |
 |---|---|---|---|---|
 | `esta_activo` | BOOLEAN | NO | `false` | Solo SuperAdmin cambia su estado mediante API. |
-| `auth_revision` | INTEGER | NO | `1` | Positivo; cambia atómicamente con el estado e invalida JWT previos. |
+| `auth_revision` | INTEGER | NO | `1` | Positivo; cambia atómicamente con el estado o los permisos e invalida JWT previos. |
 | `es_superadmin` | BOOLEAN | NO | `false` | Concesión global provisionada por CLI, no por API. |
 
 `email` usa índice único `lower(btrim(email))`; `documento_identidad` usa índice
@@ -22,6 +22,18 @@ las tablas. `password_hash` guarda PBKDF2-SHA256 y nunca se expone.
 `usuario_roles` mantiene una asignación por `(usuario_id, condominio_id)` y
 `usuario_departamentos` un vínculo por `(usuario_id, departamento_id)`, ambos
 con claves foráneas y checks de los catálogos canónicos.
+
+## Asignaciones revocables — CON-06
+
+`usuario_roles.es_activo BOOLEAN NOT NULL DEFAULT true` distingue asignación
+vigente y revocada sin eliminar filas ni vínculos. La migración `20261020_0008`
+conserva las asignaciones existentes como activas. La unicidad del par y el check
+de cuatro roles SQL se mantienen; la API solo concede ADMIN_JUNTA/AUDITOR/RESIDENTE.
+Cambios reales actualizan `usuarios.auth_revision` y registran auditoría en la
+misma transacción. El downgrade elimina únicamente la columna de actividad y
+rechaza bajar si existen asignaciones revocadas, ya que la revisión anterior no
+representa esa revocación. Las filas y auditorías se conservan. Contrato:
+[roles y permisos](../../02-domains/05-usuarios-rbac/roles-y-permisos.md).
 
 ## 1. Tabla: `condominios`
 Almacena las comunidades inmobiliarias o edificios matrices.

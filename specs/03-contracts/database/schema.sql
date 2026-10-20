@@ -111,6 +111,7 @@ CREATE TABLE usuario_roles (
     usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
     rol VARCHAR(30) NOT NULL DEFAULT 'RESIDENTE',
+    es_activo BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT uq_usuario_condo_rol UNIQUE (usuario_id, condominio_id),
     CONSTRAINT ck_rol_nombre CHECK (rol IN ('SUPERADMIN', 'ADMIN_JUNTA', 'AUDITOR', 'RESIDENTE'))
 );

@@ -13,6 +13,18 @@ Escenarios ejecutables: [alta_usuarios.feature](../02-domains/05-usuarios-rbac/f
 - Alta, asignación inicial y auditoría se confirman o revierten conjuntamente.
 - La activación administrativa es independiente de una futura verificación por correo.
 
+## CON-06 — Asignaciones persistentes de roles
+
+Contrato: [roles y permisos](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
+BDD: [roles_permisos.feature](../02-domains/05-usuarios-rbac/features/roles_permisos.feature).
+
+- SuperAdmin asigna, cambia y revoca roles contextuales; Junta solo Auditor/Residente
+  de su condominio, sin autoasignación ni cambios sobre otra Junta o identidad global.
+- Asignaciones revocadas permanecen visibles a la administración; no autorizan login.
+- Cada cambio real invalida sesiones, audita y confirma atómicamente; el no-op no.
+- La sesión nueva y la interfaz reflejan el rol persistido y sus permisos.
+- Probar aislamiento, concurrencia, rollback, reactivación y rechazo de roles de tenencia.
+
 ## Característica: Autenticación JWT y Control Granular de Pantallas por Rol
 
 ### Escenario 1: Inicio de sesión exitoso y generación de claims

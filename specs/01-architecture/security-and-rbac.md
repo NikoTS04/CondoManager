@@ -22,6 +22,8 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Reportar pagos, crear/cancelar reservas | Soporte | Soporte de su condominio | No | Sus vínculos activos |
 | Conciliar pagos, evaluar moras y enviar/reintentar comunicados | Sí | Su condominio | No | No |
 | Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | No |
+| Asignar/revocar ADMIN_JUNTA | Sí, excepto propia asignación o identidad global | No | No | No |
+| Asignar/revocar AUDITOR y RESIDENTE | Sí | Su condominio, sin modificar Junta ni su propia asignación | No | No |
 
 Todas las rutas de negocio requieren Bearer JWT. Ausencia de token: `401`;
 rol/contexto/unidad no autorizados: `403`. No existe un modo anónimo de desarrollo.
@@ -44,7 +46,12 @@ sin datos del departamento que reservó.
 - El JWT dura 24 horas. No hay refresh token; la renovación se realiza mediante login.
   `auth_revision` identifica la revisión persistida de la cuenta. Toda ruta protegida
   comprueba estado activo, revisión, asignación y contexto vigentes. Desactivar y
-  reactivar una cuenta invalida los tokens previos, incluso antes de su expiración.
+   reactivar una cuenta invalida los tokens previos, incluso antes de su expiración.
+
+CON-06 aplica la misma revisión global a los cambios reales de asignación. Solo
+`usuario_roles.es_activo=true` autoriza un contexto. Revocar conserva la fila y
+sus vínculos; repetir el rol/estado no modifica revisión ni auditoría. Contrato:
+[roles y permisos](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
 
 ## 4. Aislamiento y reglas de negocio
 
