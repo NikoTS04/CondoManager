@@ -108,13 +108,11 @@ CREATE TABLE cuotas_mantenimiento (
 
 -- 5. Tabla de Comprobantes de Pago (Tarqui - PROC-02)
 -- CON-13: evidencia única incluso para aplicación cero; el crédito es un pago.
--- La migración 0004 difiere la FK: cuotas_mantenimiento aún no existe en Alembic.
--- La migración de CON-11 que cree cuotas_mantenimiento debe añadir:
--- ALTER TABLE aplicaciones_saldo_favor ADD CONSTRAINT fk_aplicacion_saldo_cuota
---     FOREIGN KEY (cuota_id) REFERENCES cuotas_mantenimiento(id) ON DELETE RESTRICT;
+-- La revisión 0006 (CON-11) completa la FK diferida por 0004.
 CREATE TABLE aplicaciones_saldo_favor (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    cuota_id UUID NOT NULL,
+    cuota_id UUID NOT NULL CONSTRAINT fk_aplicacion_saldo_cuota
+        REFERENCES cuotas_mantenimiento(id) ON DELETE RESTRICT,
     saldo_previo NUMERIC(12,2) NOT NULL,
     monto_aplicado NUMERIC(12,2) NOT NULL,
     monto_pendiente NUMERIC(12,2) NOT NULL,
@@ -132,6 +130,29 @@ CREATE TABLE aplicaciones_saldo_favor (
         ((estado_posterior = 'PAGADA' AND monto_pendiente = 0) OR
          (estado_posterior = 'PENDIENTE' AND monto_pendiente > 0))
     )
+);
+
+-- Resumen histórico e idempotencia del lote (CON-11).
+CREATE TABLE lotes_cuotas (
+    id UUID PRIMARY KEY,
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
+    presupuesto_id UUID NOT NULL REFERENCES presupuestos_mensuales(id) ON DELETE RESTRICT,
+    periodo VARCHAR(7) NOT NULL,
+    metodo VARCHAR(20) NOT NULL CHECK (metodo IN ('POR_ALICUOTA', 'EQUITATIVA')),
+    actor_id VARCHAR(150) NOT NULL,
+    total_cuotas_emitidas INTEGER NOT NULL CHECK (total_cuotas_emitidas > 0),
+    monto_total_facturado NUMERIC(12,2) NOT NULL CHECK (monto_total_facturado > 0),
+    cuotas_cubiertas_saldo_favor INTEGER NOT NULL,
+    fecha_emision TIMESTAMPTZ NOT NULL,
+    fecha_vencimiento DATE NOT NULL,
+    CONSTRAINT uq_lote_condominio_periodo UNIQUE (condominio_id, periodo)
+);
+
+CREATE TABLE eventos_lote_outbox (
+    id UUID PRIMARY KEY,
+    lote_id UUID NOT NULL UNIQUE REFERENCES lotes_cuotas(id) ON DELETE RESTRICT,
+    payload JSONB NOT NULL,
+    publicado_en TIMESTAMPTZ
 );
 
 CREATE TABLE comprobantes_pago (

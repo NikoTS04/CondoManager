@@ -753,7 +753,7 @@ export async function conciliarComprobante(
   return { ok: false, error: "Comprobante no hallado." };
 }
 
-export async function emitirLoteCuotas(periodo: string, presupuestoTotal: string, condominioId: string, fechaVencimiento: string): Promise<{ ok: boolean; error?: string; total?: number }> {
+export async function emitirLoteCuotas(periodo: string, condominioId: string): Promise<{ ok: boolean; error?: string; total?: number }> {
   try {
     const res = await fetch(`${API_BASE}/cuotas/emitir-lote`, {
       method: "POST",
@@ -761,8 +761,6 @@ export async function emitirLoteCuotas(periodo: string, presupuestoTotal: string
       body: JSON.stringify({
         condominio_id: condominioId,
         periodo,
-        presupuesto_total: presupuestoTotal,
-        fecha_vencimiento: fechaVencimiento,
       }),
     });
     if (res.ok) {

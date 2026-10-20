@@ -60,6 +60,7 @@ async def connection():
 @pytest_asyncio.fixture
 async def api(connection):
     await connection.run_sync(migrar)
+    await connection.run_sync(lambda c: migrar(c, ("20261019_0006_emision_cuotas",)))
 
     async def db():
         async with AsyncSession(
@@ -323,9 +324,8 @@ async def test_adopta_esquema_backup_conserva_registros_y_downgrade(connection):
 
 
 @pytest.mark.asyncio
-async def test_emisor_usa_unidades_activas_y_contexto_real(api, monkeypatch):
+async def test_emisor_usa_unidades_activas_y_contexto_real(api):
     client, _ = api
-    monkeypatch.setattr("src.modules.cuotas.router.LOTES_EMITIDOS", set())
     for _ in range(2):
         cid = await condominio(client)
         eid = await edificio(client, cid)
@@ -343,12 +343,29 @@ async def test_emisor_usa_unidades_activas_y_contexto_real(api, monkeypatch):
                     headers=auth(),
                     json={"activo": False},
                 )
-        datos = {
-            "condominio_id": cid,
-            "periodo": "2026-11",
-            "presupuesto_total": "100.00",
-            "fecha_vencimiento": "2026-11-20",
-        }
+        presupuesto = await client.post(
+            "/api/v1/presupuestos",
+            headers=auth(),
+            json={
+                "condominio_id": cid,
+                "periodo": "2026-11",
+                "moneda": "PEN",
+                "monto_total": "100.00",
+                "fecha_vencimiento": "2026-11-20",
+            },
+        )
+        assert presupuesto.status_code == 201, presupuesto.text
+        aprobacion = await client.post(
+            f"/api/v1/presupuestos/{presupuesto.json()['id']}/aprobar", headers=auth()
+        )
+        assert aprobacion.status_code == 200, aprobacion.text
+        configuracion = await client.put(
+            f"/api/v1/condominios/{cid}/distribucion",
+            headers=auth(),
+            json={"metodo": "POR_ALICUOTA"},
+        )
+        assert configuracion.status_code == 200, configuracion.text
+        datos = {"condominio_id": cid, "periodo": "2026-11"}
         respuesta = await client.post(
             "/api/v1/cuotas/emitir-lote", headers=auth("ADMIN_JUNTA", cid), json=datos
         )

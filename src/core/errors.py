@@ -39,6 +39,15 @@ async def api_error_handler(_request: Request, exc: APIError) -> JSONResponse:
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Adapta validaciones de FastAPI a los contratos públicos de CON-2 y CON-9."""
 
+    if request.url.path == "/api/v1/cuotas/emitir-lote":
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error_code": "DATOS_EMISION_INVALIDOS",
+                "mensaje": "Envíe únicamente un condominio y un periodo YYYY-MM válido.",
+                "detalles": {"errores": jsonable_encoder(exc.errors())},
+            },
+        )
     if request.url.path.startswith("/api/v1/presupuestos") or "/presupuestos/" in request.url.path:
         return JSONResponse(
             status_code=422,

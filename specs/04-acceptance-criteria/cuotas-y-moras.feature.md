@@ -43,3 +43,10 @@ Entonces la cuota de S/ 150.00 cambia al estado "PAGADA"
 Y el remanente de S/ 50.00 se abona automáticamente como "saldo_a_favor" del departamento 401
 Y dicho saldo queda disponible para descontarse en la emisión del próximo mes.
 ```
+# Aceptación de emisión persistente CON-11
+
+Los escenarios ejecutables del lote persistente se encuentran en
+[`emision.feature`](../02-domains/01-cuotas/features/emision.feature), enlazados a
+`src/tests/bdd/test_emision_bdd.py`. Cubren presupuesto aprobado, cuotas activas,
+amortización de crédito, cierre contable, idempotencia y reversión completa.
+Las pruebas de integración añaden concurrencia API/worker, autorización y outbox.
