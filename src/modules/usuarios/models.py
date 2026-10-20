@@ -1,7 +1,8 @@
 """Modelos ORM de Usuarios y RBAC (PROC-05)."""
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
+
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -12,7 +13,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from src.core.database import Base
+from src.core.roles import RolUsuario, TipoRelacion
 
 
 class Usuario(Base):
@@ -52,7 +55,7 @@ class UsuarioDepartamento(Base):
         nullable=False,
     )
     tipo_relacion: Mapped[str] = mapped_column(
-        String(30), nullable=False, default="PROPIETARIO_TITULAR"
+        String(30), nullable=False, default=TipoRelacion.PROPIETARIO_TITULAR.value
     )
     es_activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -82,7 +85,7 @@ class UsuarioRol(Base):
         nullable=False,
     )
     rol: Mapped[str] = mapped_column(
-        String(30), nullable=False, default="RESIDENTE"
+        String(30), nullable=False, default=RolUsuario.RESIDENTE.value
     )
 
     __table_args__ = (

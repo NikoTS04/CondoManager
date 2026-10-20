@@ -1,11 +1,12 @@
 """Router FastAPI para el Dominio de Notificaciones (Alejandro - PROC-03)."""
 
-from typing import Dict, List, Optional
 import uuid
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from scripts.seed_condominio_piloto import generar_datos_departamentos
+from src.core.authorization import autorizar_condominio, autorizar_departamento, contexto_consulta
+from src.core.security import require_role
 from src.modules.notificaciones.schemas import (
     CanalNotificacionEnum,
     DespacharNotificacionRequest,
@@ -16,6 +17,7 @@ from src.modules.notificaciones.schemas import (
     ReenviarNotificacionRequest,
 )
 from src.modules.notificaciones.service import NotificacionesService
+from src.modules.usuarios.piloto import DEPARTAMENTOS_PILOTO
 
 router = APIRouter(prefix="/notificaciones", tags=["Notificaciones y Comunicaciones"])
 
@@ -33,9 +35,12 @@ async def listar_logs(
     departamento_id: Optional[str] = Query(None, description="Filtrar por número de departamento"),
     estado: Optional[EstadoNotificacionEnum] = Query(None, description="Filtrar por estado del envío"),
     canal: Optional[CanalNotificacionEnum] = Query(None, description="Filtrar por canal"),
+    condominio_id: uuid.UUID | None = None,
+    user: dict = Depends(require_role(["SUPERADMIN", "ADMIN_JUNTA", "AUDITOR"])),
 ):
     """Retorna los registros de notificaciones aplicando filtros opcionales."""
-    resultados = list(NOTIFICACIONES_REGISTRADAS.values())
+    cid = contexto_consulta(user, condominio_id)
+    resultados = [n for n in NOTIFICACIONES_REGISTRADAS.values() if n.condominio_id == str(cid)]
 
     if departamento_id:
         resultados = [r for r in resultados if r.departamento_id == departamento_id]
@@ -53,8 +58,18 @@ async def listar_logs(
     status_code=status.HTTP_201_CREATED,
     summary="Despachar una notificación individual",
 )
-async def despachar_notificacion(request: DespacharNotificacionRequest):
+async def despachar_notificacion(
+    request: DespacharNotificacionRequest,
+    user: dict = Depends(require_role(["SUPERADMIN", "ADMIN_JUNTA"])),
+):
     """Despacha una notificación renderizando la plantilla correspondiente y registrando la entrega."""
+    autorizar_condominio(user, request.condominio_id, escritura=True)
+    depto = DEPARTAMENTOS_PILOTO.get(request.departamento_id)
+    if not depto:
+        raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
+    autorizar_departamento(user, depto["id"], depto["condominio_id"], escritura=True)
+    if str(depto["condominio_id"]) != request.condominio_id:
+        raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO"})
     log = NotificacionesService.despachar_notificacion(request)
     NOTIFICACIONES_REGISTRADAS[log.id] = log
     return log
@@ -69,6 +84,7 @@ async def despachar_notificacion(request: DespacharNotificacionRequest):
 async def reenviar_notificacion(
     log_id: uuid.UUID,
     request: Optional[ReenviarNotificacionRequest] = None,
+    user: dict = Depends(require_role(["SUPERADMIN", "ADMIN_JUNTA"])),
 ):
     """Permite al Administrador reenviar una notificación rebotada, actualizando opcionalmente el destinatario."""
     log = NOTIFICACIONES_REGISTRADAS.get(log_id)
@@ -78,6 +94,7 @@ async def reenviar_notificacion(
             detail={"error_code": "NOTIFICACION_NO_HALLADA", "mensaje": "Registro de notificación no encontrado."},
         )
 
+    autorizar_condominio(user, log.condominio_id, escritura=True)
     nuevo_destinatario = request.nuevo_destinatario if request else None
     log_actualizado = NotificacionesService.reenviar_notificacion_manual(
         log=log,
@@ -93,14 +110,21 @@ async def reenviar_notificacion(
     status_code=status.HTTP_202_ACCEPTED,
     summary="Despacho de comunicado oficial masivo a todos los departamentos",
 )
-async def despachar_comunicado_masivo(request: EnviarComunicadoMasivoRequest):
+async def despachar_comunicado_masivo(
+    request: EnviarComunicadoMasivoRequest,
+    user: dict = Depends(require_role(["SUPERADMIN", "ADMIN_JUNTA"])),
+):
     """Emite un comunicado extraordinario para todos los 139 departamentos de la comunidad."""
-    departamentos = generar_datos_departamentos()
+    autorizar_condominio(user, request.condominio_id, escritura=True)
+    departamentos = [
+        d for d in DEPARTAMENTOS_PILOTO.values()
+        if str(d["condominio_id"]) == request.condominio_id and d["activo"]
+    ]
     respuesta, logs = NotificacionesService.despachar_comunicado_masivo(
         request=request, departamentos=departamentos
     )
 
-    for l in logs:
-        NOTIFICACIONES_REGISTRADAS[l.id] = l
+    for log in logs:
+        NOTIFICACIONES_REGISTRADAS[log.id] = log
 
     return respuesta

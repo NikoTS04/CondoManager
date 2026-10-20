@@ -123,36 +123,41 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
 
         from src.modules.reservas import router
         from src.modules.reservas.schemas import CrearReservaRequest
+        from src.modules.usuarios.piloto import vinculo_piloto
 
         area_id = uuid.uuid4()
+        condominio_id = router.CONDOMINIO_PILOTO_ID
         monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {})
-        monkeypatch.setattr(router, "DEPARTAMENTOS_MAP", {})
         monkeypatch.setattr(
             router,
             "AREAS_REGISTRADAS",
             {
-                area_id: {"nombre": context["area"], "esta_activa": True},
+                area_id: {"nombre": context["area"], "esta_activa": True, "condominio_id": condominio_id},
             },
         )
 
-        async def solicitar():
+        async def solicitar(numero):
+            vinculo = vinculo_piloto(numero, "PROPIETARIO_TITULAR")
             request = CrearReservaRequest(
-                condominio_id=uuid.uuid4(),
-                departamento_id=uuid.uuid4(),
+                condominio_id=condominio_id,
+                departamento_id=vinculo["departamento_id"],
                 area_id=area_id,
                 fecha_reserva=context["fecha"],
                 hora_inicio=context["hora_inicio"],
                 hora_fin=context["hora_fin"],
             )
             try:
-                return await router.crear_reserva(request)
+                return await router.crear_reserva(request, user={
+                    "sub": "residente-" + numero, "rol": "RESIDENTE",
+                    "condominio_id": str(condominio_id), "departamentos": [vinculo],
+                })
             except HTTPException as exc:
                 return exc
 
         async def ejecutar():
             # Ejercita el router real en un único event loop, como un worker ASGI.
             # No demuestra exclusión entre procesos: el almacén sigue en memoria.
-            return await asyncio.gather(solicitar(), solicitar())
+            return await asyncio.gather(solicitar("102"), solicitar("104"))
 
         context["resultados_concurrentes"] = asyncio.run(ejecutar())
         context["reservas_guardadas"] = router.RESERVAS_REGISTRADAS

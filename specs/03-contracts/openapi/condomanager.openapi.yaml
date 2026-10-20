@@ -2,7 +2,8 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: API formal para el Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD).
-  version: 1.2.0
+  version: 1.3.0
+security: [{ bearerAuth: [] }]
 servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
@@ -10,6 +11,230 @@ tags:
   - name: Cuotas de Mantenimiento
     description: Presupuestos y emisión mensual de cuotas.
 paths:
+  /auth/login:
+    post:
+      operationId: iniciarSesion
+      summary: Autenticación piloto y emisión de sesión v2
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: JWT con session_version 2 y perfil con roles SQL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in, usuario]
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, const: bearer }
+                  expires_in: { type: integer, const: 86400 }
+                  usuario: { $ref: '#/components/schemas/UsuarioDTO' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /auth/me:
+    get:
+      operationId: contextoSesion
+      summary: Perfil y vínculos activos de la sesión autenticada
+      responses:
+        '200':
+          description: Perfil coherente con el login; nombres completos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsuarioDTO' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /auth/demo-users:
+    get:
+      operationId: listarUsuariosDemo
+      summary: Perfiles públicos del catálogo piloto
+      security: []
+      responses:
+        '200':
+          description: Perfiles sin contraseñas ni tokens
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/UsuarioDTO' } }
+  /cuotas/departamentos:
+    get:
+      operationId: departamentosDelPortal
+      summary: Unidades autorizadas del catálogo piloto
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+      responses:
+        '200':
+          description: Unidades del contexto; RESIDENTE solo recibe vínculos activos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DepartamentoPortal' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /pagos/comprobantes:
+    get:
+      operationId: listarComprobantes
+      summary: Comprobantes de unidades autorizadas en el contexto
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+      responses:
+        '200':
+          description: Comprobantes autorizados; nunca datos de otra unidad para residentes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ComprobantePagoDTO' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /areas:
+    get:
+      operationId: listarAreas
+      summary: Áreas comunes activas del contexto autorizado
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+      responses:
+        '200': { description: Catálogo contextual de áreas comunes }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /areas/{area_id}/disponibilidad:
+    get:
+      operationId: disponibilidadArea
+      summary: Horarios ocupados sin información privada de otras unidades
+      parameters:
+        - { name: area_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: fecha, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Intervalos ocupados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [hora_inicio, hora_fin]
+                  properties:
+                    hora_inicio: { type: string }
+                    hora_fin: { type: string }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /reservas/{reserva_id}/cancelar:
+    post:
+      operationId: cancelarReserva
+      summary: Cancelar una reserva autorizada; permiso administrativo derivado del JWT
+      parameters:
+        - { name: reserva_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                motivo: { type: string }
+                es_admin: { type: boolean, description: Compatibilidad; el servidor no confía en este valor }
+      responses:
+        '200': { description: Reserva cancelada }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '422': { description: Cancelación fuera del plazo o estado no permitido }
+  /moras/evaluar:
+    post:
+      operationId: evaluarMoras
+      summary: Simular evaluación de moras; solo administración del contexto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [condominio_id]
+              properties:
+                condominio_id: { type: string, format: uuid }
+                fecha_corte: { type: string, format: date }
+      responses:
+        '200': { description: Resultado de evaluación piloto }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /notificaciones/logs:
+    get:
+      operationId: listarNotificaciones
+      summary: Bitácora del contexto para administración y auditoría
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+        - { name: departamento_id, in: query, schema: { type: string, format: uuid } }
+        - { name: estado, in: query, schema: { type: string, enum: [EN_COLA, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE] } }
+        - { name: canal, in: query, schema: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] } }
+      responses:
+        '200': { description: Notificaciones exclusivamente del contexto autorizado }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /notificaciones/despachar:
+    post:
+      operationId: despacharNotificacion
+      summary: Despacho manual exclusivo de administración del contexto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [condominio_id, departamento_id, tipo_evento, destinatario, contexto]
+              properties:
+                condominio_id: { type: string, format: uuid }
+                departamento_id: { type: string, format: uuid }
+                tipo_evento: { type: string }
+                destinatario: { type: string }
+                canal: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] }
+                contexto: { type: object }
+      responses:
+        '201': { description: Notificación despachada }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /notificaciones/reenviar/{log_id}:
+    post:
+      operationId: reenviarNotificacion
+      summary: Reenvío manual exclusivo de administración del recurso
+      parameters:
+        - { name: log_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nuevo_destinatario: { type: [string, 'null'] }
+      responses:
+        '200': { description: Notificación reenviada }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /notificaciones/comunicado-masivo:
+    post:
+      operationId: enviarComunicadoMasivo
+      summary: Comunicado a unidades activas del contexto autorizado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [condominio_id, titulo, mensaje]
+              properties:
+                condominio_id: { type: string, format: uuid }
+                titulo: { type: string, minLength: 5, maxLength: 150 }
+                mensaje: { type: string, minLength: 10 }
+                canal: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] }
+                remitente: { type: string }
+      responses:
+        '202': { description: Comunicado generado en el catálogo piloto }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
   /condominios/{condominio_id}/edificios:
     parameters:
       - $ref: '#/components/parameters/ContextoEstructura'
@@ -217,6 +442,7 @@ paths:
           description: DATOS_DISTRIBUCION_INVALIDOS por UUID inválido
   /health:
     get:
+      security: []
       summary: Comprobación de estado del servicio
       operationId: healthCheck
       responses:
@@ -493,16 +719,17 @@ paths:
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
-              required: [departamento_id, banco, numero_operacion, fecha_operacion, monto]
+              required: [departamento_id, banco, numero_operacion, fecha_operacion, monto, url_voucher]
               properties:
                 departamento_id: { type: string, format: uuid }
                 banco: { type: string, enum: [YAPE, PLIN, BCP, INTERBANK, BBVA, SCOTIABANK] }
                 numero_operacion: { type: string, minLength: 4, maxLength: 30 }
                 fecha_operacion: { type: string, format: date }
                 monto: { type: string, pattern: '^[0-9]+(\\.[0-9]{2})?$' }
+                url_voucher: { type: string }
       responses:
         '202':
           description: Comprobante recibido y encolado para revisión
@@ -542,16 +769,17 @@ paths:
 
   /reservas:
     get:
-      summary: Consultar reservas y disponibilidad de áreas comunes
+      summary: Consultar reservas de unidades autorizadas
       operationId: listarReservas
       parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
         - name: area_id
           in: query
-          required: true
+          required: false
           schema: { type: string, format: uuid }
         - name: fecha
           in: query
-          required: true
+          required: false
           schema: { type: string, format: date }
       responses:
         '200':
@@ -587,6 +815,12 @@ paths:
 
 components:
   parameters:
+    ContextoConsulta:
+      name: condominio_id
+      in: query
+      required: false
+      description: Para SUPERADMIN selecciona el contexto; para los demás debe coincidir con su JWT
+      schema: { type: string, format: uuid }
     ContextoEstructura:
       name: condominio_id
       in: path
@@ -612,6 +846,56 @@ components:
       bearerFormat: JWT
 
   schemas:
+    RolUsuario:
+      type: string
+      enum: [SUPERADMIN, ADMIN_JUNTA, AUDITOR, RESIDENTE]
+    VinculoDepartamento:
+      type: object
+      additionalProperties: false
+      required: [departamento_id, numero, tipo_relacion, es_activo]
+      properties:
+        departamento_id: { type: string, format: uuid }
+        numero: { type: string }
+        tipo_relacion: { type: string, enum: [PROPIETARIO_TITULAR, COPROPIETARIO, INQUILINO] }
+        es_activo: { type: boolean }
+    UsuarioDTO:
+      type: object
+      required: [id, email, nombre, apellido, rol, condominio_id, departamentos]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        nombre: { type: string }
+        apellido: { type: string }
+        rol: { $ref: '#/components/schemas/RolUsuario' }
+        condominio_id: { type: [string, 'null'], format: uuid }
+        departamentos: { type: array, items: { $ref: '#/components/schemas/VinculoDepartamento' } }
+    DepartamentoPortal:
+      type: object
+      required: [id, condominio_id, numero, piso, coeficiente, saldo_a_favor, estado_financiero, activo, deuda_vencida]
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        numero: { type: string }
+        piso: { type: integer }
+        coeficiente: { type: string }
+        saldo_a_favor: { type: string }
+        estado_financiero: { type: string, enum: [AL_DIA, OBSERVADO, EN_MORA] }
+        activo: { type: boolean }
+        deuda_vencida: { type: string }
+    ComprobantePagoDTO:
+      type: object
+      required: [id, departamento_id, banco, numero_operacion, fecha_operacion, monto, estado, idempotency_hash, url_voucher]
+      properties:
+        id: { type: string, format: uuid }
+        departamento_id: { type: string, format: uuid }
+        banco: { type: string }
+        numero_operacion: { type: string }
+        fecha_operacion: { type: string, format: date }
+        monto: { type: string }
+        estado: { type: string, enum: [EN_REVISION, CONCILIADO, RECHAZADO] }
+        idempotency_hash: { type: string }
+        url_voucher: { type: string }
+        motivo_rechazo: { type: [string, 'null'] }
     CrearEdificioRequest:
       type: object
       additionalProperties: false
@@ -903,7 +1187,7 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
 
     Error401:
-      description: Bearer Token ausente, inválido o expirado
+      description: Bearer ausente, inválido, expirado o SESION_DESACTUALIZADA (requiere login v2)
       content:
         application/json:
           schema:

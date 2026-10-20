@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import RoleGuard from "@/components/RoleGuard";
+import { seleccionarUnidad } from "@/lib/session";
 import {
   type AreaComun,
   type Departamento,
@@ -31,13 +32,17 @@ import {
 
 function ResidenteContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const dptoParam = searchParams.get("dpto");
   const { user, activeDepartment, setActiveDepartment } = useAuth();
 
-  const [departamentoNumero, setDepartamentoNumero] = useState(
-    dptoParam || activeDepartment || "102",
-  );
-  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [departamentosRecibidos, setDepartamentos] = useState<Departamento[]>([]);
+  const departamentos = useMemo(() => departamentosRecibidos.filter((d) => d.activo !== false &&
+    (user?.rol !== "RESIDENTE" || user.departamentos.some((v) => v.es_activo && v.departamento_id === d.id))),
+    [departamentosRecibidos, user]);
+  const departamentoId = user ? seleccionarUnidad(user, dptoParam, activeDepartment, departamentos.map((d) => d.id)) : "";
+  const [contextoId] = useState(() => user?.condominio_id ||
+    (user?.rol === "SUPERADMIN" ? localStorage.getItem("condo_active_id") : null));
   const [activeTab, setActiveTab] = useState<ResidenteTab>("reservas");
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
@@ -61,12 +66,21 @@ function ResidenteContent() {
     setErrorAreas(null);
     setErrorReservas(null);
     setErrorComprobantes(null);
+    setDepartamentos([]);
+    setAreas([]);
+    setReservas([]);
+    setComprobantes([]);
+    if (!contextoId) {
+      setErrorDeptos("Selecciona primero un condominio en el portal de Junta.");
+      setLoadingInitial(false);
+      return;
+    }
 
     const [deptosRes, areasRes, reservasRes, compsRes] = await Promise.allSettled([
-      fetchDepartamentos(),
-      fetchAreasComunes(),
-      fetchReservas(),
-      fetchComprobantes(),
+      fetchDepartamentos(contextoId),
+      fetchAreasComunes(contextoId),
+      fetchReservas(undefined, undefined, contextoId),
+      fetchComprobantes(contextoId),
     ]);
 
     if (isCancelled && isCancelled()) return;
@@ -96,46 +110,46 @@ function ResidenteContent() {
     }
 
     setLoadingInitial(false);
-  }, []);
+  }, [contextoId]);
 
   const reloadReservas = useCallback(async () => {
     setLoadingReservas(true);
     setErrorReservas(null);
     try {
-      const data = await fetchReservas();
+      const data = await fetchReservas(undefined, undefined, contextoId);
       setReservas(data);
     } catch {
       setErrorReservas("No pudimos actualizar las reservas.");
     } finally {
       setLoadingReservas(false);
     }
-  }, []);
+  }, [contextoId]);
 
   const reloadComprobantes = useCallback(async () => {
     setLoadingComprobantes(true);
     setErrorComprobantes(null);
     try {
-      const data = await fetchComprobantes();
+      const data = await fetchComprobantes(contextoId);
       setComprobantes(data);
     } catch {
       setErrorComprobantes("No pudimos actualizar los comprobantes.");
     } finally {
       setLoadingComprobantes(false);
     }
-  }, []);
+  }, [contextoId]);
 
   const reloadAreas = useCallback(async () => {
     setLoadingAreas(true);
     setErrorAreas(null);
     try {
-      const data = await fetchAreasComunes();
+      const data = await fetchAreasComunes(contextoId);
       setAreas(data);
     } catch {
       setErrorAreas("No pudimos actualizar los espacios comunes.");
     } finally {
       setLoadingAreas(false);
     }
-  }, []);
+  }, [contextoId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,31 +160,19 @@ function ResidenteContent() {
   }, [loadData]);
 
   useEffect(() => {
-    if (dptoParam) {
-      setDepartamentoNumero(dptoParam);
-      setActiveDepartment(dptoParam);
+    if (departamentoId) {
+      if (departamentoId !== activeDepartment) setActiveDepartment(departamentoId);
+      if (dptoParam && dptoParam !== departamentoId) router.replace(`/residente?dpto=${departamentoId}`);
     }
-  }, [dptoParam, setActiveDepartment]);
+  }, [departamentoId, activeDepartment, dptoParam, setActiveDepartment, router]);
 
-  // Si los departamentos cargaron y el número actual no existe en ellos, sincroniza con el primero
-  useEffect(() => {
-    if (
-      departamentos.length > 0 &&
-      !departamentos.some((d) => d.numero === departamentoNumero)
-    ) {
-      const defaultNumero = departamentos[0].numero;
-      setDepartamentoNumero(defaultNumero);
-      setActiveDepartment(defaultNumero);
-    }
-  }, [departamentos, departamentoNumero, setActiveDepartment]);
-
-  function handleSelectDepartamento(num: string) {
-    setDepartamentoNumero(num);
-    setActiveDepartment(num);
+  function handleSelectDepartamento(id: string) {
+    if (!user || seleccionarUnidad(user, id, null, departamentos.map((d) => d.id)) !== id) return;
+    router.replace(`/residente?dpto=${id}`);
   }
 
   const deptoActual =
-    departamentos.find((d) => d.numero === departamentoNumero) ?? null;
+    departamentos.find((d) => d.id === departamentoId) ?? null;
 
   const estaEnMora = deptoActual?.estado_financiero === "EN_MORA";
 
@@ -220,9 +222,10 @@ function ResidenteContent() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
             <ReservarAreaForm
+              key={departamentoId}
               areas={areas}
-              condominioId={user?.condominio_id}
-              departamentoNumero={departamentoNumero}
+              condominioId={contextoId}
+              departamentoId={departamentoId}
               estaEnMora={estaEnMora}
               deudaVencida={deptoActual?.deuda_vencida}
               errorAreas={errorAreas}
@@ -233,9 +236,9 @@ function ResidenteContent() {
           </div>
           <div className="lg:col-span-2">
             <MisReservasList
-              reservas={reservas}
+              reservas={reservas.filter((r) => r.departamento_id === departamentoId)}
               areas={areas}
-              departamentoNumero={departamentoNumero}
+              departamentoId={departamentoId}
               loading={loadingInitial || loadingReservas || loadingAreas}
               error={errorReservas}
               errorAreas={errorAreas}
@@ -251,7 +254,8 @@ function ResidenteContent() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
             <ReportarPagoForm
-              departamentoNumero={departamentoNumero}
+              key={departamentoId}
+              departamentoId={departamentoId}
               onSuccess={reloadComprobantes}
               comprobantesExistentes={comprobantes}
             />
@@ -259,7 +263,7 @@ function ResidenteContent() {
           <div className="lg:col-span-2">
             <ComprobantesList
               comprobantes={comprobantes}
-              departamentoNumero={departamentoNumero}
+              departamentoId={departamentoId}
               loading={loadingInitial || loadingComprobantes}
               error={errorComprobantes}
               onRetry={reloadComprobantes}
@@ -302,7 +306,7 @@ function ResidenteContent() {
 
 export default function ResidentePage() {
   return (
-    <RoleGuard allowedRoles={["PROPIETARIO", "INQUILINO", "ADMIN_JUNTA", "SUPERADMIN"]}>
+    <RoleGuard allowedRoles={["RESIDENTE", "ADMIN_JUNTA", "SUPERADMIN"]}>
       <Suspense
         fallback={
           <div className="flex min-h-64 items-center justify-center p-8">

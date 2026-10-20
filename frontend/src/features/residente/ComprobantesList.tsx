@@ -12,7 +12,7 @@ import type { ComprobantePago } from "@/lib/api";
 
 export interface ComprobantesListProps {
   comprobantes: ComprobantePago[];
-  departamentoNumero: string;
+  departamentoId: string;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -20,12 +20,12 @@ export interface ComprobantesListProps {
 
 export function ComprobantesList({
   comprobantes,
-  departamentoNumero,
+  departamentoId,
   loading = false,
   error = null,
   onRetry,
 }: ComprobantesListProps) {
-  const filtrados = comprobantes.filter((c) => c.departamento_id === departamentoNumero);
+  const filtrados = comprobantes.filter((c) => c.departamento_id === departamentoId);
 
   return (
     <Card>

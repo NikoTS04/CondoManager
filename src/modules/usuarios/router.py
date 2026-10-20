@@ -1,7 +1,9 @@
 """Router FastAPI para Autenticación y RBAC (PROC-05)."""
 
 from typing import Any, Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException, status
+
 from src.core.security import get_current_user
 from src.modules.usuarios.schemas import (
     LoginRequest,
@@ -43,12 +45,11 @@ async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
     return UserContextResponse(
         id=current_user["sub"],
         email=current_user["email"],
-        nombre=current_user.get("nombre", "").split()[0] if current_user.get("nombre") else "",
-        apellido=current_user.get("nombre", "").split()[-1] if current_user.get("nombre") else "",
+        nombre=current_user.get("nombre", ""),
+        apellido=current_user.get("apellido", ""),
         rol=current_user["rol"],
         condominio_id=current_user["condominio_id"],
         departamentos=current_user.get("departamentos", []),
-        tipo_relacion=current_user.get("tipo_relacion"),
     )
 
 

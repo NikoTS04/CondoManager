@@ -8,9 +8,9 @@ Implementa:
 5. Bitácora auditable de envíos (`notificaciones_logs`).
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
-import uuid
 
 from src.modules.notificaciones.schemas import (
     CanalNotificacionEnum,
@@ -205,7 +205,7 @@ class NotificacionesService:
 
             req_indiv = DespacharNotificacionRequest(
                 condominio_id=request.condominio_id,
-                departamento_id=str(numero),
+                departamento_id=str(dpto.get("id", numero)),
                 tipo_evento="NOTIF_COMUNICADO_GENERAL",
                 canal=request.canal,
                 destinatario=destinatario,
@@ -223,7 +223,7 @@ class NotificacionesService:
             condominio_id=request.condominio_id,
             total_destinatarios=len(departamentos),
             notificaciones_generadas=len(logs_generados),
-            estado_general="ENTREGADO" if all(l.estado == EstadoNotificacionEnum.ENTREGADO for l in logs_generados) else "REINTENTANDO",
+            estado_general="ENTREGADO" if all(log.estado == EstadoNotificacionEnum.ENTREGADO for log in logs_generados) else "REINTENTANDO",
         )
 
         return respuesta, logs_generados

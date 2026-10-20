@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Feedback";
 import { useAuth } from "@/context/AuthContext";
+import { portalInicial } from "@/lib/session";
 
 export default function Home() {
   const router = useRouter();
   const { user } = useAuth();
   useEffect(() => {
     if (!user) return;
-    router.replace(["PROPIETARIO", "INQUILINO"].includes(user.rol) ? "/residente" : "/junta");
+    router.replace(portalInicial(user.rol));
   }, [user, router]);
   if (user) return <div className="flex min-h-64 items-center justify-center"><Spinner label="Abriendo tu portal…" /></div>;
 

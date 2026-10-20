@@ -1,9 +1,9 @@
 """Servicio de Usuarios, Autenticación y Catálogo Piloto (PROC-05)."""
 
 from typing import Dict, List, Optional
-import uuid
-from src.core.config import settings
+
 from src.core.security import create_access_token, hash_password, verify_password
+from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
 from src.modules.usuarios.schemas import LoginRequest, TokenResponse, UsuarioDTO
 
 
@@ -15,10 +15,7 @@ class CredencialesInvalidasException(Exception):
 class UsuariosService:
     """Gestiona el catálogo de usuarios, autenticación y emisión de tokens RBAC."""
 
-    try:
-        CONDOMINIO_PILOTO_ID: str | None = str(uuid.UUID(settings.CONDOMINIO_PILOTO_ID))
-    except (TypeError, ValueError, AttributeError):
-        CONDOMINIO_PILOTO_ID = None
+    CONDOMINIO_PILOTO_ID = str(CONDOMINIO_PILOTO_ID)
 
     # Directorio de Usuarios Semilla para el Piloto Villa Bonita 3
     USUARIOS_PILOTO: Dict[str, Dict] = {
@@ -31,7 +28,6 @@ class UsuariosService:
             "rol": "ADMIN_JUNTA",
             "condominio_id": CONDOMINIO_PILOTO_ID,
             "departamentos": [],
-            "tipo_relacion": "ADMINISTRADOR",
         },
         "auditor@villabonita3.pe": {
             "id": "usr-audit-01",
@@ -42,7 +38,6 @@ class UsuariosService:
             "rol": "AUDITOR",
             "condominio_id": CONDOMINIO_PILOTO_ID,
             "departamentos": [],
-            "tipo_relacion": "AUDITOR",
         },
         "residente102@villabonita3.pe": {
             "id": "usr-res-102",
@@ -50,10 +45,9 @@ class UsuariosService:
             "password_hash": hash_password("Residente123!"),
             "nombre": "Ana",
             "apellido": "Gómez (Solvente)",
-            "rol": "PROPIETARIO",
+            "rol": "RESIDENTE",
             "condominio_id": CONDOMINIO_PILOTO_ID,
-            "departamentos": ["102"],
-            "tipo_relacion": "PROPIETARIO_TITULAR",
+            "departamentos": [vinculo_piloto("102", "PROPIETARIO_TITULAR")],
         },
         "moroso402@villabonita3.pe": {
             "id": "usr-res-402",
@@ -61,10 +55,9 @@ class UsuariosService:
             "password_hash": hash_password("Moroso123!"),
             "nombre": "Pedro",
             "apellido": "Morales (En Mora)",
-            "rol": "PROPIETARIO",
+            "rol": "RESIDENTE",
             "condominio_id": CONDOMINIO_PILOTO_ID,
-            "departamentos": ["402"],
-            "tipo_relacion": "PROPIETARIO_TITULAR",
+            "departamentos": [vinculo_piloto("402", "PROPIETARIO_TITULAR")],
         },
         "inquilino504@villabonita3.pe": {
             "id": "usr-inq-504",
@@ -72,10 +65,9 @@ class UsuariosService:
             "password_hash": hash_password("Inquilino123!"),
             "nombre": "Lucía",
             "apellido": "Fernández",
-            "rol": "INQUILINO",
+            "rol": "RESIDENTE",
             "condominio_id": CONDOMINIO_PILOTO_ID,
-            "departamentos": ["504"],
-            "tipo_relacion": "INQUILINO",
+            "departamentos": [vinculo_piloto("504", "INQUILINO")],
         },
         "superadmin@condomanager.pe": {
             "id": "usr-super-01",
@@ -86,7 +78,6 @@ class UsuariosService:
             "rol": "SUPERADMIN",
             "condominio_id": None,
             "departamentos": [],
-            "tipo_relacion": "SUPERADMIN",
         },
     }
 
@@ -99,29 +90,14 @@ class UsuariosService:
         if not usuario_data or not verify_password(request.password, usuario_data["password_hash"]):
             raise CredencialesInvalidasException("Correo electrónico o contraseña incorrectos.")
 
-        # Claims para el JWT
+        dto = UsuarioDTO.model_validate(usuario_data)
+        # El perfil público y el JWT comparten exactamente los mismos vínculos.
         token_claims = {
-            "sub": usuario_data["id"],
-            "email": usuario_data["email"],
-            "rol": usuario_data["rol"],
-            "condominio_id": usuario_data["condominio_id"],
-            "departamentos": usuario_data["departamentos"],
-            "tipo_relacion": usuario_data["tipo_relacion"],
-            "nombre": f"{usuario_data['nombre']} {usuario_data['apellido']}",
+            **dto.model_dump(mode="json", exclude={"id"}),
+            "sub": dto.id,
         }
 
         access_token = create_access_token(data=token_claims)
-
-        dto = UsuarioDTO(
-            id=usuario_data["id"],
-            email=usuario_data["email"],
-            nombre=usuario_data["nombre"],
-            apellido=usuario_data["apellido"],
-            rol=usuario_data["rol"],
-            condominio_id=usuario_data["condominio_id"],
-            departamentos=usuario_data["departamentos"],
-            tipo_relacion=usuario_data["tipo_relacion"],
-        )
 
         return TokenResponse(
             access_token=access_token,
@@ -136,30 +112,12 @@ class UsuariosService:
         usuario_data = cls.USUARIOS_PILOTO.get(email.strip().lower())
         if not usuario_data:
             return None
-        return UsuarioDTO(
-            id=usuario_data["id"],
-            email=usuario_data["email"],
-            nombre=usuario_data["nombre"],
-            apellido=usuario_data["apellido"],
-            rol=usuario_data["rol"],
-            condominio_id=usuario_data["condominio_id"],
-            departamentos=usuario_data["departamentos"],
-            tipo_relacion=usuario_data["tipo_relacion"],
-        )
+        return UsuarioDTO.model_validate(usuario_data)
 
     @classmethod
     def listar_usuarios_demo(cls) -> List[UsuarioDTO]:
         """Retorna el catálogo público de perfiles demo para pruebas rápidas."""
         return [
-            UsuarioDTO(
-                id=u["id"],
-                email=u["email"],
-                nombre=u["nombre"],
-                apellido=u["apellido"],
-                rol=u["rol"],
-                condominio_id=u["condominio_id"],
-                departamentos=u["departamentos"],
-                tipo_relacion=u["tipo_relacion"],
-            )
+            UsuarioDTO.model_validate(u)
             for u in cls.USUARIOS_PILOTO.values()
         ]

@@ -4,11 +4,12 @@ import Link from "next/link";
 import { Building2, LogOut, Search, ShieldCheck, UserRound } from "lucide-react";
 import { ROLE_LABELS, useAuth } from "@/context/AuthContext";
 import DemoSwitcher from "@/components/layout/DemoSwitcher";
+import { etiquetaResidente } from "@/lib/session";
 
 export default function TopBar() {
   const { user, logout, activeDepartment } = useAuth();
   const role = user?.rol;
-  const resident = role && ["PROPIETARIO", "INQUILINO", "ADMIN_JUNTA", "SUPERADMIN"].includes(role);
+  const resident = role && ["RESIDENTE", "ADMIN_JUNTA", "SUPERADMIN"].includes(role);
   const junta = role && ["ADMIN_JUNTA", "SUPERADMIN", "AUDITOR"].includes(role);
   return (
     <header className="border-b border-line bg-surface">
@@ -47,7 +48,7 @@ export default function TopBar() {
           {user ? (
             <span className="hidden text-right text-xs sm:block">
               <span className="block font-medium text-ink">{user.nombre}</span>
-              <span className="text-muted">{role ? ROLE_LABELS[role] : ""}</span>
+              <span className="text-muted">{role === "RESIDENTE" ? etiquetaResidente(user, activeDepartment) : role ? ROLE_LABELS[role] : ""}</span>
             </span>
           ) : (
             <Link href="/login" className="rounded-lg px-3 py-2 text-sm text-brand-700">

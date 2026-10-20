@@ -77,7 +77,7 @@ usar `float` para validarlos, persistirlos o serializarlos.
 - Si contiene más de uno, el cliente exige una selección explícita y no asume el
   primero creado ni el más reciente.
 - Al crear un nuevo condominio, este se convierte en el contexto activo del cliente.
-- `ADMIN_JUNTA`, `AUDITOR`, `PROPIETARIO` e `INQUILINO` no utilizan el listado global:
+- `ADMIN_JUNTA`, `AUDITOR` y `RESIDENTE` no utilizan el listado global:
   su contexto se obtiene del claim `condominio_id` validado.
 
 ### 3.5 Aislamiento multi-condominio
@@ -117,8 +117,9 @@ La creación registra una entrada inmutable con:
   proveedores), sin permiso para crear otros condominios.
 - `AUDITOR`: Lectura de auditoría y estados financieros dentro de los condominios
   autorizados.
-- `PROPIETARIO`: Gestión de sus propiedades, consulta de cuentas y reserva de áreas.
-- `INQUILINO`: Reporte de pagos, tickets y reservas de su departamento arrendado.
+- `RESIDENTE`: Consulta de cuentas, reporte de pagos y reservas de sus vínculos activos.
+  `PROPIETARIO_TITULAR`, `COPROPIETARIO` e `INQUILINO` son relaciones por unidad,
+  no roles adicionales. Contrato: [identidad-y-alcances.md](identidad-y-alcances.md).
 
 ---
 

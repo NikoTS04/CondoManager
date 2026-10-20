@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { DEMO_PERSONAS, useAuth } from "@/context/AuthContext";
 import { parseApiError } from "@/lib/errors";
+import { portalInicial, type UserRole } from "@/lib/session";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,8 +16,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ message: string; code: string | null } | null>(null);
-  const goToPortal = (role: string) => {
-    router.push(["ADMIN_JUNTA", "AUDITOR", "SUPERADMIN"].includes(role) ? "/junta" : "/residente");
+  const goToPortal = (role: UserRole) => {
+    router.push(portalInicial(role));
   };
 
   async function handleSubmit(event: FormEvent) {

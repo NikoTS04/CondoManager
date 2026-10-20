@@ -13,6 +13,15 @@ except ImportError:
     client = None
 
 
+def auth():
+    from src.core.security import create_access_token
+    from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
+
+    return {"Authorization": "Bearer " + create_access_token({
+        "sub": "prueba-api", "rol": "ADMIN_JUNTA", "condominio_id": str(CONDOMINIO_PILOTO_ID),
+    })}
+
+
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
 def test_health_check_endpoint():
     response = client.get("/api/v1/health")
@@ -36,8 +45,11 @@ def test_api_emitir_lote_cuotas():
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
 def test_api_reportar_pago_e_idempotencia():
+    from src.modules.usuarios.piloto import vinculo_piloto
+
+    client = TestClient(app, headers=auth())
     payload = {
-        "departamento_id": str(uuid.uuid4()),
+        "departamento_id": vinculo_piloto("102", "PROPIETARIO_TITULAR")["departamento_id"],
         "banco": "YAPE",
         "numero_operacion": "99881122",
         "fecha_operacion": "2026-10-15",
@@ -60,6 +72,8 @@ def test_api_reportar_pago_e_idempotencia():
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
 def test_api_reservas_flujo_completo(monkeypatch):
     from src.modules.reservas import router as reservas_router
+
+    client = TestClient(app, headers=auth())
 
     # Aislar el calendario para que la prueba sea repetible y usar UUID,
     # tal como exige OpenAPI; "402" era rechazado por Pydantic antes del servicio.
@@ -126,10 +140,14 @@ def test_api_reservas_flujo_completo(monkeypatch):
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
 def test_api_notificaciones_endpoints():
+    from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
+
+    client = TestClient(app, headers=auth())
+    depto_id = vinculo_piloto("105", "PROPIETARIO_TITULAR")["departamento_id"]
     # 1. Despacho individual
     payload_despacho = {
-        "condominio_id": "vb3-condo",
-        "departamento_id": "105",
+        "condominio_id": str(CONDOMINIO_PILOTO_ID),
+        "departamento_id": depto_id,
         "tipo_evento": "NOTIF_PAGO_CONCILIADO",
         "canal": "EMAIL",
         "destinatario": "residente105@gmail.com",
@@ -145,7 +163,7 @@ def test_api_notificaciones_endpoints():
     log_id = res_despacho.json()["id"]
 
     # 2. Consulta de logs
-    res_logs = client.get("/api/v1/notificaciones/logs?departamento_id=105")
+    res_logs = client.get("/api/v1/notificaciones/logs", params={"departamento_id": depto_id})
     assert res_logs.status_code == 200
     logs = res_logs.json()
     assert len(logs) >= 1
@@ -161,7 +179,7 @@ def test_api_notificaciones_endpoints():
 
     # 4. Comunicado masivo
     payload_masivo = {
-        "condominio_id": "vb3-condo",
+        "condominio_id": str(CONDOMINIO_PILOTO_ID),
         "titulo": "Asamblea General de Propietarios",
         "mensaje": "Se convoca a la asamblea anual ordinaria para el próximo mes.",
         "canal": "EMAIL",

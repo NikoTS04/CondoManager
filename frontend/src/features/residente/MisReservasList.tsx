@@ -15,7 +15,7 @@ import { cancelarReserva, type AreaComun, type Reserva } from "@/lib/api";
 export interface MisReservasListProps {
   reservas: Reserva[];
   areas: AreaComun[];
-  departamentoNumero: string;
+  departamentoId: string;
   loading?: boolean;
   error?: string | null;
   errorAreas?: string | null;
@@ -27,7 +27,7 @@ export interface MisReservasListProps {
 export function MisReservasList({
   reservas,
   areas,
-  departamentoNumero,
+  departamentoId,
   loading = false,
   error = null,
   errorAreas = null,
@@ -115,8 +115,8 @@ export function MisReservasList({
       {/* Listado de Reservas y Turnos Confirmados */}
       <Card>
         <CardHeader
-          title="Calendario y Turnos del Condominio"
-          description="Turnos programados para las áreas comunes y opciones de cancelación."
+          title="Mis reservas"
+          description="Turnos de la unidad seleccionada y opciones de cancelación."
           icon={<Calendar className="h-5 w-5 text-brand-600" aria-hidden />}
         />
         <CardBody className="space-y-4">
@@ -155,7 +155,7 @@ export function MisReservasList({
           ) : (
             <div className="divide-y divide-line">
               {reservas.map((r) => {
-                const esPropia = r.departamento_id === departamentoNumero;
+                const esPropia = r.departamento_id === departamentoId;
                 return (
                   <div
                     key={r.id}
@@ -164,7 +164,7 @@ export function MisReservasList({
                     <div className="space-y-0.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold text-ink">
-                          {r.area_nombre || "Área Común"} · Dpto. {r.departamento_id}
+                          {r.area_nombre || "Área Común"} · Tu unidad
                         </p>
                         {esPropia && (
                           <span className="rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-semibold text-brand-700">

@@ -1,12 +1,9 @@
-/**
- * Cliente API para CondoManager con soporte híbrido:
- * 1. Conecta con el backend FastAPI en http://localhost:8000/api/v1.
- * 2. Si el backend está apagado o falla la red, recurre de forma transparente
- *    a un almacén local en memoria calibrado con los 139 departamentos de Villa Bonita 3.
- */
+/** Cliente autenticado: los fallos de red o autorización nunca generan éxitos simulados. */
+import type { SessionUser } from "./session";
 
 export interface Departamento {
-  id?: string;
+  id: string;
+  condominio_id?: string;
   edificio_id?: string;
   activo?: boolean;
   numero: string;
@@ -62,6 +59,7 @@ export function departamentoParaPortal(departamento: DepartamentoRegistrado): De
 
 export interface AreaComun {
   id: string;
+  condominio_id: string;
   nombre: string;
   descripcion: string;
   aforo_maximo: number;
@@ -160,16 +158,7 @@ export interface PresupuestoApiResult {
   notFound?: boolean;
 }
 
-export interface AuthenticatedUser {
-  id: string;
-  email: string;
-  nombre: string;
-  apellido: string;
-  rol: "SUPERADMIN" | "ADMIN_JUNTA" | "AUDITOR" | "PROPIETARIO" | "INQUILINO";
-  condominio_id: string | null;
-  departamentos: string[];
-  tipo_relacion?: string;
-}
+export type AuthenticatedUser = SessionUser;
 
 export interface LoginResult {
   access_token: string;
@@ -222,6 +211,21 @@ export async function iniciarSesion(email: string, password: string): Promise<Lo
     throw new Error(obtenerMensajeError(data, "No se pudo iniciar sesión."));
   }
   return data as LoginResult;
+}
+
+export function obtenerSesion(): Promise<AuthenticatedUser> {
+  return recursoRequest("/auth/me");
+}
+
+async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${ruta}`, { ...init, headers: getAuthHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo completar la operación."));
+  return data as T;
+}
+
+function contextoQuery(condominioId?: string | null): string {
+  return condominioId ? `?condominio_id=${encodeURIComponent(condominioId)}` : "";
 }
 
 async function estructuraRequest<T>(condominioId: string, ruta: string, init: RequestInit = {}): Promise<T> {
@@ -448,150 +452,26 @@ export async function obtenerPresupuestoPorPeriodo(
   }
 }
 
-// ============================================================================
-// Datos Semilla en Memoria (Villa Bonita 3 - 139 Departamentos)
-// ============================================================================
-
-function generarDepartamentosPiloto(): Departamento[] {
-  const deptos: Departamento[] = [];
-  for (let piso = 1; piso <= 13; piso++) {
-    for (let cor = 1; cor <= 10; cor++) {
-      const num = `${piso}${cor.toString().padStart(2, "0")}`;
-      deptos.push({
-        numero: num,
-        piso,
-        coeficiente: cor % 2 !== 0 ? "0.6800" : "0.7400",
-        saldo_a_favor: num === "302" ? "200.00" : "0.00",
-        estado_financiero: num === "402" ? "EN_MORA" : num === "504" ? "OBSERVADO" : "AL_DIA",
-        deuda_vencida: num === "402" ? "170.00" : "0.00",
-      });
-    }
-  }
-  for (let cor = 1; cor <= 9; cor++) {
-    const num = `140${cor}`;
-    deptos.push({
-      numero: num,
-      piso: 14,
-      coeficiente: cor === 9 ? "0.8560" : "0.8555",
-      saldo_a_favor: "0.00",
-      estado_financiero: "AL_DIA",
-      deuda_vencida: "0.00",
-    });
-  }
-  return deptos;
+export function fetchDepartamentos(condominioId?: string | null): Promise<Departamento[]> {
+  return recursoRequest(`/cuotas/departamentos${contextoQuery(condominioId)}`);
 }
 
-const MOCK_AREAS: AreaComun[] = [
-  {
-    id: "11111111-1111-1111-1111-111111111101",
-    nombre: "Zona de Parrilla 1 (Terraza Piso 15)",
-    descripcion: "Parrilla de acero inoxidable con mesa para 12 comensales.",
-    aforo_maximo: 12,
-    costo_reserva: "25.00",
-    esta_activa: true,
-  },
-  {
-    id: "11111111-1111-1111-1111-111111111102",
-    nombre: "Zona de Parrilla 2 (Terraza Piso 15)",
-    descripcion: "Parrilla de acero inoxidable con mesa para 12 comensales.",
-    aforo_maximo: 12,
-    costo_reserva: "25.00",
-    esta_activa: true,
-  },
-  {
-    id: "11111111-1111-1111-1111-111111111103",
-    nombre: "Salón Social de Eventos (Piso 1)",
-    descripcion: "Salón climatizado para reuniones y cumpleaños con cocina de apoyo.",
-    aforo_maximo: 40,
-    costo_reserva: "100.00",
-    esta_activa: true,
-  },
-  {
-    id: "11111111-1111-1111-1111-111111111104",
-    nombre: "Sala Fitness / Gimnasio (Piso 1)",
-    descripcion: "Máquinas cardiovasculares y mancuernas para residentes.",
-    aforo_maximo: 8,
-    costo_reserva: "0.00",
-    esta_activa: true,
-  },
-];
-
-let mockDepartamentos = generarDepartamentosPiloto();
-let mockReservas: Reserva[] = [
-  {
-    id: "res-demo-1",
-    condominio_id: "vb3-condo",
-    area_id: "11111111-1111-1111-1111-111111111101",
-    area_nombre: "Zona de Parrilla 1 (Terraza Piso 15)",
-    departamento_id: "102",
-    fecha_reserva: "2026-10-25",
-    hora_inicio: "14:00",
-    hora_fin: "18:00",
-    costo_reserva: "25.00",
-    estado: "CONFIRMADA",
-    creado_en: new Date().toISOString(),
-  },
-];
-let mockComprobantes: ComprobantePago[] = [
-  {
-    id: "comp-demo-1",
-    departamento_id: "105",
-    banco: "YAPE",
-    numero_operacion: "88991122",
-    fecha_operacion: "2026-10-18",
-    monto: "150.00",
-    estado: "EN_REVISION",
-    idempotency_hash: "sha256-mock-hash-88991122",
-    url_voucher: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400",
-  },
-];
-let mockNotificaciones: NotificacionLog[] = [
-  {
-    id: "notif-1",
-    departamento_id: "102",
-    tipo_evento: "NOTIF_EMISION_CUOTA",
-    canal: "EMAIL",
-    destinatario: "residente102@gmail.com",
-    asunto: "CondoManager: Emisión de cuota de mantenimiento - Periodo 2026-10",
-    estado: "ENTREGADO",
-    intentos: 1,
-    fecha_creacion: new Date().toISOString(),
-  },
-];
-
-// ============================================================================
-// Funciones del Cliente API
-// ============================================================================
-
-export async function fetchDepartamentos(): Promise<Departamento[]> {
-  try {
-    const res = await fetch(`${API_BASE}/cuotas/departamentos`);
-    if (res.ok) return await res.json();
-  } catch {}
-  return mockDepartamentos;
+export function fetchAreasComunes(condominioId?: string | null): Promise<AreaComun[]> {
+  return recursoRequest(`/areas${contextoQuery(condominioId)}`);
 }
 
-export async function fetchAreasComunes(): Promise<AreaComun[]> {
-  try {
-    const res = await fetch(`${API_BASE}/areas`);
-    if (res.ok) return await res.json();
-  } catch {}
-  return MOCK_AREAS;
+export interface HorarioOcupado { hora_inicio: string; hora_fin: string }
+
+export function fetchDisponibilidad(areaId: string, fecha: string): Promise<HorarioOcupado[]> {
+  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`);
 }
 
-export async function fetchReservas(areaId?: string, fecha?: string): Promise<Reserva[]> {
-  try {
-    const params = new URLSearchParams();
-    if (areaId) params.append("area_id", areaId);
-    if (fecha) params.append("fecha", fecha);
-    const res = await fetch(`${API_BASE}/reservas?${params.toString()}`);
-    if (res.ok) return await res.json();
-  } catch {}
-  return mockReservas.filter((r) => {
-    if (areaId && r.area_id !== areaId) return false;
-    if (fecha && r.fecha_reserva !== fecha) return false;
-    return true;
-  });
+export function fetchReservas(areaId?: string, fecha?: string, condominioId?: string | null): Promise<Reserva[]> {
+  const params = new URLSearchParams();
+  if (areaId) params.set("area_id", areaId);
+  if (fecha) params.set("fecha", fecha);
+  if (condominioId) params.set("condominio_id", condominioId);
+  return recursoRequest(`/reservas?${params}`);
 }
 
 export async function crearReserva(payload: {
@@ -603,82 +483,25 @@ export async function crearReserva(payload: {
   hora_fin: string;
 }): Promise<{ ok: boolean; data?: Reserva; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/reservas`, {
+    const data = await recursoRequest<Reserva>("/reservas", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (res.ok) {
-      mockReservas.push(data);
-      return { ok: true, data };
-    }
-    return { ok: false, error: data.detail?.mensaje || "Error al procesar reserva" };
-  } catch {
-    // Modo Mock Fallback
-    const depto = mockDepartamentos.find((d) => d.numero === payload.departamento_id);
-    if (depto && depto.estado_financiero === "EN_MORA") {
-      return {
-        ok: false,
-        error: `No es posible reservar: El departamento '${payload.departamento_id}' mantiene cuotas vencidas pendientes en mora (S/ 170.00).`,
-      };
-    }
-
-    const solapada = mockReservas.find(
-      (r) =>
-        r.area_id === payload.area_id &&
-        r.fecha_reserva === payload.fecha_reserva &&
-        r.estado === "CONFIRMADA" &&
-        payload.hora_inicio < r.hora_fin &&
-        payload.hora_fin > r.hora_inicio
-    );
-    if (solapada) {
-      return {
-        ok: false,
-        error: `Horario no disponible: Ya existe una reserva confirmada entre ${solapada.hora_inicio} y ${solapada.hora_fin}.`,
-      };
-    }
-
-    const area = MOCK_AREAS.find((a) => a.id === payload.area_id);
-    const nuevaReserva: Reserva = {
-      id: `res-${Date.now()}`,
-      condominio_id: payload.condominio_id,
-      area_id: payload.area_id,
-      area_nombre: area?.nombre,
-      departamento_id: payload.departamento_id,
-      fecha_reserva: payload.fecha_reserva,
-      hora_inicio: payload.hora_inicio,
-      hora_fin: payload.hora_fin,
-      costo_reserva: area?.costo_reserva || "0.00",
-      estado: "CONFIRMADA",
-      creado_en: new Date().toISOString(),
-    };
-    mockReservas.push(nuevaReserva);
-    return { ok: true, data: nuevaReserva };
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo crear la reserva." };
   }
 }
 
-export async function cancelarReserva(reservaId: string, esAdmin = false): Promise<{ ok: boolean; error?: string }> {
+export async function cancelarReserva(reservaId: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/reservas/${reservaId}/cancelar`, {
+    await recursoRequest(`/reservas/${encodeURIComponent(reservaId)}/cancelar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ motivo: "Cancelación voluntaria", es_admin: esAdmin }),
+      body: JSON.stringify({ motivo: "Cancelación voluntaria" }),
     });
-    if (res.ok) {
-      const idx = mockReservas.findIndex((r) => r.id === reservaId);
-      if (idx !== -1) mockReservas[idx].estado = "CANCELADA";
-      return { ok: true };
-    }
-    const err = await res.json();
-    return { ok: false, error: err.detail?.mensaje };
-  } catch {
-    const idx = mockReservas.findIndex((r) => r.id === reservaId);
-    if (idx !== -1) {
-      mockReservas[idx].estado = "CANCELADA";
-      return { ok: true };
-    }
-    return { ok: false, error: "Reserva no encontrada." };
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo cancelar." };
   }
 }
 
@@ -689,38 +512,20 @@ export async function reportarPago(payload: {
   fecha_operacion: string;
   monto: string;
   url_voucher?: string;
-}): Promise<{ ok: boolean; data?: ComprobantePago; error?: string }> {
+}): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/pagos/reportar`, {
+    await recursoRequest("/pagos/reportar", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (res.ok) {
-      mockComprobantes.push(data);
-      return { ok: true, data };
-    }
-    return { ok: false, error: data.detail?.mensaje };
-  } catch {
-    const nuevoComprobante: ComprobantePago = {
-      id: `comp-${Date.now()}`,
-      departamento_id: payload.departamento_id,
-      banco: payload.banco,
-      numero_operacion: payload.numero_operacion,
-      fecha_operacion: payload.fecha_operacion,
-      monto: payload.monto,
-      estado: "EN_REVISION",
-      idempotency_hash: `sha256-mock-${payload.numero_operacion}`,
-      url_voucher: payload.url_voucher || "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400",
-    };
-    mockComprobantes.push(nuevoComprobante);
-    return { ok: true, data: nuevoComprobante };
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
 }
 
-export async function fetchComprobantes(): Promise<ComprobantePago[]> {
-  return mockComprobantes;
+export function fetchComprobantes(condominioId?: string | null): Promise<ComprobantePago[]> {
+  return recursoRequest(`/pagos/comprobantes${contextoQuery(condominioId)}`);
 }
 
 export async function conciliarComprobante(
@@ -729,28 +534,14 @@ export async function conciliarComprobante(
   motivo_rechazo?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/pagos/${comprobanteId}/conciliar`, {
+    await recursoRequest(`/pagos/${encodeURIComponent(comprobanteId)}/conciliar`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ decision, motivo_rechazo }),
     });
-    if (res.ok) return { ok: true };
-  } catch {}
-
-  const c = mockComprobantes.find((comp) => comp.id === comprobanteId);
-  if (c) {
-    c.estado = decision === "APROBADO" ? "CONCILIADO" : "RECHAZADO";
-    c.motivo_rechazo = motivo_rechazo;
-    if (decision === "APROBADO") {
-      const depto = mockDepartamentos.find((d) => d.numero === c.departamento_id);
-      if (depto) {
-        depto.estado_financiero = "AL_DIA";
-        depto.deuda_vencida = "0.00";
-      }
-    }
     return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo conciliar." };
   }
-  return { ok: false, error: "Comprobante no hallado." };
 }
 
 export async function emitirLoteCuotas(periodo: string, condominioId: string): Promise<{ ok: boolean; error?: string; total?: number }> {
@@ -774,42 +565,23 @@ export async function emitirLoteCuotas(periodo: string, condominioId: string): P
   }
 }
 
-export async function fetchNotificaciones(): Promise<NotificacionLog[]> {
-  try {
-    const res = await fetch(`${API_BASE}/notificaciones/logs`);
-    if (res.ok) return await res.json();
-  } catch {}
-  return mockNotificaciones;
+export function fetchNotificaciones(condominioId?: string | null): Promise<NotificacionLog[]> {
+  return recursoRequest(`/notificaciones/logs${contextoQuery(condominioId)}`);
 }
 
-export async function enviarComunicadoMasivo(titulo: string, mensaje: string): Promise<{ ok: boolean; generadas?: number }> {
+export async function enviarComunicadoMasivo(titulo: string, mensaje: string, condominioId: string): Promise<{ ok: boolean; generadas?: number }> {
   try {
-    const res = await fetch(`${API_BASE}/notificaciones/comunicado-masivo`, {
+    const data = await recursoRequest<{ notificaciones_generadas: number }>("/notificaciones/comunicado-masivo", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        condominio_id: "vb3-condo",
+        condominio_id: condominioId,
         titulo,
         mensaje,
         canal: "EMAIL",
       }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: true, generadas: data.notificaciones_generadas };
-    }
-  } catch {}
-
-  const nuevoLog: NotificacionLog = {
-    id: `notif-${Date.now()}`,
-    tipo_evento: "NOTIF_COMUNICADO_GENERAL",
-    canal: "EMAIL",
-    destinatario: "todos@condominio.pe (139 departamentos)",
-    asunto: `CondoManager Comunicado: ${titulo}`,
-    estado: "ENTREGADO",
-    intentos: 1,
-    fecha_creacion: new Date().toISOString(),
-  };
-  mockNotificaciones.unshift(nuevoLog);
-  return { ok: true, generadas: 139 };
+    return { ok: true, generadas: data.notificaciones_generadas };
+  } catch {
+    return { ok: false };
+  }
 }

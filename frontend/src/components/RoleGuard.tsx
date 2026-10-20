@@ -26,5 +26,5 @@ export default function RoleGuard({ allowedRoles, fallback, children }: RoleGuar
     return <>{fallback ?? <AccessDenied />}</>;
   }
 
-  return <>{children}</>;
+  return <React.Fragment key={`${user.id}:${user.rol}:${user.condominio_id}`}>{children}</React.Fragment>;
 }

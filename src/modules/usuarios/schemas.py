@@ -1,13 +1,41 @@
 """Esquemas Pydantic para el Dominio de Usuarios y Autenticación (PROC-05)."""
 
+from decimal import Decimal
 from typing import List, Optional
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
+
+from src.core.roles import RolUsuario, TipoRelacion
 
 
 class LoginRequest(BaseModel):
     """Solicitud de inicio de sesión con credenciales."""
     email: str = Field(..., description="Correo electrónico registrado")
     password: str = Field(..., description="Contraseña en texto plano")
+
+
+class VinculoDepartamentoDTO(BaseModel):
+    """La tenencia se resuelve por UUID de unidad, no por rol ni número."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    departamento_id: UUID
+    numero: str = Field(min_length=1)
+    tipo_relacion: TipoRelacion
+    es_activo: bool = True
+
+
+class DepartamentoPortalDTO(BaseModel):
+    id: UUID
+    condominio_id: UUID
+    numero: str
+    piso: int
+    coeficiente: Decimal
+    saldo_a_favor: Decimal
+    estado_financiero: str
+    activo: bool
+    deuda_vencida: Decimal
 
 
 class UsuarioDTO(BaseModel):
@@ -18,10 +46,9 @@ class UsuarioDTO(BaseModel):
     email: str
     nombre: str
     apellido: str
-    rol: str = Field(..., description="SUPERADMIN, ADMIN_JUNTA, AUDITOR, PROPIETARIO, INQUILINO")
+    rol: RolUsuario
     condominio_id: Optional[str]
-    departamentos: List[str] = Field(default_factory=list, description="Lista de números de departamentos vinculados")
-    tipo_relacion: Optional[str] = Field(default=None, description="PROPIETARIO_TITULAR, INQUILINO, ADMINISTRADOR")
+    departamentos: List[VinculoDepartamentoDTO] = Field(default_factory=list)
 
 
 class TokenResponse(BaseModel):
@@ -32,13 +59,5 @@ class TokenResponse(BaseModel):
     usuario: UsuarioDTO
 
 
-class UserContextResponse(BaseModel):
+class UserContextResponse(UsuarioDTO):
     """Contexto de sesión activo para el usuario autenticado."""
-    id: str
-    email: str
-    nombre: str
-    apellido: str
-    rol: str
-    condominio_id: Optional[str]
-    departamentos: List[str]
-    tipo_relacion: Optional[str] = None

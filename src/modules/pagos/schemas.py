@@ -3,10 +3,11 @@
 Alineados formalmente con OpenAPI 3.1: specs/03-contracts/openapi/condomanager.openapi.yaml
 """
 
+import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional
-import uuid
+
 from pydantic import BaseModel, Field
 
 
@@ -24,6 +25,19 @@ class ComprobanteRecibidoResponse(BaseModel):
     estado: str = "EN_REVISION"
     mensaje: str = "Comprobante recibido. En proceso de conciliación por la Junta Directiva."
     idempotency_hash: str
+
+
+class ComprobantePagoDTO(BaseModel):
+    id: uuid.UUID
+    departamento_id: uuid.UUID
+    banco: str
+    numero_operacion: str
+    fecha_operacion: date
+    monto: Decimal
+    estado: str
+    idempotency_hash: str
+    url_voucher: str
+    motivo_rechazo: Optional[str] = None
 
 
 class ConciliarPagoRequest(BaseModel):

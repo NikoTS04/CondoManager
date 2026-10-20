@@ -23,13 +23,13 @@ function getTodayLima(): string {
 }
 
 export interface ReportarPagoFormProps {
-  departamentoNumero: string;
+  departamentoId: string;
   onSuccess?: () => void;
   comprobantesExistentes?: ComprobantePago[];
 }
 
 export function ReportarPagoForm({
-  departamentoNumero,
+  departamentoId,
   onSuccess,
   comprobantesExistentes = [],
 }: ReportarPagoFormProps) {
@@ -58,6 +58,7 @@ export function ReportarPagoForm({
   function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
     setAlertState(null);
+    if (!departamentoId) return;
     const errors: typeof fieldErrors = {};
 
     const cleanOp = numeroOperacion.trim();
@@ -79,7 +80,7 @@ export function ReportarPagoForm({
     // Validación preventiva de duplicidad contra comprobantes existentes
     const existente = comprobantesExistentes.find(
       (c) =>
-        c.departamento_id === departamentoNumero &&
+        c.departamento_id === departamentoId &&
         c.numero_operacion.trim().toLowerCase() === cleanOp.toLowerCase() &&
         c.banco === banco,
     );
@@ -123,7 +124,7 @@ export function ReportarPagoForm({
 
     try {
       const res = await reportarPago({
-        departamento_id: departamentoNumero,
+        departamento_id: departamentoId,
         banco,
         numero_operacion: numeroOperacion.trim(),
         fecha_operacion: fechaOperacion,
@@ -306,7 +307,7 @@ export function ReportarPagoForm({
           <strong className="text-brand-700">
             <MoneyAmount value={montoPago || "0.00"} moneda="PEN" />
           </strong>{" "}
-          para el departamento <strong>{departamentoNumero}</strong> en{" "}
+          para la <strong>unidad seleccionada</strong> en{" "}
           <strong>{banco}</strong> con el número de operación{" "}
           <strong className="tabular-nums">{numeroOperacion}</strong>.
         </p>

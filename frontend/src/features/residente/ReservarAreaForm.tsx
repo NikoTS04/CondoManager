@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PlusCircle, ShieldAlert, ArrowRight } from "lucide-react";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { formatMoney } from "@/lib/money";
-import { crearReserva, type AreaComun } from "@/lib/api";
+import { crearReserva, fetchDisponibilidad, type AreaComun, type HorarioOcupado } from "@/lib/api";
 
 function getTodayLima(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -21,7 +21,7 @@ function getTodayLima(): string {
 export interface ReservarAreaFormProps {
   areas: AreaComun[];
   condominioId?: string | null;
-  departamentoNumero: string;
+  departamentoId: string;
   estaEnMora: boolean;
   deudaVencida?: string;
   errorAreas?: string | null;
@@ -33,7 +33,7 @@ export interface ReservarAreaFormProps {
 export function ReservarAreaForm({
   areas,
   condominioId,
-  departamentoNumero,
+  departamentoId,
   estaEnMora,
   deudaVencida,
   errorAreas,
@@ -48,14 +48,33 @@ export function ReservarAreaForm({
   const [reservaError, setReservaError] = useState<string | null>(null);
   const [reservaSuccess, setReservaSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [ocupados, setOcupados] = useState<HorarioOcupado[]>([]);
+  const [errorDisponibilidad, setErrorDisponibilidad] = useState<string | null>(null);
+  const [revisionCalendario, setRevisionCalendario] = useState(0);
 
   // Asegura área por defecto si la lista se carga después
   const effectiveAreaId = selectedAreaId || areas[0]?.id || "";
+
+  useEffect(() => {
+    let cancelled = false;
+    setOcupados([]);
+    setErrorDisponibilidad(null);
+    if (effectiveAreaId && fechaReserva) {
+      void fetchDisponibilidad(effectiveAreaId, fechaReserva)
+        .then((data) => { if (!cancelled) setOcupados(data); })
+        .catch(() => { if (!cancelled) setErrorDisponibilidad("No pudimos consultar los horarios ocupados."); });
+    }
+    return () => { cancelled = true; };
+  }, [effectiveAreaId, fechaReserva, revisionCalendario]);
 
   async function handleCrearReserva(e: React.FormEvent) {
     e.preventDefault();
     setReservaError(null);
     setReservaSuccess(null);
+    if (!departamentoId || !condominioId) {
+      setReservaError("Selecciona una unidad autorizada y su condominio.");
+      return;
+    }
 
     if (estaEnMora) {
       setReservaError("No puedes reservar áreas comunes mientras mantengas cuotas vencidas.");
@@ -69,9 +88,9 @@ export function ReservarAreaForm({
 
     setIsSubmitting(true);
     const res = await crearReserva({
-      condominio_id: condominioId || "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      condominio_id: condominioId,
       area_id: effectiveAreaId,
-      departamento_id: departamentoNumero,
+      departamento_id: departamentoId,
       fecha_reserva: fechaReserva,
       hora_inicio: horaInicio,
       hora_fin: horaFin,
@@ -80,6 +99,7 @@ export function ReservarAreaForm({
     setIsSubmitting(false);
 
     if (res.ok) {
+      setRevisionCalendario((value) => value + 1);
       setReservaSuccess("¡Reserva confirmada con éxito! Se ha notificado a tu correo con las normas del espacio.");
       if (onSuccess) onSuccess();
     } else {
@@ -151,6 +171,17 @@ export function ReservarAreaForm({
               disabled={estaEnMora}
             />
           </Field>
+
+          {errorDisponibilidad ? (
+            <Alert tone="warning">{errorDisponibilidad}</Alert>
+          ) : ocupados.length > 0 ? (
+            <div className="rounded-lg bg-canvas p-3 text-sm" aria-live="polite">
+              <p className="font-medium">Horarios ocupados para esta fecha</p>
+              <ul>{ocupados.map((h) => <li key={`${h.hora_inicio}-${h.hora_fin}`}>
+                {h.hora_inicio.slice(0, 5)} – {h.hora_fin.slice(0, 5)}
+              </li>)}</ul>
+            </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Hora Inicio" required>

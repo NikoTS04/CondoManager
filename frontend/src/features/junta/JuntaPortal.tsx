@@ -76,9 +76,9 @@ export default function JuntaPortal() {
 
     try {
       const [nuevosComprobantes, nuevosDepartamentos, nuevasNotificaciones] = await Promise.all([
-        fetchComprobantes(),
+        condominioActivoId ? fetchComprobantes(condominioActivoId) : Promise.resolve([]),
         condominioActivoId ? listarDepartamentos(condominioActivoId) : Promise.resolve([]),
-        fetchNotificaciones(),
+        condominioActivoId ? fetchNotificaciones(condominioActivoId) : Promise.resolve([]),
       ]);
       if (solicitud !== cargaActual.current) return;
       setComprobantes(nuevosComprobantes);
@@ -100,6 +100,8 @@ export default function JuntaPortal() {
   const seleccionarCondominio = useCallback((condominioId: string | null) => {
     cargaActual.current++;
     setDepartamentosRegistrados([]);
+    setComprobantes([]);
+    setNotificaciones([]);
     setCondominioActivoId(condominioId);
     setPresupuesto(null);
     if (condominioId) {
@@ -213,8 +215,8 @@ export default function JuntaPortal() {
         } else {
           setFeedback(resultado.error || "No se pudo procesar el comprobante.");
         }
-      } else if (confirmacion.kind === "comunicado") {
-        const resultado = await enviarComunicadoMasivo(titulo, mensaje);
+      } else if (confirmacion.kind === "comunicado" && condominioActivoId) {
+        const resultado = await enviarComunicadoMasivo(titulo, mensaje, condominioActivoId);
         if (resultado.ok) {
           const alcance = resultado.generadas ?? 0;
           setFeedback(

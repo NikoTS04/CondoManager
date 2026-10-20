@@ -66,7 +66,11 @@ El diseño garantiza la escalabilidad multi-edificio, permitiendo que un usuario
 - El backend resuelve automáticamente el usuario activo (`get_current_user`) y valida que:
   1. Si invoca acciones de administración (`ADMIN_JUNTA`, `SUPERADMIN`), su claim `rol` coincida exactamente.
   2. Si es `AUDITOR`, sus peticiones estén restringidas estrictamente a métodos de lectura idempotente (`GET`), rechazando cualquier mutación con `403 Forbidden`.
-  3. Si es `PROPIETARIO` o `INQUILINO`, cualquier operación sobre un `departamento_id` pertenezca a la lista de `departamentos` autorizados en su token.
+   3. Si es `RESIDENTE`, cualquier operación sobre un `departamento_id` pertenezca a
+      un vínculo activo de `departamentos` en su token y a su condominio.
+- Los cuatro roles coinciden con el SQL. Propietario/inquilino son relaciones de
+  tenencia por unidad, no roles. Contrato y renovación de sesiones en
+  [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/identidad-y-alcances.md).
 
 ---
 
@@ -99,13 +103,13 @@ auditoría, la transacción completa se revierte.
  [ Usuario ingresa Email y Contraseña ]
                   │
                   ▼
- [ API valida credenciales contra hash bcrypt ]
+ [ API valida credenciales contra hash PBKDF2 del piloto ]
                   │
                   ▼
  [ Resuelve Roles y Departamentos asociados ]
                   │
                   ▼
- [ Emite JWT con claims {sub, email, rol, departamentos} ]
+ [ Emite JWT v2 con rol SQL y vínculos UUID por departamento ]
                   │
                   ▼
  [ Frontend adapta elementos de UI según el Rol ]

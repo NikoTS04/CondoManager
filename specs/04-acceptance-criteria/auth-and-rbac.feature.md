@@ -8,7 +8,7 @@ Dado que existe un usuario con correo "admin@villabonita3.pe" y rol "ADMIN_JUNTA
 Cuando el usuario envía su correo y contraseña correcta a "/api/v1/auth/login"
 Entonces la API responde con código HTTP 200 OK
 Y la respuesta contiene un "access_token" JWT válido
-Y el payload del token incluye el rol "ADMIN_JUNTA" y el identificador de condominio "vb3-condo".
+Y el payload del token incluye el rol "ADMIN_JUNTA", el UUID del condominio piloto y "session_version" igual a 2.
 ```
 
 ### Escenario 2: Rechazo de credenciales incorrectas
@@ -21,7 +21,7 @@ Y el mensaje de error indica "Credenciales inválidas".
 
 ### Escenario 3: Bloqueo de mutación administrativa para rol Residente
 ```gherkin
-Dado que un usuario con rol "PROPIETARIO" ha iniciado sesión
+Dado que un usuario con rol "RESIDENTE" ha iniciado sesión
 Cuando el usuario intenta invocar "POST /api/v1/cuotas/emitir-lote" con su token Bearer
 Entonces la API rechaza la solicitud con código HTTP 403 Forbidden
 Y el mensaje de error indica "Acceso denegado: Se requiere rol de administración".
@@ -129,4 +129,45 @@ Entonces la API responde con código HTTP 200 OK
 Y devuelve los condominios activos como contextos seleccionables
 Y si existe más de uno la interfaz exige una selección explícita
 Y los usuarios sin rol "SUPERADMIN" no pueden utilizar el listado global.
+```
+
+### Escenario 14: Relaciones distintas sin cambiar de rol
+
+```gherkin
+Dado un usuario RESIDENTE propietario de la unidad 102 e inquilino de la 504
+Cuando inicia sesión y consulta /auth/me
+Entonces recibe ambos vínculos con UUID, número, tipo_relacion y es_activo
+Y el JWT conserva rol RESIDENTE para ambos vínculos
+Y al seleccionar cada unidad la etiqueta cambia entre Propietario e Inquilino
+Y no aparecen unidades ajenas o vínculos inactivos en el selector.
+```
+
+### Escenario 15: Autorización de recursos y cancelación sin elevación
+
+```gherkin
+Dado un RESIDENTE vinculado únicamente a la unidad 102
+Cuando reporta un pago o crea/cancela una reserva de una unidad ajena
+Entonces recibe 403 y no se modifica ningún recurso
+Y enviar es_admin=true no evita la regla de 24 horas para su propia reserva
+Y el departamento moroso sigue bloqueado aunque el otro vínculo esté al día.
+```
+
+### Escenario 16: Renovación obligatoria y restauración segura
+
+```gherkin
+Dado un token anterior a la versión de sesión 2 o con rol PROPIETARIO o INQUILINO
+Cuando intenta acceder a una ruta protegida
+Entonces recibe 401 SESION_DESACTUALIZADA y debe iniciar sesión de nuevo
+Y el frontend descarta esa sesión en lugar de restaurarla o entrar automáticamente
+Y un UUID de unidad ajena en URL o almacenamiento no cambia la unidad autorizada.
+```
+
+### Escenario 17: Aislamiento administrativo y consulta del calendario
+
+```gherkin
+Dado un ADMIN_JUNTA o AUDITOR con contexto de condominio A
+Cuando consulta o modifica recursos del condominio B
+Entonces recibe 403 y no se modifica ningún recurso
+Y AUDITOR puede consultar los recursos de A pero nunca enviar pagos, reservas o comunicados
+Y un residente consulta horarios ocupados sin recibir datos privados de otras unidades.
 ```

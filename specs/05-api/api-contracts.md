@@ -320,6 +320,20 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
   - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
 
 ### 2.7 Módulo de Autenticación y RBAC (PROC-05)
+
+Roles canónicos: `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`. Los tres
+endpoints de autenticación usan el contrato v2 descrito en
+[identidad-y-alcances.md](../02-domains/05-usuarios-rbac/identidad-y-alcances.md).
+`departamentos` contiene vínculos `{departamento_id: UUID, numero, tipo_relacion,
+es_activo}`. No existe una relación global de usuario; los administrativos sin
+tenencia devuelven `[]`. JWT con `session_version: 2`; tokens anteriores o roles
+antiguos/desconocidos reciben `401 SESION_DESACTUALIZADA` y requieren login.
+`GET /auth/demo-users` devuelve la lista de perfiles públicos con la misma forma.
+
+Pagos, reservas y notificaciones requieren Bearer. Las listas se filtran por contexto
+y vínculo activo; UUID de unidad ajena o condominio distinto responde `403`.
+`GET /pagos/comprobantes` sustituye el listado local de comprobantes y
+`GET /cuotas/departamentos` devuelve el padrón del portal ya autorizado.
 - **`POST /api/v1/auth/login`**
   - *Descripción:* Autentica a un usuario y genera su token de acceso JWT con sus claims y permisos.
   - *Request Body:*
@@ -341,7 +355,7 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
         "nombre": "Carlos",
         "apellido": "Mendoza",
         "rol": "ADMIN_JUNTA",
-        "condominio_id": "vb3-condo",
+       "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "departamentos": []
       }
     }
@@ -364,9 +378,9 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
       "email": "residente102@villabonita3.pe",
       "nombre": "Ana",
       "apellido": "Gómez",
-      "rol": "PROPIETARIO",
-      "condominio_id": "vb3-condo",
-      "departamentos": ["102"]
+       "rol": "RESIDENTE",
+       "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+       "departamentos": [{"departamento_id": "48c8c328-8a14-59b6-bc14-c905db21e630", "numero": "102", "tipo_relacion": "PROPIETARIO_TITULAR", "es_activo": true}]
     }
     ```
 # Estructura inmobiliaria (CON-3 / USR-02)

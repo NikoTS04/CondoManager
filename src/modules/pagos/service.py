@@ -6,11 +6,11 @@ Implementa:
 3. Restablecimiento de solvencia financiera para reservas de áreas comunes.
 """
 
+import hashlib
+import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
-import hashlib
 from typing import Dict, List, Optional
-import uuid
 
 from src.core.audit import AuditoriaPayload
 from src.modules.pagos.schemas import (
@@ -64,6 +64,11 @@ class PagosService:
 
         if idempotency_hash in comprobantes_existentes:
             previo = comprobantes_existentes[idempotency_hash]
+            if previo["departamento_id"] != request.departamento_id:
+                raise VoucherDuplicadoException(
+                    error_code="VOUCHER_UNIDAD_DISTINTA",
+                    mensaje="El comprobante no puede aplicarse a otra unidad.",
+                )
             if previo["estado"] == "APROBADO":
                 raise VoucherDuplicadoException(
                     error_code="VOUCHER_YA_CONCILIADO",
@@ -80,6 +85,7 @@ class PagosService:
         nuevo_id = uuid.uuid4()
         comprobante_data = {
             "id": nuevo_id,
+            "condominio_id": condominio_id,
             "departamento_id": request.departamento_id,
             "banco_origen": request.banco,
             "numero_operacion": request.numero_operacion,

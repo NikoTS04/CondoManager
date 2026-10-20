@@ -1,10 +1,16 @@
 """Módulo de Seguridad, Criptografía y Control de Acceso RBAC (PROC-05)."""
 
-from datetime import datetime, timedelta, timezone
 import hashlib
 import os
 import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
+
+from pydantic import TypeAdapter, ValidationError
+
+from src.core.roles import VERSION_SESION, RolUsuario
+from src.modules.usuarios.schemas import VinculoDepartamentoDTO
+
 try:
     from fastapi import Depends, HTTPException, status
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -93,7 +99,7 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
         expire = now + expires_delta
     else:
         expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "iat": now})
+    to_encode.update({"exp": expire, "iat": now, "session_version": VERSION_SESION})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -101,7 +107,6 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     """Decodifica y valida la firma y expiración de un token JWT."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
     except getattr(jwt, "ExpiredSignatureError", Exception):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -112,6 +117,24 @@ def decode_access_token(token: str) -> Dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error_code": "TOKEN_INVALIDO", "mensaje": "Token de autenticación inválido o corrupto."},
         )
+
+    try:
+        RolUsuario(payload.get("rol"))
+        if payload.get("session_version") != VERSION_SESION or not payload.get("sub"):
+            raise ValueError("Contrato de sesión anterior")
+        vinculos = TypeAdapter(List[VinculoDepartamentoDTO]).validate_python(
+            payload.get("departamentos", [])
+        )
+    except (ValueError, ValidationError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error_code": "SESION_DESACTUALIZADA",
+                "mensaje": "La sesión utiliza un contrato antiguo o inválido. Inicie sesión de nuevo.",
+            },
+        )
+    payload["departamentos"] = [v.model_dump(mode="json") for v in vinculos]
+    return payload
 
 
 # ============================================================================
@@ -142,30 +165,24 @@ async def get_current_user(
 def require_role(allowed_roles: List[str]) -> Callable:
     """Fábrica de dependencias para verificar que el rol del usuario coincida con los roles autorizados."""
     async def role_checker(
-        current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
-    ) -> Optional[Dict[str, Any]]:
-        # Si se proporciona token, validar rol de forma estricta
-        if current_user:
-            user_role = current_user.get("rol")
-            if user_role not in allowed_roles:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={
-                        "error_code": "ACCESO_DENEGADO",
-                        "mensaje": f"Acceso restringido. Su rol actual ('{user_role}') no tiene privilegios suficientes.",
-                        "roles_requeridos": allowed_roles,
-                    },
-                )
-            return current_user
-
-        # Si no hay token y el modo estricto está habilitado
-        if os.getenv("AUTH_STRICT_ENFORCEMENT", "false").lower() == "true":
+        current_user: Dict[str, Any] = Depends(get_current_user),
+    ) -> Dict[str, Any]:
+        if not current_user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={"error_code": "NO_AUTENTICADO", "mensaje": "Se requiere cabecera 'Authorization: Bearer <token>'."},
             )
 
-        return None
+        user_role = current_user.get("rol")
+        if user_role not in allowed_roles or user_role not in set(RolUsuario):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error_code": "ACCESO_DENEGADO",
+                    "mensaje": f"El rol '{user_role}' no tiene permisos para esta operación.",
+                    "roles_requeridos": allowed_roles,
+                },
+            )
+        return current_user
 
     return role_checker
-
