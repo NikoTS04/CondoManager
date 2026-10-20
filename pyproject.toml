@@ -48,6 +48,8 @@ markers = ["postgres: integración que requiere PostgreSQL real y CON13_TEST_DAT
 [tool.coverage.run]
 source = ["src"]
 omit = ["src/tests/*"]
+# SQLAlchemy async usa greenlets: sin este seguimiento se pierden líneas ejecutadas.
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
 show_missing = true

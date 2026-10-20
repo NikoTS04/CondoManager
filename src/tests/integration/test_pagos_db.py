@@ -100,6 +100,9 @@ async def test_recorrido_persistente_reporte_revision_y_solvencia(api_pagos):
     junta = await login(client, "admin", "Admin123!")
     before = await client.get(f"/api/v1/pagos/solvencia/{did()}", headers=residente)
     assert before.json()["saldo_vencido"] == "170.00"
+    unidades = await client.get("/api/v1/cuotas/departamentos", headers=residente)
+    assert unidades.status_code == 200
+    assert len(unidades.json()) == 1 and unidades.json()[0]["estado_financiero"] == "EN_MORA"
     rechazo = await client.post("/api/v1/reservas", headers=residente, json=solicitud(base))
     assert (
         rechazo.status_code == 403 and rechazo.json()["detail"]["error_code"] == "DEUDA_MORA_ACTIVA"
@@ -135,6 +138,8 @@ async def test_recorrido_persistente_reporte_revision_y_solvencia(api_pagos):
     assert (await client.get(f"/api/v1/pagos/solvencia/{did()}", headers=residente)).json()[
         "saldo_vencido"
     ] == "0.00"
+    unidades = await client.get("/api/v1/cuotas/departamentos", headers=residente)
+    assert unidades.json()[0]["estado_financiero"] == "AL_DIA"
     assert (
         await client.post("/api/v1/reservas", headers=residente, json=solicitud(base))
     ).status_code == 201
