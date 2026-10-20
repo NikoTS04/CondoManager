@@ -55,6 +55,19 @@ Cambios y auditoría son atómicos e invalidan sesiones anteriores; los no-op no
 El listado administrativo añade `rol`, `rol_activo`, `es_superadmin` e incluye
 asignaciones revocadas. La concesión global de SuperAdmin continúa mediante CLI.
 
+### Vínculos con departamentos (CON-05 / PROC-05)
+
+Contrato: [vínculos](../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+`GET /condominios/{cid}/usuarios/{uid}/departamentos` lista relaciones del contexto,
+incluidas las revocadas. `PUT|DELETE` sobre esa ruta más `/{departamento_id}`
+asigna/cambia/restaura o revoca (200). PUT solo recibe `tipo_relacion`.
+Administración autorizada, rol contextual vigente para asignar y unidad activa.
+Primer vínculo de titular; retirar/cambiar al último titular responde
+`409 TITULAR_REQUERIDO`. Repeticiones idénticas no cambian revisión ni auditoría.
+Un cambio real invalida JWT anteriores y registra el departamento en auditoría.
+`GET /cuotas/departamentos` y lectura de unidades en pagos/reservas usan SQL real;
+el portal añade edificio para distinguir números de unidad repetidos.
+
 ### Distribución de cuotas (CON-10)
 
 Base: `/api/v1/condominios/{condominio_id}/distribucion`. Requiere Bearer Token.

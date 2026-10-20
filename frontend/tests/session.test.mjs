@@ -55,3 +55,10 @@ test("el catálogo confirma la selección y no confunde números con UUID", () =
   assert.equal(seleccionarUnidad(admin, c, a, [a, b]), a);
   assert.equal(seleccionarUnidad(admin, b, a, [a, b]), b);
 });
+
+test("unidades del mismo número en edificios distintos se seleccionan por UUID", () => {
+  const repetidos = { ...user, departamentos: user.departamentos.map((v) => ({ ...v, numero: "101" })) };
+  assert.equal(seleccionarUnidad(repetidos, b, a, [a, b]), b);
+  assert.equal(seleccionarUnidad(repetidos, "101", a, [a, b]), a);
+  assert.equal(etiquetaResidente(repetidos, b), "Inquilino");
+});

@@ -115,6 +115,10 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 - Un propietario puede estar vinculado con uno o varios departamentos.
 - Un inquilino solo accede a los departamentos cuyo vínculo se encuentre vigente.
 - Cada departamento debe tener al menos un propietario titular registrado.
+- El primer vínculo activo es de titular; no se retira al último sin reemplazo.
+- Los vínculos se revocan sin eliminar su historial; los cambios reales invalidan
+  sesiones y quedan auditados. El portal utiliza departamentos SQL por UUID.
+- Contrato CON-05: [vínculos](../../specs/02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## USR-05 — Asignar roles y permisos
 

@@ -1,4 +1,4 @@
-"""Persistencia de identidad, contexto, vínculos y auditoría de CON-04."""
+"""Persistencia de identidad, roles, vínculos y auditoría de PROC-05."""
 
 from uuid import UUID
 
@@ -15,6 +15,7 @@ from src.modules.usuarios.schemas import (
     CuentaUsuarioResponse,
     UsuarioDTO,
     VinculoDepartamentoDTO,
+    VinculoUsuarioResponse,
 )
 
 
@@ -165,6 +166,66 @@ class SQLAlchemyUsuariosRepository:
             .where(AuditoriaLogORM.condominio_id == condominio_id)
             .order_by(AuditoriaLogORM.timestamp.desc(), AuditoriaLogORM.id.desc())
             .limit(1)
+        )
+
+    async def departamento(self, cid: UUID, did: UUID, *, bloquear=False):
+        query = (
+            select(Departamento, Edificio)
+            .join(Edificio, Departamento.edificio_id == Edificio.id)
+            .where(Edificio.condominio_id == cid, Departamento.id == did)
+            .execution_options(populate_existing=True)
+        )
+        if bloquear:
+            query = query.with_for_update(of=Departamento)
+        return (await self.session.execute(query)).one_or_none()
+
+    async def vinculo(self, uid: UUID, did: UUID):
+        return await self.session.scalar(
+            select(UsuarioDepartamento)
+            .where(
+                UsuarioDepartamento.usuario_id == uid, UsuarioDepartamento.departamento_id == did
+            )
+            .execution_options(populate_existing=True)
+        )
+
+    @staticmethod
+    def representar_vinculo(vinculo, departamento, edificio):
+        return VinculoUsuarioResponse(
+            id=vinculo.id,
+            usuario_id=vinculo.usuario_id,
+            departamento_id=departamento.id,
+            condominio_id=edificio.condominio_id,
+            numero=departamento.numero,
+            edificio_id=edificio.id,
+            edificio_nombre=edificio.nombre_bloque,
+            tipo_relacion=vinculo.tipo_relacion,
+            es_activo=vinculo.es_activo,
+            departamento_activo=departamento.activo,
+        )
+
+    async def vinculos_usuario(self, uid: UUID, cid: UUID):
+        rows = await self.session.execute(
+            select(UsuarioDepartamento, Departamento, Edificio)
+            .join(Departamento, UsuarioDepartamento.departamento_id == Departamento.id)
+            .join(Edificio, Departamento.edificio_id == Edificio.id)
+            .where(UsuarioDepartamento.usuario_id == uid, Edificio.condominio_id == cid)
+            .order_by(Edificio.nombre_bloque, Departamento.numero, Departamento.id)
+        )
+        return [self.representar_vinculo(*row) for row in rows]
+
+    async def hay_otro_titular(self, uid: UUID, did: UUID):
+        return (
+            await self.session.scalar(
+                select(UsuarioDepartamento.id)
+                .where(
+                    UsuarioDepartamento.departamento_id == did,
+                    UsuarioDepartamento.usuario_id != uid,
+                    UsuarioDepartamento.es_activo.is_(True),
+                    UsuarioDepartamento.tipo_relacion == "PROPIETARIO_TITULAR",
+                )
+                .limit(1)
+            )
+            is not None
         )
 
     async def agregar(self, *records):

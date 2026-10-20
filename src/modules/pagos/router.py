@@ -26,16 +26,16 @@ from src.modules.pagos.schemas import (
     ReportarPagoRequest,
 )
 from src.modules.pagos.service import PagosService, VoucherDuplicadoException
-from src.modules.usuarios.piloto import DEPARTAMENTOS_PILOTO
+from src.modules.usuarios.departamentos import get_departamentos_portal_repository
 
 router = APIRouter(tags=["Pagos y Conciliación"])
 COMPROBANTES_REGISTRADOS: Dict[str, Dict] = {}
 
 
-def _departamento(usuario, departamento_id, *, escritura=False):
+async def _departamento(usuario, departamento_id, repository, *, escritura=False):
     if not puede_ver_departamento(usuario, departamento_id):
         denegar("El departamento no pertenece a sus vínculos activos.")
-    depto = DEPARTAMENTOS_PILOTO.get(str(departamento_id))
+    depto = await repository.obtener(departamento_id)
     if not depto:
         raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
     autorizar_departamento(usuario, departamento_id, depto["condominio_id"], escritura=escritura)
@@ -56,13 +56,18 @@ async def listar_comprobantes(
             "estado": "CONCILIADO" if c["estado"] == "APROBADO" else c["estado"],
         }
         for c in COMPROBANTES_REGISTRADOS.values()
-        if str(c["condominio_id"]) == str(cid) and puede_ver_departamento(user, c["departamento_id"])
+        if str(c["condominio_id"]) == str(cid)
+        and puede_ver_departamento(user, c["departamento_id"])
     ]
 
 
 @router.post("/pagos/reportar", response_model=ComprobanteRecibidoResponse, status_code=202)
-async def reportar_pago(request: ReportarPagoRequest, user: dict = Depends(get_current_user)):
-    depto = _departamento(user, request.departamento_id, escritura=True)
+async def reportar_pago(
+    request: ReportarPagoRequest,
+    user: dict = Depends(get_current_user),
+    repository=Depends(get_departamentos_portal_repository),
+):
+    depto = await _departamento(user, request.departamento_id, repository, escritura=True)
     try:
         return PagosService.procesar_reporte_pago(
             request=request,
@@ -78,6 +83,7 @@ async def conciliar_pago(
     comprobante_id: UUID,
     request: ConciliarPagoRequest,
     user: dict = Depends(require_role(["ADMIN_JUNTA", "SUPERADMIN"])),
+    repository=Depends(get_departamentos_portal_repository),
 ):
     comprobante = next(
         (c for c in COMPROBANTES_REGISTRADOS.values() if c["id"] == comprobante_id), None
@@ -85,15 +91,17 @@ async def conciliar_pago(
     if not comprobante:
         raise HTTPException(404, detail={"error_code": "COMPROBANTE_NO_ENCONTRADO"})
     autorizar_condominio(user, comprobante["condominio_id"], escritura=True)
-    depto = _departamento(user, comprobante["departamento_id"], escritura=True)
+    depto = await _departamento(user, comprobante["departamento_id"], repository, escritura=True)
     # La conciliación sigue siendo una simulación; no modifica las cuotas SQL.
-    cuotas_mock = [{
-        "id": uuid4(),
-        "fecha_vencimiento": date(2026, 9, 20),
-        "monto_total_exigible": comprobante["monto"],
-        "monto_pagado": Decimal("0.00"),
-        "estado": "PENDIENTE",
-    }]
+    cuotas_mock = [
+        {
+            "id": uuid4(),
+            "fecha_vencimiento": date(2026, 9, 20),
+            "monto_total_exigible": comprobante["monto"],
+            "monto_pagado": Decimal("0.00"),
+            "estado": "PENDIENTE",
+        }
+    ]
     try:
         result = PagosService.conciliar_comprobante(
             comprobante=comprobante,
@@ -116,6 +124,8 @@ async def evaluar_moras(
 ):
     autorizar_condominio(user, request.condominio_id, escritura=True)
     return MotorMorasService.evaluar_y_aplicar_moras(
-        cuotas=[], departamentos={}, comprobantes_en_revision_por_depto={},
+        cuotas=[],
+        departamentos={},
+        comprobantes_en_revision_por_depto={},
         fecha_evaluacion=request.fecha_corte,
     )

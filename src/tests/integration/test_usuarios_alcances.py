@@ -1,6 +1,5 @@
 """Sesión v2 y aislamiento real de los recursos piloto por rol, contexto y vínculo."""
 
-from copy import deepcopy
 from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
@@ -55,9 +54,6 @@ def aislar_recursos(monkeypatch):
     monkeypatch.setattr(reservas, "RESERVAS_REGISTRADAS", {})
     monkeypatch.setattr(pagos, "COMPROBANTES_REGISTRADOS", {})
     monkeypatch.setattr(notificaciones, "NOTIFICACIONES_REGISTRADAS", {})
-    catalogo = deepcopy(pagos.DEPARTAMENTOS_PILOTO)
-    monkeypatch.setattr(pagos, "DEPARTAMENTOS_PILOTO", catalogo)
-    monkeypatch.setattr(reservas, "DEPARTAMENTOS_MAP", catalogo)
 
 
 def test_login_me_y_demo_comparten_perfil_y_nombres_completos():

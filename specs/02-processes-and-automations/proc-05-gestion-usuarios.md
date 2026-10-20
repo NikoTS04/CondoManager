@@ -68,6 +68,11 @@ idéntica es un no-op. Contrato y escenarios:
   con el contexto de condominio autorizado.
 
 ### 4.2 Relación Usuario - Unidad Habitacional
+Contrato ejecutable de CON-05:
+[vinculos-departamentos.md](../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+El primer vínculo activo es de titular y no se retira al último sin reemplazo.
+La administración crea/cambia/restaura/revoca vínculos por UUID en su contexto;
+un cambio real audita e invalida sesiones atómicamente, conservando el historial.
 - Cada unidad inmobiliaria (departamento) debe tener al menos un **Propietario Titular** registrado con DNI/CE, nombre completo, teléfono y correo electrónico.
 - Una unidad puede tener opcionalmente uno o más **Inquilinos** registrados.
 - Si una unidad cambia de arrendatario:

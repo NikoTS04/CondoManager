@@ -124,7 +124,9 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
         from src.modules.reservas import router
         from src.modules.reservas.schemas import CrearReservaRequest
         from src.modules.usuarios.piloto import vinculo_piloto
+        from src.tests.departamentos import CatalogoDepartamentosFake
 
+        catalogo = CatalogoDepartamentosFake()
         area_id = uuid.uuid4()
         condominio_id = router.CONDOMINIO_PILOTO_ID
         monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {})
@@ -150,7 +152,7 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
                 return await router.crear_reserva(request, user={
                     "sub": "residente-" + numero, "rol": "RESIDENTE",
                     "condominio_id": str(condominio_id), "departamentos": [vinculo],
-                })
+                }, repository=catalogo)
             except HTTPException as exc:
                 return exc
 

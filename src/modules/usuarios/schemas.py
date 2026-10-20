@@ -98,6 +98,8 @@ class VinculoDepartamentoDTO(BaseModel):
 class DepartamentoPortalDTO(BaseModel):
     id: UUID
     condominio_id: UUID
+    edificio_id: UUID
+    edificio_nombre: str
     numero: str
     piso: int
     coeficiente: Decimal
@@ -105,6 +107,25 @@ class DepartamentoPortalDTO(BaseModel):
     estado_financiero: str
     activo: bool
     deuda_vencida: Decimal
+
+
+class AsignarVinculoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tipo_relacion: TipoRelacion
+
+
+class VinculoUsuarioResponse(BaseModel):
+    id: UUID
+    usuario_id: UUID
+    condominio_id: UUID
+    departamento_id: UUID
+    numero: str
+    edificio_id: UUID
+    edificio_nombre: str
+    tipo_relacion: TipoRelacion
+    es_activo: bool
+    departamento_activo: bool
 
 
 class UsuarioDTO(BaseModel):
