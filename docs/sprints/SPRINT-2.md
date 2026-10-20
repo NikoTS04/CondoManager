@@ -405,9 +405,9 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 **Objetivo técnico:** establecer un contrato único entre módulos, interfaz, persistencia y comunicaciones para integrar el prototipo sin interpretaciones incompatibles.
 
-**Base de implementación:** [contratos del Sprint 2 / CON-72](../../specs/05-api/sprint-2-contratos.md), adoptados para que cada responsable implemente su HU. Incluyen OpenAPI, esquemas, permisos, estados y procedimiento de cambios. El [diagnóstico histórico](../../specs/05-api/con-72-diagnostico-y-propuesta.md) conserva las diferencias de la base anterior.
+**Base de implementación:** [contratos del Sprint 2 / CON-72](../../specs/05-api/sprint-2-contratos.md), para que cada responsable implemente su HU. La entrega se limita a OpenAPI, esquemas de eventos, catálogo y guía de contratos. Los ajustes de dominio, proceso y persistencia se incorporan junto con la implementación de cada HU.
 
-**Estado de verificación:** por instrucción de Gerardo, esta entrega define contratos sin crear pruebas de software ni ejecutar aplicación, scripts o tests. La adopción por los módulos, validación automatizada y revisión de pares quedan pendientes; no se marca CON-72 como verificada ni terminada por publicar estos archivos.
+**Estado de verificación:** revisión documental; adopción por los módulos, validación automatizada y revisión de pares pendientes. Publicar estos contratos no acredita el cierre de CON-72.
 
 **Debe incluir:**
 

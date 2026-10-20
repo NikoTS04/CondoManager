@@ -21,35 +21,27 @@ El dominio de Notificaciones es responsable de:
 
 ## 3. Matriz de Eventos y Plantillas
 
-Contrato vigente del Sprint 2: [CON-72](../../05-api/sprint-2-contratos.md#6-notificaciones--alejandro-persistencia-con-73), [catálogo versionado](../../03-contracts/events/domain-events-catalog.md) y [política de entrega](delivery-policy.md). Los eventos ajenos a ese catálogo del sprint se conservan como alcance futuro, sin agregar dependencias nuevas a las historias comprometidas.
-
 | Evento de Entrada | Canal Principal | Canal Secundario | Plantilla | Variables Inyectadas |
 | :--- | :---: | :---: | :--- | :--- |
 | `CuotasEmitidasEvent` | Email | WhatsApp | `tpl_nueva_cuota` | `nombre`, `dpto`, `periodo`, `monto`, `vencimiento`, `cci_banco` |
 | `RecordatorioPrevioEvent` (3 días) | WhatsApp | Email | `tpl_recordatorio_corte` | `nombre`, `dpto`, `monto_pendiente`, `fecha_corte` |
 | `MoraAplicadaEvent` | Email | App Push | `tpl_mora_notificacion` | `nombre`, `dpto`, `monto_mora`, `nuevo_saldo`, `aviso_bloqueo_reservas` |
 | `PagoConciliadoEvent` | Email | WhatsApp | `tpl_pago_exitoso` | `nombre`, `dpto`, `monto_abonado`, `saldo_restante`, `recibo_url` |
-| `PagoReportadoEvent` | Email | WhatsApp | Confirmación de recepción | Comprobante persistido y estado en revisión; no cancela deuda. |
-| `PagoRevisadoEvent` | Email | WhatsApp | Resultado observado o rechazado | `nombre`, `dpto`, `motivo_rechazo`, instrucciones según estado. |
+| `PagoRechazadoEvent` | Email | WhatsApp | `tpl_pago_rechazado` | `nombre`, `dpto`, `motivo_rechazo`, `enlace_subir_nuevo` |
 | `ReservaConfirmadaEvent` | Email | WhatsApp | `tpl_reserva_aprobada` | `nombre`, `area`, `fecha`, `horario`, `normas_convivencia` |
-| `ReservaCanceladaEvent` | Email | WhatsApp | Confirmación de cancelación | Reserva, horario liberado y estado real del ajuste económico. |
 
 ---
 
 ## 4. Estructura de Datos del Log de Notificaciones
 
-Cada aviso lógico conserva un registro en `notificaciones_logs` y un historial separado de ciclos e intentos. El resumen del contrato objetivo incluye:
+Cada intento de envío persiste un registro en `notificaciones_logs`:
 - `id`: UUIDv4
 - `condominio_id`: UUID
 - `departamento_id`: UUID
 - `tipo_evento`: String
 - `canal`: Enum (`EMAIL`, `WHATSAPP`, `SMS`, `PUSH`)
 - `destinatario`: String (correo o teléfono internacional `+51...`)
-- `usuario_destinatario_id`: UUID del usuario destinatario, o nulo en una comunicación administrativa externa autorizada.
-- `evento_id`: UUID del evento de origen o nulo en despacho administrativo manual.
-- `estado`: Enum (`EN_COLA`, `ENVIADO`, `ENTREGADO`, `REINTENTANDO`, `FALLIDO_PERMANENTE`).
-- `ciclo`: Int >= 1; `intentos`: Int (0 a 4 por ciclo).
-- `transporte`: `SIMULADO` o `PROVEEDOR`.
-- `proximo_reintento`: timestamp persistido o nulo.
-- `proveedor_message_id`: String nullable (Message-ID del proveedor).
+- `estado`: Enum (`EN_COLA`, `ENTREGADO`, `REINTENTANDO`, `FALLIDO_PERMANENTE`)
+- `intentos`: Int (1 a 4)
+- `proveedor_response_id`: String (Message-ID del proveedor)
 - `error_mensaje`: Text nullable

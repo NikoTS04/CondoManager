@@ -44,9 +44,9 @@ Antes de evaluar la disponibilidad física de un espacio, el motor consulta el e
 
 | Fase | Detalle Técnico |
 | :--- | :--- |
-| **1. Evento** | `POST /api/v1/reservas` con UUID de condominio, área y departamento, `fecha_reserva`, `hora_inicio` y `hora_fin`, según [CON-72](../05-api/sprint-2-contratos.md). |
-| **2. Evaluación de Reglas** | Validar identidad y unidad activa, horarios de America/Lima, deuda persistida y disponibilidad bajo bloqueo del recurso de área. La protección cubre también intervalos sin reservas previas. Límites adicionales solo si están definidos en el catálogo/contrato vigente; los ejemplos de máximos no son reglas implícitas. |
-| **3. Decisión** | Aceptar: `201` tras commit. Deuda en mora: `403 DEUDA_MORA_ACTIVA`. Conflicto: `409 HORARIO_NO_DISPONIBLE`. No crear una reserva por un intento rechazado. |
+| **1. Evento** | Residente envía solicitud: `POST /api/v1/reservas` con `{area_id, fecha, hora_inicio, hora_fin}`. |
+| **2. Evaluación de Reglas** | 1. Valida solvencia financiera en `cuotas_mantenimiento` (¿Saldo vencido == 0?). <br>2. Valida disponibilidad en `reservas` para ese horario (`SELECT ... FOR UPDATE`). <br>3. Valida límites de reservas mensuales del residente. |
+| **3. Decisión** | ¿Cumple todas las condiciones? <br>- Sí $\rightarrow$ Aprueba y bloquea el horario. <br>- No (Deudor) $\rightarrow$ Rechaza por motivo `"DEUDA_PENDIENTE"`. <br>- No (Ocupado) $\rightarrow$ Rechaza por motivo `"HORARIO_NO_DISPONIBLE"`. |
 | **4. Acción** | Si aprueba: <br>1. Crea fila en tabla `reservas` con estado `CONFIRMADA`. <br>2. Emite `ReservaConfirmadaEvent`. <br>3. Genera cargo de limpieza en estado de cuenta si el área tiene tarifa. |
 | **5. Verificación** | Confirma que el calendario refleja el bloqueo y dispara a PROC-03 (Alejandro) el envío del comprobante de reserva con las reglas del espacio. |
 

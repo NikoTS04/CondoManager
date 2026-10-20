@@ -1,7 +1,5 @@
 # Política de Concurrencia, Aislamiento y Bloqueo Pesimista (Concurrency & Locking)
 
-Contrato objetivo de integración: [CON-72](../05-api/sprint-2-contratos.md). La estrategia se implementa y coordina en CON-41/43/46/70/73; no se afirma que los routers piloto actuales ya utilicen estos bloqueos.
-
 ## 1. Contexto del Problema
 
 En un condominio de alta densidad como Villa Bonita 3 (139 departamentos), ocurren situaciones críticas de concurrencia:
@@ -18,22 +16,15 @@ Si no se implementa una estrategia estricta de aislamiento transaccional y bloqu
 Todas las conexiones de base de datos en CondoManager operan bajo el nivel de aislamiento:
 $$\mathbf{READ\ COMMITTED}\ \text{con Bloqueo Pesimista Explícito}$$
 
-Bloquear solo reservas existentes no protege el primer intento sobre un intervalo vacío. Para reservas, serializar primero recursos persistentes en orden común: condominio, departamento y área; después consultar solapamientos. Creación y cancelación usan ese mismo orden. Cuando una operación afecta varias unidades o áreas, ordenarlas por UUID antes de bloquearlas.
-
-Ejemplo del contrato SQL dentro de la transacción, con contexto y autorización ya comprobados y revalidados bajo lock:
+En operaciones críticas de concurrencia se utiliza bloqueo pesimista mediante:
 ```sql
-SELECT id FROM condominios WHERE id = :condominio_id FOR UPDATE;
-SELECT id FROM departamentos WHERE id = :departamento_id FOR UPDATE;
-SELECT id FROM areas_comunes WHERE id = :area_id FOR UPDATE;
-SELECT id FROM reservas
+SELECT * FROM reservas 
 WHERE area_id = :area_id 
   AND fecha_reserva = :fecha 
   AND NOT (hora_fin <= :hora_inicio OR hora_inicio >= :hora_fin)
   AND estado = 'CONFIRMADA'
 FOR UPDATE;
 ```
-
-La fila de área existe aunque no haya reservas y es el recurso que protege ese caso. Una restricción de exclusión equivalente puede complementar esta garantía, coordinada con las migraciones de CON-73. Un mutex del proceso o una consulta de calendario sin bloqueo no la sustituye.
 
 ---
 
@@ -44,12 +35,11 @@ La fila de área existe aunque no haya reservas y es el recurso que protege ese 
               │
               ▼
 [ Iniciar Transacción ACID en PostgreSQL ]
-  Adquirir locks comunes de la sección 2 en orden y revalidar recursos.
               │
               ▼
 [ 1. Verificar Solvencia Financiera del Departamento ]
-  Leer cuotas/obligaciones persistidas de la unidad y calcular deuda vencida.
-  No usar COUNT(*) con FOR SHARE ni considerar unidades desconocidas solventes.
+  SELECT COUNT(*) FROM cuotas_mantenimiento 
+  WHERE departamento_id = :id AND estado = 'EN_MORA' FOR SHARE;
               │
       ┌───────┴───────┐
       ▼               ▼
@@ -57,7 +47,7 @@ La fila de área existe aunque no haya reservas y es el recurso que protege ese 
       │               │
   ROLLBACK            ▼
   Retorna 403   [ 2. Bloquear Recurso Temporal con FOR UPDATE ]
-  "DEUDA_MORA_ACTIVA"   SELECT id FROM reservas
+  "MORA_ACTIVA"   SELECT id FROM reservas 
                   WHERE area_id = :area_id AND fecha_reserva = :fecha ...
                   FOR UPDATE;
                       │
@@ -67,7 +57,7 @@ La fila de área existe aunque no haya reservas y es el recurso que protege ese 
               │               │
           ROLLBACK            ▼
           Retorna 409   [ 3. Insertar Reserva 'CONFIRMADA' ]
-          "HORARIO_NO_DISPONIBLE" │
+          "NO_DISP"           │
                               ▼
                         [ 4. Registrar Auditoría y COMMIT ]
                               │

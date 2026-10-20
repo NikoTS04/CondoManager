@@ -1,6 +1,6 @@
 # CON-72 — Contratos base de implementación del Sprint 2
 
-**Responsable:** Gerardo. **Base adoptada:** 20/10/2026, con autorización para aplicar las recomendaciones del diagnóstico. **Estado:** contratos definidos para implementar; integración, ejecución y revisión de pares pendientes. Los contratos pueden evolucionar mediante el procedimiento de cambios de la sección 9.
+**Responsable:** Gerardo. **Base:** 20/10/2026. **Estado:** contratos definidos para implementar; validación automatizada, integración y revisión de pares pendientes. Los contratos pueden evolucionar mediante el procedimiento de cambios de la sección 9.
 
 ## 1. Fuentes y alcance
 
@@ -10,9 +10,10 @@
 | [sprint-2.paths.yaml](../03-contracts/openapi/sprint-2.paths.yaml) | Operaciones por HU, estados HTTP, permisos y marcas de implementación pendiente/parcial. |
 | [sprint-2.schemas.yaml](../03-contracts/openapi/sprint-2.schemas.yaml) | Formas de entrada/salida y tipos compartidos. |
 | [Catálogo de eventos](../03-contracts/events/domain-events-catalog.md) | Productores, consumidores, versiones, esquemas y recuperación. |
-| [Diagnóstico histórico](con-72-diagnostico-y-propuesta.md) | Diferencias verificadas sobre `85f1986`; no sustituye esta base actual. |
 
 CON-72 entrega interfaces para que cada responsable implemente sus historias. Definir un endpoint en OpenAPI no lo incorpora a FastAPI. Los routers, DTO Python, tipos TypeScript, repositorios y migraciones actuales deben adoptar estos contratos en las HU indicadas; los almacenes piloto en memoria no satisfacen la integración persistente.
+
+Para los contratos del Sprint 2 se usan los artefactos de esta tabla. Cada responsable alinea los documentos de dominio, proceso y persistencia afectados en el PR que implemente su HU; esas actualizaciones generales quedan fuera de esta entrega.
 
 ## 2. Convenciones comunes
 
@@ -131,22 +132,21 @@ Las confirmaciones automáticas se originan en los eventos del [catálogo](../03
 
 `POST /notificaciones/reenviar/{log_id}` responde `200` con el log vigente. `ENVIADO` y `ENTREGADO` no provocan otro envío; avisos ya en cola o programados se reutilizan. Para un fallo definitivo o agotado, corregir a un nuevo destinatario autorizado puede iniciar un nuevo ciclo manual trazado; nunca borrar los intentos anteriores. Sin corrección, el agotamiento responde `409 INTENTOS_AGOTADOS`.
 
-Estados, confirmación de entrega, cuatro intentos por ciclo y recuperación se fijan en [delivery-policy.md](../02-domains/03-notificaciones/delivery-policy.md). El modelo conserva `evento_id`, identidad destinataria, ciclo e historial de intentos aunque el DTO solo exponga el resumen vigente. La confirmación del proveedor se procesa por su adaptador autenticado y referencia externa idempotente; no se añade un webhook público genérico sin conocer ese proveedor.
-
-## 7. Errores y decisiones adoptadas
-
-| Decisión del diagnóstico | Base de implementación |
+| Estado | Significado |
 |---|---|
-| D01 | Calendario America/Lima; UTC para instantes; precisión de minuto; `[inicio, fin)`. |
-| D02 | Horarios semanales persistidos, catálogo activo y bloqueos operativos por fecha; errores explícitos. |
-| D03 | Multipart único, archivo privado de hasta 5 MiB y descarga autenticada. |
-| D04 | Estado público `APROBADO`, con adopción coordinada del alias histórico. |
-| D05 | Versionar archivo de `OBSERVADO`; rechazados conservan resultado sin reapertura automática. |
-| D06 | Cancelación repetida `200` con resultado original y sin efectos duplicados. |
-| D07 | Ajuste solo por cobro acreditado; estados NO_APLICA/PENDIENTE/APLICADO y asiento trazable. |
-| D08 | Registro/aceptación/entrega distintos, identidad de destinatario y acceso contextual. |
-| D09 | Envelope propio v1, esquemas por evento y compatibilidad explícita con CON-11. |
-| D10 | Error raíz común; rutas de gestión y reglas de autorización definidas en OpenAPI. |
+| `EN_COLA` | Aviso persistido, pendiente de aceptación del proveedor. |
+| `ENVIADO` | Aceptado por el proveedor; todavía sin confirmación de entrega. |
+| `ENTREGADO` | Entrega confirmada por el proveedor de forma autenticada e idempotente. |
+| `REINTENTANDO` | Fallo temporal y siguiente intento programado. |
+| `FALLIDO_PERMANENTE` | Fallo definitivo o intentos del ciclo agotados. |
+
+El transporte se identifica como `SIMULADO` o `PROVEEDOR`; la simulación y un HTTP 200/202 de aceptación no acreditan entrega. La confirmación real se procesa mediante el adaptador del proveedor y una referencia externa idempotente.
+
+Cada ciclo tiene hasta cuatro intentos efectivos: inicial y reintentos a los 2, 10 y 30 minutos desde el fallo anterior; el primero agrega jitter de ±15 segundos. `intentos` comienza en cero y solo aumenta al ejecutar, no al programar. Conservar el ciclo, cada intento, el próximo instante y la referencia del proveedor; recuperar pendientes tras reinicios mediante lock/lease persistente.
+
+Un timeout con aceptación incierta se reconcilia con la referencia o clave idempotente del proveedor antes de reenviar. La deduplicación local evita avisos lógicos duplicados; la entrega física exactamente una vez depende de las capacidades del proveedor.
+
+## 7. Errores comunes
 
 Además de los códigos por operación, se usan `401 NO_AUTENTICADO`, `TOKEN_INVALIDO`, `TOKEN_EXPIRADO`, `SESION_DESACTUALIZADA` o `SESION_REVOCADA`; `403 ACCESO_DENEGADO`; `404` según recurso; `422 DATOS_USUARIO_INVALIDOS`, `DATOS_AREA_INVALIDOS`, `DATOS_RESERVA_INVALIDOS` o `DATOS_COMPROBANTE_INVALIDOS`. Los errores inesperados no divulgan stack traces ni datos sensibles. CON-04 conserva `401 CREDENCIALES_INVALIDAS` para cuenta inactiva o credenciales erróneas.
 
@@ -163,7 +163,7 @@ Además de los códigos por operación, se usan `401 NO_AUTENTICADO`, `TOKEN_INV
 
 Las firmas de colaboración se implementan en las historias de origen: lectura de catálogo y ocupaciones, evaluación de solvencia dentro de la sesión SQL, cancelación transaccional y cola de notificaciones. No crear repositorios alternativos en memoria para acreditar el cierre.
 
-**Restricción de esta entrega de CON-72:** por instrucción de Gerardo no se crean pruebas de software ni se ejecutan aplicación, scripts, linters o tests. Se realiza revisión textual de coherencia y cambios. No se afirma que el YAML, los esquemas o los recorridos estén validados por ejecución. La validación automatizada, revisión de pares e integración exigidas por la definición de terminado quedan pendientes para la revisión posterior; publicar esta base no marca las HU funcionales ni CON-72 como verificadas en ejecución.
+**Verificación de esta entrega:** revisión documental. La validación automatizada, integración y revisión de pares quedan pendientes; publicar esta base no acredita el funcionamiento de las HU ni el cierre de CON-72.
 
 ## 9. Procedimiento de cambios durante el sprint
 

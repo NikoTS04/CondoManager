@@ -277,16 +277,3 @@ Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 - CON-11 crea `cuotas_mantenimiento` y completa `fk_aplicacion_saldo_cuota` con
   `ON DELETE RESTRICT`; `monto_total_exigible` conserva el bruto y `monto_pagado`
   incluye el crédito aplicado por CON-13. Migración `20261019_0006`.
-
-## Extensiones objetivo del Sprint 2 — contratos CON-72
-
-Estas definiciones describen lo que deben persistir CON-70/73; no son una migración aplicada. Las migraciones finales se entregan con las historias de origen, validan tablas preexistentes y conservan sus registros.
-
-- **Usuarios/vínculos/roles:** UUID y restricciones actuales de CON-04; cambios reales de CON-05/06 incrementan `usuarios.auth_revision` con auditoría atómica. Unicidad de par usuario/departamento y condiciones de titularidad bajo bloqueo de unidad; roles contextuales y privilegio global separados.
-- **Comprobantes/vouchers:** hash único durable, estado `EN_REVISION|APROBADO|OBSERVADO|RECHAZADO`, revisiones y resultado financiero consultable. El campo interno histórico `banco_origen` corresponde al `banco` público. La columna histórica `url_voucher` guarda una referencia privada del objeto, no una URL de cliente ni un enlace público; su respuesta HTTP se construye como descarga autenticada. Conservar versiones de archivo y asociar cada resultado a la revisión efectiva.
-- **Áreas/horarios:** horarios semanales por área, día ISO 1–7 e intervalos de minuto; zona `America/Lima`, estado activo y normas. Bloqueos operativos por área/fecha/intervalo con estado activo; fuente común para disponibilidad y creación.
-- **Reservas:** registrar contexto consistente con área/unidad, costo confirmado, instante de creación y, al cancelar, fecha UTC, actor y motivo originales. El resultado idempotente incluye ajuste `NO_APLICA|PENDIENTE|APLICADO`, importe decimal y referencia de asiento confirmada solo en `APLICADO`. Solicitud de compensación única por reserva y asociada a un cobro acreditado. No borrar reservas para liberar horarios.
-- **Eventos pendientes:** identificador estable, tipo/versión, contexto, payload, estado de publicación e intentos necesarios para recuperación. La operación, auditoría y outbox comparten commit; conservar el outbox existente de CON-11.
-- **Notificaciones:** un aviso lógico con `evento_id`, `operacion_id`, `destinatario_id`, `usuario_destinatario_id` autorizado y canal; unicidad del origen lógico descrita en el catálogo. Resumen de estado `EN_COLA|ENVIADO|ENTREGADO|REINTENTANDO|FALLIDO_PERMANENTE`, transporte, ciclo, intentos efectivos, próximo reintento, proveedor y errores. Historial separado de ciclos/intentos y confirmaciones del proveedor; los locks/leases evitan despachos simultáneos del mismo aviso.
-
-Tipos, entradas y respuestas públicas: [base del Sprint 2](../../05-api/sprint-2-contratos.md). Estos campos no justifican devolver datos de otra unidad ni extender permisos mediante un filtro enviado por el cliente.

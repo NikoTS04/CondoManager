@@ -57,7 +57,7 @@ Los mensajes nuevos utilizan [event-envelope.v1.schema.json](schemas/event-envel
 
 ## Compatibilidad y esquemas históricos
 
-`CuotasEmitidasEvent` ya está implementado. Su esquema acepta opcionalmente `schema_version=1`, correlación y causación; esos campos no son obligatorios para leer eventos previos. El consumidor trata la versión ausente como 1 únicamente para este evento. CON-72 no modifica su relay.
+`CuotasEmitidasEvent` ya está implementado y conserva exactamente su esquema y relay actuales: `event_id`, `event_type`, `producer`, `occurred_at` y `data`. No se le agregan los campos del nuevo envelope. El consumidor reconoce este formato histórico sin `schema_version` como versión 1 únicamente para este evento; puede usar su `event_id` para la trazabilidad interna sin alterar el mensaje persistido.
 
 Los archivos sin sufijo `.v1` de [pago conciliado](schemas/pago-conciliado.schema.json), [reserva confirmada](schemas/reserva-confirmada.schema.json), [mora aplicada](schemas/mora-aplicada.schema.json) y [cuota emitida](schemas/cuota-emitida.schema.json) se conservan como contratos históricos. Los nuevos productores de pagos y reservas usan los esquemas `.v1` de la tabla.
 

@@ -1,6 +1,6 @@
 # Contratos de API y Especificación OpenAPI (API Contracts)
 
-Base de implementación del Sprint 2: [CON-72 — contratos acordados por historia](sprint-2-contratos.md). El [diagnóstico](con-72-diagnostico-y-propuesta.md) conserva el estado previo. El OpenAPI describe el contrato objetivo y distingue operaciones pendientes/parciales; su publicación no implica que los endpoints estén implementados.
+Base de implementación del Sprint 2: [CON-72 — contratos por historia](sprint-2-contratos.md). La guía reúne los acuerdos y enlaza OpenAPI y eventos. El OpenAPI describe el contrato objetivo y distingue operaciones pendientes/parciales; su publicación no implica que los endpoints estén implementados.
 
 ## 1. Filosofía de Contratos en SDD
 
@@ -305,7 +305,7 @@ Contrato completo, estados y errores: [pagos del Sprint 2](sprint-2-contratos.md
 | `PUT /pagos/{comprobante_id}/voucher` | Multipart de archivo para subsanar un observado; preserva metadatos/hash, versiona el archivo y vuelve a revisión; `202`. |
 | `POST /pagos/{comprobante_id}/conciliar` | Administración decide aprobación, observación o rechazo; motivo para los dos últimos; `200` con resultado financiero real persistido. |
 
-No se acepta `url_voucher` del cliente como prueba de carga. La recepción no cancela deuda. Una aprobación previa o reutilización en otra unidad responde `409`; las respuestas nunca revelan datos de una unidad ajena. La normalización y unicidad siguen la [política de idempotencia](../01-architecture/idempotency-and-deduplication.md).
+No se acepta `url_voucher` del cliente como prueba de carga. La recepción no cancela deuda. Una aprobación previa o reutilización en otra unidad responde `409`; las respuestas nunca revelan datos de una unidad ajena. Normalización, unicidad y subsanación se definen en la guía del Sprint 2 enlazada arriba.
 
 ### 2.5 Catálogo, disponibilidad y reservas
 
@@ -324,7 +324,7 @@ La respuesta de creación es `Reserva`: `id`, `condominio_id`, `area_id`, `area_
 
 ### 2.6 Notificaciones — Alejandro
 
-Contrato: [comunicaciones del Sprint 2](sprint-2-contratos.md#6-notificaciones--alejandro-persistencia-con-73) y [política de entrega](../02-domains/03-notificaciones/delivery-policy.md). Los eventos confirmados producen avisos automáticos; las rutas de despacho/reenviar/comunicado son administrativas.
+Contrato y reglas de entrega/reintento: [comunicaciones del Sprint 2](sprint-2-contratos.md#6-notificaciones--alejandro-persistencia-con-73). Los eventos confirmados producen avisos automáticos; las rutas de despacho/reenviar/comunicado son administrativas.
 
 `GET /notificaciones/logs` filtra contexto y destinatario autorizado; `POST /notificaciones/despachar` y `/comunicado-masivo` confirman registros en cola con `202`; `/reenviar/{log_id}` devuelve `200` sin duplicar avisos entregados o aceptados por proveedor. `EN_COLA`, `ENVIADO`, `ENTREGADO`, `REINTENTANDO` y `FALLIDO_PERMANENTE` distinguen persistencia, aceptación y confirmación. El log identifica transporte simulado o real y conserva ciclos/intentos.
 
