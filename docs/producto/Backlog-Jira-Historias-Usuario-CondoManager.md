@@ -31,7 +31,7 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 | Comunicar resultados | Crear aviso → seleccionar canal → ejecutar bot RPA → verificar persistencia → enviar → comprobar entrega → reintentar y reportar | NOT-01 a NOT-08 |
 | Reservar áreas | Consultar disponibilidad → validar solvencia → reservar → pagar/cancelar | RES-01 a RES-09 |
 | Administrar gastos | Registrar proveedor → contrato → egreso → pago → controlar vencimiento | EGR-01 a EGR-05 |
-| Atender incidencias | Reportar → clasificar → asignar → resolver → confirmar cierre | TIC-01 a TIC-05 |
+| Atender incidencias | Reportar → clasificar → asignar → resolver → confirmar cierre | TIC-01 a TIC-06 |
 | Supervisar la gestión | Consultar KPIs → cerrar periodo → generar balance → publicar reportes | REP-01 a REP-05 |
 | Controlar y recuperar | Auditar → impedir duplicados → gestionar excepciones → reintentar → monitorear | TRV-01 a TRV-06 |
 
@@ -650,6 +650,35 @@ Resultado general: COMPLETADO CON OBSERVACIONES
 - El residente puede aceptar la solución y calificar la atención.
 - Al aceptar, el ticket cambia a CERRADO.
 - Si no está conforme, el ticket vuelve a EN_PROCESO con el motivo registrado.
+
+## TIC-06 — Clasificar y asignar incidencias con IA y RPA
+
+**Estado:** Propuesto como mejora futura. No forma parte de la implementación actual.
+
+**Historia:** Como administrador del condominio, quiero que una IA recomiende la categoría, prioridad y responsable de cada incidencia y que un bot RPA procese los casos normales, para reducir el tiempo de asignación sin delegar decisiones críticas ni responsabilidad humana.
+
+**Separación de responsabilidades:**
+
+- La IA analiza la descripción y evidencia, detecta posibles duplicados y devuelve categoría, prioridad, responsable recomendado y nivel de confianza.
+- RPA no interpreta libremente la incidencia: valida reglas predefinidas y ejecuta el registro, asignación, inicio del plazo, actualización de estado y auditoría.
+- El administrador conserva la decisión final en casos críticos, ambiguos, costosos o sin proveedor compatible.
+
+**Regla ECA principal:**
+
+> CUANDO un residente reporte una incidencia, SI la IA la clasifica con confianza suficiente, no detecta una situación crítica, no existe un duplicado confirmado y hay un proveedor compatible disponible, ENTONCES RPA crea y asigna el ticket, inicia el plazo de atención y registra la ejecución.
+
+**Criterios de aceptación:**
+
+- La recomendación de IA conserva categoría, prioridad, nivel de confianza, posibles coincidencias y versión del modelo o servicio utilizado.
+- El umbral de confianza es configurable; no se codifica como una cifra fija de negocio.
+- Una incidencia crítica, una recomendación bajo el umbral, datos incompletos, una contradicción relevante o la ausencia de proveedor compatible impiden la asignación desatendida y generan revisión humana.
+- Las reglas críticas determinísticas tienen precedencia sobre la recomendación de IA.
+- El administrador puede confirmar o corregir categoría, prioridad y responsable antes o después de la asignación, dejando trazabilidad de la corrección.
+- Cada ejecución RPA utiliza una clave de idempotencia; un reintento no crea tickets ni asignaciones duplicadas.
+- Al terminar, RPA verifica que el ticket exista, tenga estado, responsable y plazo coherentes, y que la auditoría se haya persistido.
+- Una ejecución incompleta queda en estado de excepción, conserva el paso fallido y puede reintentarse o continuar mediante intervención humana.
+- El proveedor no puede cerrar definitivamente el ticket; el residente confirma la solución o solicita su reapertura.
+- Se calculan, como mínimo, tiempo promedio de asignación, exactitud de clasificación confirmada y porcentaje de incidencias resueltas dentro del plazo.
 
 ---
 
