@@ -8,7 +8,8 @@ No se migró ni modificó una base compartida del equipo.
 
 | Verificación | Resultado |
 |---|---|
-| Suite completa con PostgreSQL (`pytest -q --cov`) | **321 pruebas aprobadas, 0 omitidas; cobertura 86,04 %**, mínimo 80 %. |
+| Suite completa final con PostgreSQL (`pytest -q --cov`) | **322 pruebas aprobadas, 0 omitidas; cobertura 92,26 %**, mínimo 80 %. |
+| Cobertura del módulo de pagos | **91,21 %**, verificada sin excluir archivos productivos. |
 | Regresión adicional del worker como proceso independiente | Aprobada, junto con las 14 pruebas de almacenamiento/contabilidad. |
 | Migración en base vacía: upgrade head → downgrade base → upgrade head | Aprobada en una base exclusivamente creada para esta verificación. |
 | Adopción de tablas financieras preexistentes | Aprobada; el comprobante conserva su identificador y estado. |
@@ -22,10 +23,13 @@ No se migró ni modificó una base compartida del equipo.
 | Ruff global | 54 avisos fuera de los archivos modificados; no se alteraron módulos ajenos para corregirlos. |
 | Docker backend | Imagen construida correctamente con las nuevas dependencias. |
 | Frontend final | Build de producción aprobado, incluido lint y comprobación de tipos. |
+| Docker Compose | Configuración validada con `.env.example`, sin arrancar servicios del equipo. |
+| `alembic check` (diagnóstico no bloqueante del proyecto) | Sigue detectando índices de auditoría/usuarios y comentarios de creación/adopción no reflejados en ORM. No se generaron ni aplicaron eliminaciones automáticas para ocultar ese drift. |
 
-La suite completa precedió a la regresión adicional del import del relay. Este
-documento distingue ambas ejecuciones; no presenta un agregado como si fuera una
-única ejecución de pytest.
+La ejecución inicial aprobó 321 pruebas con cobertura 86,04 %. La corrida final
+incluye la regresión adicional del relay y las comprobaciones del portal; aprobó
+322 pruebas con cobertura 92,26 %. No se suman ejecuciones repetidas para inflar
+el número de pruebas.
 
 La medición de cobertura se configuró para `greenlet` y `thread`: SQLAlchemy async
 transfiere ejecución a greenlets y el seguimiento anterior omitía líneas realmente
@@ -70,3 +74,7 @@ Alejandro haya implementado o entregado una notificación.
 - No se implementaron historias de otros integrantes ni el motor de nuevos recargos.
 - La aprobación del PR, el cierre de Jira y la validación funcional del equipo
   continúan siendo necesarios. Este registro no sustituye la revisión de un par.
+- El intento de `git push -u origin feat/CORE-sprint-2-anderson` falló por conexión
+  a `github.com:443`. En esta verificación no se publicó la rama ni se abrió PR.
+  Los commits permanecen locales; reintentar al restablecer conectividad y solicitar
+  revisión hacia `develop`, nunca integrar directamente en ramas protegidas.
