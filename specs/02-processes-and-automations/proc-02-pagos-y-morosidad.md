@@ -1,5 +1,7 @@
 # PROC-02: Gestión de Pagos, Conciliación y Morosidad
 
+Para CON-22/23/34/42/70 se aplica la [base de contratos CON-72](../05-api/sprint-2-contratos.md#5-pagos--anderson-y-brandon-persistencia-con-70): Anderson implementa reporte/persistencia/revisión y Brandon la deduplicación. Los detalles del cron de mora ajenos a ese alcance se mantienen como proceso general, sin ampliar el compromiso del Sprint 2.
+
 ## 1. Ficha del Proceso
 - **Identificador:** PROC-02
 - **Responsable del Módulo:** **Tarqui**
@@ -24,7 +26,7 @@ Gestionar el ciclo completo de recaudación: desde la recepción y validación d
 ## 4. Reglas de Negocio
 
 ### 4.1 Validación y Registro de Comprobantes (Idempotencia)
-- Cada reporte de pago valida que la combinación `(banco, numero_operacion, fecha_emision)` no exista previamente para evitar que el mismo voucher sea usado dos veces o por dos departamentos diferentes.
+- Cada reporte usa el hash canónico `SHA256(condominio_id|banco_normalizado|operacion_normalizada|fecha_operacion|monto_2_decimales)`, con unicidad durable, según la [política de idempotencia](../01-architecture/idempotency-and-deduplication.md). Un reintento propio en revisión recupera el comprobante; una reutilización no permitida devuelve conflicto sin exponer otra unidad.
 - Si la validación pasa, el comprobante queda en estado `EN_REVISION` y se notifica a la junta directiva para su conciliación bancaria.
 
 ### 4.2 Motor de Moras Automatizado
@@ -74,7 +76,7 @@ $$\text{Formulario} \longrightarrow \text{Validar Hash Idempotente} \longrightar
              │
      ┌───────┴───────┐
      ▼               ▼
-[ RECHAZADO ]   [ APROBADO / CONCILIADO ]
+[ RECHAZADO ]   [ APROBADO ]
  (Con motivo)        │
                      ▼
            [ IMPUTADO A CUOTA(S) ]

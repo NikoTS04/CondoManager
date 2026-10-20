@@ -1,5 +1,7 @@
 # PROC-05: Configuración de Condominios, Usuarios, Roles y Asignación de Unidades
 
+Las operaciones del Sprint 2 de alta, vínculos, roles y catálogo de áreas se implementan usando la [base CON-72](../05-api/sprint-2-contratos.md#3-usuarios-y-accesos--jerson). Se conserva el alta inactiva y la habilitación manual de CON-04. Las mutaciones reales de vínculo/rol invalidan sesiones anteriores; la concesión global SuperAdmin queda fuera de la API contextual de roles.
+
 ## 1. Ficha del Proceso
 - **Identificador:** PROC-05
 - **Responsable del Módulo:** **Administración / Junta Directiva**

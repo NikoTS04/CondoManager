@@ -52,12 +52,16 @@ $$\mathbf{Paso\ 5:} \text{Si existe remanente } R > 0.00 \implies \text{departam
 ## 5. Contratos DTO Principales
 
 ### `ReportarPagoDTO` (Request Multipart)
+Contrato objetivo, subida privada y estados HTTP: [CON-72](../../05-api/sprint-2-contratos.md#5-pagos--anderson-y-brandon-persistencia-con-70). Su adopción en los routers/DTO y el frontend corresponde a CON-22/23/70/74.
+
 - `departamento_id`: UUID
 - `banco`: `"YAPE"` | `"PLIN"` | `"BCP"` | `"INTERBANK"` | `"BBVA"` | `"SCOTIABANK"`
-- `numero_operacion`: String(min=4, max=30)
+- `numero_operacion`: String(min=1, max=50); normalización canónica antes del hash.
 - `fecha_operacion`: Date
-- `monto`: Decimal(precision=12, scale=2)
-- `voucher_file`: Binary (PNG/JPG/PDF)
+- `monto`: cadena decimal positiva de dos posiciones, precision=12, scale=2.
+- `archivo_voucher`: Binary (PNG/JPEG/PDF), hasta 5 MiB; contenido validado y almacenamiento privado.
+
+Estado público/persistido: `EN_REVISION`, `APROBADO`, `OBSERVADO`, `RECHAZADO`. No transformar `APROBADO` a `CONCILIADO` al construir el listado del contrato objetivo. El resultado aprobado ya incorpora sus efectos financieros antes de publicar el evento; un consumidor no vuelve a imputar el mismo pago.
 
 ### `ConciliarPagoDTO` (Request JSON de Administrador)
 ```json

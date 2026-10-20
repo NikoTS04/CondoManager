@@ -1,6 +1,6 @@
 # CON-72 — Diagnóstico y propuesta de contratos del Sprint 2
 
-**Responsable:** Gerardo. **Estado:** propuesta para revisión; no constituye aprobación de nuevos contratos ni cierre de CON-72. **Base inspeccionada:** `85f1986`, en `develop`, el 20/10/2026.
+**Responsable:** Gerardo. **Estado:** diagnóstico histórico de `85f1986`, en `develop`, el 20/10/2026. Gerardo autorizó aplicar la base de contratos y permitir su evolución mediante PR. Los acuerdos concretos vigentes están en [sprint-2-contratos.md](sprint-2-contratos.md), OpenAPI y el catálogo versionado; las propuestas y decisiones pendientes descritas más abajo corresponden a la etapa previa.
 
 ## 1. Alcance y resultado de la revisión
 
@@ -10,7 +10,7 @@ El OpenAPI generado mediante `app.openapi()` y el YAML versionado describen **38
 
 Los contratos de CON-04 ya reflejan el alta inactiva y la habilitación manual por SuperAdmin. Disponibilidad, cancelación, pagos y notificaciones tienen código aprovechable, pero continúan utilizando almacenes piloto en memoria. CON-05, CON-06 y la administración de CON-39 todavía necesitan operaciones propias; la coincidencia de las 38 rutas no acredita cobertura completa del sprint.
 
-Esta propuesta mantiene los contratos actuales hasta su validación. Las reglas ya acordadas en el sprint se distinguen de las opciones recomendadas que requieren confirmación. No se modifican endpoints, DTO, migraciones, OpenAPI ni esquemas de eventos en esta etapa.
+La etapa inicial de este diagnóstico no modificó endpoints, DTO, migraciones ni esquemas. La etapa posterior aplica las definiciones de contrato en sus fuentes canónicas. Por instrucción de Gerardo no se crean pruebas de software ni se ejecuta código durante esa aplicación; la evidencia de inspección anterior no valida automáticamente los nuevos archivos.
 
 ## 2. Inventario por historia y dependencias
 
@@ -152,7 +152,7 @@ Reglas compartidas ya exigidas por el sprint: outbox o mecanismo durable en la t
 
 El contrato de comunicación debe distinguir registro persistido, aceptación del proveedor y entrega confirmada. Los enum finales y la evidencia de entrega quedan por acordar con Alejandro; un transporte simulado se identifica como tal. Conservar intento inicial más tres reintentos a 2, 10 y 30 minutos, con jitter documentado del primero, y recuperar el próximo intento tras reiniciar. El reenvío manual de un registro `ENTREGADO` no debe producir un nuevo envío.
 
-## 7. Decisiones para validar antes de cambiar contratos canónicos
+## 7. Registro histórico de decisiones propuestas
 
 | Decisión | Recomendación inicial | Quién debe acordarla con Gerardo |
 |---|---|---|
@@ -191,11 +191,11 @@ Gerardo puede preparar las correcciones de coherencia sobre acuerdos vigentes: e
 | Notificaciones | Intentos y próximo reintento persistidos, aceptación separada de entrega y ningún reenvío ya entregado. Alejandro y Nicolás. |
 | Cierre CON-72 | Decisiones registradas, contratos canónicos alineados, validaciones automatizadas pasando y revisión de otro integrante; este documento por sí solo no cierra la entrega. Gerardo. |
 
-### Evidencia de esta etapa de análisis
+### Evidencia de la etapa anterior de análisis (commit 44922a4)
 
 - `git pull --ff-only origin develop`: sin cambios remotos pendientes al crear la rama. La base local conserva la integración de `main` ya realizada.
 - Generación de `app.openapi()` sin iniciar servidor ni conexión de negocio: 38 operaciones; comparación normalizada con el YAML: 38, sin rutas exclusivas de una fuente.
 - Revisión de los cinco JSON Schema de eventos: únicamente `cuotas-emitidas.schema.json` declara la envoltura con `data` en esta base. No existen todavía esquemas de pago reportado ni reserva cancelada.
 - Inspección de routers/DTO/cliente y fuentes enlazadas para H01–H15. Los hallazgos describen el código revisado; no equivalen a pruebas funcionales del flujo completo.
 - Verificador estático SDD del repositorio: correcto. Validación documental: enlaces locales existentes, bloques Markdown cerrados, inventario de 15 HU, 15 hallazgos, 10 decisiones y ejemplos JSON legibles; YAML y esquemas JSON existentes también legibles. `git diff --check` sin errores.
-- La revisión de reglas y contratos termina aquí. Las decisiones D01–D10 quedan pendientes de validación; no se crean endpoints ni se cambian reglas de negocio con este diagnóstico.
+- D01–D10 se concretaron posteriormente en la base CON-72 autorizada por Gerardo. Este registro conserva lo encontrado antes de esa aplicación; los contratos no implican que las HU funcionales ya estén implementadas.

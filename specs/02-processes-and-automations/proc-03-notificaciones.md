@@ -1,5 +1,7 @@
 # PROC-03: Gestión de Notificaciones y Comunicaciones Automáticas
 
+Contrato del Sprint 2: [CON-72](../05-api/sprint-2-contratos.md#6-notificaciones--alejandro-persistencia-con-73), [eventos versionados](../03-contracts/events/domain-events-catalog.md) y [política de entrega](../02-domains/03-notificaciones/delivery-policy.md). Un registro guardado, un mensaje aceptado y una entrega confirmada son estados distintos. Los reintentos conservan el aviso lógico y su historial; no se vuelve a enviar un aviso aceptado/entregado para demostrar un reintento.
+
 ## 1. Ficha del Proceso
 - **Identificador:** PROC-03
 - **Responsable del Módulo:** **Alejandro**

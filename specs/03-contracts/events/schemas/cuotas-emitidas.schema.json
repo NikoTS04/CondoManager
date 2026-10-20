@@ -6,8 +6,11 @@
   "properties": {
     "event_id": {"type": "string", "format": "uuid"},
     "event_type": {"const": "CuotasEmitidasEvent"},
+    "schema_version": {"type": "integer", "const": 1},
     "producer": {"const": "service.cuotas"},
     "occurred_at": {"type": "string", "format": "date-time"},
+    "correlation_id": {"type": "string", "format": "uuid"},
+    "causation_id": {"type": ["string", "null"], "format": "uuid"},
     "data": {
       "type": "object",
       "required": ["condominio_id", "presupuesto_id", "metodo", "lote_id", "periodo", "total_cuotas_emitidas", "monto_total_facturado", "cuotas_cubiertas_saldo_favor", "fecha_emision", "fecha_vencimiento"],

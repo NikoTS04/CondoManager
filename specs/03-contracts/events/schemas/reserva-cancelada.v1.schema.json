@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReservaCanceladaEventV1",
+  "allOf": [{"$ref": "./event-envelope.v1.schema.json"}],
+  "properties": {
+    "event_type": {"const": "ReservaCanceladaEvent"},
+    "producer": {"const": "service.reservas"},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condominio_id", "departamento_id", "reserva_id", "area_id", "fecha_reserva", "hora_inicio", "hora_fin", "zona_horaria", "fecha_cancelacion", "motivo", "ajuste_economico"],
+      "properties": {
+        "condominio_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "departamento_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "reserva_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "area_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "fecha_reserva": {"type": "string", "format": "date"},
+        "hora_inicio": {"$ref": "./event-envelope.v1.schema.json#/$defs/hora_local"},
+        "hora_fin": {"$ref": "./event-envelope.v1.schema.json#/$defs/hora_local"},
+        "zona_horaria": {"const": "America/Lima"},
+        "fecha_cancelacion": {"$ref": "./event-envelope.v1.schema.json#/$defs/instante_utc"},
+        "motivo": {"type": "string", "minLength": 1, "maxLength": 500},
+        "ajuste_economico": {"$ref": "./event-envelope.v1.schema.json#/$defs/ajuste_cancelacion"}
+      }
+    }
+  },
+  "unevaluatedProperties": false
+}

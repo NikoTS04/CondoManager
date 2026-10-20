@@ -21,7 +21,7 @@ Fuente de verdad: checks `ck_rol_nombre` y `ck_tipo_relacion` de
 
 ```json
 {
-  "id": "usr-res-102",
+  "id": "2c84bfb4-a34d-464d-9b18-e173012ee3b4",
   "email": "residente102@villabonita3.pe",
   "nombre": "Ana",
   "apellido": "Gómez (Solvente)",
@@ -43,6 +43,12 @@ No hay `tipo_relacion` global: un administrador sin vínculo real devuelve una l
 vacía. La condición de propietario/inquilino se muestra según el vínculo seleccionado.
 El JWT transporta el mismo arreglo, el identificador de usuario como `sub` y
 `session_version: 2`. Las sesiones anteriores requieren un nuevo login.
+
+## Gestión de vínculos y roles del Sprint 2
+
+Las operaciones de CON-05 y CON-06 se definen en [CON-72](../../05-api/sprint-2-contratos.md#3-usuarios-y-accesos--jerson) y en los fragmentos OpenAPI de esa base. La pertenencia a un departamento no se deriva del rol. La modificación real de vínculos/roles actualiza `auth_revision` y obliga a iniciar una nueva sesión; el no-op no invalida sesiones ni duplica auditoría.
+
+El perfil público usa UUID persistidos. Los ejemplos `usr-*` históricos no son valores aceptados para una identidad SQL. La API de roles contextuales no concede ni modifica `es_superadmin`.
 
 ## Recursos autorizados
 
