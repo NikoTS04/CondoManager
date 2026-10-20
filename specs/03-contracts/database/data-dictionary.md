@@ -221,3 +221,17 @@ Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 | `estado_posterior`| `JSONB` | NO | `'{}'` | - | Fotografía de datos después de la mutación. |
 | `hash_actual` | `VARCHAR(64)` | NO | - | - | Hash SHA-256 encadenado del registro actual. |
 | `hash_previo` | `VARCHAR(64)` | SÍ | `NULL` | - | Hash SHA-256 del registro anterior en la cadena. |
+# Extensión CON-11 — lotes y eventos
+
+- `lotes_cuotas`: `id UUID PK`, `condominio_id UUID FK RESTRICT`,
+  `presupuesto_id UUID FK RESTRICT`, `periodo VARCHAR(7)`, `metodo VARCHAR(20)`,
+  `actor_id VARCHAR(150)`, `total_cuotas_emitidas INTEGER`,
+  `monto_total_facturado NUMERIC(12,2)`, `cuotas_cubiertas_saldo_favor INTEGER`,
+  `fecha_emision TIMESTAMPTZ`, `fecha_vencimiento DATE`. Campos obligatorios;
+  unicidad `(condominio_id, periodo)`, cantidad y total positivos. Resumen histórico.
+- `eventos_lote_outbox`: `id UUID PK` (event_id estable), `lote_id UUID UNIQUE FK
+  RESTRICT`, `payload JSONB NOT NULL` (envelope), `publicado_en TIMESTAMPTZ NULL`.
+  NULL indica publicación pendiente. Se guarda junto al lote.
+- CON-11 crea `cuotas_mantenimiento` y completa `fk_aplicacion_saldo_cuota` con
+  `ON DELETE RESTRICT`; `monto_total_exigible` conserva el bruto y `monto_pagado`
+  incluye el crédito aplicado por CON-13. Migración `20261019_0006`.

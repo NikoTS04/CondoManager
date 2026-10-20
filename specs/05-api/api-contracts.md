@@ -216,27 +216,35 @@ Contrato para CON-11: la emisión recibe `condominio_id + periodo`, recupera el
 registro persistido y solo continúa si `estado == APROBADO`. El cliente no puede
 reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
 
-### 2.3 Módulo de Cuotas (Anderson)
+### 2.3 Emisión de Cuotas (CON-11, Nicolás)
 - **`POST /api/v1/cuotas/emitir-lote`**
   - *Descripción:* Genera las cuotas del mes para todas las unidades activas del condominio.
   - *Request Body:*
     ```json
     {
       "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "periodo": "2026-10",
-      "presupuesto_total": "20000.00",
-      "fecha_vencimiento": "2026-10-20"
+      "periodo": "2026-10"
     }
     ```
   - *Response (201 Created):*
     ```json
     {
-      "cuotas_generadas": 139,
-      "total_emitido": "20000.00",
+      "lote_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "total_cuotas_emitidas": 139,
+      "monto_total_facturado": "20000.00",
       "periodo": "2026-10",
-      "estado": "EMITIDAS"
+      "cuotas_cubiertas_saldo_favor": 4,
+      "fecha_emision": "2026-10-01T00:00:00Z",
+      "fecha_vencimiento": "2026-10-20"
     }
     ```
+
+  - Bearer obligatorio: `SUPERADMIN` o `ADMIN_JUNTA` del condominio.
+  - Campos adicionales se rechazan; monto y vencimiento proceden de CON-9 aprobado.
+  - `409 LOTE_YA_EMITIDO` ante reintentos; `409 PRESUPUESTO_NO_APROBADO` si falta
+    aprobación. `401/403` por identidad/contexto, `404` condominio inexistente,
+    `422` padrón/configuración inválidos o condominio inactivo.
+  - Transacción única con CON-10 y CON-13; evento durable en outbox.
 
 ### 2.4 Módulo de Pagos y Moras (Tarqui)
 - **`POST /api/v1/pagos/reportar`**

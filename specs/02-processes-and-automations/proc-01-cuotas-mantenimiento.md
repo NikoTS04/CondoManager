@@ -141,3 +141,21 @@ Escenario: Emisión exitosa de cuota ordinaria mensual
   Entonces el sistema emite una cuota de S/ 170.00 para el departamento 301
   Y la cuota queda en estado "PENDIENTE" con fecha de vencimiento el día 20 del mes en curso.
 ```
+# Integración persistente CON-11 (Sprint 1)
+
+La [especificación de dominio](../02-domains/01-cuotas/spec.md#emisión-persistente-con-11)
+define el contrato vigente de emisión: el comando contiene solo condominio y
+periodo. CON-9 aporta el presupuesto aprobado; CON-10 aporta el método vigente y
+departamentos activos; CON-13 aplica créditos después del cierre de centavos.
+El presupuesto no puede sustituirse con importes enviados por el cliente.
+
+Se guarda el lote, todas sus cuotas, amortizaciones, auditoría y
+`CuotasEmitidasEvent` en una sola transacción. El evento se publica desde outbox a
+Redis Streams con entrega al menos una vez. La unicidad por condominio/periodo
+y el bloqueo de la raíz protegen reintentos concurrentes entre API y worker.
+La API exige administrador autorizado; el worker ejecuta como sistema.
+
+El worker revisa diariamente a las 00:00 UTC y al arrancar desde
+`CUOTAS_DIA_EMISION` (1..28, predeterminado 1); recupera pendientes del mes actual.
+La ejecución manual permite seleccionar otro periodo sin cambiar el presupuesto.
+Escenarios ejecutables: `02-domains/01-cuotas/features/emision.feature`.

@@ -29,6 +29,12 @@ services:
       postgres:
         condition: service_healthy
 
+  cuotas-worker:
+    image: condomanager-api:ci
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
+      DEBUG: "false"
+
   frontend:
     image: condomanager-web:ci
     depends_on:

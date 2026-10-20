@@ -2,9 +2,9 @@
 
 ## 1. Ficha del Dominio
 - **Identificador:** DOM-01 / PROC-01
-- **Responsables:** **Anderson** (cuotas) / **Gerardo** (CON-9 presupuesto)
+- **Responsables:** **Anderson** (dominio) / **Gerardo** (CON-9) / **Nicolás** (CON-11) / **Alejandro** (CON-10 y CON-13)
 - **Estado:** Aprobado para Implementación
-- **Versión:** 2.1 (CON-9 especificado)
+- **Versión:** 2.2 (integración persistente CON-11)
 - **Módulos de Código:** `src/modules/cuotas/`
 
 ---
@@ -67,9 +67,8 @@ $$\text{CuotaRedondeada}(u) = \text{round\_half\_up}(\text{CuotaBruta}(u), 2)$$
   `Decimal` igual a `100.0000`, sin tolerancia ni redondeo previo de la suma.
   `99.9999` y `100.0001` se rechazan. Cada coeficiente debe ser finito,
   ser mayor que cero y menor o igual a cien y tener como máximo cuatro decimales.
-- Se consideran todos los departamentos del condominio mientras CON-3 no integre
-  el campo de actividad. Este criterio queda aislado en
-  `listar_departamentos_para_distribucion` del repositorio.
+- CON-10 y CON-11 utilizan exclusivamente departamentos activos del condominio.
+  El criterio queda aislado en `listar_departamentos_para_distribucion`.
 - El PUT valida antes de persistir. Los errores `DISTRIBUCION_SIN_DEPARTAMENTOS`
   y `DISTRIBUCION_COEFICIENTES_INVALIDOS` devuelven `422` con mensaje explicativo.
   CON-11 debe revalidar los departamentos actuales antes de usar la configuración.
@@ -180,15 +179,46 @@ existe el condominio o presupuesto; `409` por duplicado o transición inválida;
 ```json
 {
   "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "periodo": "2026-10",
-  "presupuesto_total": "20000.00",
-  "fecha_vencimiento": "2026-10-20"
+  "periodo": "2026-10"
 }
 ```
 
-Este es el contrato vigente de la emisión demostrativa. Al implementar CON-11,
-`presupuesto_total` y `fecha_vencimiento` dejarán de ser datos libres y se
-recuperarán del presupuesto `APROBADO` de CON-9 para el mismo condominio y periodo.
+Contrato CON-11: se rechazan campos adicionales. Monto, moneda y vencimiento se
+recuperan exclusivamente del presupuesto `APROBADO` de CON-9 para el mismo
+condominio y periodo (mes válido `01` a `12`, año `0001` a `9999`).
+
+### Emisión persistente CON-11
+
+- Solo `SUPERADMIN` y `ADMIN_JUNTA` del condominio pueden emitir manualmente;
+  el worker interno usa `SISTEMA_AUTOMATICO`. No se permite ese rol en la API.
+- Una transacción bloquea condominio → departamentos activos por UUID ascendente
+  → cuotas, revalida CON-10 y consume CON-9. Se rechazan condominios inactivos.
+- Se persiste un lote único `(condominio_id, periodo)` con presupuesto, método,
+  actor y resumen histórico; cuotas únicas `(departamento_id, periodo)`.
+  Reintentos, incluso concurrentes y desde otro proceso, responden `409
+  LOTE_YA_EMITIDO` sin alterar crédito, auditorías ni eventos.
+- El cierre de centavos usa `calcular_distribucion` de CON-10. La diferencia se
+  reparte de a un centavo, cíclicamente, en orden de monto descendente y UUID
+  ascendente; al restar se omiten montos cero. Ninguna cuota queda negativa,
+  incluso para presupuestos menores que la cantidad de unidades.
+- Cada cuota nace `EMITIDA` con bruto definitivo; se invoca CON-13 en la misma
+  transacción. Cuotas, créditos, aplicaciones, auditorías, lote y evento se
+  confirman juntos o se revierten juntos. Se añade la FK pendiente de CON-13.
+- Se registra `LOTE_CUOTAS_EMITIDO` con los siete campos y hash encadenado,
+  después de las auditorías de CON-13. El resumen conserva el bruto presupuestado.
+- `CuotasEmitidasEvent` se guarda en outbox con UUID estable dentro de la
+  transacción. Un relay publica el envelope en el stream Redis
+  `condomanager:domain-events`. Entrega al menos una vez: consumidores deduplican
+  por `event_id`; reintentos conservan el payload histórico y no reemiten cuotas.
+- Worker separado `python -m src.modules.cuotas.worker`: APScheduler, UTC, día
+  configurable `CUOTAS_DIA_EMISION` (1..28, predeterminado 1), revisión diaria a
+  las 00:00 y al arrancar. Desde ese día recupera emisiones pendientes del mes
+  actual para condominios activos con presupuesto aprobado; un fallo no detiene
+  los demás condominios. El relay reintenta cada 30 segundos. No modifica meses
+  anteriores automáticamente. API y worker comparten el mismo servicio.
+- Errores: `401` sin identidad, `403` sin permiso/contexto, `404` condominio
+  inexistente, `409` lote existente o presupuesto no aprobado, `422` configuración
+  ausente, padrón inválido o condominio inactivo. No hay escrituras parciales.
 
 ### `LoteCuotasResponseDTO` (Response)
 ```json
@@ -197,9 +227,9 @@ recuperarán del presupuesto `APROBADO` de CON-9 para el mismo condominio y peri
   "periodo": "2026-10",
   "total_cuotas_emitidas": 139,
   "monto_total_facturado": "20000.00",
-  "cuotas_pagadas_por_saldo_a_favor": 4,
+   "cuotas_cubiertas_saldo_favor": 4,
   "fecha_emision": "2026-10-01T00:00:00Z",
-  "fecha_vencimiento": "2026-10-20T23:59:59Z"
+   "fecha_vencimiento": "2026-10-20"
 }
 ```
 
