@@ -165,6 +165,42 @@ export interface LoginResult {
   usuario: AuthenticatedUser;
 }
 
+export interface CuentaUsuario {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  telefono: string | null;
+  documento_identidad: string;
+  esta_activo: boolean;
+  creado_en: string;
+}
+
+export interface CrearUsuarioPayload {
+  email: string;
+  password: string;
+  nombre: string;
+  apellido: string;
+  telefono: string | null;
+  documento_identidad: string;
+}
+
+export function listarUsuarios(condominioId: string, limit = 50, offset = 0): Promise<CuentaUsuario[]> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/usuarios?limit=${limit}&offset=${offset}`);
+}
+
+export function crearUsuario(condominioId: string, datos: CrearUsuarioPayload): Promise<CuentaUsuario> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/usuarios`, {
+    method: "POST", body: JSON.stringify(datos),
+  });
+}
+
+export function cambiarEstadoUsuario(condominioId: string, usuarioId: string, esta_activo: boolean): Promise<CuentaUsuario> {
+  return recursoRequest(`/usuarios/${encodeURIComponent(usuarioId)}/estado?condominio_id=${encodeURIComponent(condominioId)}`, {
+    method: "PATCH", body: JSON.stringify({ esta_activo }),
+  });
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 function getAuthHeaders(): Record<string, string> {
@@ -200,15 +236,15 @@ function obtenerCodigoError(data: unknown): string | undefined {
   return payload.error_code || payload.detail?.error_code;
 }
 
-export async function iniciarSesion(email: string, password: string): Promise<LoginResult> {
+export async function iniciarSesion(email: string, password: string, condominioId?: string): Promise<LoginResult> {
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, condominio_id: condominioId }),
   });
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(obtenerMensajeError(data, "No se pudo iniciar sesión."));
+    throw data;
   }
   return data as LoginResult;
 }
@@ -220,7 +256,12 @@ export function obtenerSesion(): Promise<AuthenticatedUser> {
 async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${ruta}`, { ...init, headers: getAuthHeaders() });
   const data = await response.json();
-  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo completar la operación."));
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new Event("condomanager:sesion-revocada"));
+    }
+    throw new Error(obtenerMensajeError(data, "No se pudo completar la operación."));
+  }
   return data as T;
 }
 

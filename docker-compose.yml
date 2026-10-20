@@ -44,6 +44,7 @@ services:
       - CONDOMINIO_PILOTO_ID=${CONDOMINIO_PILOTO_ID:-}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - DEMO_MODE=${DEMO_MODE:-false}
     ports:
       - "8000:8000"
     depends_on:

@@ -48,16 +48,30 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://condo_user:condo_secret@localhost:5432/condomanager
       REDIS_URL: redis://localhost:6379/0
       CONDOMINIO_PILOTO_ID: ''
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: condo_user
+          POSTGRES_PASSWORD: condo_secret
+          POSTGRES_DB: condomanager
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U condo_user -d condomanager"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - uses: astral-sh/setup-uv@v6
+      - name: Preparar esquema persistente de autenticación
+        run: |
+          uv run --extra dev alembic upgrade head
+          uv run --extra dev python -m scripts.seed_usuarios_demo
       - name: Probar contrato generado contra FastAPI en modo ASGI
-        # No sustituye validación de respuestas ni flujos autenticados persistentes.
-        # Sin servicios: los rechazos de autenticación no acceden a Postgres/Redis;
-        # las rutas públicas actuales usan almacenes en memoria.
+        # No sustituye validación de respuestas ni flujos autenticados completos.
+        # El login consulta PostgreSQL; las rutas públicas siguen sin Redis.
         run: uv run --extra dev --with schemathesis==4.22.1 python -m pytest -q scripts/ci/verify_api_contract.py -k 'not reporte_pago'
       - name: Detectar deuda de límites decimales al reportar pagos
         id: reporte_pago

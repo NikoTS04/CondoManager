@@ -1,64 +1,91 @@
-"""Router FastAPI para Autenticación y RBAC (PROC-05)."""
+"""Autenticación SQL y administración de cuentas inactivas (CON-04)."""
 
-from typing import Any, Dict, List
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Query
 
+from src.core.config import settings
+from src.core.errors import APIError
 from src.core.security import get_current_user
+from src.modules.usuarios.repository import get_usuarios_repository
 from src.modules.usuarios.schemas import (
+    CambiarEstadoUsuarioRequest,
+    CrearUsuarioRequest,
+    CuentaUsuarioResponse,
     LoginRequest,
     TokenResponse,
     UserContextResponse,
     UsuarioDTO,
 )
-from src.modules.usuarios.service import CredencialesInvalidasException, UsuariosService
+from src.modules.usuarios.service import UsuariosService
 
-router = APIRouter(prefix="/auth", tags=["Autenticación y RBAC"])
-
-
-@router.post(
-    "/login",
-    response_model=TokenResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Inicio de sesión y emisión de token JWT",
-)
-async def login(request: LoginRequest):
-    """Valida credenciales de usuario y retorna un access token JWT con sus claims y permisos."""
-    try:
-        response = UsuariosService.autenticar(request)
-        return response
-    except CredencialesInvalidasException as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error_code": "CREDENCIALES_INVALIDAS", "mensaje": str(exc)},
-        )
+router = APIRouter(tags=["Autenticación y RBAC"])
 
 
-@router.get(
-    "/me",
-    response_model=UserContextResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Contexto y perfil del usuario autenticado",
-)
-async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Retorna la información del perfil y departamentos autorizados según el token Bearer."""
+@router.post("/auth/login", response_model=TokenResponse)
+async def login(request: LoginRequest, repository=Depends(get_usuarios_repository)):
+    return await UsuariosService(repository).autenticar(request)
+
+
+@router.get("/auth/me", response_model=UserContextResponse)
+async def get_me(current_user: dict = Depends(get_current_user)):
     return UserContextResponse(
         id=current_user["sub"],
-        email=current_user["email"],
-        nombre=current_user.get("nombre", ""),
-        apellido=current_user.get("apellido", ""),
-        rol=current_user["rol"],
-        condominio_id=current_user["condominio_id"],
-        departamentos=current_user.get("departamentos", []),
+        **{
+            k: current_user[k]
+            for k in ("email", "nombre", "apellido", "rol", "condominio_id", "departamentos")
+        },
     )
 
 
-@router.get(
-    "/demo-users",
-    response_model=List[UsuarioDTO],
-    status_code=status.HTTP_200_OK,
-    summary="Listado de perfiles demo para pruebas de campo",
+@router.get("/auth/demo-users", response_model=list[UsuarioDTO])
+async def get_demo_users(repository=Depends(get_usuarios_repository)):
+    if not settings.DEMO_MODE:
+        raise APIError(404, "RECURSO_NO_ENCONTRADO", "El modo demo está deshabilitado.")
+    from src.modules.usuarios.demo import DEMO_CUENTAS
+
+    perfiles = []
+    for cuenta in DEMO_CUENTAS:
+        usuario = await repository.por_email(cuenta["email"])
+        if usuario is not None and usuario.esta_activo:
+            contextos = await repository.contextos(usuario.id)
+            perfil = await repository.perfil(usuario, contextos[0]["id"] if contextos else None)
+            if perfil is not None:
+                perfiles.append(perfil)
+    return perfiles
+
+
+@router.post(
+    "/condominios/{condominio_id}/usuarios", response_model=CuentaUsuarioResponse, status_code=201
 )
-async def get_demo_users():
-    """Retorna los perfiles precargados para la demostración del piloto Villa Bonita 3."""
-    return UsuariosService.listar_usuarios_demo()
+async def crear_usuario(
+    condominio_id: UUID,
+    request: CrearUsuarioRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).crear(condominio_id, request, actor)
+
+
+@router.get("/condominios/{condominio_id}/usuarios", response_model=list[CuentaUsuarioResponse])
+async def listar_usuarios(
+    condominio_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).listar(condominio_id, actor, limit, offset)
+
+
+@router.patch("/usuarios/{usuario_id}/estado", response_model=CuentaUsuarioResponse)
+async def cambiar_estado_usuario(
+    usuario_id: UUID,
+    condominio_id: UUID,
+    request: CambiarEstadoUsuarioRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).cambiar_estado(
+        condominio_id, usuario_id, request.esta_activo, actor
+    )

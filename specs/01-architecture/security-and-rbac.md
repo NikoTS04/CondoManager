@@ -41,9 +41,10 @@ sin datos del departamento que reservó.
   de nuevo. `SISTEMA_AUTOMATICO` sigue siendo un actor interno, nunca un rol de login.
 - El frontend restaura la sesión consultando `/auth/me`, descarta cachés de roles
   antiguos y valida el UUID seleccionado en URL/localStorage contra los vínculos.
-- El JWT del piloto dura 24 horas. No hay refresh token implementado; la renovación
-  se realiza mediante login. Las asignaciones incluidas en el JWT son una instantánea
-  válida hasta expirar o renovar la sesión.
+- El JWT dura 24 horas. No hay refresh token; la renovación se realiza mediante login.
+  `auth_revision` identifica la revisión persistida de la cuenta. Toda ruta protegida
+  comprueba estado activo, revisión, asignación y contexto vigentes. Desactivar y
+  reactivar una cuenta invalida los tokens previos, incluso antes de su expiración.
 
 ## 4. Aislamiento y reglas de negocio
 
@@ -59,16 +60,16 @@ administrativo del rol e ignora cualquier intento de elevarlo mediante `es_admin
 
 ## 5. Piloto y persistencia
 
-El directorio de login y los recursos de pagos/reservas/notificaciones siguen siendo
-catálogos piloto en memoria. Sus identidades UUID se generan de forma coherente a
-partir de `CONDOMINIO_PILOTO_ID`; sin configuración se usa el espacio demo aislado.
-La alineación de roles no convierte estos módulos en persistencia SQL.
+CON-04 utiliza identidades, roles y vínculos persistentes para login y autorización.
+Los recursos de pagos/reservas/notificaciones conservan su estado piloto hasta sus
+entregas de persistencia. Los datos demo se provisionan explícitamente y el login
+siempre consulta PostgreSQL. Véase [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
 
 El SQL exige `usuario_roles.condominio_id NOT NULL`: representa una **asignación
 persistida por condominio**. El `condominio_id: null` del `SUPERADMIN` piloto es un
-**contexto activo global de sesión**, no una fila de `usuario_roles`. Antes de
-conectar el login a usuarios reales debe resolverse la concesión global y la
-selección de asignaciones; no se cambia ni se relaja la restricción SQL.
+**contexto activo global de sesión**, no una fila de `usuario_roles`. La concesión
+global persistida se representa mediante `usuarios.es_superadmin`, provisionada por
+CLI; las API de alta y estado no modifican esa concesión. Se conserva la restricción SQL.
 
 Egresos, proveedores, tickets, exportación de balances y traspaso de Junta son
 capacidades documentales futuras; no amplían los permisos de los endpoints actuales.

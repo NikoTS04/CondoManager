@@ -15,6 +15,8 @@ from src.modules.cuotas.presupuestos.schemas import CrearPresupuestoRequest
 from src.modules.cuotas.presupuestos.service import ActorPresupuesto, PresupuestosService
 from src.tests.fakes import FakePresupuestoRepository
 
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
+
 
 def crear_condominio(moneda: str = "PEN", nombre: str = "Villa Bonita 3") -> Condominio:
     return Condominio(

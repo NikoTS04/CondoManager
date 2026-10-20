@@ -3,6 +3,9 @@
 La implementación de CON-3 / USR-02 y su columna `departamentos.activo` se define
 en [estructura-inmobiliaria.md](estructura-inmobiliaria.md).
 
+CON-04 / USR-03 se define en [alta-administrativa.md](alta-administrativa.md): alta
+inactiva, contraseña inicial administrativa, login SQL y estado editable por SuperAdmin.
+
 ## 1. Ficha del Dominio
 
 - **Identificador:** DOM-05 / PROC-05

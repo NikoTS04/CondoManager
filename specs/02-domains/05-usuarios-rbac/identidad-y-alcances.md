@@ -1,5 +1,11 @@
 # Identidad, cuatro roles y vínculos de departamento
 
+CON-04 sustituye el directorio de login en memoria por PostgreSQL. Contrato de alta,
+habilitación manual, selección de contexto y revocación: [alta-administrativa.md](alta-administrativa.md).
+Los UUID de usuario proceden de la base de datos; los identificadores `usr-*` de los
+ejemplos históricos no son identidades de login persistentes. El JWT v2 incorpora
+`auth_revision`, comprobada en cada petición protegida.
+
 Fuente de verdad: checks `ck_rol_nombre` y `ck_tipo_relacion` de
 `condomanager_schema.sql`. No se requiere migración de roles: el ORM/SQL ya usan
 `RESIDENTE`; se actualizan el directorio piloto, JWT y cliente.

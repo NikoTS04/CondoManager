@@ -24,6 +24,8 @@ from src.modules.condominios.estructura.repository import EstructuraRepository
 from src.modules.condominios.models import Departamento
 from src.modules.cuotas.distribucion.repository import SQLAlchemyDistribucionRepository
 
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
+
 REVISIONES = (
     "20261008_0001_crear_condominios_y_auditoria",
     "20261008_0002_crear_presupuestos_mensuales",

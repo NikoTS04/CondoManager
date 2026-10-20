@@ -10,6 +10,8 @@ from src.main import app
 from src.modules.condominios.router import get_condominio_repository
 from src.tests.fakes import FakeCondominioRepository
 
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
+
 
 @pytest.fixture
 def repository():

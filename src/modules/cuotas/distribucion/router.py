@@ -4,15 +4,14 @@ from collections.abc import Callable, Coroutine
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
 from src.core.errors import APIError
-from src.core.security import decode_access_token, security_scheme
+from src.core.security import get_current_user
 from src.modules.cuotas.distribucion.exceptions import (
     AccesoDistribucionDenegadoError,
     CondominioNoEncontradoError,
@@ -53,19 +52,8 @@ router = APIRouter(tags=["Distribución de cuotas"], route_class=RutaDistribucio
 
 
 async def require_distribucion_user(
-    auth: Annotated[HTTPAuthorizationCredentials | None, Depends(security_scheme)],
+    claims: Annotated[dict[str, Any], Depends(get_current_user)],
 ) -> ActorDistribucion:
-    if auth is None or not auth.credentials:
-        raise APIError(401, "NO_AUTENTICADO", "Se requiere un Bearer Token válido.")
-    try:
-        claims: dict[str, Any] = decode_access_token(auth.credentials)
-    except HTTPException as exc:
-        detalle = exc.detail if isinstance(exc.detail, dict) else {}
-        raise APIError(
-            exc.status_code,
-            str(detalle.get("error_code", "TOKEN_INVALIDO")),
-            str(detalle.get("mensaje", "Token de autenticación inválido.")),
-        ) from exc
     if not claims.get("sub") or not claims.get("rol"):
         raise APIError(401, "TOKEN_INVALIDO", "El token debe contener identidad y rol.")
     rol = str(claims["rol"])
