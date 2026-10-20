@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { Field, Input } from "@/components/ui/Field";
+import { Field, Input, Select } from "@/components/ui/Field";
 import { DEMO_PERSONAS, useAuth } from "@/context/AuthContext";
 import { parseApiError } from "@/lib/errors";
 import { portalInicial, type UserRole } from "@/lib/session";
@@ -14,6 +14,8 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [contextos, setContextos] = useState<{ id: string; nombre: string }[]>([]);
+  const [condominioId, setCondominioId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ message: string; code: string | null } | null>(null);
   const goToPortal = (role: UserRole) => {
@@ -25,10 +27,14 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, condominioId || undefined);
       if (result.ok && result.user) {
         goToPortal(result.user.rol);
       } else {
+        const causa = result.error as { error_code?: string; detalles?: { condominios?: { id: string; nombre: string }[] } } | undefined;
+        if (causa?.error_code === "CONTEXTO_REQUERIDO" && causa.detalles?.condominios) {
+          setContextos(causa.detalles.condominios);
+        }
         setError(parseApiError(result.error, "No pudimos iniciar sesión. Revisa tus credenciales e inténtalo de nuevo."));
       }
     } catch (cause) {
@@ -73,9 +79,17 @@ export default function LoginPage() {
             type="email"
             autoComplete="username"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => { setEmail(event.target.value); setContextos([]); setCondominioId(""); }}
           />
         </Field>
+        {contextos.length > 0 && (
+          <Field label="Condominio" required>
+            <Select value={condominioId} onChange={(event) => setCondominioId(event.target.value)}>
+              <option value="">Selecciona tu contexto</option>
+              {contextos.map((contexto) => <option key={contexto.id} value={contexto.id}>{contexto.nombre}</option>)}
+            </Select>
+          </Field>
+        )}
         <Field label="Contraseña" required>
           <Input
             type="password"

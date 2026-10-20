@@ -11,6 +11,8 @@ from src.main import app
 from src.modules.cuotas.distribucion.router import get_distribucion_repository
 from src.tests.unit.test_distribucion_service import FakeDistribucionRepository, departamentos
 
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
+
 
 @pytest.fixture
 def repository():

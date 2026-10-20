@@ -94,15 +94,17 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 - No puede existir el mismo número de departamento dos veces dentro del mismo edificio o condominio.
 - El sistema informa las filas inválidas de una importación sin duplicar las válidas ya procesadas.
 
-## USR-03 — Crear e invitar usuarios
+## USR-03 — Crear usuarios y habilitar su acceso
 
-**Historia:** Como administrador, quiero crear usuarios y enviarles una invitación, para que puedan activar su cuenta y acceder al sistema.
+**Historia:** Como administrador, quiero crear usuarios con contraseña inicial, para que un SuperAdmin habilite su acceso al sistema desde la aplicación.
 
 **Criterios de aceptación:**
 
 - El correo y documento de identidad deben ser válidos y únicos según las reglas definidas.
-- Al crear el usuario, se genera un token de activación y se solicita a Notificaciones el envío de la invitación.
-- La cuenta permanece inactiva hasta que el usuario establezca su contraseña.
+- El administrador establece la contraseña inicial, almacenada exclusivamente mediante hash.
+- La cuenta se crea inactiva y solo SuperAdmin puede activar o desactivar su acceso.
+- Una cuenta inactiva no inicia sesión y su desactivación invalida las sesiones anteriores.
+- La invitación y verificación por correo se incorporarán en una evolución posterior. Contrato vigente: [alta administrativa](../../specs/02-domains/05-usuarios-rbac/alta-administrativa.md).
 
 ## USR-04 — Vincular usuarios con departamentos
 
@@ -783,4 +785,3 @@ Resultado general: COMPLETADO CON OBSERVACIONES
 4. Añadir subtareas técnicas únicamente después de crear la historia: backend, frontend, base de datos, pruebas y documentación.
 5. Priorizar primero las historias de la Entrega 1; las entregas 2 y 3 pueden permanecer en el backlog.
 6. No marcar una historia como terminada hasta que cumpla todos sus criterios de aceptación y sus pruebas relacionadas.
-

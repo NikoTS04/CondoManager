@@ -13,6 +13,7 @@ from src.core.config import settings
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
+    hide_parameters=True,
     future=True,
     pool_pre_ping=True,
 )

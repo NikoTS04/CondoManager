@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     # Contexto del catálogo piloto; debe configurarse con el UUID creado por CON-2.
     CONDOMINIO_PILOTO_ID: str = ""
+    DEMO_MODE: bool = False
 
     # Servidor
     HOST: str = "0.0.0.0"

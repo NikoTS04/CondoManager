@@ -8,7 +8,8 @@ const MENSAJES: Record<string, string> = {
   TOKEN_EXPIRADO: "Tu sesión expiró. Ingresa nuevamente para continuar.",
   TOKEN_INVALIDO: "No pudimos validar tu sesión. Ingresa nuevamente.",
   ACCESO_DENEGADO: "No tienes permisos para realizar esta acción.",
-  CREDENCIALES_INVALIDAS: "El correo o la contraseña no son correctos.",
+  CREDENCIALES_INVALIDAS: "Revisa tus credenciales. Tu cuenta debe estar habilitada por un SuperAdmin.",
+  SESION_REVOCADA: "Tu cuenta o tus permisos cambiaron. Inicia sesión nuevamente.",
   DATOS_CONDOMINIO_INVALIDOS: "Algunos datos del condominio no son válidos. Revisa los campos marcados.",
   CONDOMINIO_NO_ENCONTRADO: "No encontramos el condominio solicitado.",
   VOUCHER_YA_CONCILIADO: "Este comprobante ya fue aprobado anteriormente. No necesitas reportarlo de nuevo.",
@@ -37,6 +38,7 @@ export function mensajeParaCodigo(code: string | null | undefined, fallback?: st
 
 /** Extrae `{ code, message }` de cualquier forma de error que devuelve el backend. */
 export function parseApiError(data: unknown, fallback?: string): { code: string | null; message: string } {
+  if (data instanceof Error) return { code: null, message: data.message || fallback || MENSAJE_GENERICO };
   if (!data || typeof data !== "object") {
     return { code: null, message: fallback || MENSAJE_GENERICO };
   }

@@ -24,6 +24,23 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
 
 ## 2. Contratos Principales por Módulo
 
+### Usuarios y autenticación persistente (CON-04 / PROC-05)
+
+Contrato canónico: [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
+`POST /condominios/{cid}/usuarios` registra contraseña inicial y devuelve una cuenta
+inactiva (`201`); `GET` lista las cuentas del contexto. Solo SuperAdmin ejecuta
+`PATCH /usuarios/{id}/estado?condominio_id={cid}` con `{"esta_activo": true|false}`.
+El estado es global a la identidad y no acredita verificación de correo.
+Login consulta PostgreSQL; cuentas inactivas reciben `401 CREDENCIALES_INVALIDAS`.
+El JWT conserva el perfil v2 y añade `auth_revision`, comprobada en todas las rutas
+protegidas. Una modificación real del estado invalida sesiones anteriores.
+El login acepta `condominio_id` opcional para múltiples asignaciones; sin selección
+devuelve `409 CONTEXTO_REQUERIDO` con los contextos autorizados tras validar credenciales.
+Alta/estado y auditoría se confirman antes de responder. El correo y documento
+normalizados tienen unicidad durable; duplicados responden `409 USUARIO_DUPLICADO`.
+Las respuestas y errores nunca incluyen contraseña o hash. Invitaciones por correo
+se difieren a una evolución posterior.
+
 ### Distribución de cuotas (CON-10)
 
 Base: `/api/v1/condominios/{condominio_id}/distribucion`. Requiere Bearer Token.

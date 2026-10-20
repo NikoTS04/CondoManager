@@ -1,123 +1,175 @@
-"""Servicio de Usuarios, Autenticación y Catálogo Piloto (PROC-05)."""
+"""Alta administrativa, estado global y autenticación persistente (CON-04)."""
 
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
-from src.core.security import create_access_token, hash_password, verify_password
-from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
-from src.modules.usuarios.schemas import LoginRequest, TokenResponse, UsuarioDTO
+from sqlalchemy.exc import IntegrityError
+
+from src.core.audit import AuditoriaPayload
+from src.core.errors import APIError
+from src.core.models_audit import AuditoriaLogORM
+from src.core.security import create_access_token, hash_password, validar_sesion, verify_password
+from src.modules.usuarios.models import Usuario, UsuarioRol
+from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
+from src.modules.usuarios.schemas import (
+    CrearUsuarioRequest,
+    CuentaUsuarioResponse,
+    LoginRequest,
+    TokenResponse,
+)
 
 
-class CredencialesInvalidasException(Exception):
-    """Excepción al fallar la autenticación de usuario."""
-    pass
+class CredencialesInvalidasException(APIError):
+    def __init__(self):
+        super().__init__(
+            401, "CREDENCIALES_INVALIDAS", "Correo, contraseña o acceso no habilitado."
+        )
 
 
 class UsuariosService:
-    """Gestiona el catálogo de usuarios, autenticación y emisión de tokens RBAC."""
+    def __init__(self, repository: SQLAlchemyUsuariosRepository):
+        self.repo = repository
 
-    CONDOMINIO_PILOTO_ID = str(CONDOMINIO_PILOTO_ID)
+    async def autenticar(self, request: LoginRequest) -> TokenResponse:
+        usuario = await self.repo.por_email(request.email)
+        if usuario is None or not verify_password(
+            request.password.get_secret_value(), usuario.password_hash
+        ):
+            raise CredencialesInvalidasException()
+        if not usuario.esta_activo:
+            raise CredencialesInvalidasException()
+        cid = request.condominio_id
+        if not usuario.es_superadmin:
+            contextos = await self.repo.contextos(usuario.id)
+            if not contextos:
+                raise CredencialesInvalidasException()
+            if cid is None and len(contextos) > 1:
+                raise APIError(
+                    409,
+                    "CONTEXTO_REQUERIDO",
+                    "Seleccione un condominio.",
+                    {"condominios": [{"id": c["id"], "nombre": c["nombre"]} for c in contextos]},
+                )
+            cid = cid or UUID(contextos[0]["id"])
+        perfil = await self.repo.perfil(usuario, cid)
+        if perfil is None:
+            raise APIError(403, "ACCESO_DENEGADO", "El condominio no está autorizado.")
+        token = create_access_token(
+            {
+                **perfil.model_dump(mode="json", exclude={"id"}),
+                "sub": str(usuario.id),
+                "auth_revision": usuario.auth_revision,
+            }
+        )
+        return TokenResponse(access_token=token, usuario=perfil)
 
-    # Directorio de Usuarios Semilla para el Piloto Villa Bonita 3
-    USUARIOS_PILOTO: Dict[str, Dict] = {
-        "admin@villabonita3.pe": {
-            "id": "usr-admin-01",
-            "email": "admin@villabonita3.pe",
-            "password_hash": hash_password("Admin123!"),
-            "nombre": "Carlos",
-            "apellido": "Mendoza",
-            "rol": "ADMIN_JUNTA",
-            "condominio_id": CONDOMINIO_PILOTO_ID,
-            "departamentos": [],
-        },
-        "auditor@villabonita3.pe": {
-            "id": "usr-audit-01",
-            "email": "auditor@villabonita3.pe",
-            "password_hash": hash_password("Auditor123!"),
-            "nombre": "Jorge",
-            "apellido": "Revisor Fiscal",
-            "rol": "AUDITOR",
-            "condominio_id": CONDOMINIO_PILOTO_ID,
-            "departamentos": [],
-        },
-        "residente102@villabonita3.pe": {
-            "id": "usr-res-102",
-            "email": "residente102@villabonita3.pe",
-            "password_hash": hash_password("Residente123!"),
-            "nombre": "Ana",
-            "apellido": "Gómez (Solvente)",
-            "rol": "RESIDENTE",
-            "condominio_id": CONDOMINIO_PILOTO_ID,
-            "departamentos": [vinculo_piloto("102", "PROPIETARIO_TITULAR")],
-        },
-        "moroso402@villabonita3.pe": {
-            "id": "usr-res-402",
-            "email": "moroso402@villabonita3.pe",
-            "password_hash": hash_password("Moroso123!"),
-            "nombre": "Pedro",
-            "apellido": "Morales (En Mora)",
-            "rol": "RESIDENTE",
-            "condominio_id": CONDOMINIO_PILOTO_ID,
-            "departamentos": [vinculo_piloto("402", "PROPIETARIO_TITULAR")],
-        },
-        "inquilino504@villabonita3.pe": {
-            "id": "usr-inq-504",
-            "email": "inquilino504@villabonita3.pe",
-            "password_hash": hash_password("Inquilino123!"),
-            "nombre": "Lucía",
-            "apellido": "Fernández",
-            "rol": "RESIDENTE",
-            "condominio_id": CONDOMINIO_PILOTO_ID,
-            "departamentos": [vinculo_piloto("504", "INQUILINO")],
-        },
-        "superadmin@condomanager.pe": {
-            "id": "usr-super-01",
-            "email": "superadmin@condomanager.pe",
-            "password_hash": hash_password("SuperAdmin123!"),
-            "nombre": "Gestor",
-            "apellido": "Plataforma",
-            "rol": "SUPERADMIN",
-            "condominio_id": None,
-            "departamentos": [],
-        },
-    }
+    async def _autorizar(self, condominio_id, actor, *, bloquear=False):
+        if actor["rol"] not in {"SUPERADMIN", "ADMIN_JUNTA"} or (
+            actor["rol"] != "SUPERADMIN" and str(condominio_id) != actor.get("condominio_id")
+        ):
+            raise APIError(
+                403, "ACCESO_DENEGADO", "No puede administrar usuarios de este condominio."
+            )
+        if await self.repo.contexto(condominio_id, bloquear=bloquear) is None:
+            raise APIError(
+                404, "CONDOMINIO_NO_ENCONTRADO", "No existe un condominio activo con ese UUID."
+            )
+        await validar_sesion(actor, self.repo)
 
-    @classmethod
-    def autenticar(cls, request: LoginRequest) -> TokenResponse:
-        """Verifica credenciales, genera el access token JWT y retorna la respuesta."""
-        email_clean = request.email.strip().lower()
-        usuario_data = cls.USUARIOS_PILOTO.get(email_clean)
+    async def listar(self, condominio_id, actor, limit=50, offset=0):
+        await self._autorizar(condominio_id, actor)
+        return await self.repo.listar(condominio_id, limit, offset)
 
-        if not usuario_data or not verify_password(request.password, usuario_data["password_hash"]):
-            raise CredencialesInvalidasException("Correo electrónico o contraseña incorrectos.")
-
-        dto = UsuarioDTO.model_validate(usuario_data)
-        # El perfil público y el JWT comparten exactamente los mismos vínculos.
-        token_claims = {
-            **dto.model_dump(mode="json", exclude={"id"}),
-            "sub": dto.id,
-        }
-
-        access_token = create_access_token(data=token_claims)
-
-        return TokenResponse(
-            access_token=access_token,
-            token_type="bearer",
-            expires_in=86400,
-            usuario=dto,
+    async def _auditar(self, cid, actor, usuario, accion, anterior):
+        payload = AuditoriaPayload(
+            condominio_id=str(cid),
+            departamento_id=None,
+            accion_ejecutada=accion,
+            motivo="GESTION_ADMINISTRATIVA_USUARIOS",
+            resultado="EXITOSO",
+            actor_tipo=actor["rol"],
+            actor_id=actor["sub"],
+            estado_anterior=anterior,
+            estado_posterior=CuentaUsuarioResponse.model_validate(usuario).model_dump(mode="json"),
+            hash_previo=await self.repo.ultimo_hash(cid),
+        )
+        await self.repo.agregar(
+            AuditoriaLogORM(
+                condominio_id=cid,
+                departamento_id=None,
+                timestamp=payload.timestamp,
+                accion_ejecutada=payload.accion_ejecutada,
+                motivo=payload.motivo,
+                resultado=payload.resultado,
+                actor_tipo=payload.actor_tipo,
+                actor_id=payload.actor_id,
+                estado_anterior=payload.estado_anterior,
+                estado_posterior=payload.estado_posterior,
+                hash_previo=payload.hash_previo,
+                hash_actual=payload.calcular_hash(),
+            )
         )
 
-    @classmethod
-    def obtener_por_email(cls, email: str) -> Optional[UsuarioDTO]:
-        """Busca un usuario por correo electrónico."""
-        usuario_data = cls.USUARIOS_PILOTO.get(email.strip().lower())
-        if not usuario_data:
-            return None
-        return UsuarioDTO.model_validate(usuario_data)
+    async def crear(self, cid: UUID, request: CrearUsuarioRequest, actor: dict) -> Usuario:
+        await self._autorizar(cid, actor, bloquear=True)
+        if await self.repo.duplicado(request.email, request.documento_identidad):
+            raise APIError(409, "USUARIO_DUPLICADO", "El correo o documento ya está registrado.")
+        usuario = Usuario(
+            id=uuid4(),
+            email=request.email,
+            nombre=request.nombre,
+            apellido=request.apellido,
+            telefono=request.telefono,
+            documento_identidad=request.documento_identidad,
+            password_hash=hash_password(request.password.get_secret_value()),
+            esta_activo=False,
+            auth_revision=1,
+            es_superadmin=False,
+            creado_en=datetime.now(UTC),
+        )
+        try:
+            await self.repo.agregar(usuario)
+            await self.repo.agregar(
+                UsuarioRol(usuario_id=usuario.id, condominio_id=cid, rol="RESIDENTE")
+            )
+            await self._auditar(cid, actor, usuario, "ALTA_USUARIO", {})
+            await self.repo.confirmar()
+        except IntegrityError as exc:
+            nombre = getattr(getattr(exc.orig, "__cause__", None), "constraint_name", "") or ""
+            if nombre in {
+                "uq_usuario_email_normalizado",
+                "uq_usuario_documento_normalizado",
+                "usuarios_email_key",
+            }:
+                raise APIError(
+                    409, "USUARIO_DUPLICADO", "El correo o documento ya está registrado."
+                ) from exc
+            raise
+        return usuario
 
-    @classmethod
-    def listar_usuarios_demo(cls) -> List[UsuarioDTO]:
-        """Retorna el catálogo público de perfiles demo para pruebas rápidas."""
-        return [
-            UsuarioDTO.model_validate(u)
-            for u in cls.USUARIOS_PILOTO.values()
-        ]
+    async def cambiar_estado(self, cid: UUID, usuario_id: UUID, esta_activo: bool, actor: dict):
+        if actor["rol"] != "SUPERADMIN":
+            raise APIError(
+                403, "ACCESO_DENEGADO", "Solo SuperAdmin cambia el estado de las cuentas."
+            )
+        usuario = await self.repo.por_id(usuario_id, bloquear=True)
+        if usuario is None:
+            raise APIError(
+                404, "USUARIO_NO_ENCONTRADO", "No existe el usuario en el contexto seleccionado."
+            )
+        contextos = await self.repo.condominios_usuario(usuario_id)
+        if cid not in contextos:
+            raise APIError(
+                404, "USUARIO_NO_ENCONTRADO", "No existe el usuario en el contexto seleccionado."
+            )
+        await self.repo.bloquear_contextos(contextos)
+        await self._autorizar(cid, actor)
+        if usuario.esta_activo != esta_activo:
+            anterior = CuentaUsuarioResponse.model_validate(usuario).model_dump(mode="json")
+            usuario.esta_activo = esta_activo
+            usuario.auth_revision += 1
+            await self.repo.agregar(usuario)
+            for contexto in contextos:
+                await self._auditar(contexto, actor, usuario, "USUARIO_ESTADO_CAMBIADO", anterior)
+        await self.repo.confirmar()
+        return usuario

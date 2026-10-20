@@ -33,6 +33,14 @@ El diseño garantiza la escalabilidad multi-edificio, permitiendo que un usuario
 
 ## 4. Reglas de Negocio
 
+### CON-04 — Alta administrativa vigente
+
+El administrador define la contraseña inicial y crea una cuenta inactiva. Solo
+SuperAdmin habilita o deshabilita su estado desde la aplicación. Login y peticiones
+protegidas verifican PostgreSQL y revisión de sesión. La invitación y la verificación
+por correo quedan para una evolución posterior. Contrato completo y criterios:
+[alta-administrativa.md](../02-domains/05-usuarios-rbac/alta-administrativa.md).
+
 ### 4.1 Configuración Inicial del Condominio (CON-2)
 
 - Solo `SUPERADMIN` puede ejecutar `POST /api/v1/condominios`.
@@ -103,7 +111,7 @@ auditoría, la transacción completa se revierte.
  [ Usuario ingresa Email y Contraseña ]
                   │
                   ▼
- [ API valida credenciales contra hash PBKDF2 del piloto ]
+ [ API valida credenciales y cuenta activa contra hash PBKDF2 en PostgreSQL ]
                   │
                   ▼
  [ Resuelve Roles y Departamentos asociados ]

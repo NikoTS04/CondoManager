@@ -89,6 +89,41 @@ CREATE TABLE departamentos (
     CONSTRAINT uq_condominio_departamento UNIQUE (condominio_id, numero)
 );
 
+-- Identidad y acceso persistentes (CON-04). La concesión global es independiente
+-- de las asignaciones por condominio y no es editable mediante las API de alta.
+CREATE TABLE usuarios (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(120) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    apellido VARCHAR(80) NOT NULL,
+    telefono VARCHAR(20),
+    documento_identidad VARCHAR(20) NOT NULL,
+    esta_activo BOOLEAN NOT NULL DEFAULT FALSE,
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    auth_revision INTEGER NOT NULL DEFAULT 1 CONSTRAINT ck_usuario_auth_revision CHECK (auth_revision >= 1),
+    es_superadmin BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE UNIQUE INDEX uq_usuario_email_normalizado ON usuarios (lower(btrim(email)));
+CREATE UNIQUE INDEX uq_usuario_documento_normalizado ON usuarios (upper(btrim(documento_identidad)));
+CREATE TABLE usuario_roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
+    rol VARCHAR(30) NOT NULL DEFAULT 'RESIDENTE',
+    CONSTRAINT uq_usuario_condo_rol UNIQUE (usuario_id, condominio_id),
+    CONSTRAINT ck_rol_nombre CHECK (rol IN ('SUPERADMIN', 'ADMIN_JUNTA', 'AUDITOR', 'RESIDENTE'))
+);
+CREATE TABLE usuario_departamentos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE CASCADE,
+    tipo_relacion VARCHAR(30) NOT NULL DEFAULT 'PROPIETARIO_TITULAR',
+    es_activo BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT uq_usuario_depto UNIQUE (usuario_id, departamento_id),
+    CONSTRAINT ck_tipo_relacion CHECK (tipo_relacion IN ('PROPIETARIO_TITULAR', 'COPROPIETARIO', 'INQUILINO'))
+);
+
 -- 4. Tabla de Cuotas de Mantenimiento (Anderson - PROC-01)
 CREATE TABLE cuotas_mantenimiento (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
