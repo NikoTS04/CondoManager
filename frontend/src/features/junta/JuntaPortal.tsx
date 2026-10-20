@@ -166,11 +166,6 @@ export default function JuntaPortal() {
       setFeedback("El total aprobado debe ser un monto mayor que cero.");
       return;
     }
-    if (!alicuotasValidas) {
-      setFeedback("La distribución debe sumar 100.0000 % antes de emitir.");
-      return;
-    }
-
     setPresupuesto({
       ...presupuestoActual,
       montoTotal: normalizeMoney(presupuestoActual.montoTotal),
@@ -201,12 +196,10 @@ export default function JuntaPortal() {
       if (confirmacion.kind === "emitir" && presupuestoActual) {
         const resultado = await emitirLoteCuotas(
           presupuestoActual.periodo,
-          presupuestoActual.montoTotal,
           presupuestoActual.condominioId,
-          presupuestoActual.fechaVencimiento,
         );
         setFeedback(resultado.ok
-          ? `Emisión de ${presupuestoActual.periodo} completada para ${departamentos.length} departamentos.`
+          ? `Emisión de ${presupuestoActual.periodo} completada para ${resultado.total} departamentos.`
           : `No se pudo emitir: ${resultado.error}`);
       } else if (confirmacion.kind === "comprobante") {
         const resultado = await conciliarComprobante(

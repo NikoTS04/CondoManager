@@ -35,7 +35,7 @@ export function CuotasSection({
       <Card>
         <CardHeader
           title="Distribución y emisión"
-          description="La suma de alícuotas debe ser 100.0000 % antes de emitir."
+          description="La API aplicará el método de distribución configurado y el presupuesto aprobado."
         />
         <CardBody className="space-y-4">
           {presupuesto ? (
@@ -53,7 +53,7 @@ export function CuotasSection({
             </Alert>
           ) : (
             <Alert tone="warning" title="Distribución pendiente">
-              La suma de alícuotas debe alcanzar 100.0000 % para continuar.
+              Para distribución por alícuota se exige 100.0000 %. La modalidad equitativa no utiliza los coeficientes.
             </Alert>
           )}
           {!isAuditor && (
@@ -72,7 +72,7 @@ export function CuotasSection({
               <Button
                 type="submit"
                 loading={busy}
-                disabled={!presupuesto || !alicuotasValidas}
+                disabled={!presupuesto}
                 icon={<Coins className="h-4 w-4" aria-hidden="true" />}
               >
                 Emitir cuotas
@@ -83,7 +83,7 @@ export function CuotasSection({
       </Card>
 
       <Card>
-        <CardHeader title="Distribución por departamento" />
+        <CardHeader title="Estimación por alícuota" description="Referencia informativa; la emisión definitiva aplica el método configurado y ajusta los centavos." />
         <CardBody>
           {departamentos.length === 0 ? (
             <EmptyState

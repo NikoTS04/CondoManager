@@ -180,3 +180,22 @@ CON-22 ───────────────> CON-23
 
 Una historia se considera terminada cuando cumple sus criterios de aceptación, persiste los datos requeridos, respeta autorización y aislamiento por condominio, actualiza sus contratos o especificaciones si corresponde, incluye pruebas automatizadas y pasa la revisión de otro integrante del equipo.
 
+## Entrega técnica CON-11 — Nicolás
+
+Implementación en `feat/PROC-01-emision-cuotas`, basada en `develop`:
+
+- Servicio persistente en `src/modules/cuotas/emision.py`, con CON-9 aprobado,
+  distribución vigente CON-10 y amortización CON-13 dentro de una transacción.
+- Cierre determinista de centavos, bloqueo por condominio, departamentos activos
+  y unicidad durable por periodo. Auditoría encadenada y evento en outbox.
+- Ejecución manual autenticada y worker APScheduler separado; operación y
+  recuperación descritas en `specs/05-operations/deployment-and-runbooks.md`.
+- Migración `20261019_0006` para cuotas, lotes, outbox y FK pendiente de CON-13.
+- Contratos OpenAPI, diccionario, DDL, evento JSON Schema y BDD actualizados;
+  frontend envía solo condominio y periodo, sin sustituir el presupuesto aprobado.
+- Evidencia automatizada en `src/tests/unit/test_emision.py`,
+  `src/tests/integration/test_emision_db.py` y `src/tests/bdd/test_emision_bdd.py`:
+  persistencia, amortización, reversión, concurrencia, reintentos y publicación.
+
+Estado de entrega: implementación y verificaciones locales; la revisión de pares
+y los checks del PR forman parte del cierre de la historia.

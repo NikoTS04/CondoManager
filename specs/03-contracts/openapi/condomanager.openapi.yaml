@@ -6,6 +6,9 @@ info:
 servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
+tags:
+  - name: Cuotas de Mantenimiento
+    description: Presupuestos y emisión mensual de cuotas.
 paths:
   /condominios/{condominio_id}/edificios:
     parameters:
@@ -447,7 +450,11 @@ paths:
   /cuotas/emitir-lote:
     post:
       summary: Emisión masiva mensual de cuotas ordinarias
+      description: Emite un lote persistente desde el presupuesto aprobado, aplica saldos a favor y registra el evento de forma transaccional.
+      tags: [Cuotas de Mantenimiento]
       operationId: emitirLoteCuotas
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -464,11 +471,20 @@ paths:
         '400':
           $ref: '#/components/responses/Error400'
         '409':
-          description: Lote ya emitido previamente para este periodo
+          description: Lote ya emitido o presupuesto no aprobado
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '422':
+          $ref: '#/components/responses/Error422'
 
   /pagos/reportar:
     post:
@@ -809,12 +825,11 @@ components:
 
     EmitirLoteCuotasRequest:
       type: object
-      required: [condominio_id, periodo, presupuesto_total, fecha_vencimiento]
+      additionalProperties: false
+      required: [condominio_id, periodo]
       properties:
         condominio_id: { type: string, format: uuid }
-        periodo: { type: string, example: "2026-10" }
-        presupuesto_total: { type: string, example: "20000.00" }
-        fecha_vencimiento: { type: string, format: date, example: "2026-10-20" }
+        periodo: { type: string, pattern: '^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])$', example: "2026-10" }
 
     EmitirLoteCuotasResponse:
       type: object
@@ -824,6 +839,8 @@ components:
         total_cuotas_emitidas: { type: integer }
         monto_total_facturado: { type: string }
         cuotas_cubiertas_saldo_favor: { type: integer }
+        fecha_emision: { type: string, format: date-time }
+        fecha_vencimiento: { type: string, format: date }
 
     ComprobanteRecibidoResponse:
       type: object

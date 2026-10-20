@@ -14,6 +14,7 @@ from src.core.database import Base
 from src.core.models_audit import AuditoriaLogORM  # noqa: F401
 from src.modules.condominios.models import Condominio  # noqa: F401
 from src.modules.cuotas.distribucion.models import ConfiguracionDistribucion  # noqa: F401
+from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, LoteCuotas  # noqa: F401
 from src.modules.cuotas.presupuestos.models import PresupuestoMensual  # noqa: F401
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor  # noqa: F401
 
