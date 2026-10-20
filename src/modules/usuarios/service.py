@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Optional
 import uuid
+from src.core.config import settings
 from src.core.security import create_access_token, hash_password, verify_password
 from src.modules.usuarios.schemas import LoginRequest, TokenResponse, UsuarioDTO
 
@@ -14,7 +15,10 @@ class CredencialesInvalidasException(Exception):
 class UsuariosService:
     """Gestiona el catálogo de usuarios, autenticación y emisión de tokens RBAC."""
 
-    CONDOMINIO_PILOTO_ID = "vb3-condo"
+    try:
+        CONDOMINIO_PILOTO_ID: str | None = str(uuid.UUID(settings.CONDOMINIO_PILOTO_ID))
+    except (TypeError, ValueError, AttributeError):
+        CONDOMINIO_PILOTO_ID = None
 
     # Directorio de Usuarios Semilla para el Piloto Villa Bonita 3
     USUARIOS_PILOTO: Dict[str, Dict] = {
@@ -80,7 +84,7 @@ class UsuariosService:
             "nombre": "Gestor",
             "apellido": "Plataforma",
             "rol": "SUPERADMIN",
-            "condominio_id": CONDOMINIO_PILOTO_ID,
+            "condominio_id": None,
             "departamentos": [],
             "tipo_relacion": "SUPERADMIN",
         },

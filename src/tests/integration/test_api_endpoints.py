@@ -1,6 +1,7 @@
 from decimal import Decimal
 import uuid
 import pytest
+import os
 
 try:
     from fastapi.testclient import TestClient
@@ -28,15 +29,9 @@ def test_api_emitir_lote_cuotas():
         "fecha_vencimiento": "2026-11-20",
     }
     response = client.post("/api/v1/cuotas/emitir-lote", json=payload)
-    assert response.status_code == 201
-    data = response.json()
-    assert data["periodo"] == "2026-11"
-    assert data["total_cuotas_emitidas"] == 139
-    assert Decimal(data["monto_total_facturado"]) == Decimal("20850.00")
-
-    # Intentar emitir el mismo periodo de nuevo debe dar 409 Conflict
-    response_dup = client.post("/api/v1/cuotas/emitir-lote", json=payload)
-    assert response_dup.status_code == 409
+    # El emisor consume ahora el padrón persistente de CON-3 y exige contexto autenticado.
+    # El conteo activo y la idempotencia por condominio se verifican con PostgreSQL real.
+    assert response.status_code == 401
 
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
@@ -63,7 +58,14 @@ def test_api_reportar_pago_e_idempotencia():
 
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
-def test_api_reservas_flujo_completo():
+def test_api_reservas_flujo_completo(monkeypatch):
+    from src.modules.reservas import router as reservas_router
+
+    # Aislar el calendario para que la prueba sea repetible y usar UUID,
+    # tal como exige OpenAPI; "402" era rechazado por Pydantic antes del servicio.
+    monkeypatch.setattr(reservas_router, "RESERVAS_REGISTRADAS", {})
+    departamentos = {d["numero"]: str(d["id"]) for d in reservas_router.DEPARTAMENTOS_MAP.values()}
+    condominio_id = str(reservas_router.CONDOMINIO_PILOTO_ID)
     # 1. Catálogo de áreas comunes
     res_areas = client.get("/api/v1/areas")
     assert res_areas.status_code == 200
@@ -74,9 +76,9 @@ def test_api_reservas_flujo_completo():
 
     # 2. Intento de reserva por dpto moroso (402) -> 403 Forbidden
     payload_moroso = {
-        "condominio_id": str(uuid.uuid4()),
+        "condominio_id": condominio_id,
         "area_id": area_id,
-        "departamento_id": "402",
+        "departamento_id": departamentos["402"],
         "fecha_reserva": "2026-10-25",
         "hora_inicio": "19:00",
         "hora_fin": "22:00",
@@ -87,9 +89,9 @@ def test_api_reservas_flujo_completo():
 
     # 3. Reserva exitosa por residente solvente (102) -> 201 Created
     payload_solvente = {
-        "condominio_id": str(uuid.uuid4()),
+        "condominio_id": condominio_id,
         "area_id": area_id,
-        "departamento_id": "102",
+        "departamento_id": departamentos["102"],
         "fecha_reserva": "2026-10-25",
         "hora_inicio": "19:00",
         "hora_fin": "22:00",
@@ -102,9 +104,9 @@ def test_api_reservas_flujo_completo():
 
     # 4. Conflicto de horario: Otro residente intenta el mismo horario -> 409 Conflict
     payload_conflicto = {
-        "condominio_id": str(uuid.uuid4()),
+        "condominio_id": condominio_id,
         "area_id": area_id,
-        "departamento_id": "104",
+        "departamento_id": departamentos["104"],
         "fecha_reserva": "2026-10-25",
         "hora_inicio": "20:00",
         "hora_fin": "23:00",
@@ -170,3 +172,72 @@ def test_api_notificaciones_endpoints():
     data_masivo = res_masivo.json()
     assert data_masivo["total_destinatarios"] == 139
     assert data_masivo["notificaciones_generadas"] == 139
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_api_condominio_persistencia_postgres(monkeypatch):
+    """Verifica HTTP, repositorio y auditoría sobre el esquema migrado, sin create_all."""
+    database_url = os.environ.get("CON13_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("Defina CON13_TEST_DATABASE_URL para probar PostgreSQL real")
+
+    from httpx import ASGITransport, AsyncClient
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from src.core.database import get_db_session
+    from src.core.models_audit import AuditoriaLogORM
+    from src.core.security import create_access_token
+
+    engine = create_async_engine(database_url)
+    actor_id = str(uuid.uuid4())
+    token = create_access_token({"sub": actor_id, "rol": "SUPERADMIN"})
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                async with AsyncSession(bind=connection, expire_on_commit=False) as session:
+
+                    async def test_session():
+                        yield session
+
+                    monkeypatch.setitem(app.dependency_overrides, get_db_session, test_session)
+                    async with AsyncClient(
+                        transport=ASGITransport(app=app),
+                        base_url="http://test",
+                        headers={"Authorization": f"Bearer {token}"},
+                    ) as postgres_client:
+                        response = await postgres_client.post(
+                            "/api/v1/condominios",
+                            json={
+                                "nombre": "Condominio CI PostgreSQL",
+                                "direccion": "Dirección de prueba",
+                                "moneda": "PEN",
+                                "regla_mora_tipo": "MONTO_FIJO",
+                                "monto_mora_fijo": "20.00",
+                                "dia_vencimiento": 20,
+                                "dias_gracia": 2,
+                            },
+                        )
+                        assert response.status_code == 201, response.text
+                        creado = response.json()
+                        consulta = await postgres_client.get(f"/api/v1/condominios/{creado['id']}")
+                        assert consulta.status_code == 200
+                        assert consulta.json() == creado
+                        auditoria = (
+                            await session.execute(
+                                select(AuditoriaLogORM).where(
+                                    AuditoriaLogORM.condominio_id == uuid.UUID(creado["id"])
+                                )
+                            )
+                        ).scalar_one()
+                        assert auditoria.accion_ejecutada == "CONDOMINIO_CREADO"
+                        assert auditoria.actor_id == actor_id
+                        assert len(auditoria.hash_actual) == 64
+            finally:
+                # El servicio sólo hace flush: no dejar datos de prueba en el servicio CI.
+                if transaction.is_active:
+                    await transaction.rollback()
+    finally:
+        await engine.dispose()

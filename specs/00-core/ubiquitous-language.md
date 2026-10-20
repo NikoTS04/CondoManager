@@ -8,7 +8,7 @@ Este glosario define la terminología formal y estricta utilizada en el diseño 
 
 | Término en Español | Término en Código (Inglés/Español) | Definición Formal | Invariantes / Restricciones |
 | :--- | :--- | :--- | :--- |
-| **Condominio** | `Condominio` / `Condo` | Entidad jurídica o agrupación habitacional superior que agrupa uno o varios edificios/torres bajo un mismo reglamento interno y presupuesto común. | Posee una moneda principal (`PEN`, `USD`) y políticas de mora globales. |
+| **Condominio** | `Condominio` / `Condo` | Entidad jurídica o agrupación habitacional superior que agrupa uno o varios edificios/torres bajo un mismo reglamento interno y presupuesto común; es la raíz del aislamiento multi-tenant. | Posee UUID generado por el servidor, estado `activo`, moneda principal (`PEN`, `USD`), `dia_vencimiento`, `dias_gracia` y una política de mora global. |
 | **Edificio / Torre** | `Edificio` / `Building` | Estructura física vertical o bloque dentro de un condominio que contiene un conjunto determinado de departamentos. | Pertenece a exactamente un condominio. |
 | **Unidad / Departamento** | `Departamento` / `Unit` | Bien inmueble de propiedad exclusiva (departamento, flat, dúplex, estacionamiento o depósito) sujeto al régimen de propiedad horizontal. | Posee un número identificador único por edificio y un coeficiente de participación (alícuota). |
 | **Alícuota / Coeficiente** | `alicuota` / `share_percentage` | Porcentaje de participación de una unidad sobre las áreas comunes y cargas financieras del condominio. Expresado con 4 decimales (`NUMERIC(7,4)`). | La sumatoria de alícuotas de todas las unidades activas del condominio debe ser exactamente igual a `100.0000%`. |

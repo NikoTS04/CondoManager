@@ -2,8 +2,17 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { iniciarSesion } from "@/lib/api";
 
 export type UserRole = "SUPERADMIN" | "ADMIN_JUNTA" | "AUDITOR" | "PROPIETARIO" | "INQUILINO";
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  SUPERADMIN: "Superadministración",
+  ADMIN_JUNTA: "Junta Directiva",
+  AUDITOR: "Auditoría",
+  PROPIETARIO: "Propietario",
+  INQUILINO: "Inquilino",
+};
 
 export interface UserProfile {
   id: string;
@@ -11,7 +20,7 @@ export interface UserProfile {
   nombre: string;
   apellido: string;
   rol: UserRole;
-  condominio_id: string;
+  condominio_id: string | null;
   departamentos: string[];
   tipo_relacion?: string;
 }
@@ -20,9 +29,9 @@ export interface DemoPersona {
   key: string;
   label: string;
   email: string;
+  password: string;
   rol: UserRole;
   depto?: string;
-  badgeColor: string;
   description: string;
 }
 
@@ -31,51 +40,51 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     key: "superadmin",
     label: "SuperAdmin de Plataforma",
     email: "superadmin@condomanager.pe",
+    password: "SuperAdmin123!",
     rol: "SUPERADMIN",
-    badgeColor: "bg-slate-900 text-white",
     description: "Configura condominios, reglas generales y accesos globales",
   },
   {
     key: "admin",
     label: "Junta Directiva",
     email: "admin@villabonita3.pe",
+    password: "Admin123!",
     rol: "ADMIN_JUNTA",
-    badgeColor: "bg-blue-600 text-white",
     description: "Gestión total: emisión masiva, conciliación de pagos y moras",
   },
   {
     key: "auditor",
     label: "Auditor Fiscal",
     email: "auditor@villabonita3.pe",
+    password: "Auditor123!",
     rol: "AUDITOR",
-    badgeColor: "bg-purple-600 text-white",
     description: "Solo lectura irrestricta: inspección de bitácora y balances",
   },
   {
     key: "residente102",
     label: "Propietario Solvente (Dpto. 102)",
     email: "residente102@villabonita3.pe",
+    password: "Residente123!",
     rol: "PROPIETARIO",
     depto: "102",
-    badgeColor: "bg-emerald-600 text-white",
     description: "Al día: reporta pagos y reserva áreas comunes sin restricción",
   },
   {
     key: "moroso402",
     label: "Propietario Moroso (Dpto. 402)",
     email: "moroso402@villabonita3.pe",
+    password: "Moroso123!",
     rol: "PROPIETARIO",
     depto: "402",
-    badgeColor: "bg-rose-600 text-white",
     description: "En mora: bloqueado automáticamente para realizar reservas",
   },
   {
     key: "inquilino504",
     label: "Inquilino (Dpto. 504)",
     email: "inquilino504@villabonita3.pe",
+    password: "Inquilino123!",
     rol: "INQUILINO",
     depto: "504",
-    badgeColor: "bg-teal-600 text-white",
     description: "Arrendatario: reporta pagos y reserva para su unidad asignada",
   },
 ];
@@ -84,99 +93,97 @@ interface AuthContextType {
   user: UserProfile | null;
   token: string | null;
   activeDepartment: string;
+  authReady: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password?: string) => Promise<boolean>;
+  login: (email: string, password?: string) => Promise<LoginResult>;
   logout: () => void;
-  switchDemoPersona: (personaKey: string) => void;
+  switchDemoPersona: (personaKey: string) => Promise<boolean>;
   setActiveDepartment: (depto: string) => void;
 }
 
+export interface LoginResult {
+  ok: boolean;
+  user?: UserProfile;
+  error?: unknown;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [activeDepartment, setActiveDepartment] = useState<string>("102");
+  const [authReady, setAuthReady] = useState(false);
   const router = useRouter();
 
   // Inicializar con la persona demo predeterminada o sesión guardada
   useEffect(() => {
-    const savedToken = typeof window !== "undefined" ? localStorage.getItem("condo_token") : null;
-    const savedUser = typeof window !== "undefined" ? localStorage.getItem("condo_user") : null;
-    const savedDepto = typeof window !== "undefined" ? localStorage.getItem("condo_depto") : null;
-
-    if (savedToken && savedUser) {
+    async function restoreSession() {
       try {
-        const parsed = JSON.parse(savedUser);
-        setUser(parsed);
-        setToken(savedToken);
-        if (savedDepto) setActiveDepartment(savedDepto);
-        else if (parsed.departamentos?.length > 0) setActiveDepartment(parsed.departamentos[0]);
-        return;
-      } catch {}
+        const savedToken = localStorage.getItem("condo_token");
+        const savedUser = localStorage.getItem("condo_user");
+        const savedDepto = localStorage.getItem("condo_depto");
+
+        if (savedToken && savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser) as UserProfile;
+            const contextoValido =
+              parsed.rol === "SUPERADMIN" || UUID_PATTERN.test(parsed.condominio_id || "");
+            if (contextoValido) {
+              setUser(parsed);
+              setToken(savedToken);
+              if (savedDepto) setActiveDepartment(savedDepto);
+              else if (parsed.departamentos?.length > 0) {
+                setActiveDepartment(parsed.departamentos[0]);
+              }
+              return;
+            }
+            localStorage.removeItem("condo_token");
+            localStorage.removeItem("condo_user");
+            localStorage.removeItem("condo_active_id");
+          } catch {
+            // Si la sesión guardada no se puede leer, continúa con el modo configurado.
+          }
+        }
+
+        if (process.env.NEXT_PUBLIC_DEMO_MODE !== "false") {
+          await switchDemoPersona("admin");
+        }
+      } finally {
+        setAuthReady(true);
+      }
     }
 
-    // Por defecto, inicializar como Junta Directiva para demostración directa
-    switchDemoPersona("admin");
+    void restoreSession();
   }, []);
 
-  function switchDemoPersona(personaKey: string) {
+  async function switchDemoPersona(personaKey: string): Promise<boolean> {
     const persona = DEMO_PERSONAS.find((p) => p.key === personaKey) || DEMO_PERSONAS[0];
-    const newUser: UserProfile = {
-      id: `usr-${persona.key}`,
-      email: persona.email,
-      nombre: persona.label.split(" ")[0],
-      apellido: persona.label.split(" ").slice(1).join(" ") || "Demo",
-      rol: persona.rol,
-      condominio_id: "vb3-condo",
-      departamentos: persona.depto ? [persona.depto] : [],
-      tipo_relacion: persona.rol === "INQUILINO" ? "INQUILINO" : persona.rol === "PROPIETARIO" ? "PROPIETARIO_TITULAR" : "ADMINISTRADOR",
-    };
-
-    const mockToken = `jwt-mock-token-${persona.key}-${Date.now()}`;
-    setUser(newUser);
-    setToken(mockToken);
-    const depto = persona.depto || (persona.rol === "ADMIN_JUNTA" ? "102" : "102");
-    setActiveDepartment(depto);
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("condo_token", mockToken);
-      localStorage.setItem("condo_user", JSON.stringify(newUser));
-      localStorage.setItem("condo_depto", depto);
-    }
+    return (await login(persona.email, persona.password)).ok;
   }
 
-  async function login(email: string, password = "Password123!"): Promise<boolean> {
+  async function login(email: string, password = ""): Promise<LoginResult> {
     const cleanEmail = email.trim().toLowerCase();
-    const persona = DEMO_PERSONAS.find((p) => p.email.toLowerCase() === cleanEmail);
+    try {
+      const session = await iniciarSesion(cleanEmail, password);
+      const newUser = session.usuario as UserProfile;
+      const depto = newUser.departamentos[0] || "102";
+      setUser(newUser);
+      setToken(session.access_token);
+      setActiveDepartment(depto);
 
-    if (persona) {
-      switchDemoPersona(persona.key);
-      return true;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("condo_token", session.access_token);
+        localStorage.setItem("condo_user", JSON.stringify(newUser));
+        localStorage.setItem("condo_depto", depto);
+      }
+      return { ok: true, user: newUser };
+    } catch (error) {
+      return { ok: false, error };
     }
-
-    // Fallback genérico para correo nuevo
-    const newUser: UserProfile = {
-      id: `usr-${Date.now()}`,
-      email: cleanEmail,
-      nombre: "Usuario",
-      apellido: "Residente",
-      rol: "PROPIETARIO",
-      condominio_id: "vb3-condo",
-      departamentos: ["102"],
-      tipo_relacion: "PROPIETARIO_TITULAR",
-    };
-    const mockToken = `jwt-token-${Date.now()}`;
-    setUser(newUser);
-    setToken(mockToken);
-    setActiveDepartment("102");
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("condo_token", mockToken);
-      localStorage.setItem("condo_user", JSON.stringify(newUser));
-      localStorage.setItem("condo_depto", "102");
-    }
-    return true;
   }
 
   function logout() {
@@ -186,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("condo_token");
       localStorage.removeItem("condo_user");
       localStorage.removeItem("condo_depto");
+      localStorage.removeItem("condo_active_id");
     }
     router.push("/login");
   }
@@ -196,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         activeDepartment,
+        authReady,
         isAuthenticated: !!user,
         login,
         logout,

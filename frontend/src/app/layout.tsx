@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
+import TopBar from "@/components/layout/TopBar";
 import { AuthProvider } from "@/context/AuthContext";
+
+const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "CondoManager - Sistema Automatizado para Condominios",
@@ -16,20 +19,23 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+      <body
+        className={`${inter.variable} min-h-screen flex flex-col bg-canvas text-ink font-sans`}
+      >
         <AuthProvider>
-          <Navbar />
-          <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+          <a
+            href="#contenido"
+            className="sr-only z-[100] rounded-md bg-surface p-3 text-ink focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:ring-2 focus:ring-brand-600"
+          >
+            Saltar al contenido
+          </a>
+          <TopBar />
+          <main id="contenido" className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8">
             {children}
           </main>
         </AuthProvider>
-        <footer className="bg-slate-900 text-slate-400 text-xs py-6 border-t border-slate-800 text-center">
-          <div className="max-w-7xl mx-auto px-4">
-            <p className="font-medium text-slate-300">CondoManager • Gestión automatizada de condominios</p>
-            <p className="mt-1 text-slate-500">
-              Cálculos financieros precisos • Control de solvencia • 139 departamentos piloto
-            </p>
-          </div>
+        <footer className="border-t border-line bg-surface py-4 text-center text-xs text-muted">
+          <p>CondoManager · Gestión de condominios</p>
         </footer>
       </body>
     </html>

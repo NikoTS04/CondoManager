@@ -28,6 +28,7 @@ build/
 .env.*.local
 *.pem
 *.key
+condomanager_schema.sql
 
 # Archivos temporales de IDE y SO
 .vscode/
@@ -43,3 +44,6 @@ Thumbs.db
 *.sqlite3
 data/
 uploads/
+
+# carpetas skills
+.opencode/

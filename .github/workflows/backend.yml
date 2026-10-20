@@ -1,0 +1,295 @@
+name: Backend
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Valores públicos exclusivos de prueba; nunca se usan secretos de producción.
+env:
+  DATABASE_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/condomanager_ci
+  DATABASE_URL_SYNC: postgresql://ci_user:ci_password@localhost:5432/condomanager_ci
+  POSTGRES_USER: ci_user
+  POSTGRES_PASSWORD: ci_password
+  POSTGRES_DB: condomanager_ci
+  JWT_SECRET: clave-publica-exclusiva-de-pruebas-ci-no-usar-en-produccion
+  JWT_ALGORITHM: HS256
+  REDIS_URL: redis://localhost:6379/0
+  MINIO_ENDPOINT: localhost:9000
+  MINIO_ROOT_USER: ci_minio
+  MINIO_ROOT_PASSWORD: ci_minio_password
+  CONDOMINIO_PILOTO_ID: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  DEBUG: 'false'
+  UV_PYTHON: '3.12'
+
+jobs:
+  lint:
+    name: Backend / Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Instalar Python y dependencias
+        # No exige uv.lock: no forma parte del manifiesto versionado actual.
+        run: uv sync --extra dev --python 3.12
+      - name: Lint y formato de archivos modificados
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        # No reformatear todo el árbol: existe deuda anterior y otros agentes trabajan aquí.
+        # En PR se compara con su base; en push con el estado anterior, incluidos varios commits.
+        # TODO: sanear el estilo histórico con sus autores. La deuda previa no bloquea,
+        # pero no se permiten más avisos de la misma regla/mensaje en un archivo modificado.
+        run: |
+          uv run --no-sync python - <<'PY'
+          from collections import Counter
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          base = os.environ.get("PR_BASE") or os.environ.get("PUSH_BEFORE")
+          if not base or set(base) == {"0"}:
+              previous = subprocess.run(
+                  ["git", "rev-parse", "--verify", "HEAD^"], capture_output=True, text=True
+              )
+              base = previous.stdout.strip() if previous.returncode == 0 else None
+          command = (
+              ["git", "diff", "--name-only", "--diff-filter=ACMR", "-z", base, "HEAD"]
+              if base else ["git", "ls-files", "-z"]
+          )
+          paths = subprocess.check_output(command).decode().split("\0")
+          files = [
+              path for path in paths
+              if path.endswith((".py", ".pyi")) and Path(path).is_file()
+              and (path.startswith(("src/", "scripts/", "migrations/")) or "/" not in path)
+          ]
+          def lint(path, source):
+              result = subprocess.run(
+                  ["ruff", "check", "--stdin-filename", path, "--output-format", "json", "-"],
+                  input=source, capture_output=True, text=True,
+              )
+              if result.returncode not in (0, 1):
+                  raise RuntimeError(result.stderr)
+              return Counter((item["code"], item["message"]) for item in json.loads(result.stdout))
+
+          def format_check(path, source):
+              result = subprocess.run(
+                  ["ruff", "format", "--check", "--stdin-filename", path, "-"],
+                  input=source, capture_output=True, text=True,
+              )
+              if result.returncode not in (0, 1):
+                  raise RuntimeError(result.stderr)
+              return result.returncode
+
+          failures = []
+          legacy = []
+          for path in files:
+              original = subprocess.run(
+                  ["git", "show", f"{base}:{path}"], capture_output=True, text=True
+              ) if base else None
+              old_source = original.stdout if original and original.returncode == 0 else ""
+              source = Path(path).read_text()
+              old_lint = lint(path, old_source)
+              current_lint = lint(path, source)
+              added = current_lint - old_lint
+              for (code, message), count in added.items():
+                  failures.append(f"{path}: {count} aviso(s) nuevo(s) {code}: {message}")
+              if current_lint:
+                  legacy.append(f"{path}: {sum((current_lint & old_lint).values())} avisos previos")
+              if format_check(path, source):
+                  if format_check(path, old_source):
+                      legacy.append(f"{path}: formato previo pendiente (TODO, no bloqueante)")
+                  else:
+                      failures.append(f"{path}: ruff format --check falla sin deuda previa")
+          for message in legacy:
+              print(f"Deuda histórica: {message}")
+          for message in failures:
+              print(message)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"### Lint y formato\nArchivos Python modificados: {len(files)}.\n")
+              summary.write("Bloquea aumentos de avisos Ruff y fallos de formato sin deuda previa.\n")
+              for message in legacy + failures:
+                  summary.write(f"- {message}\n")
+          raise SystemExit(1 if failures else 0)
+          PY
+      - name: Diagnóstico de lint global (deuda existente)
+        id: lint_global
+        # TODO: corregir lint histórico fuera del alcance de CI y hacer este paso bloqueante.
+        continue-on-error: true
+        run: uv run --no-sync ruff check src scripts migrations
+      - name: Resumen de deuda de lint
+        if: always()
+        env:
+          RESULTADO: ${{ steps.lint_global.outcome }}
+        run: |
+          echo "Lint global: $RESULTADO (diagnóstico no bloqueante; TODO: sanear deuda histórica)." >> "$GITHUB_STEP_SUMMARY"
+
+  pruebas:
+    name: Backend / Pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: condomanager_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d condomanager_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # CON-3 requiere persistencia y concurrencia reales también en la cobertura.
+      CON3_TEST_DATABASE_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/condomanager_ci
+      CON13_TEST_DATABASE_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/condomanager_ci
+    # Python 3.12 coincide con Dockerfile; una matriz no aporta otra plataforma de despliegue hoy.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Instalar Python y dependencias
+        run: uv sync --extra dev --python 3.12
+      - name: Ejecutar pruebas y cobertura (mínimo 80 %)
+        run: |
+          uv run --no-sync python -m pytest -q --cov --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=pytest.xml
+      - name: Resumen de pruebas y cobertura
+        if: always()
+        run: |
+          uv run --no-sync python - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("### Pruebas backend (Python 3.12)\n")
+              if Path("pytest.xml").exists():
+                  suites = ET.parse("pytest.xml").getroot().iter("testsuite")
+                  counts = {key: 0 for key in ("tests", "failures", "errors", "skipped")}
+                  for suite in suites:
+                      for key in counts:
+                          counts[key] += int(suite.get(key, "0"))
+                  summary.write(f"Resultados JUnit: {counts}.\n")
+              if Path("coverage.xml").exists():
+                  root = ET.parse("coverage.xml").getroot()
+                  percent = float(root.attrib["line-rate"]) * 100
+                  summary.write(f"Cobertura de src (sin tests): **{percent:.2f} %**; mínimo **80 %**.\n")
+              else:
+                  summary.write("No se generó cobertura; revisar el paso de pruebas.\n")
+              summary.write("Los tests PostgreSQL se ejecutan en Backend / Migraciones.\n")
+          PY
+      - name: Publicar reportes XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-reportes-python312
+          path: |
+            coverage.xml
+            pytest.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  migraciones:
+    name: Backend / Migraciones
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: condomanager_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d condomanager_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CON13_TEST_DATABASE_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/condomanager_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Instalar Python y dependencias
+        run: uv sync --extra dev --python 3.12
+      - name: Validar ciclo completo de migraciones
+        id: ciclo
+        run: |
+          uv run --no-sync python -m alembic upgrade head
+          uv run --no-sync python -m alembic downgrade base
+          uv run --no-sync python -m alembic upgrade head
+      - name: Detectar drift con el entorno Alembic actual
+        id: drift_actual
+        # TODO: migrar departamentos (registrado indirectamente por Condominio)
+        # y alinear el índice idx_auditoria_condominio_fecha con el ORM de auditoría.
+        # env.py no registra los restantes modelos: este check no certifica todo el esquema.
+        continue-on-error: true
+        run: uv run --no-sync python -m alembic check
+      - name: Detectar drift con todos los modelos registrados
+        id: drift_completo
+        # TODO: completar migraciones de cuotas, pagos, reservas, usuarios, etc.,
+        # y registrar sus modelos en migrations/env.py antes de hacer el check bloqueante.
+        continue-on-error: true
+        run: |
+          uv run --no-sync python - <<'PY'
+          import importlib
+          from pathlib import Path
+
+          from alembic import command
+          from alembic.config import Config
+
+          for path in sorted(Path("src").rglob("models*.py")):
+              importlib.import_module(".".join(path.with_suffix("").parts))
+          command.check(Config("alembic.ini"))
+          PY
+      - name: Integración contra PostgreSQL real
+        id: integracion
+        # La variable habilita los tests de BD; no se usa create_all para ocultar migraciones faltantes.
+        run: uv run --no-sync python -m pytest -q src/tests/integration --junitxml=postgres-pytest.xml
+      - name: Resumen de migraciones y drift
+        if: always()
+        env:
+          CICLO: ${{ steps.ciclo.outcome }}
+          DRIFT_ACTUAL: ${{ steps.drift_actual.outcome }}
+          DRIFT_COMPLETO: ${{ steps.drift_completo.outcome }}
+          INTEGRACION: ${{ steps.integracion.outcome }}
+        run: |
+          {
+            echo '### PostgreSQL 16 y migraciones'
+            echo "Ciclo upgrade → downgrade base → upgrade: $CICLO."
+            echo "Integración real: $INTEGRACION."
+            echo "Drift con env.py actual: $DRIFT_ACTUAL; con todos los modelos: $DRIFT_COMPLETO."
+            echo 'TODO: completar migraciones y registro de metadatos; ambos diagnósticos de drift son no bloqueantes.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar reporte PostgreSQL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-integracion-postgres16
+          path: postgres-pytest.xml
+          if-no-files-found: warn
+          retention-days: 14

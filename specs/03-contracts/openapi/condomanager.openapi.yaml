@@ -2,11 +2,219 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: API formal para el Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD).
-  version: 1.0.0
+  version: 1.2.0
 servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
+tags:
+  - name: Cuotas de Mantenimiento
+    description: Presupuestos y emisión mensual de cuotas.
 paths:
+  /condominios/{condominio_id}/edificios:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+    get:
+      operationId: listarEdificios
+      summary: Listar edificios del condominio
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Edificios persistidos del contexto autorizado
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EdificioResponse' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio activo no encontrado }
+    post:
+      operationId: crearEdificio
+      summary: Registrar edificio (CON-3)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearEdificioRequest' }
+      responses:
+        '201':
+          description: Edificio persistido con auditoría
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EdificioResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio activo no encontrado }
+        '409': { description: EDIFICIO_DUPLICADO o ESTRUCTURA_DUPLICADA }
+        '422': { description: DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/departamentos:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+    get:
+      operationId: listarDepartamentos
+      summary: Listar unidades persistidas, incluyendo inactivas
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: edificio_id, in: query, schema: { type: string, format: uuid } }
+        - { name: activo, in: query, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Padrón contextual
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DepartamentoResponse' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o edificio no encontrado en el contexto }
+        '422': { description: DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/edificios/{edificio_id}/departamentos:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+      - { name: edificio_id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: crearDepartamento
+      summary: Registrar departamento activo (CON-3)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearDepartamentoRequest' }
+      responses:
+        '201':
+          description: Unidad persistida con saldo cero y estado AL_DIA
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DepartamentoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o edificio no encontrado }
+        '409': { description: DEPARTAMENTO_DUPLICADO o ESTRUCTURA_DUPLICADA }
+        '422': { description: DATOS_ESTRUCTURA_INVALIDOS o PISO_INVALIDO }
+  /condominios/{condominio_id}/departamentos/{departamento_id}/estado:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+      - { name: departamento_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: cambiarEstadoDepartamento
+      summary: Activar o desactivar conservando el historial
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [activo]
+              properties: { activo: { type: boolean } }
+      responses:
+        '200':
+          description: Estado vigente; un estado idéntico no duplica auditoría
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DepartamentoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o departamento no encontrado }
+        '422': { description: DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/importaciones/previsualizar:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+    post:
+      operationId: previsualizarEstructura
+      summary: Validar CSV sin escrituras (administradores)
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/ArchivoEstructura' }
+      responses:
+        '200':
+          description: Vista previa con estado y errores por fila
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportacionEstructuraResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio activo no encontrado }
+        '422': { description: CSV_INVALIDO o DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/importaciones/confirmar:
+    parameters:
+      - $ref: '#/components/parameters/ContextoEstructura'
+    post:
+      operationId: confirmarEstructura
+      summary: Revalidar CSV e importar filas válidas sin duplicados
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/ArchivoEstructura' }
+      responses:
+        '200':
+          description: Resultado persistido; datos existentes diferentes se reportan como error por fila
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportacionEstructuraResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio activo no encontrado }
+        '422': { description: CSV_INVALIDO o DATOS_ESTRUCTURA_INVALIDOS }
+  /condominios/{condominio_id}/distribucion:
+    parameters:
+      - name: condominio_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      summary: Configurar el método de distribución (CON-10)
+      operationId: configurarDistribucion
+      description: >-
+        SUPERADMIN o ADMIN_JUNTA del condominio. Valida departamentos y suma exacta
+        100.0000 para POR_ALICUOTA; EQUITATIVA requiere al menos un departamento.
+        El mismo método válido conserva actor, fecha y auditoría. Cada cambio
+        se audita transaccionalmente. No versiona por periodo ni ajusta residuos.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigurarDistribucionRequest'
+      responses:
+        '200':
+          description: Configuración vigente validada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistribucionResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          description: DISTRIBUCION_ACCESO_DENEGADO por rol o condominio ajeno
+        '404':
+          description: CONDOMINIO_NO_ENCONTRADO
+        '422':
+          description: >-
+            DATOS_DISTRIBUCION_INVALIDOS, DISTRIBUCION_SIN_DEPARTAMENTOS o
+            DISTRIBUCION_COEFICIENTES_INVALIDOS; error_code y mensaje claros.
+    get:
+      summary: Consultar el método de distribución (CON-10)
+      operationId: obtenerDistribucion
+      description: >-
+        Lectura para SUPERADMIN, ADMIN_JUNTA y AUDITOR; salvo SUPERADMIN se exige
+        contexto propio. Devuelve configuración persistida sin revalidar departamentos.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Configuración vigente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistribucionResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          description: DISTRIBUCION_ACCESO_DENEGADO
+        '404':
+          description: CONDOMINIO_NO_ENCONTRADO o DISTRIBUCION_NO_CONFIGURADA
+        '422':
+          description: DATOS_DISTRIBUCION_INVALIDOS por UUID inválido
   /health:
     get:
       summary: Comprobación de estado del servicio
@@ -22,10 +230,231 @@ paths:
                   status: { type: string, example: "ok" }
                   service: { type: string, example: "CondoManager Core API" }
 
+  /condominios:
+    get:
+      summary: Listar condominios activos
+      description: >-
+        Devuelve los condominios activos disponibles para que un SUPERADMIN
+        seleccione explícitamente el contexto operativo.
+      operationId: listarCondominios
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de condominios activos ordenada por creación descendente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CondominioResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+    post:
+      summary: Crear y configurar un condominio
+      description: >-
+        Crea la raíz de un contexto multi-condominio y su auditoría en una sola
+        transacción. Operación exclusiva del rol global SUPERADMIN.
+      operationId: crearCondominio
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearCondominioRequest'
+      responses:
+        '201':
+          description: Condominio creado, activo y auditado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CondominioResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '422':
+          $ref: '#/components/responses/Error422'
+
+  /condominios/{condominio_id}:
+    get:
+      summary: Consultar un condominio por UUID
+      description: Devuelve exactamente la configuración persistida para el UUID solicitado.
+      operationId: obtenerCondominio
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: condominio_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Condominio encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CondominioResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /presupuestos:
+    post:
+      summary: Registrar un presupuesto mensual en borrador
+      description: >-
+        Crea un único presupuesto ordinario por condominio y periodo. Disponible
+        para SUPERADMIN y ADMIN_JUNTA dentro de su contexto autorizado.
+      operationId: crearPresupuestoMensual
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearPresupuestoRequest'
+      responses:
+        '201':
+          description: Presupuesto creado en estado BORRADOR y auditado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresupuestoResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/ErrorPresupuesto403'
+        '404':
+          $ref: '#/components/responses/ErrorPresupuesto404'
+        '409':
+          $ref: '#/components/responses/ErrorPresupuesto409'
+        '422':
+          $ref: '#/components/responses/ErrorPresupuesto422'
+
+  /presupuestos/{id}:
+    put:
+      summary: Modificar un presupuesto mensual en borrador
+      description: >-
+        Reemplaza los datos editables. El identificador y el condominio son
+        inmutables; un presupuesto APROBADO responde 409.
+      operationId: actualizarPresupuestoMensual
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarPresupuestoRequest'
+      responses:
+        '200':
+          description: Borrador reemplazado y modificación auditada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresupuestoResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/ErrorPresupuesto403'
+        '404':
+          $ref: '#/components/responses/ErrorPresupuesto404'
+        '409':
+          $ref: '#/components/responses/ErrorPresupuesto409'
+        '422':
+          $ref: '#/components/responses/ErrorPresupuesto422'
+
+  /presupuestos/{id}/aprobar:
+    post:
+      summary: Aprobar un presupuesto mensual
+      description: >-
+        Ejecuta la transición BORRADOR a APROBADO y registra el claim sub del
+        actor y la fecha UTC dentro de la misma transacción de auditoría.
+      operationId: aprobarPresupuestoMensual
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Presupuesto aprobado y auditado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresupuestoResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/ErrorPresupuesto403'
+        '404':
+          $ref: '#/components/responses/ErrorPresupuesto404'
+        '409':
+          $ref: '#/components/responses/ErrorPresupuesto409'
+        '422':
+          $ref: '#/components/responses/ErrorPresupuesto422'
+
+  /condominios/{condominio_id}/presupuestos/{periodo}:
+    get:
+      summary: Consultar el presupuesto de un condominio y periodo
+      description: >-
+        Devuelve el BORRADOR o APROBADO existente sin cruzar contextos. AUDITOR
+        puede usar esta consulta dentro de su condominio. CON-11 debe aceptar el
+        resultado como fuente de emisión únicamente cuando estado sea APROBADO.
+      operationId: obtenerPresupuestoPorPeriodo
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: condominio_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: periodo
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+            example: '2026-10'
+      responses:
+        '200':
+          description: Presupuesto encontrado dentro del contexto autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresupuestoResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/ErrorPresupuesto403'
+        '404':
+          $ref: '#/components/responses/ErrorPresupuesto404'
+        '422':
+          $ref: '#/components/responses/ErrorPresupuesto422'
+
   /cuotas/emitir-lote:
     post:
       summary: Emisión masiva mensual de cuotas ordinarias
+      description: Emite un lote persistente desde el presupuesto aprobado, aplica saldos a favor y registra el evento de forma transaccional.
+      tags: [Cuotas de Mantenimiento]
       operationId: emitirLoteCuotas
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -42,11 +471,20 @@ paths:
         '400':
           $ref: '#/components/responses/Error400'
         '409':
-          description: Lote ya emitido previamente para este periodo
+          description: Lote ya emitido o presupuesto no aprobado
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '422':
+          $ref: '#/components/responses/Error422'
 
   /pagos/reportar:
     post:
@@ -148,15 +586,250 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  parameters:
+    ContextoEstructura:
+      name: condominio_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  requestBodies:
+    ArchivoEstructura:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [archivo]
+            properties:
+              archivo:
+                type: string
+                format: binary
+                description: CSV UTF-8, máximo 2 MiB y 5000 filas; numero,piso,edificio,coeficiente,total_pisos
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
-    EmitirLoteCuotasRequest:
+    CrearEdificioRequest:
       type: object
-      required: [condominio_id, periodo, presupuesto_total, fecha_vencimiento]
+      additionalProperties: false
+      required: [nombre_bloque, total_pisos]
+      properties:
+        nombre_bloque: { type: string, minLength: 1, maxLength: 100 }
+        total_pisos: { type: integer, minimum: 1, maximum: 32767 }
+    EdificioResponse:
+      type: object
+      required: [id, condominio_id, nombre_bloque, total_pisos]
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        nombre_bloque: { type: string }
+        total_pisos: { type: integer, minimum: 1, maximum: 32767 }
+    CrearDepartamentoRequest:
+      type: object
+      additionalProperties: false
+      required: [numero, piso, coeficiente_participacion]
+      properties:
+        numero: { type: string, minLength: 1, maxLength: 20 }
+        piso: { type: integer, minimum: 1, maximum: 32767 }
+        coeficiente_participacion:
+          type: string
+          pattern: '^[0-9]{1,3}(\.[0-9]{1,4})?$'
+          description: Decimal mayor que cero y menor o igual que 100, como porcentaje
+          example: '0.7200'
+    DepartamentoResponse:
+      type: object
+      required: [id, edificio_id, numero, piso, coeficiente_participacion, saldo_a_favor, estado_financiero, activo]
+      properties:
+        id: { type: string, format: uuid }
+        edificio_id: { type: string, format: uuid }
+        numero: { type: string }
+        piso: { type: integer }
+        coeficiente_participacion: { type: string, pattern: '^[0-9]+\.[0-9]{4}$' }
+        saldo_a_favor: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        estado_financiero: { type: string, enum: [AL_DIA, OBSERVADO, EN_MORA] }
+        activo: { type: boolean }
+    ImportacionEstructuraResponse:
+      type: object
+      required: [total_filas, nuevas, creadas, ya_existentes, rechazadas, filas]
+      properties:
+        total_filas: { type: integer }
+        nuevas: { type: integer }
+        creadas: { type: integer }
+        ya_existentes: { type: integer }
+        rechazadas: { type: integer }
+        filas:
+          type: array
+          items:
+            type: object
+            required: [fila, numero, piso, edificio, coeficiente, total_pisos, estado, errores]
+            properties:
+              fila: { type: integer }
+              numero: { type: string }
+              piso: { type: [integer, 'null'] }
+              edificio: { type: string }
+              coeficiente: { type: string }
+              total_pisos: { type: [integer, 'null'] }
+              estado: { type: string, enum: [NUEVA, YA_EXISTENTE, ERROR, CREADA] }
+              errores: { type: array, items: { type: string } }
+    ConfigurarDistribucionRequest:
+      type: object
+      additionalProperties: false
+      required: [metodo]
+      properties:
+        metodo:
+          type: string
+          enum: [POR_ALICUOTA, EQUITATIVA]
+    DistribucionResponse:
+      type: object
+      required: [id, condominio_id, metodo, actualizado_por, actualizado_en]
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        metodo:
+          type: string
+          enum: [POR_ALICUOTA, EQUITATIVA]
+        actualizado_por: { type: string }
+        actualizado_en: { type: string, format: date-time }
+    CrearCondominioRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - nombre
+        - direccion
+        - moneda
+        - regla_mora_tipo
+        - dia_vencimiento
+        - dias_gracia
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 150, example: "Villa Bonita 3" }
+        direccion: { type: string, minLength: 1, maxLength: 500, example: "Av. Principal 123, Lima" }
+        moneda: { type: string, enum: [PEN, USD] }
+        regla_mora_tipo: { type: string, enum: [MONTO_FIJO, PORCENTAJE_SALDO] }
+        monto_mora_fijo:
+          type: [string, 'null']
+          pattern: '^[0-9]+(\.[0-9]{2})$'
+          example: "20.00"
+        tasa_mora_porcentaje:
+          type: [string, 'null']
+          pattern: '^(100\.0000|[0-9]{1,2}\.[0-9]{4})$'
+          example: null
+        dia_vencimiento: { type: integer, minimum: 1, maximum: 28, example: 20 }
+        dias_gracia: { type: integer, minimum: 0, maximum: 30, example: 2 }
+      oneOf:
+        - title: Mora por monto fijo
+          properties:
+            regla_mora_tipo: { const: MONTO_FIJO }
+            monto_mora_fijo: { type: string }
+            tasa_mora_porcentaje: { type: 'null' }
+          required: [monto_mora_fijo]
+        - title: Mora porcentual sobre saldo
+          properties:
+            regla_mora_tipo: { const: PORCENTAJE_SALDO }
+            monto_mora_fijo: { type: 'null' }
+            tasa_mora_porcentaje: { type: string }
+          required: [tasa_mora_porcentaje]
+
+    CondominioResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - nombre
+        - direccion
+        - moneda
+        - regla_mora_tipo
+        - dia_vencimiento
+        - dias_gracia
+        - activo
+        - creado_en
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string }
+        direccion: { type: string }
+        moneda: { type: string, enum: [PEN, USD] }
+        regla_mora_tipo: { type: string, enum: [MONTO_FIJO, PORCENTAJE_SALDO] }
+        monto_mora_fijo: { type: [string, 'null'], example: "20.00" }
+        tasa_mora_porcentaje: { type: [string, 'null'], example: null }
+        dia_vencimiento: { type: integer, minimum: 1, maximum: 28 }
+        dias_gracia: { type: integer, minimum: 0, maximum: 30 }
+        activo: { type: boolean, const: true }
+        creado_en: { type: string, format: date-time }
+
+    CrearPresupuestoRequest:
+      type: object
+      additionalProperties: false
+      required: [condominio_id, periodo, moneda, monto_total, fecha_vencimiento]
       properties:
         condominio_id: { type: string, format: uuid }
-        periodo: { type: string, example: "2026-10" }
-        presupuesto_total: { type: string, example: "20000.00" }
-        fecha_vencimiento: { type: string, format: date, example: "2026-10-20" }
+        periodo:
+          type: string
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          example: '2026-10'
+        moneda: { type: string, enum: [PEN, USD] }
+        monto_total:
+          type: string
+          pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
+          not: { const: '0.00' }
+          example: '20000.00'
+        fecha_vencimiento: { type: string, format: date, example: '2026-10-20' }
+
+    ActualizarPresupuestoRequest:
+      type: object
+      additionalProperties: false
+      required: [periodo, moneda, monto_total, fecha_vencimiento]
+      properties:
+        periodo:
+          type: string
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          example: '2026-10'
+        moneda: { type: string, enum: [PEN, USD] }
+        monto_total:
+          type: string
+          pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
+          not: { const: '0.00' }
+          example: '20500.00'
+        fecha_vencimiento: { type: string, format: date, example: '2026-10-20' }
+
+    PresupuestoResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - condominio_id
+        - periodo
+        - moneda
+        - monto_total
+        - fecha_vencimiento
+        - estado
+        - creado_por
+        - creado_en
+        - aprobado_por
+        - aprobado_en
+        - actualizado_en
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        periodo: { type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }
+        moneda: { type: string, enum: [PEN, USD] }
+        monto_total: { type: string, example: '20000.00' }
+        fecha_vencimiento: { type: string, format: date }
+        estado: { type: string, enum: [BORRADOR, APROBADO] }
+        creado_por: { type: string }
+        creado_en: { type: string, format: date-time }
+        aprobado_por: { type: [string, 'null'] }
+        aprobado_en: { type: [string, 'null'], format: date-time }
+        actualizado_en: { type: string, format: date-time }
+
+    EmitirLoteCuotasRequest:
+      type: object
+      additionalProperties: false
+      required: [condominio_id, periodo]
+      properties:
+        condominio_id: { type: string, format: uuid }
+        periodo: { type: string, pattern: '^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])$', example: "2026-10" }
 
     EmitirLoteCuotasResponse:
       type: object
@@ -166,6 +839,8 @@ components:
         total_cuotas_emitidas: { type: integer }
         monto_total_facturado: { type: string }
         cuotas_cubiertas_saldo_favor: { type: integer }
+        fecha_emision: { type: string, format: date-time }
+        fecha_vencimiento: { type: string, format: date }
 
     ComprobanteRecibidoResponse:
       type: object
@@ -226,3 +901,95 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+
+    Error401:
+      description: Bearer Token ausente, inválido o expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: NO_AUTENTICADO
+            mensaje: Se requiere un Bearer Token válido.
+
+    Error403:
+      description: El rol autenticado no está autorizado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: ACCESO_DENEGADO
+            mensaje: La operación requiere el rol SUPERADMIN.
+
+    Error404:
+      description: Condominio no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: CONDOMINIO_NO_ENCONTRADO
+            mensaje: No existe un condominio con el identificador solicitado.
+
+    Error422:
+      description: Datos del condominio inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: DATOS_CONDOMINIO_INVALIDOS
+            mensaje: La configuración de mora no corresponde con la modalidad seleccionada.
+
+    ErrorPresupuesto403:
+      description: Rol no autorizado o condominio fuera del contexto del JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: PRESUPUESTO_ACCESO_DENEGADO
+            mensaje: No tiene permisos sobre los presupuestos del condominio solicitado.
+
+    ErrorPresupuesto404:
+      description: Condominio o presupuesto solicitado no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            presupuestoNoEncontrado:
+              value:
+                error_code: PRESUPUESTO_NO_ENCONTRADO
+                mensaje: No existe un presupuesto para el identificador o periodo solicitado.
+            condominioNoEncontrado:
+              value:
+                error_code: CONDOMINIO_NO_ENCONTRADO
+                mensaje: No existe un condominio con el identificador solicitado.
+
+    ErrorPresupuesto409:
+      description: Presupuesto duplicado o transición incompatible con su estado actual
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            periodoDuplicado:
+              value:
+                error_code: PRESUPUESTO_PERIODO_DUPLICADO
+                mensaje: Ya existe un presupuesto para el condominio y periodo indicados.
+            presupuestoNoEditable:
+              value:
+                error_code: PRESUPUESTO_NO_EDITABLE
+                mensaje: Un presupuesto aprobado no puede modificarse ni aprobarse nuevamente.
+
+    ErrorPresupuesto422:
+      description: Periodo, moneda, monto o vencimiento inválido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: DATOS_PRESUPUESTO_INVALIDOS
+            mensaje: El vencimiento debe pertenecer al periodo y la moneda debe coincidir con el condominio.

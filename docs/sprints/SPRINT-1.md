@@ -44,11 +44,12 @@ CON-22 ───────────────> CON-23
 - Configuración del día de vencimiento, días de gracia y modalidad de mora.
 - Acceso de creación restringido al rol `SUPERADMIN`.
 - Persistencia del condominio como entidad activa y devolución de su identificador.
+- Listado y selección del contexto activo para `SUPERADMIN`; selección automática si solo existe uno.
 - Aislamiento: las consultas y operaciones deben conservar el contexto del condominio correspondiente.
 
 **Se considera terminada cuando:** un SuperAdmin puede crear y consultar el condominio; un usuario sin autorización recibe un rechazo; y una prueba confirma que los datos de dos condominios no se mezclan.
 
-**Trazabilidad:** [backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md), [lenguaje del dominio](../../specs/00-core/ubiquitous-language.md), [modelo de entidades](../../specs/03-data-models/domain-entities.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [seguridad y RBAC](../../specs/01-architecture/security-and-rbac.md).
+**Trazabilidad:** [backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md), [especificación de dominio](../../specs/02-domains/05-usuarios-rbac/spec.md), [proceso PROC-05](../../specs/02-processes-and-automations/proc-05-gestion-usuarios.md), [lenguaje del dominio](../../specs/00-core/ubiquitous-language.md), [modelo de entidades](../../specs/03-data-models/domain-entities.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [contrato de API](../../specs/05-api/api-contracts.md), [OpenAPI](../../specs/03-contracts/openapi/condomanager.openapi.yaml), [BDD ejecutable](../../specs/02-domains/05-usuarios-rbac/features/condominios.feature), [criterios BDD detallados](../../specs/04-acceptance-criteria/auth-and-rbac.feature.md), [seguridad y RBAC](../../specs/01-architecture/security-and-rbac.md).
 
 ## CON-3 — Registrar edificios y departamentos
 
@@ -179,3 +180,22 @@ CON-22 ───────────────> CON-23
 
 Una historia se considera terminada cuando cumple sus criterios de aceptación, persiste los datos requeridos, respeta autorización y aislamiento por condominio, actualiza sus contratos o especificaciones si corresponde, incluye pruebas automatizadas y pasa la revisión de otro integrante del equipo.
 
+## Entrega técnica CON-11 — Nicolás
+
+Implementación en `feat/PROC-01-emision-cuotas`, basada en `develop`:
+
+- Servicio persistente en `src/modules/cuotas/emision.py`, con CON-9 aprobado,
+  distribución vigente CON-10 y amortización CON-13 dentro de una transacción.
+- Cierre determinista de centavos, bloqueo por condominio, departamentos activos
+  y unicidad durable por periodo. Auditoría encadenada y evento en outbox.
+- Ejecución manual autenticada y worker APScheduler separado; operación y
+  recuperación descritas en `specs/05-operations/deployment-and-runbooks.md`.
+- Migración `20261019_0006` para cuotas, lotes, outbox y FK pendiente de CON-13.
+- Contratos OpenAPI, diccionario, DDL, evento JSON Schema y BDD actualizados;
+  frontend envía solo condominio y periodo, sin sustituir el presupuesto aprobado.
+- Evidencia automatizada en `src/tests/unit/test_emision.py`,
+  `src/tests/integration/test_emision_db.py` y `src/tests/bdd/test_emision_bdd.py`:
+  persistencia, amortización, reversión, concurrencia, reintentos y publicación.
+
+Estado de entrega: implementación y verificaciones locales; la revisión de pares
+y los checks del PR forman parte del cierre de la historia.

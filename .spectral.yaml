@@ -1,0 +1,12 @@
+extends:
+  - spectral:oas
+
+# La estructura y referencias siguen siendo bloqueantes. La documentación
+# incompleta del contrato actual se publica como warnings, no se oculta.
+# Línea base: 20 warnings (contacto ausente, descripciones y tags de operaciones).
+# TODO: completar esa documentación en specs/ antes de exigir cero warnings.
+rules:
+  info-contact: warn
+  operation-description: warn
+  operation-tags: warn
+  oas3-api-servers: warn

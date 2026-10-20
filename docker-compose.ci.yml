@@ -1,0 +1,42 @@
+# Usar con --env-file /dev/null; nunca cargar .env ni conectar a Supabase en CI.
+# Los secretos efímeros se generan en docker.yml. No usar este override en producción.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ci
+      POSTGRES_DB: condomanager_ci
+      POSTGRES_PASSWORD: ${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ci -d condomanager_ci"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  # El smoke no usa almacenamiento S3; evitar descargar AIStor, que requiere licencia.
+  minio:
+    profiles: ["almacenamiento-no-usado"]
+
+  backend:
+    image: condomanager-api:ci
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
+      JWT_SECRET: ${CI_JWT_SECRET:?Generar CI_JWT_SECRET}
+      DEBUG: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  cuotas-worker:
+    image: condomanager-api:ci
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
+      DEBUG: "false"
+
+  frontend:
+    image: condomanager-web:ci
+    depends_on:
+      backend:
+        condition: service_healthy

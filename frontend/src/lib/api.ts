@@ -6,12 +6,58 @@
  */
 
 export interface Departamento {
+  id?: string;
+  edificio_id?: string;
+  activo?: boolean;
   numero: string;
   piso: number;
   coeficiente: string;
   saldo_a_favor: string;
   estado_financiero: "AL_DIA" | "EN_MORA" | "OBSERVADO";
   deuda_vencida?: string;
+}
+
+export interface Edificio {
+  id: string;
+  condominio_id: string;
+  nombre_bloque: string;
+  total_pisos: number;
+}
+
+export interface DepartamentoRegistrado {
+  id: string;
+  edificio_id: string;
+  numero: string;
+  piso: number;
+  coeficiente_participacion: string;
+  saldo_a_favor: string;
+  estado_financiero: "AL_DIA" | "EN_MORA" | "OBSERVADO";
+  activo: boolean;
+}
+
+export interface FilaImportacion {
+  fila: number;
+  numero: string;
+  piso: number | null;
+  edificio: string;
+  coeficiente: string;
+  total_pisos: number | null;
+  estado: "NUEVA" | "CREADA" | "YA_EXISTENTE" | "ERROR";
+  errores: string[];
+}
+
+export interface ResultadoImportacion {
+  total_filas: number;
+  nuevas: number;
+  creadas: number;
+  ya_existentes: number;
+  rechazadas: number;
+  filas: FilaImportacion[];
+}
+
+/** Adaptador para las vistas de cuotas que usan el nombre histórico coeficiente. */
+export function departamentoParaPortal(departamento: DepartamentoRegistrado): Departamento {
+  return { ...departamento, coeficiente: departamento.coeficiente_participacion };
 }
 
 export interface AreaComun {
@@ -63,6 +109,73 @@ export interface NotificacionLog {
   fecha_creacion: string;
 }
 
+export type Moneda = "PEN" | "USD";
+export type ReglaMoraTipo = "MONTO_FIJO" | "PORCENTAJE_SALDO";
+
+export interface CrearCondominioPayload {
+  nombre: string;
+  direccion: string;
+  moneda: Moneda;
+  regla_mora_tipo: ReglaMoraTipo;
+  monto_mora_fijo: string | null;
+  tasa_mora_porcentaje: string | null;
+  dia_vencimiento: number;
+  dias_gracia: number;
+}
+
+export interface Condominio extends CrearCondominioPayload {
+  id: string;
+  activo: boolean;
+  creado_en: string;
+}
+
+export type EstadoPresupuesto = "BORRADOR" | "APROBADO";
+
+export interface DatosPresupuestoPayload {
+  periodo: string;
+  moneda: Moneda;
+  monto_total: string;
+  fecha_vencimiento: string;
+}
+
+export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
+  condominio_id: string;
+}
+
+export interface PresupuestoMensual extends CrearPresupuestoPayload {
+  id: string;
+  estado: EstadoPresupuesto;
+  creado_por: string;
+  creado_en: string;
+  aprobado_por: string | null;
+  aprobado_en: string | null;
+  actualizado_en: string;
+}
+
+export interface PresupuestoApiResult {
+  ok: boolean;
+  data?: PresupuestoMensual;
+  error?: string;
+  errorCode?: string;
+  notFound?: boolean;
+}
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  rol: "SUPERADMIN" | "ADMIN_JUNTA" | "AUDITOR" | "PROPIETARIO" | "INQUILINO";
+  condominio_id: string | null;
+  departamentos: string[];
+  tipo_relacion?: string;
+}
+
+export interface LoginResult {
+  access_token: string;
+  usuario: AuthenticatedUser;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 function getAuthHeaders(): Record<string, string> {
@@ -76,6 +189,263 @@ function getAuthHeaders(): Record<string, string> {
     }
   }
   return headers;
+}
+
+function obtenerMensajeError(data: unknown, fallback: string): string {
+  if (!data || typeof data !== "object") return fallback;
+  const payload = data as {
+    mensaje?: string;
+    detail?: { mensaje?: string } | string;
+  };
+  if (payload.mensaje) return payload.mensaje;
+  if (typeof payload.detail === "string") return payload.detail;
+  return payload.detail?.mensaje || fallback;
+}
+
+function obtenerCodigoError(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const payload = data as {
+    error_code?: string;
+    detail?: { error_code?: string };
+  };
+  return payload.error_code || payload.detail?.error_code;
+}
+
+export async function iniciarSesion(email: string, password: string): Promise<LoginResult> {
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(obtenerMensajeError(data, "No se pudo iniciar sesión."));
+  }
+  return data as LoginResult;
+}
+
+async function estructuraRequest<T>(condominioId: string, ruta: string, init: RequestInit = {}): Promise<T> {
+  const headers = getAuthHeaders();
+  if (init.body instanceof FormData) delete headers["Content-Type"];
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/condominios/${encodeURIComponent(condominioId)}${ruta}`, {
+      ...init, headers,
+    });
+  } catch {
+    throw new Error("No se pudo conectar con la API. Comprueba la conexión e inténtalo de nuevo.");
+  }
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo completar la operación de estructura."));
+  return data as T;
+}
+
+export function listarEdificios(condominioId: string): Promise<Edificio[]> {
+  return estructuraRequest(condominioId, "/edificios");
+}
+
+export function registrarEdificio(condominioId: string, nombre_bloque: string, total_pisos: number): Promise<Edificio> {
+  return estructuraRequest(condominioId, "/edificios", {
+    method: "POST", body: JSON.stringify({ nombre_bloque, total_pisos }),
+  });
+}
+
+export function listarDepartamentos(condominioId: string): Promise<DepartamentoRegistrado[]> {
+  return estructuraRequest(condominioId, "/departamentos");
+}
+
+export function registrarDepartamento(condominioId: string, edificioId: string, datos: {
+  numero: string; piso: number; coeficiente_participacion: string;
+}): Promise<DepartamentoRegistrado> {
+  return estructuraRequest(condominioId, `/edificios/${encodeURIComponent(edificioId)}/departamentos`, {
+    method: "POST", body: JSON.stringify(datos),
+  });
+}
+
+export function cambiarEstadoDepartamento(condominioId: string, departamentoId: string, activo: boolean): Promise<DepartamentoRegistrado> {
+  return estructuraRequest(condominioId, `/departamentos/${encodeURIComponent(departamentoId)}/estado`, {
+    method: "PATCH", body: JSON.stringify({ activo }),
+  });
+}
+
+export function importarEstructura(condominioId: string, archivo: File, confirmar = false): Promise<ResultadoImportacion> {
+  const body = new FormData();
+  body.append("archivo", archivo);
+  return estructuraRequest(condominioId, `/importaciones/${confirmar ? "confirmar" : "previsualizar"}`, {
+    method: "POST", body,
+  });
+}
+
+export async function crearCondominio(
+  payload: CrearCondominioPayload
+): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/condominios`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo guardar el condominio."),
+      };
+    }
+    return { ok: true, data: data as Condominio };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo conectar con la API. La configuración no fue guardada.",
+    };
+  }
+}
+
+export async function listarCondominios(): Promise<{
+  ok: boolean;
+  data?: Condominio[];
+  error?: string;
+}> {
+  try {
+    const response = await fetch(`${API_BASE}/condominios`, {
+      headers: getAuthHeaders(),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudieron consultar los condominios."),
+      };
+    }
+    return { ok: true, data: data as Condominio[] };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API." };
+  }
+}
+
+export async function obtenerCondominio(
+  condominioId: string
+): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/condominios/${condominioId}`, {
+      headers: getAuthHeaders(),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo consultar el condominio."),
+      };
+    }
+    return { ok: true, data: data as Condominio };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API." };
+  }
+}
+
+export async function crearPresupuesto(
+  payload: CrearPresupuestoPayload
+): Promise<PresupuestoApiResult> {
+  try {
+    const response = await fetch(`${API_BASE}/presupuestos`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo guardar el presupuesto."),
+        errorCode: obtenerCodigoError(data),
+      };
+    }
+    return { ok: true, data: data as PresupuestoMensual };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo conectar con la API. El presupuesto no fue guardado.",
+    };
+  }
+}
+
+export async function actualizarPresupuesto(
+  presupuestoId: string,
+  payload: DatosPresupuestoPayload
+): Promise<PresupuestoApiResult> {
+  try {
+    const response = await fetch(`${API_BASE}/presupuestos/${presupuestoId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo actualizar el presupuesto."),
+        errorCode: obtenerCodigoError(data),
+      };
+    }
+    return { ok: true, data: data as PresupuestoMensual };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo conectar con la API. El presupuesto no fue actualizado.",
+    };
+  }
+}
+
+export async function aprobarPresupuesto(
+  presupuestoId: string
+): Promise<PresupuestoApiResult> {
+  try {
+    const response = await fetch(`${API_BASE}/presupuestos/${presupuestoId}/aprobar`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo aprobar el presupuesto."),
+        errorCode: obtenerCodigoError(data),
+      };
+    }
+    return { ok: true, data: data as PresupuestoMensual };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo conectar con la API. El presupuesto no fue aprobado.",
+    };
+  }
+}
+
+export async function obtenerPresupuestoPorPeriodo(
+  condominioId: string,
+  periodo: string
+): Promise<PresupuestoApiResult> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/condominios/${condominioId}/presupuestos/${encodeURIComponent(periodo)}`,
+      { headers: getAuthHeaders() }
+    );
+    const data = await response.json();
+    const errorCode = obtenerCodigoError(data);
+    if (response.status === 404 && errorCode === "PRESUPUESTO_NO_ENCONTRADO") {
+      return { ok: true, notFound: true };
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: obtenerMensajeError(data, "No se pudo consultar el presupuesto."),
+        errorCode,
+      };
+    }
+    return { ok: true, data: data as PresupuestoMensual };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API." };
+  }
 }
 
 // ============================================================================
@@ -383,16 +753,14 @@ export async function conciliarComprobante(
   return { ok: false, error: "Comprobante no hallado." };
 }
 
-export async function emitirLoteCuotas(periodo: string, presupuestoTotal: string): Promise<{ ok: boolean; error?: string; total?: number }> {
+export async function emitirLoteCuotas(periodo: string, condominioId: string): Promise<{ ok: boolean; error?: string; total?: number }> {
   try {
     const res = await fetch(`${API_BASE}/cuotas/emitir-lote`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({
-        condominio_id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        condominio_id: condominioId,
         periodo,
-        presupuesto_total: presupuestoTotal,
-        fecha_vencimiento: `${periodo}-20`,
       }),
     });
     if (res.ok) {
@@ -400,9 +768,9 @@ export async function emitirLoteCuotas(periodo: string, presupuestoTotal: string
       return { ok: true, total: data.total_cuotas_emitidas };
     }
     const err = await res.json();
-    return { ok: false, error: err.detail?.mensaje };
+    return { ok: false, error: obtenerMensajeError(err, "No se pudo emitir el lote.") };
   } catch {
-    return { ok: true, total: 139 };
+    return { ok: false, error: "No se pudo conectar con la API para emitir el lote." };
   }
 }
 

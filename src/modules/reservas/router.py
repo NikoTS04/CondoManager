@@ -58,10 +58,13 @@ for idx, area_data in enumerate(_raw_areas):
 # Almacén de reservas confirmadas / canceladas
 RESERVAS_REGISTRADAS: Dict[uuid.UUID, Dict] = {}
 
-# Mapa de departamentos con estado y moras
+# El contrato recibe UUID, no números: indexar por número dejaba la mora
+# inalcanzable y trataba incluso al piloto moroso como AL_DIA. UUID5 mantiene
+# identidades estables en este almacén simulado; no sustituye el catálogo de BD.
 DEPARTAMENTOS_MAP: Dict[str, Dict] = {}
 for d in generar_datos_departamentos():
-    DEPARTAMENTOS_MAP[d["numero"]] = d
+    departamento_id = uuid.uuid5(CONDOMINIO_PILOTO_ID, d["numero"])
+    DEPARTAMENTOS_MAP[str(departamento_id)] = {**d, "id": departamento_id}
 
 
 # ============================================================================
@@ -134,7 +137,7 @@ async def crear_reserva(request: CrearReservaRequest):
     estado_financiero = "AL_DIA"
     saldo_mora = Decimal("0.00")
 
-    # Si se pasó un número de departamento piloto (ej. 402 moroso)
+    # Resolver el UUID del departamento piloto (ej. 402 moroso).
     if depto_id_str in DEPARTAMENTOS_MAP:
         depto = DEPARTAMENTOS_MAP[depto_id_str]
         estado_financiero = depto.get("estado_financiero", "AL_DIA")

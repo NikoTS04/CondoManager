@@ -24,29 +24,229 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
 
 ## 2. Contratos Principales por Módulo
 
-### 2.1 Módulo de Cuotas (Anderson)
+### Distribución de cuotas (CON-10)
+
+Base: `/api/v1/condominios/{condominio_id}/distribucion`. Requiere Bearer Token.
+`SUPERADMIN` opera sobre cualquier condominio; `ADMIN_JUNTA` solo sobre el suyo;
+`AUDITOR` solo consulta el suyo. Los demás roles no acceden.
+
+| Método | Entrada | Respuesta |
+| :--- | :--- | :--- |
+| `PUT` | `{"metodo": "POR_ALICUOTA"}` o `{"metodo": "EQUITATIVA"}`; sin campos extra | `200`, configuración persistida y validada. |
+| `GET` | Sin cuerpo | `200`, configuración vigente; consultar no garantiza que los departamentos sigan siendo válidos. |
+
+Respuesta: `id` y `condominio_id` UUID, `metodo`, `actualizado_por` (claim `sub`)
+y `actualizado_en` (fecha UTC). El PUT repetido con el mismo método vuelve a validar
+los departamentos y, si es válido, conserva respuesta y auditoría anteriores.
+Una modificación registra `DISTRIBUCION_CONFIGURADA` transaccionalmente.
+
+Errores con `error_code` y `mensaje`:
+- `401 NO_AUTENTICADO` / `TOKEN_INVALIDO` por credenciales ausentes o inválidas.
+- `403 DISTRIBUCION_ACCESO_DENEGADO` por rol o contexto ajeno/inválido.
+- `404 CONDOMINIO_NO_ENCONTRADO` / `DISTRIBUCION_NO_CONFIGURADA`.
+- `422 DATOS_DISTRIBUCION_INVALIDOS` por cuerpo o identificador inválido.
+- `422 DISTRIBUCION_SIN_DEPARTAMENTOS` para ambas modalidades.
+- `422 DISTRIBUCION_COEFICIENTES_INVALIDOS` si la suma no es exactamente
+  `100.0000` o un coeficiente no es válido. Una suma incorrecta incluye
+  `detalles.suma_coeficientes` y `detalles.suma_requerida` como cadenas.
+
+Contrato interno CON-11: `DistribucionService.obtener_para_emision(condominio_id)`
+revalida y devuelve `DistribucionParaEmision(configuracion_id, metodo, departamentos)`;
+cada departamento contiene `id` y `coeficiente: Decimal`. Debe llamarse en la
+transacción de emisión. `calcular_distribucion(presupuesto: Decimal, departamentos,
+metodo)` devuelve `dict[UUID, Decimal]` ordenado por UUID, sin ajuste residual.
+La configuración es vigente por condominio, no versionada por periodo; CON-11
+conserva la instantánea del lote y realiza su control de concurrencia.
+
+### 2.1 Módulo de Condominios (CON-2 / PROC-05)
+
+Todos los endpoints de esta sección requieren `Authorization: Bearer <token>` y rol
+global `SUPERADMIN`. La ausencia de credenciales responde `401 NO_AUTENTICADO`; un rol
+distinto responde `403 ACCESO_DENEGADO`.
+
+- **`GET /api/v1/condominios`**
+  - *Descripción:* Lista los condominios activos para que el `SUPERADMIN` seleccione
+    el contexto operativo antes de ingresar a procesos como presupuesto mensual.
+  - *Response (200 OK):* Arreglo de objetos `CondominioResponse`, ordenado desde el
+    condominio creado más recientemente.
+  - La lista vacía indica que debe iniciarse el alta del primer condominio.
+  - Otros roles reciben `403 ACCESO_DENEGADO`; sus contextos proceden del JWT y no
+    pueden escoger arbitrariamente otro condominio.
+
+- **`POST /api/v1/condominios`**
+  - *Descripción:* Crea la raíz persistente de un nuevo contexto multi-condominio y
+    registra la auditoría `CONDOMINIO_CREADO` en la misma transacción.
+  - *Request Body:*
+    ```json
+    {
+      "nombre": "Villa Bonita 3",
+      "direccion": "Av. Principal 123, Lima",
+      "moneda": "PEN",
+      "regla_mora_tipo": "MONTO_FIJO",
+      "monto_mora_fijo": "20.00",
+      "tasa_mora_porcentaje": null,
+      "dia_vencimiento": 20,
+      "dias_gracia": 2
+    }
+    ```
+  - *Reglas condicionales:*
+    - `MONTO_FIJO`: `monto_mora_fijo` es obligatorio y
+      `tasa_mora_porcentaje` debe ser `null`.
+    - `PORCENTAJE_SALDO`: `tasa_mora_porcentaje` es obligatoria y
+      `monto_mora_fijo` debe ser `null`.
+    - `activo`, `id` y `creado_en` son campos de servidor y se rechazan si el cliente
+      intenta incluirlos.
+  - *Response (201 Created):*
+    ```json
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "nombre": "Villa Bonita 3",
+      "direccion": "Av. Principal 123, Lima",
+      "moneda": "PEN",
+      "regla_mora_tipo": "MONTO_FIJO",
+      "monto_mora_fijo": "20.00",
+      "tasa_mora_porcentaje": null,
+      "dia_vencimiento": 20,
+      "dias_gracia": 2,
+      "activo": true,
+      "creado_en": "2026-10-08T15:30:00Z"
+    }
+    ```
+  - *Response (422 Unprocessable Entity):* `DATOS_CONDOMINIO_INVALIDOS` cuando los
+    campos no cumplen sus rangos o la combinación de mora es inconsistente.
+
+- **`GET /api/v1/condominios/{condominio_id}`**
+  - *Descripción:* Recupera exactamente el condominio persistido con el UUID indicado.
+  - *Parámetro de ruta:* `condominio_id`, UUID obligatorio.
+  - *Response (200 OK):* Mismo objeto de respuesta del alta.
+  - *Response (404 Not Found):*
+    ```json
+    {
+      "error_code": "CONDOMINIO_NO_ENCONTRADO",
+      "mensaje": "No existe un condominio con el identificador solicitado.",
+      "detalles": {
+        "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      }
+    }
+    ```
+
+### 2.2 Presupuestos mensuales (CON-9)
+
+Todos los endpoints requieren `Authorization: Bearer <token>`. `SUPERADMIN` puede
+operar cualquier condominio; `ADMIN_JUNTA` puede crear, modificar, aprobar y
+consultar solo el condominio de su JWT; `AUDITOR` dispone únicamente del `GET` para
+su condominio. Los demás roles y todo cruce de contexto reciben
+`403 PRESUPUESTO_ACCESO_DENEGADO`.
+
+- **`POST /api/v1/presupuestos`**
+  - *Descripción:* Crea un presupuesto mensual ordinario en `BORRADOR` y registra
+    `PRESUPUESTO_CREADO` en la misma transacción.
+  - *Request Body:*
+    ```json
+    {
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "periodo": "2026-10",
+      "moneda": "PEN",
+      "monto_total": "20000.00",
+      "fecha_vencimiento": "2026-10-20"
+    }
+    ```
+  - *Response (201 Created):* Devuelve `PresupuestoResponse` con UUID, estado,
+    actor y fechas del servidor.
+
+- **`PUT /api/v1/presupuestos/{id}`**
+  - *Descripción:* Reemplaza `periodo`, `moneda`, `monto_total` y
+    `fecha_vencimiento` mientras el presupuesto esté en `BORRADOR`. `id` y
+    `condominio_id` no pueden modificarse. Registra `PRESUPUESTO_MODIFICADO` con
+    las fotografías anterior y posterior.
+  - *Request Body:*
+    ```json
+    {
+      "periodo": "2026-10",
+      "moneda": "PEN",
+      "monto_total": "20500.00",
+      "fecha_vencimiento": "2026-10-20"
+    }
+    ```
+  - *Response (200 OK):* Devuelve el borrador actualizado.
+
+- **`POST /api/v1/presupuestos/{id}/aprobar`**
+  - *Descripción:* Ejecuta una sola vez la transición `BORRADOR -> APROBADO`,
+    asigna `aprobado_por` desde el claim `sub`, registra `aprobado_en` en UTC y
+    crea `PRESUPUESTO_APROBADO` atómicamente.
+  - *Request Body:* No tiene.
+  - *Response (200 OK):* Devuelve el presupuesto aprobado.
+
+- **`GET /api/v1/condominios/{condominio_id}/presupuestos/{periodo}`**
+  - *Descripción:* Recupera el presupuesto existente, sea `BORRADOR` o
+    `APROBADO`, para el contexto autorizado. El periodo usa `YYYY-MM`.
+  - *Response (200 OK):*
+    ```json
+    {
+      "id": "c21b2dc9-b7d4-47d5-b947-90e3ea900f5c",
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "periodo": "2026-10",
+      "moneda": "PEN",
+      "monto_total": "20000.00",
+      "fecha_vencimiento": "2026-10-20",
+      "estado": "APROBADO",
+      "creado_por": "6a4a78de-c704-44fb-a8b1-9d387ff67c92",
+      "creado_en": "2026-10-08T15:30:00Z",
+      "aprobado_por": "6a4a78de-c704-44fb-a8b1-9d387ff67c92",
+      "aprobado_en": "2026-10-08T16:00:00Z",
+      "actualizado_en": "2026-10-08T16:00:00Z"
+    }
+    ```
+
+Reglas comunes: `periodo` debe ser válido; `monto_total` es una cadena decimal
+positiva con dos posiciones y capacidad `NUMERIC(12,2)`; la moneda es `PEN` o
+`USD` y coincide con la del condominio; el vencimiento pertenece al periodo; y
+solo existe una fila por `(condominio_id, periodo)`.
+
+| HTTP | `error_code` | Uso |
+| :---: | :--- | :--- |
+| `401` | `NO_AUTENTICADO` | Token ausente, inválido o expirado. |
+| `403` | `PRESUPUESTO_ACCESO_DENEGADO` | Rol no permitido o condominio fuera del contexto autorizado. |
+| `404` | `PRESUPUESTO_NO_ENCONTRADO` / `CONDOMINIO_NO_ENCONTRADO` | No existe el recurso solicitado. |
+| `409` | `PRESUPUESTO_PERIODO_DUPLICADO` | Ya existe el par condominio-periodo. |
+| `409` | `PRESUPUESTO_NO_EDITABLE` | El registro ya está aprobado. |
+| `422` | `DATOS_PRESUPUESTO_INVALIDOS` | Periodo, moneda, monto o vencimiento incumple el contrato. |
+
+Contrato para CON-11: la emisión recibe `condominio_id + periodo`, recupera el
+registro persistido y solo continúa si `estado == APROBADO`. El cliente no puede
+reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
+
+### 2.3 Emisión de Cuotas (CON-11, Nicolás)
 - **`POST /api/v1/cuotas/emitir-lote`**
   - *Descripción:* Genera las cuotas del mes para todas las unidades activas del condominio.
   - *Request Body:*
     ```json
     {
       "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "periodo": "2026-10",
-      "presupuesto_total": "20000.00",
-      "fecha_vencimiento": "2026-10-20"
+      "periodo": "2026-10"
     }
     ```
   - *Response (201 Created):*
     ```json
     {
-      "cuotas_generadas": 139,
-      "total_emitido": "20000.00",
+      "lote_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "total_cuotas_emitidas": 139,
+      "monto_total_facturado": "20000.00",
       "periodo": "2026-10",
-      "estado": "EMITIDAS"
+      "cuotas_cubiertas_saldo_favor": 4,
+      "fecha_emision": "2026-10-01T00:00:00Z",
+      "fecha_vencimiento": "2026-10-20"
     }
     ```
 
-### 2.2 Módulo de Pagos y Moras (Tarqui)
+  - Bearer obligatorio: `SUPERADMIN` o `ADMIN_JUNTA` del condominio.
+  - Campos adicionales se rechazan; monto y vencimiento proceden de CON-9 aprobado.
+  - `409 LOTE_YA_EMITIDO` ante reintentos; `409 PRESUPUESTO_NO_APROBADO` si falta
+    aprobación. `401/403` por identidad/contexto, `404` condominio inexistente,
+    `422` padrón/configuración inválidos o condominio inactivo.
+  - Transacción única con CON-10 y CON-13; evento durable en outbox.
+
+### 2.4 Módulo de Pagos y Moras (Tarqui)
 - **`POST /api/v1/pagos/reportar`**
   - *Descripción:* El residente carga un comprobante de pago bancario (Yape/CCI).
   - *Request Body (Multipart/Form-Data):*
@@ -77,7 +277,7 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
     ```
   - *Response (200 OK):* Retorna la liquidación e imputación a cuotas y el nuevo saldo del departamento.
 
-### 2.3 Módulo de Reservas (Brandon)
+### 2.5 Módulo de Reservas (Brandon)
 - **`POST /api/v1/reservas`**
   - *Descripción:* El residente solicita el uso de un área común.
   - *Request Body:*
@@ -115,11 +315,11 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
     }
     ```
 
-### 2.4 Módulo de Notificaciones (Alejandro)
+### 2.6 Módulo de Notificaciones (Alejandro)
 - **`POST /api/v1/notificaciones/despachar`**
   - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
 
-### 2.5 Módulo de Autenticación y RBAC (PROC-05)
+### 2.7 Módulo de Autenticación y RBAC (PROC-05)
 - **`POST /api/v1/auth/login`**
   - *Descripción:* Autentica a un usuario y genera su token de acceso JWT con sus claims y permisos.
   - *Request Body:*
@@ -169,4 +369,21 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
       "departamentos": ["102"]
     }
     ```
+# Estructura inmobiliaria (CON-3 / USR-02)
 
+Contrato detallado: [estructura-inmobiliaria.md](../02-domains/05-usuarios-rbac/estructura-inmobiliaria.md).
+Prefijo `/api/v1/condominios/{condominio_id}`; JWT obligatorio.
+
+| Método | Ruta relativa | Respuesta |
+|---|---|---|
+| GET / POST | `/edificios` | Lista / recurso 201 con UUID, condominio_id, nombre_bloque, total_pisos |
+| GET | `/departamentos` | Lista con filtros opcionales edificio_id y activo |
+| POST | `/edificios/{edificio_id}/departamentos` | 201; entrada numero, piso, coeficiente_participacion (string) |
+| PATCH | `/departamentos/{departamento_id}/estado` | 200; entrada activo (boolean), no-op si no cambia |
+| POST | `/importaciones/previsualizar` | 200; multipart archivo CSV; ninguna escritura |
+| POST | `/importaciones/confirmar` | 200; revalida el archivo y guarda filas válidas |
+
+Importación devuelve `total_filas`, `nuevas`, `creadas`, `ya_existentes`, `rechazadas`
+y `filas`, cada una con `fila`, `numero`, `piso`, `edificio`, `coeficiente`,
+`total_pisos`, `estado` y `errores`. Máximo 2 MiB / 5000 filas. Errores de estructura
+usan el sobre `error_code`, `mensaje`, `detalles` opcional; estados 401/403/404/409/422.

@@ -13,31 +13,110 @@ Almacena las comunidades inmobiliarias o edificios matrices.
 | `nombre` | `VARCHAR(150)` | NO | - | - | Nombre comercial del edificio (ej. "Edificio 3 - Villa Bonita 3"). |
 | `direccion` | `TEXT` | NO | - | - | Ubicación geográfica formal. |
 | `moneda` | `VARCHAR(3)` | NO | `'PEN'` | `CHECK (moneda IN ('PEN', 'USD'))` | Moneda oficial para cobro de cuotas y libros contables. |
-| `regla_mora_tipo` | `VARCHAR(20)` | NO | `'MONTO_FIJO'` | `CHECK (regla_mora_tipo IN ('MONTO_FIJO', 'PORCENTAJE_SALDO'))` | Mecanismo de recargo punitorio por mora. |
-| `monto_mora_fijo` | `NUMERIC(12,2)` | SÍ | `20.00` | `CHECK (monto_mora_fijo >= 0.00)` | Importe de penalidad fija si aplica modalidad fija. |
-| `tasa_mora_porcentaje`| `NUMERIC(6,4)` | SÍ | `0.0000` | `CHECK (tasa_mora_porcentaje >= 0.0000)` | Tasa mensual de interés punitorio si aplica porcentaje. |
-| `dias_corte` | `SMALLINT` | NO | `20` | `CHECK (dias_corte BETWEEN 1 AND 28)` | Día calendario de vencimiento regular de la cuota mensual. |
-| `dias_gracia` | `SMALLINT` | NO | `2` | `CHECK (dias_gracia >= 0)` | Días de tolerancia antes de ejecutar la penalidad de mora. |
+| `regla_mora_tipo` | `VARCHAR(20)` | NO | - | `CHECK (regla_mora_tipo IN ('MONTO_FIJO', 'PORCENTAJE_SALDO'))` | Mecanismo de recargo punitorio por mora. |
+| `monto_mora_fijo` | `NUMERIC(12,2)` | SÍ | `NULL` | `CHECK (monto_mora_fijo >= 0.00)` | Importe de penalidad fija; obligatorio solo para `MONTO_FIJO`. |
+| `tasa_mora_porcentaje`| `NUMERIC(7,4)` | SÍ | `NULL` | `CHECK (tasa_mora_porcentaje BETWEEN 0.0000 AND 100.0000)` | Tasa mensual; obligatoria solo para `PORCENTAJE_SALDO`. |
+| `dia_vencimiento` | `SMALLINT` | NO | - | `CHECK (dia_vencimiento BETWEEN 1 AND 28)` | Día calendario de vencimiento regular. Nombre canónico que reemplaza `dias_corte`. |
+| `dias_gracia` | `SMALLINT` | NO | - | `CHECK (dias_gracia BETWEEN 0 AND 30)` | Días calendario de tolerancia antes de ejecutar la penalidad de mora. |
+| `activo` | `BOOLEAN` | NO | `TRUE` | - | Habilita el contexto del condominio; el cliente no lo establece durante el alta. |
 | `creado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Auditoría de creación de registro. |
+
+Restricción condicional `ck_condominio_configuracion_mora`:
+
+```sql
+CHECK (
+    (regla_mora_tipo = 'MONTO_FIJO'
+        AND monto_mora_fijo IS NOT NULL
+        AND tasa_mora_porcentaje IS NULL)
+    OR
+    (regla_mora_tipo = 'PORCENTAJE_SALDO'
+        AND tasa_mora_porcentaje IS NOT NULL
+        AND monto_mora_fijo IS NULL)
+)
+```
 
 ---
 
-## 2. Tabla: `departamentos`
+## 2. Tabla: `presupuestos_mensuales`
+
+Almacena el presupuesto ordinario de cada condominio y periodo (CON-9).
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador único del presupuesto. |
+| `condominio_id` | `UUID` | NO | - | `REFERENCES condominios(id) ON DELETE RESTRICT` | Condominio propietario del presupuesto. |
+| `periodo` | `VARCHAR(7)` | NO | - | Formato `YYYY-MM`; `UNIQUE (condominio_id, periodo)` | Mes contable del presupuesto. |
+| `moneda` | `VARCHAR(3)` | NO | - | `CHECK (moneda IN ('PEN', 'USD'))` | Debe coincidir con `condominios.moneda`; la aplicación valida esta regla transrelacional. |
+| `monto_total` | `NUMERIC(12,2)` | NO | - | `CHECK (monto_total > 0.00)` | Total ordinario aprobado para distribuir. |
+| `fecha_vencimiento` | `DATE` | NO | - | Debe pertenecer a `periodo` | Fecha límite de pago de las cuotas resultantes. |
+| `estado` | `VARCHAR(20)` | NO | `'BORRADOR'` | `CHECK (estado IN ('BORRADOR', 'APROBADO'))` | Estado del ciclo de vida. |
+| `creado_por` | `VARCHAR(100)` | NO | - | - | Claim `sub` del actor que creó el borrador. |
+| `creado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Fecha y hora UTC de creación. |
+| `aprobado_por` | `VARCHAR(100)` | SÍ | `NULL` | - | Claim `sub` del actor que aprobó. |
+| `aprobado_en` | `TIMESTAMP TZ` | SÍ | `NULL` | - | Fecha y hora UTC de aprobación. |
+| `actualizado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Última modificación UTC. |
+
+Restricciones adicionales:
+
+- `ck_presupuesto_periodo`: valida el patrón `YYYY-MM` y un mes entre `01` y `12`.
+- `ck_presupuesto_vencimiento_periodo`: compara año y mes de
+  `fecha_vencimiento` con `periodo`.
+- `ck_presupuesto_aprobacion`: exige ambos campos de aprobación en estado
+  `APROBADO` y ambos nulos en `BORRADOR`.
+- La coincidencia de moneda con el condominio y la inmutabilidad posterior a la
+  aprobación se aplican transaccionalmente en el servicio.
+
+---
+
+## Tabla: `configuraciones_distribucion` (CON-10)
+
+Una configuración vigente por condominio, sin versionado por periodo.
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador de configuración. |
+| `condominio_id` | `UUID` | NO | - | FK `condominios(id) ON DELETE RESTRICT`; `uq_distribucion_condominio` UNIQUE | Contexto propietario. |
+| `metodo` | `VARCHAR(20)` | NO | - | `ck_distribucion_metodo`: `POR_ALICUOTA` o `EQUITATIVA` | Modalidad vigente. |
+| `actualizado_por` | `VARCHAR(100)` | NO | - | - | Claim `sub` del último actor que cambió el método. |
+| `actualizado_en` | `TIMESTAMP TZ` | NO | - | - | Fecha UTC asignada por el servicio. |
+
+El servicio valida departamentos y suma porcentual, registra auditoría en la misma
+transacción y bloquea el condominio para serializar PUT concurrentes. Un PUT sin
+cambio no modifica actor, fecha ni auditoría. Migración `20261014_0003`, sobre
+`20261008_0002`. No se modifica el modelo Departamento en esta historia.
+
+---
+
+## Tabla: `edificios` (CON-3)
+
+| Columna | Tipo | Nulo | Restricción |
+|---|---|---|---|
+| `id` | UUID | NO | PK, generado por servidor |
+| `condominio_id` | UUID | NO | FK condominios(id), ON DELETE CASCADE |
+| `nombre_bloque` | VARCHAR(100) | NO | Único por condominio; índice único normalizado lower(btrim(nombre_bloque)) |
+| `total_pisos` | INTEGER | NO | CHECK >=1; API máximo 32767 |
+
+## 3. Tabla: `departamentos`
 Almacena cada unidad inmobiliaria exclusiva (departamento, flat, local).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
 | :--- | :--- | :---: | :---: | :--- | :--- |
 | `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador único de la unidad. |
-| `condominio_id` | `UUID` | NO | - | `REFERENCES condominios(id) ON DELETE CASCADE` | Condominio al que pertenece. |
-| `numero` | `VARCHAR(20)` | NO | - | `UNIQUE (condominio_id, numero)` | Número identificador del departamento (ej. "101", "504B"). |
+| `edificio_id` | `UUID` | NO | - | `REFERENCES edificios(id) ON DELETE CASCADE` | El condominio se obtiene a través del edificio. |
+| `numero` | `VARCHAR(20)` | NO | - | `UNIQUE (edificio_id, numero)` e índice único normalizado | Número identificador del departamento (ej. "101", "504B"). |
 | `piso` | `SMALLINT` | NO | - | `CHECK (piso >= 1)` | Piso o nivel en el que se ubica la unidad. |
-| `coeficiente_participacion` | `NUMERIC(7,4)` | NO | - | `CHECK (coeficiente_participacion > 0.0000)` | Alícuota porcentual de participación sobre el 100%. |
+| `coeficiente_participacion` | `NUMERIC(7,4)` | NO | - | `CHECK (>0 AND <=100)` | Alícuota porcentual; cadena decimal en API. |
 | `saldo_a_favor` | `NUMERIC(12,2)` | NO | `0.00` | `CHECK (saldo_a_favor >= 0.00)` | Fondo crediticio a favor del departamento por pagos en exceso. |
 | `estado_financiero` | `VARCHAR(20)` | NO | `'AL_DIA'` | `CHECK (estado_financiero IN ('AL_DIA', 'OBSERVADO', 'EN_MORA'))` | Estado de solvencia para control de reservas comunes. |
+| `activo` | `BOOLEAN` | NO | `TRUE` | - | Estado operativo; inactivos se excluyen de futuras distribuciones sin perder el historial. |
+
+Migración `20261018_0005`: adopta el esquema existente de Supabase tras verificarlo,
+o lo crea en instalaciones nuevas. El piso máximo se valida contra el edificio en
+el servicio. Los registros y cambios de actividad se auditan transaccionalmente.
 
 ---
 
-## 3. Tabla: `cuotas_mantenimiento`
+## 4. Tabla: `cuotas_mantenimiento`
 Almacena las obligaciones devengadas mensuales por cada departamento (Anderson - PROC-01).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -57,7 +136,38 @@ Almacena las obligaciones devengadas mensuales por cada departamento (Anderson -
 
 ---
 
-## 4. Tabla: `comprobantes_pago`
+## Tabla: `aplicaciones_saldo_favor` (CON-13)
+
+Evidencia histórica de la amortización inicial, incluso si el crédito aplicado es cero.
+El departamento y condominio se obtienen mediante la cuota; no se duplican claves.
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador de aplicación. |
+| `cuota_id` | `UUID` | NO | - | UNIQUE; FK diferida a CON-11 | Clave de idempotencia. |
+| `saldo_previo` | `NUMERIC(12,2)` | NO | - | >= 0 | Crédito antes del consumo. |
+| `monto_aplicado` | `NUMERIC(12,2)` | NO | - | >= 0 | Pago con crédito, no descuento. |
+| `monto_pendiente` | `NUMERIC(12,2)` | NO | - | >= 0 | Neto después de amortizar. |
+| `saldo_restante` | `NUMERIC(12,2)` | NO | - | >= 0 | Remanente conservado. |
+| `estado_anterior` | `VARCHAR(20)` | NO | - | EMITIDA | Estado antes de amortizar. |
+| `estado_posterior` | `VARCHAR(20)` | NO | - | PAGADA / PENDIENTE | Estado resultante. |
+| `creado_en` | `TIMESTAMP TZ` | NO | `NOW()` | - | Fecha UTC de aplicación. |
+
+Checks: `saldo_previo = monto_aplicado + saldo_restante`; `PAGADA` exige pendiente
+cero y `PENDIENTE` exige pendiente positivo. La cuota conserva el bruto exigible y
+descuento cero; su `monto_pagado` aumenta por el crédito aplicado. Esta regla de
+CON-13 prevalece sobre la descripción histórica de descuentos por saldo a favor.
+Cuota, departamento, registro y auditoría se escriben en una sola transacción.
+
+La migración `20261014_0004` no declara la FK porque todavía no existe la tabla
+`cuotas_mantenimiento` en las migraciones. La migración de CON-11 que la cree debe
+añadir `fk_aplicacion_saldo_cuota` (`cuota_id` → `cuotas_mantenimiento.id`,
+`ON DELETE RESTRICT`). El modelo ORM conserva esta relación. Los bloqueos siguen
+el orden condominio → departamento → cuota para mantener lineal la cadena auditada.
+
+---
+
+## 5. Tabla: `comprobantes_pago`
 Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -77,7 +187,7 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 ---
 
-## 5. Tabla: `reservas`
+## 6. Tabla: `reservas`
 Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -93,7 +203,7 @@ Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 
 ---
 
-## 6. Tabla: `auditoria_logs`
+## 7. Tabla: `auditoria_logs`
 Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
@@ -111,3 +221,17 @@ Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 | `estado_posterior`| `JSONB` | NO | `'{}'` | - | Fotografía de datos después de la mutación. |
 | `hash_actual` | `VARCHAR(64)` | NO | - | - | Hash SHA-256 encadenado del registro actual. |
 | `hash_previo` | `VARCHAR(64)` | SÍ | `NULL` | - | Hash SHA-256 del registro anterior en la cadena. |
+# Extensión CON-11 — lotes y eventos
+
+- `lotes_cuotas`: `id UUID PK`, `condominio_id UUID FK RESTRICT`,
+  `presupuesto_id UUID FK RESTRICT`, `periodo VARCHAR(7)`, `metodo VARCHAR(20)`,
+  `actor_id VARCHAR(150)`, `total_cuotas_emitidas INTEGER`,
+  `monto_total_facturado NUMERIC(12,2)`, `cuotas_cubiertas_saldo_favor INTEGER`,
+  `fecha_emision TIMESTAMPTZ`, `fecha_vencimiento DATE`. Campos obligatorios;
+  unicidad `(condominio_id, periodo)`, cantidad y total positivos. Resumen histórico.
+- `eventos_lote_outbox`: `id UUID PK` (event_id estable), `lote_id UUID UNIQUE FK
+  RESTRICT`, `payload JSONB NOT NULL` (envelope), `publicado_en TIMESTAMPTZ NULL`.
+  NULL indica publicación pendiente. Se guarda junto al lote.
+- CON-11 crea `cuotas_mantenimiento` y completa `fk_aplicacion_saldo_cuota` con
+  `ON DELETE RESTRICT`; `monto_total_exigible` conserva el bruto y `monto_pagado`
+  incluye el crédito aplicado por CON-13. Migración `20261019_0006`.
