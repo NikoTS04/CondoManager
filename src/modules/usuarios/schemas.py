@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
@@ -58,6 +58,30 @@ class CuentaUsuarioResponse(BaseModel):
     documento_identidad: str
     esta_activo: bool
     creado_en: datetime
+
+
+RolContextual = Literal["ADMIN_JUNTA", "AUDITOR", "RESIDENTE"]
+
+
+class AsignarRolRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rol: RolContextual
+
+
+class AsignacionRolResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    usuario_id: UUID
+    condominio_id: UUID
+    rol: RolUsuario
+    es_activo: bool
+
+
+class CuentaUsuarioConRolResponse(CuentaUsuarioResponse):
+    rol: RolUsuario
+    rol_activo: bool
+    es_superadmin: bool
 
 
 class VinculoDepartamentoDTO(BaseModel):

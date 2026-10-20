@@ -343,7 +343,7 @@ export default function JuntaPortal() {
             />
           )}
           {section === "usuarios" && !isAuditor && (
-            <UsuariosSection key={condominioActivoId ?? "sin-condominio"} condominioId={condominioActivoId} esSuperAdmin={isSuperAdmin} />
+            <UsuariosSection key={condominioActivoId ?? "sin-condominio"} condominioId={condominioActivoId} esSuperAdmin={isSuperAdmin} usuarioActualId={user?.id ?? ""} />
           )}
           {section === "presupuesto" && (
             <>

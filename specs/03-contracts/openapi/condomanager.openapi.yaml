@@ -2,12 +2,14 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: API formal para el Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD).
-  version: 1.4.0
+  version: 1.5.0
 security: [{ bearerAuth: [] }]
 servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
 tags:
+  - name: Usuarios y permisos
+    description: Asignaciones contextuales y revocación de permisos.
   - name: Cuotas de Mantenimiento
     description: Presupuestos y emisión mensual de cuotas.
 paths:
@@ -82,7 +84,7 @@ paths:
           description: Cuentas del condominio sin secretos
           content:
             application/json:
-              schema: { type: array, items: { $ref: '#/components/schemas/CuentaUsuario' } }
+              schema: { type: array, items: { $ref: '#/components/schemas/CuentaUsuarioConRol' } }
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
         '404': { description: Condominio no encontrado }
@@ -106,6 +108,65 @@ paths:
         '404': { description: Condominio no encontrado }
         '409': { description: 'USUARIO_DUPLICADO, correo o documento ya registrado' }
         '422': { description: 'DATOS_USUARIO_INVALIDOS, sin incluir contraseñas en el error' }
+  /condominios/{condominio_id}/usuarios/{usuario_id}/rol:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: usuario_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: consultarRolUsuario
+      summary: Consultar la asignación contextual vigente o revocada
+      description: Administración autorizada; no revela identidades ajenas a Junta.
+      tags: [Usuarios y permisos]
+      responses:
+        '200':
+          description: Asignación persistida
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsignacionRol' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Contexto o asignación no encontrados }
+        '422': { description: DATOS_ROL_INVALIDOS }
+    put:
+      operationId: asignarRolUsuario
+      summary: Crear, cambiar o reactivar un rol contextual
+      description: SuperAdmin gestiona los tres roles; Junta solo Auditor/Residente de su condominio. Prohíbe autoasignación y cambios de concesión global. Un cambio real revoca sesiones y audita atómicamente.
+      tags: [Usuarios y permisos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [rol]
+              properties:
+                rol: { $ref: '#/components/schemas/RolContextual' }
+      responses:
+        '200':
+          description: Asignación activa; repetir el rol vigente es un no-op
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsignacionRol' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Contexto o usuario no encontrados o asignación ajena a Junta }
+        '422': { description: DATOS_ROL_INVALIDOS }
+    delete:
+      operationId: revocarRolUsuario
+      summary: Revocar lógicamente una asignación conservando su historial
+      description: Aplica la misma autoridad que PUT. La revocación repetida es un no-op. No modifica el estado global de cuenta ni los vínculos de departamentos.
+      tags: [Usuarios y permisos]
+      responses:
+        '200':
+          description: Asignación con es_activo false
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsignacionRol' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Contexto o asignación no encontrados }
+        '422': { description: DATOS_ROL_INVALIDOS }
   /usuarios/{usuario_id}/estado:
     patch:
       operationId: cambiarEstadoUsuario
@@ -944,6 +1005,34 @@ components:
     RolUsuario:
       type: string
       enum: [SUPERADMIN, ADMIN_JUNTA, AUDITOR, RESIDENTE]
+    RolContextual:
+      type: string
+      enum: [ADMIN_JUNTA, AUDITOR, RESIDENTE]
+    AsignacionRol:
+      type: object
+      additionalProperties: false
+      required: [usuario_id, condominio_id, rol, es_activo]
+      properties:
+        usuario_id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        rol: { $ref: '#/components/schemas/RolUsuario' }
+        es_activo: { type: boolean }
+    CuentaUsuarioConRol:
+      type: object
+      additionalProperties: false
+      required: [id, email, nombre, apellido, telefono, documento_identidad, esta_activo, creado_en, rol, rol_activo, es_superadmin]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        nombre: { type: string }
+        apellido: { type: string }
+        telefono: { type: [string, 'null'] }
+        documento_identidad: { type: string }
+        esta_activo: { type: boolean }
+        creado_en: { type: string, format: date-time }
+        rol: { $ref: '#/components/schemas/RolUsuario' }
+        rol_activo: { type: boolean }
+        es_superadmin: { type: boolean, readOnly: true }
     VinculoDepartamento:
       type: object
       additionalProperties: false

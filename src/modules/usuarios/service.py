@@ -12,6 +12,7 @@ from src.core.security import create_access_token, hash_password, validar_sesion
 from src.modules.usuarios.models import Usuario, UsuarioRol
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
 from src.modules.usuarios.schemas import (
+    AsignacionRolResponse,
     CrearUsuarioRequest,
     CuentaUsuarioResponse,
     LoginRequest,
@@ -80,17 +81,31 @@ class UsuariosService:
         await self._autorizar(condominio_id, actor)
         return await self.repo.listar(condominio_id, limit, offset)
 
-    async def _auditar(self, cid, actor, usuario, accion, anterior):
+    async def _auditar(
+        self,
+        cid,
+        actor,
+        usuario,
+        accion,
+        anterior,
+        *,
+        posterior=None,
+        motivo="GESTION_ADMINISTRATIVA_USUARIOS",
+    ):
         payload = AuditoriaPayload(
             condominio_id=str(cid),
             departamento_id=None,
             accion_ejecutada=accion,
-            motivo="GESTION_ADMINISTRATIVA_USUARIOS",
+            motivo=motivo,
             resultado="EXITOSO",
             actor_tipo=actor["rol"],
             actor_id=actor["sub"],
             estado_anterior=anterior,
-            estado_posterior=CuentaUsuarioResponse.model_validate(usuario).model_dump(mode="json"),
+            estado_posterior=(
+                CuentaUsuarioResponse.model_validate(usuario).model_dump(mode="json")
+                if posterior is None
+                else posterior
+            ),
             hash_previo=await self.repo.ultimo_hash(cid),
         )
         await self.repo.agregar(
@@ -173,3 +188,72 @@ class UsuariosService:
                 await self._auditar(contexto, actor, usuario, "USUARIO_ESTADO_CAMBIADO", anterior)
         await self.repo.confirmar()
         return usuario
+
+    async def consultar_rol(self, cid: UUID, usuario_id: UUID, actor: dict):
+        await self._autorizar(cid, actor)
+        asignacion = await self.repo.rol_usuario(usuario_id, cid)
+        if asignacion is None:
+            raise APIError(404, "ROL_NO_ENCONTRADO", "No existe una asignación en este condominio.")
+        return asignacion
+
+    async def gestionar_rol(self, cid: UUID, usuario_id: UUID, rol: str | None, actor: dict):
+        """PUT asigna/reactiva; DELETE (rol=None) revoca sin borrar la asignación."""
+        await self._autorizar(cid, actor)
+        if str(usuario_id) == actor["sub"]:
+            raise APIError(403, "ACCESO_DENEGADO", "No puede modificar su propia asignación.")
+        if actor["rol"] != "SUPERADMIN" and await self.repo.rol_usuario(usuario_id, cid) is None:
+            raise APIError(404, "ROL_NO_ENCONTRADO", "No existe una asignación en este condominio.")
+        usuario = await self.repo.por_id(usuario_id, bloquear=True)
+        if usuario is None:
+            raise APIError(404, "USUARIO_NO_ENCONTRADO", "No existe la identidad solicitada.")
+        if usuario.es_superadmin:
+            raise APIError(
+                403, "ACCESO_DENEGADO", "La concesión global se gestiona fuera de esta API."
+            )
+        contextos = set(await self.repo.condominios_usuario(usuario_id)) | {cid}
+        await self.repo.bloquear_contextos(list(contextos))
+        await self._autorizar(cid, actor)
+        asignacion = await self.repo.rol_usuario(usuario_id, cid)
+        if asignacion is None and (rol is None or actor["rol"] != "SUPERADMIN"):
+            raise APIError(404, "ROL_NO_ENCONTRADO", "No existe una asignación en este condominio.")
+        if actor["rol"] != "SUPERADMIN" and (
+            rol == "ADMIN_JUNTA" or asignacion.rol not in {"AUDITOR", "RESIDENTE"}
+        ):
+            raise APIError(
+                403, "ACCESO_DENEGADO", "Solo SuperAdmin puede gestionar roles de Junta."
+            )
+
+        anterior = (
+            AsignacionRolResponse.model_validate(asignacion).model_dump(mode="json")
+            if asignacion
+            else {}
+        )
+        if asignacion is None:
+            asignacion = UsuarioRol(
+                usuario_id=usuario_id, condominio_id=cid, rol=rol, es_activo=True
+            )
+            accion = "ROL_ASIGNADO"
+        elif rol is None:
+            if not asignacion.es_activo:
+                return asignacion
+            asignacion.es_activo = False
+            accion = "ROL_REVOCADO"
+        else:
+            if asignacion.es_activo and asignacion.rol == rol:
+                return asignacion
+            asignacion.rol = rol
+            asignacion.es_activo = True
+            accion = "ROL_CAMBIADO"
+        usuario.auth_revision += 1
+        await self.repo.agregar(usuario, asignacion)
+        await self._auditar(
+            cid,
+            actor,
+            usuario,
+            accion,
+            anterior,
+            posterior=AsignacionRolResponse.model_validate(asignacion).model_dump(mode="json"),
+            motivo="GESTION_ROLES_PERMISOS",
+        )
+        await self.repo.confirmar()
+        return asignacion

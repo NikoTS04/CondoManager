@@ -6,6 +6,9 @@ en [estructura-inmobiliaria.md](estructura-inmobiliaria.md).
 CON-04 / USR-03 se define en [alta-administrativa.md](alta-administrativa.md): alta
 inactiva, contraseña inicial administrativa, login SQL y estado editable por SuperAdmin.
 
+CON-06 / USR-05 se define en [roles-y-permisos.md](roles-y-permisos.md): asignación
+contextual, revocación lógica, autoridad administrativa y renovación de sesiones.
+
 ## 1. Ficha del Dominio
 
 - **Identificador:** DOM-05 / PROC-05

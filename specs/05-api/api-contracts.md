@@ -41,6 +41,20 @@ normalizados tienen unicidad durable; duplicados responden `409 USUARIO_DUPLICAD
 Las respuestas y errores nunca incluyen contraseña o hash. Invitaciones por correo
 se difieren a una evolución posterior.
 
+### Asignaciones de roles (CON-06 / PROC-05)
+
+Contrato: [roles y permisos](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
+`GET|PUT|DELETE /condominios/{cid}/usuarios/{uid}/rol` consulta, asigna/reactiva
+o revoca lógicamente. PUT recibe únicamente `rol` (ADMIN_JUNTA/AUDITOR/RESIDENTE).
+Todos devuelven 200 con `usuario_id`, `condominio_id`, `rol`, `es_activo`.
+SuperAdmin gestiona cualquier contexto activo; Junta solo roles Auditor/Residente
+de identidades ya asignadas a su contexto. La propia asignación, los SuperAdmin
+globales y la elevación por Junta están protegidos (403). Sin asignación: 404
+`ROL_NO_ENCONTRADO`; cuerpo inválido: 422 `DATOS_ROL_INVALIDOS`.
+Cambios y auditoría son atómicos e invalidan sesiones anteriores; los no-op no.
+El listado administrativo añade `rol`, `rol_activo`, `es_superadmin` e incluye
+asignaciones revocadas. La concesión global de SuperAdmin continúa mediante CLI.
+
 ### Distribución de cuotas (CON-10)
 
 Base: `/api/v1/condominios/{condominio_id}/distribucion`. Requiere Bearer Token.

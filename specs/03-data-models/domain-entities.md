@@ -38,7 +38,7 @@
 ### 2.2 Usuarios y Seguridad
 - **`usuarios`**: `id (UUID)`, `email (VARCHAR UNIQUE)`, `password_hash (VARCHAR)`, `nombre (VARCHAR)`, `apellido (VARCHAR)`, `telefono (VARCHAR)`, `documento_identidad (VARCHAR)`.
 - **`usuario_departamentos`**: `id (UUID)`, `usuario_id (FK)`, `departamento_id (FK)`, `tipo_relacion (VARCHAR: PROPIETARIO_TITULAR, INQUILINO, COPROPIETARIO)`, `es_activo (BOOLEAN)`.
-- **`usuario_roles`**: `usuario_id (FK)`, `condominio_id (FK)`, `rol (VARCHAR: ADMIN_JUNTA, AUDITOR, RESIDENTE)`.
+- **`usuario_roles`**: `usuario_id (FK)`, `condominio_id (FK)`, `rol (VARCHAR: ADMIN_JUNTA, AUDITOR, RESIDENTE)`, `es_activo (BOOLEAN, true)`. Una asignación revocada se conserva; SuperAdmin global procede de `usuarios.es_superadmin`.
 
 ### 2.3 Finanzas y Recaudación
 - **`cuotas_mantenimiento`**: `id (UUID)`, `departamento_id (FK)`, `periodo (VARCHAR: 2026-10)`, `monto_ordinario (NUMERIC(12,2))`, `monto_extraordinario (NUMERIC(12,2))`, `monto_mora (NUMERIC(12,2))`, `monto_descuento (NUMERIC(12,2))`, `monto_total_exigible (NUMERIC(12,2))`, `monto_pagado (NUMERIC(12,2))`, `fecha_emision (DATE)`, `fecha_vencimiento (DATE)`, `estado (VARCHAR: EMITIDA, PENDIENTE, PAGO_PARCIAL, PAGADA, VENCIDA, EN_MORA)`.

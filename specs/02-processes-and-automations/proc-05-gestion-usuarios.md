@@ -41,6 +41,15 @@ protegidas verifican PostgreSQL y revisión de sesión. La invitación y la veri
 por correo quedan para una evolución posterior. Contrato completo y criterios:
 [alta-administrativa.md](../02-domains/05-usuarios-rbac/alta-administrativa.md).
 
+### CON-06 — Asignación y revocación de roles
+
+SuperAdmin gestiona roles contextuales; Junta solo Auditor/Residente de su
+condominio, sin modificar a otros administradores ni a sí misma. Las asignaciones
+se revocan con `es_activo=false`, conservando vínculos e historial. Cada cambio
+real incrementa la revisión global y audita atómicamente. Repetir una operación
+idéntica es un no-op. Contrato y escenarios:
+[roles-y-permisos.md](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
+
 ### 4.1 Configuración Inicial del Condominio (CON-2)
 
 - Solo `SUPERADMIN` puede ejecutar `POST /api/v1/condominios`.

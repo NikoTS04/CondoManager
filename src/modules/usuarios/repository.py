@@ -10,7 +10,12 @@ from src.core.database import get_db_session
 from src.core.models_audit import AuditoriaLogORM
 from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol
-from src.modules.usuarios.schemas import UsuarioDTO, VinculoDepartamentoDTO
+from src.modules.usuarios.schemas import (
+    CuentaUsuarioConRolResponse,
+    CuentaUsuarioResponse,
+    UsuarioDTO,
+    VinculoDepartamentoDTO,
+)
 
 
 class SQLAlchemyUsuariosRepository:
@@ -53,6 +58,7 @@ class SQLAlchemyUsuariosRepository:
             .join(UsuarioRol, UsuarioRol.condominio_id == Condominio.id)
             .where(
                 UsuarioRol.usuario_id == usuario_id,
+                UsuarioRol.es_activo.is_(True),
                 Condominio.activo.is_(True),
                 UsuarioRol.rol.in_(("ADMIN_JUNTA", "AUDITOR", "RESIDENTE")),
             )
@@ -125,17 +131,33 @@ class SQLAlchemyUsuariosRepository:
             .with_for_update()
         )
 
-    async def listar(self, condominio_id: UUID, limit=50, offset=0) -> list[Usuario]:
-        return list(
-            await self.session.scalars(
-                select(Usuario)
-                .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
-                .where(UsuarioRol.condominio_id == condominio_id)
-                .order_by(Usuario.creado_en.desc(), Usuario.id)
-                .limit(limit)
-                .offset(offset)
-            )
+    async def rol_usuario(self, usuario_id: UUID, condominio_id: UUID) -> UsuarioRol | None:
+        return await self.session.scalar(
+            select(UsuarioRol)
+            .where(UsuarioRol.usuario_id == usuario_id, UsuarioRol.condominio_id == condominio_id)
+            .execution_options(populate_existing=True)
         )
+
+    async def listar(
+        self, condominio_id: UUID, limit=50, offset=0
+    ) -> list[CuentaUsuarioConRolResponse]:
+        rows = await self.session.execute(
+            select(Usuario, UsuarioRol)
+            .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
+            .where(UsuarioRol.condominio_id == condominio_id)
+            .order_by(Usuario.creado_en.desc(), Usuario.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return [
+            CuentaUsuarioConRolResponse(
+                **CuentaUsuarioResponse.model_validate(usuario).model_dump(),
+                rol=asignacion.rol,
+                rol_activo=asignacion.es_activo,
+                es_superadmin=usuario.es_superadmin,
+            )
+            for usuario, asignacion in rows
+        ]
 
     async def ultimo_hash(self, condominio_id: UUID) -> str | None:
         return await self.session.scalar(
