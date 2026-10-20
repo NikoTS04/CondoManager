@@ -405,6 +405,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 **Objetivo técnico:** establecer un contrato único entre módulos, interfaz, persistencia y comunicaciones para integrar el prototipo sin interpretaciones incompatibles.
 
+**Preparación:** [diagnóstico y propuesta de CON-72](../../specs/05-api/con-72-diagnostico-y-propuesta.md), con inventario por historia, diferencias verificadas, decisiones pendientes y orden de implementación. Está en revisión; no implica que los contratos propuestos estén aprobados ni que CON-72 esté terminada.
+
 **Debe incluir:**
 
 - Alineación entre OpenAPI, DTO, ejemplos, documentación y consumo del frontend.

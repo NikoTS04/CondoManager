@@ -1,5 +1,7 @@
 # Contratos de API y Especificación OpenAPI (API Contracts)
 
+Diagnóstico del Sprint 2: [CON-72 — diferencias y propuesta para revisión](con-72-diagnostico-y-propuesta.md). Las opciones pendientes de ese documento no sustituyen los contratos vigentes hasta su aprobación e implementación coordinada.
+
 ## 1. Filosofía de Contratos en SDD
 
 En el Desarrollo Guiado por Especificaciones (SDD), los contratos de API sirven como el **acuerdo formal desacoplado** entre el Frontend (Next.js/TypeScript) y el Backend (FastAPI/Python), así como entre los diferentes módulos desarrollados por los integrantes del equipo (Anderson, Tarqui, Alejandro, Brandon).
