@@ -44,3 +44,6 @@ Thumbs.db
 *.sqlite3
 data/
 uploads/
+
+# Documentación local
+/usuarios-y-alcances.md
