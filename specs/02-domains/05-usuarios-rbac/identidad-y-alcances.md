@@ -46,8 +46,8 @@ El JWT transporta el mismo arreglo, el identificador de usuario como `sub` y
 
 ## Recursos autorizados
 
-- `GET /cuotas/departamentos`: padrón piloto filtrado por condominio y, para
-  residentes, por sus vínculos activos. Devuelve UUID, número, piso, coeficiente,
+- `GET /cuotas/departamentos`: padrón persistente filtrado por condominio y, para
+  residentes, por sus vínculos activos. CON-05 usa SQL real. Devuelve UUID, número, piso, coeficiente,
   saldo y estado financiero; nunca todas las unidades a un residente.
 - `GET /pagos/comprobantes` y `GET /reservas`: solo recursos de unidades autorizadas;
   `condominio_id` opcional selecciona el contexto para administrativos globales.
@@ -61,6 +61,10 @@ El JWT transporta el mismo arreglo, el identificador de usuario como `sub` y
 - Los clientes no sustituyen errores de autorización/red por éxitos o datos mock.
 
 ## Verificación
+
+Gestión administrativa de tenencia y regla de titular:
+[vinculos-departamentos.md](vinculos-departamentos.md). Cambios reales invalidan
+sesiones mediante `auth_revision`; la relación revocada conserva su UUID e historial.
 
 Probar ambos perfiles de residentes, relaciones mixtas en varias unidades, vínculos
 inactivos, unidad ajena, cruce de condominios, escritura por auditor, roles antiguos,

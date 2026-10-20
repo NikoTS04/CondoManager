@@ -125,6 +125,9 @@ CREATE TABLE usuario_departamentos (
     CONSTRAINT ck_tipo_relacion CHECK (tipo_relacion IN ('PROPIETARIO_TITULAR', 'COPROPIETARIO', 'INQUILINO'))
 );
 
+CREATE INDEX idx_vinculos_titulares_activos
+    ON usuario_departamentos (departamento_id, tipo_relacion) WHERE es_activo IS TRUE;
+
 -- 4. Tabla de Cuotas de Mantenimiento (Anderson - PROC-01)
 CREATE TABLE cuotas_mantenimiento (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

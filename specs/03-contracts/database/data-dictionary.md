@@ -35,6 +35,17 @@ rechaza bajar si existen asignaciones revocadas, ya que la revisión anterior no
 representa esa revocación. Las filas y auditorías se conservan. Contrato:
 [roles y permisos](../../02-domains/05-usuarios-rbac/roles-y-permisos.md).
 
+## Vínculos de tenencia — CON-05
+
+Se reutiliza `usuario_departamentos`: UUID estable, FK de usuario y departamento,
+relación canónica y `es_activo`. PUT conserva la unicidad del par; la revocación no
+borra filas. Cada cambio real incrementa revisión y audita en la misma transacción.
+La regla del último titular se comprueba bajo bloqueo del usuario/contexto/unidad,
+incluidas carreras entre usuarios. La migración `20261020_0009` añade
+`idx_vinculos_titulares_activos` sobre `(departamento_id, tipo_relacion)` donde
+`es_activo IS TRUE`; no reescribe datos históricos. Contrato:
+[vínculos](../../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+
 ## 1. Tabla: `condominios`
 Almacena las comunidades inmobiliarias o edificios matrices.
 

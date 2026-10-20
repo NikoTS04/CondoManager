@@ -72,7 +72,7 @@ def test_api_reportar_pago_e_idempotencia():
 
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
-def test_api_reservas_flujo_completo(monkeypatch):
+def test_api_reservas_flujo_completo(monkeypatch, autorizacion_aislada):
     from src.modules.reservas import router as reservas_router
 
     client = TestClient(app, headers=auth())
@@ -80,7 +80,7 @@ def test_api_reservas_flujo_completo(monkeypatch):
     # Aislar el calendario para que la prueba sea repetible y usar UUID,
     # tal como exige OpenAPI; "402" era rechazado por Pydantic antes del servicio.
     monkeypatch.setattr(reservas_router, "RESERVAS_REGISTRADAS", {})
-    departamentos = {d["numero"]: str(d["id"]) for d in reservas_router.DEPARTAMENTOS_MAP.values()}
+    departamentos = {d["numero"]: str(d["id"]) for d in autorizacion_aislada.datos.values()}
     condominio_id = str(reservas_router.CONDOMINIO_PILOTO_ID)
     # 1. Catálogo de áreas comunes
     res_areas = client.get("/api/v1/areas")

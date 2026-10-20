@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { asignarRolUsuario, cambiarEstadoUsuario, crearUsuario, listarUsuarios, revocarRolUsuario, type CuentaUsuario, type CuentaUsuarioConRol, type RolContextual } from "@/lib/api";
 import { RolUsuarioEditor } from "@/features/junta/RolUsuarioEditor";
+import { VinculosUsuarioSection } from "@/features/junta/VinculosUsuarioSection";
 
 interface Props {
   condominioId: string | null;
@@ -29,6 +30,8 @@ export function UsuariosSection({ condominioId, esSuperAdmin, usuarioActualId }:
   const [revision, setRevision] = useState(0);
   const [identidadId, setIdentidadId] = useState("");
   const [rolExistente, setRolExistente] = useState<RolContextual>("RESIDENTE");
+  const [usuarioVinculosId, setUsuarioVinculosId] = useState<string | null>(null);
+  const usuarioVinculos = usuarios.find((usuario) => usuario.id === usuarioVinculosId);
 
   useEffect(() => {
     if (!condominioId) return;
@@ -160,12 +163,13 @@ export function UsuariosSection({ condominioId, esSuperAdmin, usuarioActualId }:
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <caption className="sr-only">Usuarios y estado de acceso del condominio</caption>
-                <thead><tr className="border-b border-line"><th scope="col" className="p-3">Nombre</th><th scope="col" className="p-3">Correo</th><th scope="col" className="p-3">Documento</th><th scope="col" className="p-3">Estado de cuenta</th><th scope="col" className="p-3">Rol y permisos</th>{esSuperAdmin && <th scope="col" className="p-3">Acceso global</th>}</tr></thead>
+                <thead><tr className="border-b border-line"><th scope="col" className="p-3">Nombre</th><th scope="col" className="p-3">Correo</th><th scope="col" className="p-3">Documento</th><th scope="col" className="p-3">Estado de cuenta</th><th scope="col" className="p-3">Rol y permisos</th><th scope="col" className="p-3">Departamentos</th>{esSuperAdmin && <th scope="col" className="p-3">Acceso global</th>}</tr></thead>
                 <tbody>{usuarios.map((usuario) => (
                   <tr key={usuario.id} className="border-b border-line">
                     <td className="p-3">{usuario.nombre} {usuario.apellido}<span className="mt-1 block max-w-48 break-all text-xs text-muted" title="UUID del usuario">{usuario.id}</span></td><td className="p-3">{usuario.email}</td><td className="p-3">{usuario.documento_identidad}</td>
                     <td className="p-3"><Badge tone={usuario.esta_activo ? "success" : "neutral"}>{usuario.esta_activo ? "Activo" : "Inactivo"}</Badge></td>
                     <td className="p-3"><RolUsuarioEditor usuario={usuario} esSuperAdmin={esSuperAdmin} esPropio={usuario.id === usuarioActualId} disabled={busy !== null} onGuardar={(rol) => void guardarRol(usuario.id, rol)} onRevocar={() => void guardarRol(usuario.id, null)} /></td>
+                    <td className="p-3"><Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => setUsuarioVinculosId(usuario.id)} aria-label={`Gestionar departamentos de ${usuario.nombre} ${usuario.apellido}`}>Gestionar vínculos</Button></td>
                     {esSuperAdmin && <td className="p-3"><Button variant="secondary" disabled={busy !== null} loading={busy === usuario.id} onClick={() => void cambiarEstado(usuario)} aria-label={`${usuario.esta_activo ? "Desactivar" : "Activar"} a ${usuario.nombre} ${usuario.apellido}`}>{usuario.esta_activo ? "Desactivar" : "Activar"}</Button></td>}
                   </tr>
                 ))}</tbody>
@@ -179,6 +183,7 @@ export function UsuariosSection({ condominioId, esSuperAdmin, usuarioActualId }:
           </div>
         </CardBody>
       </Card>
+      {usuarioVinculos && <VinculosUsuarioSection key={`${condominioId}:${usuarioVinculos.id}`} condominioId={condominioId} usuario={usuarioVinculos} onCerrar={() => setUsuarioVinculosId(null)} />}
     </div>
   );
 }

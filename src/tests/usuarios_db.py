@@ -1,4 +1,4 @@
-"""Fixtures de CON-04: migraciones y sesiones independientes en PostgreSQL real."""
+"""Fixtures de identidad y tenencia: migraciones y sesiones PostgreSQL independientes."""
 
 import asyncio
 import os
@@ -31,6 +31,7 @@ REVISIONES = (
     "20261019_0006_emision_cuotas",
     "20261020_0007_alta_usuarios",
     "20261020_0008_roles_revocables",
+    "20261020_0009_vinculos_departamentos",
 )
 
 
@@ -77,7 +78,8 @@ async def borrar_base(base):
 @pytest.fixture
 def db_usuarios(monkeypatch):
     url = (
-        os.getenv("CON06_TEST_DATABASE_URL")
+        os.getenv("CON05_TEST_DATABASE_URL")
+        or os.getenv("CON06_TEST_DATABASE_URL")
         or os.getenv("CON04_TEST_DATABASE_URL")
         or os.getenv("CON13_TEST_DATABASE_URL")
     )

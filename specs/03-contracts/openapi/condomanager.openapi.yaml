@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: API formal para el Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD).
-  version: 1.5.0
+  version: 1.6.0
 security: [{ bearerAuth: [] }]
 servers:
   - url: http://localhost:8000/api/v1
@@ -167,6 +167,72 @@ paths:
         '403': { $ref: '#/components/responses/Error403' }
         '404': { description: Contexto o asignación no encontrados }
         '422': { description: DATOS_ROL_INVALIDOS }
+  /condominios/{condominio_id}/usuarios/{usuario_id}/departamentos:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: usuario_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listarVinculosUsuario
+      summary: Consultar vínculos activos e inactivos de una identidad en el condominio
+      description: Solo administración autorizada. La identidad debe estar asignada al contexto; no devuelve vínculos ajenos.
+      tags: [Usuarios y permisos]
+      responses:
+        '200':
+          description: Relaciones persistidas con su unidad y edificio
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/VinculoUsuario' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o usuario no encontrados en el contexto }
+        '422': { description: DATOS_VINCULO_INVALIDOS }
+  /condominios/{condominio_id}/usuarios/{usuario_id}/departamentos/{departamento_id}:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: usuario_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: departamento_id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: asignarVinculoUsuario
+      summary: Crear, cambiar o restaurar una relación de tenencia
+      description: Exige rol contextual vigente y unidad activa. No permite inquilino/copropietario sin titular ni retirar al último titular. Confirma vínculo, revisión de sesión y auditoría atómicamente.
+      tags: [Usuarios y permisos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tipo_relacion]
+              properties:
+                tipo_relacion: { $ref: '#/components/schemas/TipoRelacion' }
+      responses:
+        '200':
+          description: Vínculo activo; repetir la relación vigente es un no-op
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VinculoUsuario' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Usuario o unidad no encontrados en el contexto }
+        '409': { description: TITULAR_REQUERIDO o ROL_NO_VIGENTE o DEPARTAMENTO_INACTIVO o VINCULO_DUPLICADO }
+        '422': { description: DATOS_VINCULO_INVALIDOS }
+    delete:
+      operationId: revocarVinculoUsuario
+      summary: Desactivar un vínculo conservando su UUID e historial
+      description: No permite retirar al último titular activo. Repetir una revocación es un no-op. Un cambio real invalida las sesiones anteriores.
+      tags: [Usuarios y permisos]
+      responses:
+        '200':
+          description: Vínculo con es_activo false
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VinculoUsuario' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Usuario o unidad o vínculo no encontrados en el contexto }
+        '409': { description: TITULAR_REQUERIDO }
+        '422': { description: DATOS_VINCULO_INVALIDOS }
   /usuarios/{usuario_id}/estado:
     patch:
       operationId: cambiarEstadoUsuario
@@ -197,7 +263,7 @@ paths:
   /cuotas/departamentos:
     get:
       operationId: departamentosDelPortal
-      summary: Unidades autorizadas del catálogo piloto
+      summary: Unidades reales autorizadas del padrón SQL
       parameters:
         - $ref: '#/components/parameters/ContextoConsulta'
       responses:
@@ -1053,9 +1119,27 @@ components:
         rol: { $ref: '#/components/schemas/RolUsuario' }
         condominio_id: { type: [string, 'null'], format: uuid }
         departamentos: { type: array, items: { $ref: '#/components/schemas/VinculoDepartamento' } }
+    TipoRelacion:
+      type: string
+      enum: [PROPIETARIO_TITULAR, COPROPIETARIO, INQUILINO]
+    VinculoUsuario:
+      type: object
+      additionalProperties: false
+      required: [id, usuario_id, condominio_id, departamento_id, numero, edificio_id, edificio_nombre, tipo_relacion, es_activo, departamento_activo]
+      properties:
+        id: { type: string, format: uuid }
+        usuario_id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        departamento_id: { type: string, format: uuid }
+        numero: { type: string }
+        edificio_id: { type: string, format: uuid }
+        edificio_nombre: { type: string }
+        tipo_relacion: { $ref: '#/components/schemas/TipoRelacion' }
+        es_activo: { type: boolean }
+        departamento_activo: { type: boolean }
     DepartamentoPortal:
       type: object
-      required: [id, condominio_id, numero, piso, coeficiente, saldo_a_favor, estado_financiero, activo, deuda_vencida]
+      required: [id, condominio_id, edificio_id, edificio_nombre, numero, piso, coeficiente, saldo_a_favor, estado_financiero, activo, deuda_vencida]
       properties:
         id: { type: string, format: uuid }
         condominio_id: { type: string, format: uuid }
@@ -1066,6 +1150,8 @@ components:
         estado_financiero: { type: string, enum: [AL_DIA, OBSERVADO, EN_MORA] }
         activo: { type: boolean }
         deuda_vencida: { type: string }
+        edificio_id: { type: string, format: uuid }
+        edificio_nombre: { type: string }
     ComprobantePagoDTO:
       type: object
       required: [id, departamento_id, banco, numero_operacion, fecha_operacion, monto, estado, idempotency_hash, url_voucher]

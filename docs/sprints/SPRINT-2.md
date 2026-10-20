@@ -127,6 +127,12 @@ CON-75: pruebas de errores y evidencia durante todo el sprint
 
 ## CON-05 — Vincular usuarios con departamentos
 
+Contrato: [vínculos persistentes](../../specs/02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+Gestión administrativa por contexto, titular previo a inquilinos/copropietarios,
+protección del último titular y renovación de sesión en cambios reales. El portal
+y la validación de unidades de pagos/reservas utilizan el padrón SQL.
+Guion y resultados: [entrega CON-05](CON-05-vinculos-departamentos.md).
+
 **Historia:** Como administrador, quiero vincular propietarios, copropietarios e inquilinos con sus departamentos, para delimitar la información y las operaciones que pueden realizar.
 
 **Debe incluir:**

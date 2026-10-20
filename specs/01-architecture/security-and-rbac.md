@@ -24,6 +24,7 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | No |
 | Asignar/revocar ADMIN_JUNTA | Sí, excepto propia asignación o identidad global | No | No | No |
 | Asignar/revocar AUDITOR y RESIDENTE | Sí | Su condominio, sin modificar Junta ni su propia asignación | No | No |
+| Crear/cambiar/revocar vínculos de departamentos | Contexto seleccionado | Su condominio | No | No |
 
 Todas las rutas de negocio requieren Bearer JWT. Ausencia de token: `401`;
 rol/contexto/unidad no autorizados: `403`. No existe un modo anónimo de desarrollo.
@@ -66,6 +67,11 @@ residente requiere al menos 24 horas de anticipación; el servidor deriva el per
 administrativo del rol e ignora cualquier intento de elevarlo mediante `es_admin`.
 
 ## 5. Piloto y persistencia
+
+CON-05 administra vínculos persistentes, invalida sesiones en cada cambio real y
+resuelve unidades del portal y de operaciones de pagos/reservas desde PostgreSQL.
+La relación de titular se conserva aunque la cuenta no tenga acceso. Contrato:
+[vínculos](../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 CON-04 utiliza identidades, roles y vínculos persistentes para login y autorización.
 Los recursos de pagos/reservas/notificaciones conservan su estado piloto hasta sus

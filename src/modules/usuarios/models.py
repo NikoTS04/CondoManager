@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -69,6 +70,12 @@ class UsuarioDepartamento(Base):
 
     __table_args__ = (
         UniqueConstraint("usuario_id", "departamento_id", name="uq_usuario_depto"),
+        Index(
+            "idx_vinculos_titulares_activos",
+            "departamento_id",
+            "tipo_relacion",
+            postgresql_where=text("es_activo IS TRUE"),
+        ),
         CheckConstraint(
             "tipo_relacion IN ('PROPIETARIO_TITULAR', 'INQUILINO', 'COPROPIETARIO')",
             name="ck_tipo_relacion",

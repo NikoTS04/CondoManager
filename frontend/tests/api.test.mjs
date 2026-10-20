@@ -145,3 +145,24 @@ test("un token revocado al gestionar roles notifica el cierre de sesión y propa
     delete globalThis.localStorage;
   }
 });
+
+test("los vínculos se gestionan por UUID sin enviar roles ni estados de cuenta", async (t) => {
+  const cid = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+  const uid = "8d3f2f64-1111-4222-8333-444455556666";
+  const did = "11111111-1111-4111-8111-111111111101";
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    const vinculo = { usuario_id: uid, departamento_id: did, tipo_relacion: "INQUILINO", es_activo: init.method !== "DELETE" };
+    return new Response(JSON.stringify(init.method ? vinculo : [vinculo]));
+  });
+  await api.listarVinculosUsuario(cid, uid);
+  assert.equal((await api.asignarVinculoUsuario(cid, uid, did, "INQUILINO")).es_activo, true);
+  assert.equal((await api.revocarVinculoUsuario(cid, uid, did)).es_activo, false);
+  assert.equal(new URL(solicitudes[0].url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/departamentos`);
+  assert.equal(new URL(solicitudes[1].url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/departamentos/${did}`);
+  assert.equal(solicitudes[1].init.method, "PUT");
+  assert.deepEqual(JSON.parse(solicitudes[1].init.body), { tipo_relacion: "INQUILINO" });
+  assert.equal(solicitudes[2].init.method, "DELETE");
+  assert.equal(solicitudes[2].init.body, undefined);
+});
