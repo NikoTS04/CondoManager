@@ -94,3 +94,10 @@ sesiones independientes, reinicios, rollback, carreras de reporte/revisión,
 seguridad del archivo, aislamiento por unidad y cuatro roles. Cada mutación usa
 Decimal/NUMERIC, nunca float. Las pruebas de contrato de módulos ajenos pueden
 aislar el guard mediante inyección; la aceptación financiera usa PostgreSQL real.
+# Nota de convergencia CON-72
+
+Este documento conserva el diseño de la primera integración de Anderson. La
+interfaz actual sigue [CON-72](../../05-api/sprint-2-contratos.md): multipart único,
+subsanación con archivos históricos y respuesta APROBADO. La contabilidad y el
+almacén privado se reutilizan; el upload separado y los envelopes version: 1 de
+este documento son históricos. Los mensajes persistidos siguen siendo legibles.

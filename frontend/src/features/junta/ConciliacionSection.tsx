@@ -71,7 +71,7 @@ export function ConciliacionSection({
                   </td>
                   <td className="p-3 text-right">
                     <VoucherDownloadButton comprobante={comprobante} />
-                    {!isAuditor && (comprobante.estado === "EN_REVISION" || comprobante.estado === "OBSERVADO") && (
+                    {!isAuditor && comprobante.estado === "EN_REVISION" && (
                       <div className="flex justify-end gap-2">
                         <Button
                           size="sm"

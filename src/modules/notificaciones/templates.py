@@ -5,14 +5,13 @@ Implementa la matriz de plantillas dinámicas según specs/02-domains/03-notific
 
 from typing import Any, Dict, Tuple
 
-
 PLANTILLAS_CONFIG = {
     "NOTIF_EMISION_CUOTA": {
         "asunto": "CondoManager: Emisión de cuota de mantenimiento - Periodo {periodo}",
         "cuerpo": (
             "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
             "Se ha emitido la cuota de mantenimiento ordinaria correspondiente al periodo {periodo}.\n"
-            "• Monto a pagar: S/ {monto}\n"
+            "• Monto a pagar: {moneda} {monto}\n"
             "• Fecha límite de vencimiento: {vencimiento}\n"
             "• Cuenta de recaudación / CCI: {cci_banco}\n\n"
             "Recuerde subir su comprobante una vez efectuado el abono desde la plataforma.\n"
@@ -33,7 +32,7 @@ PLANTILLAS_CONFIG = {
         "asunto": "CondoManager: Hemos recibido su comprobante de pago",
         "cuerpo": (
             "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
-            "Hemos recibido su comprobante de pago por S/ {monto} (Op. {numero_operacion} - {banco}).\n"
+            "Hemos recibido su comprobante de pago por {moneda} {monto} (Op. {numero_operacion} - {banco}).\n"
             "Su comprobante ha ingresado en cola de revisión para conciliación bancaria.\n"
             "Le avisaremos tan pronto sea validado.\n\n"
             "Atentamente,\nJunta Directiva"
@@ -44,22 +43,30 @@ PLANTILLAS_CONFIG = {
         "cuerpo": (
             "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
             "Nos complace informarle que su comprobante de pago ha sido validado y conciliado con éxito.\n"
-            "• Monto abonado: S/ {monto_abonado}\n"
-            "• Saldo restante del departamento: S/ {saldo_restante}\n"
+            "• Monto abonado: {moneda} {monto_abonado}\n"
+            "• Saldo restante del departamento: {moneda} {saldo_restante}\n"
             "• Comprobante digital: {recibo_url}\n\n"
             "Gracias por su compromiso y puntualidad con el edificio.\n"
             "Atentamente,\nJunta Directiva"
         ),
     },
     "NOTIF_PAGO_RECHAZADO": {
-        "asunto": "CondoManager: Observación en comprobante de pago reportado",
+        "asunto": "CondoManager: Comprobante de pago rechazado",
         "cuerpo": (
             "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
-            "Su comprobante de pago reportado ha sido observado o rechazado por la Junta Directiva.\n"
+            "Su comprobante de pago ha sido rechazado por la Junta Directiva.\n"
             "• Motivo: {motivo_rechazo}\n"
-            "• Enlace para adjuntar un nuevo comprobante legible: {enlace_subir_nuevo}\n\n"
-            "Por favor revise la información y vuelva a cargar una imagen clara de la transferencia.\n"
+            "Contacte con la administración para revisar los datos; no vuelva a reportar la misma operación.\n"
             "Atentamente,\nJunta Directiva"
+        ),
+    },
+    "NOTIF_PAGO_OBSERVADO": {
+        "asunto": "CondoManager: Comprobante de pago observado",
+        "cuerpo": (
+            "Estimado(a) {nombre} (Dpto. {dpto}):\n"
+            "Su comprobante requiere revisión. Motivo: {motivo_rechazo}\n"
+            "Adjunte un nuevo archivo desde Subsanar voucher en su historial: {enlace_subir_nuevo}\n"
+            "No se han aplicado saldos por esta observación."
         ),
     },
     "NOTIF_MORA_APLICADA": {
@@ -82,6 +89,7 @@ PLANTILLAS_CONFIG = {
             "• Espacio: {area}\n"
             "• Fecha: {fecha}\n"
             "• Horario: {horario}\n"
+            "• Tarifa confirmada: {moneda} {costo}\n"
             "• Normas de uso: {normas_convivencia}\n\n"
             "Le recordamos mantener el orden y cuidar las instalaciones.\n"
             "Atentamente,\nAdministración"
@@ -93,17 +101,14 @@ PLANTILLAS_CONFIG = {
             "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
             "Se confirma la cancelación de su reserva para el espacio {area} el {fecha} ({horario}).\n"
             "• Motivo: {motivo}\n\n"
+            "• Ajuste económico: {ajuste}\n\n"
             "El horario ha sido liberado para otros residentes de la comunidad.\n"
             "Atentamente,\nAdministración"
         ),
     },
     "NOTIF_COMUNICADO_GENERAL": {
         "asunto": "CondoManager Comunicado: {titulo}",
-        "cuerpo": (
-            "COMUNICADO OFICIAL DE LA COMUNIDAD\n\n"
-            "{mensaje}\n\n"
-            "Emitido por: {remitente}"
-        ),
+        "cuerpo": ("COMUNICADO OFICIAL DE LA COMUNIDAD\n\n{mensaje}\n\nEmitido por: {remitente}"),
     },
 }
 
@@ -120,6 +125,9 @@ class PlantillasService:
 
         # Valores por defecto seguros para evitar KeyErrors
         contexto_seguro = {
+            "moneda": "S/",
+            "costo": "No disponible",
+            "ajuste": "No disponible",
             "nombre": "Residente",
             "dpto": "-",
             "periodo": "-",

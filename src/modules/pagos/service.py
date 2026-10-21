@@ -81,12 +81,20 @@ class PagosService:
                     error_code="VOUCHER_YA_CONCILIADO",
                     mensaje="El voucher bancario ya fue conciliado y aplicado anteriormente.",
                 )
+            if previo["estado"] in {"OBSERVADO", "RECHAZADO"}:
+                raise VoucherDuplicadoException(
+                    "VOUCHER_REQUIERE_SUBSANACION"
+                    if previo["estado"] == "OBSERVADO"
+                    else "VOUCHER_RECHAZADO",
+                    "La operación no admite otro reporte.",
+                )
             # Si está EN_REVISION, retornamos el comprobante previo sin duplicar
             return ComprobanteRecibidoResponse(
                 comprobante_id=previo["id"],
                 estado=previo["estado"],
                 mensaje="El comprobante ya fue recibido previamente y se encuentra en revisión.",
                 idempotency_hash=idempotency_hash,
+                codigo="VOUCHER_EN_EVALUACION",
             )
 
         nuevo_id = uuid.uuid4()
@@ -98,7 +106,8 @@ class PagosService:
             "numero_operacion": request.numero_operacion.strip(),
             "fecha_operacion": request.fecha_operacion,
             "monto": redondear_moneda(request.monto),
-            "url_voucher": request.url_voucher,
+            "url_voucher": f"/api/v1/pagos/{nuevo_id}/voucher",
+            "motivo_rechazo": None,
             "idempotency_hash": idempotency_hash,
             "estado": "EN_REVISION",
             "creado_en": datetime.now(timezone.utc),
@@ -207,6 +216,7 @@ class PagosService:
             return ConciliacionResultResponse(
                 comprobante_id=comprobante["id"],
                 estado_final="RECHAZADO",
+                motivo_rechazo=motivo_rechazo,
                 monto_imputado=Decimal("0.00"),
                 nuevo_saldo_departamento=sum(
                     c["monto_total_exigible"] - c["monto_pagado"] for c in cuotas_pendientes

@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 
 from src.core.security import create_access_token, decode_access_token
 from src.main import app
-from src.modules.notificaciones import router as notificaciones
-from src.modules.reservas import router as reservas
 from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
+from src.tests import reservas_contrato as notificaciones
+from src.tests import reservas_contrato as reservas
 
 pytestmark = pytest.mark.usefixtures(
     "autorizacion_aislada", "identidad_piloto", "finanzas_contrato"
@@ -60,7 +60,6 @@ def solicitud_pago(numero="102"):
         "numero_operacion": "OP-" + uuid4().hex,
         "fecha_operacion": "2026-10-15",
         "monto": "150.00",
-        "url_voucher": "https://ejemplo.test/voucher.jpg",
     }
 
 
@@ -128,25 +127,39 @@ def test_sesion_con_relaciones_mixtas_solo_ve_sus_vinculos_activos(monkeypatch, 
     for numero in ("102", "504"):
         assert (
             client.post(
-                "/api/v1/pagos/reportar", headers=headers, json=solicitud_pago(numero)
+                "/api/v1/pagos/reportar",
+                headers=headers,
+                data=solicitud_pago(numero),
+                files={"archivo_voucher": ("v.png", b"doble", "image/png")},
             ).status_code
             == 202
         )
     for numero in ("302", "402"):
         assert (
             client.post(
-                "/api/v1/pagos/reportar", headers=headers, json=solicitud_pago(numero)
+                "/api/v1/pagos/reportar",
+                headers=headers,
+                data=solicitud_pago(numero),
+                files={"archivo_voucher": ("v.png", b"doble", "image/png")},
             ).status_code
             == 403
         )
 
 
 def test_pago_y_reserva_ajenos_no_se_registran(finanzas_contrato):
-    for ruta, body in (
-        ("/pagos/reportar", solicitud_pago("504")),
-        ("/reservas", solicitud_reserva("504")),
-    ):
-        assert client.post("/api/v1" + ruta, headers=auth(), json=body).status_code == 403
+    assert (
+        client.post(
+            "/api/v1/pagos/reportar",
+            headers=auth(),
+            data=solicitud_pago("504"),
+            files={"archivo_voucher": ("v.png", b"doble", "image/png")},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post("/api/v1/reservas", headers=auth(), json=solicitud_reserva("504")).status_code
+        == 403
+    )
     assert not finanzas_contrato.comprobantes
     assert not reservas.RESERVAS_REGISTRADAS
 
@@ -162,13 +175,24 @@ def test_listas_privadas_y_calendario_sin_unidad_ajena():
     assert disponible.status_code == 200
     assert disponible.json() == [{"hora_inicio": "14:00:00", "hora_fin": "16:00:00"}]
     pago = solicitud_pago()
-    assert client.post("/api/v1/pagos/reportar", headers=auth(), json=pago).status_code == 202
+    assert (
+        client.post(
+            "/api/v1/pagos/reportar",
+            headers=auth(),
+            data=pago,
+            files={"archivo_voucher": ("v.png", b"doble", "image/png")},
+        ).status_code
+        == 202
+    )
     assert client.get("/api/v1/pagos/comprobantes", headers=auth(numeros=("504",))).json() == []
     assert len(client.get("/api/v1/pagos/comprobantes", headers=auth()).json()) == 1
     ajeno = {**pago, "departamento_id": unidad("504")}
     assert (
         client.post(
-            "/api/v1/pagos/reportar", headers=auth(numeros=("504",)), json=ajeno
+            "/api/v1/pagos/reportar",
+            headers=auth(numeros=("504",)),
+            data=ajeno,
+            files={"archivo_voucher": ("v.png", b"doble", "image/png")},
         ).status_code
         == 409
     )
@@ -195,9 +219,7 @@ def test_cancelar_reserva_ajena_y_suplantar_admin_no_es_posible():
 def test_cancelacion_residente_anticipada_y_mora_por_unidad():
     headers = auth(numeros=("102", "402"))
     moroso = client.post("/api/v1/reservas", headers=headers, json=solicitud_reserva("402"))
-    assert (
-        moroso.status_code == 403 and moroso.json()["detail"]["error_code"] == "DEUDA_MORA_ACTIVA"
-    )
+    assert moroso.status_code == 403 and moroso.json()["error_code"] == "DEUDA_MORA_ACTIVA"
     propia = client.post("/api/v1/reservas", headers=headers, json=solicitud_reserva())
     assert propia.status_code == 201
     assert (
@@ -227,7 +249,10 @@ def test_roles_no_administrativos_no_mutan_recursos(rol):
         assert client.get("/api/v1/notificaciones/logs", headers=headers).status_code == 200
         assert (
             client.post(
-                "/api/v1/pagos/reportar", headers=headers, json=solicitud_pago()
+                "/api/v1/pagos/reportar",
+                headers=headers,
+                data=solicitud_pago(),
+                files={"archivo_voucher": ("v.png", b"doble", "image/png")},
             ).status_code
             == 403
         )
@@ -252,7 +277,12 @@ def test_condominio_ajeno_rechazado_en_consultas_y_mutaciones(rol):
         == 403
     )
     assert (
-        client.post("/api/v1/pagos/reportar", headers=headers, json=solicitud_pago()).status_code
+        client.post(
+            "/api/v1/pagos/reportar",
+            headers=headers,
+            data=solicitud_pago(),
+            files={"archivo_voucher": ("v.png", b"doble", "image/png")},
+        ).status_code
         == 403
     )
 

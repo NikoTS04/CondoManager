@@ -11,7 +11,7 @@ import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
 import { isPositiveMoney } from "@/lib/money";
-import { reportarPago, subirVoucher, type ComprobantePago } from "@/lib/api";
+import { reportarPago, type ComprobantePago } from "@/lib/api";
 
 function getTodayLima(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -37,7 +37,6 @@ export function ReportarPagoForm({
   const [montoPago, setMontoPago] = useState<string>("");
   const [fechaOperacion, setFechaOperacion] = useState<string>(getTodayLima());
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
-  const [subida, setSubida] = useState<{ archivo: File; departamentoId: string; nombre: string } | null>(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,18 +90,13 @@ export function ReportarPagoForm({
 
     try {
       if (!voucherFile) throw new Error("Adjunta el voucher de tu pago.");
-      let nombre = subida?.archivo === voucherFile && subida.departamentoId === departamentoId ? subida.nombre : null;
-      if (!nombre) {
-        nombre = await subirVoucher(departamentoId, voucherFile);
-        setSubida({ archivo: voucherFile, departamentoId, nombre });
-      }
       const res = await reportarPago({
         departamento_id: departamentoId,
         banco,
         numero_operacion: numeroOperacion.trim(),
         fecha_operacion: fechaOperacion,
         monto: montoPago,
-        url_voucher: nombre,
+        archivo_voucher: voucherFile,
       });
 
       setConfirmOpen(false);
@@ -119,7 +113,6 @@ export function ReportarPagoForm({
         setMontoPago("");
         setFechaOperacion(getTodayLima());
         setVoucherFile(null);
-        setSubida(null);
         if (onSuccess) onSuccess();
       } else {
         const err = res.errorCode || res.error || "";
@@ -193,13 +186,13 @@ export function ReportarPagoForm({
             <Field
               label="Número de Operación Bancaria"
               required
-              hint="Se calcula una firma digital para verificar la autenticidad del comprobante."
+              hint="La operación, fecha e importe permiten detectar reportes duplicados."
               error={fieldErrors.numeroOperacion}
             >
               <Input
                 type="text"
                 placeholder="Ej. 0089214"
-                minLength={4}
+                minLength={1}
                 maxLength={50}
                 value={numeroOperacion}
                 onChange={(e) => {

@@ -15,7 +15,6 @@ from httpx import ASGITransport, AsyncClient
 from src.core.config import settings
 from src.main import app
 from src.modules.cuotas.models import CuotaMantenimiento
-from src.modules.reservas import router as reservas
 from src.modules.usuarios.piloto import vinculo_piloto
 
 
@@ -29,8 +28,6 @@ def did(numero="402"):
 
 
 async def preparar(base):
-    async with base.engine.begin() as conn:
-        await conn.run_sync(migrar_pagos)
     async with base.sessions() as db, db.begin():
         db.add(
             CuotaMantenimiento(
@@ -65,7 +62,6 @@ def db_pagos(db_usuarios, monkeypatch, tmp_path):
     db_usuarios.engine = new_engine
     db_usuarios.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
     monkeypatch.setattr(settings, "VOUCHERS_DIR", str(tmp_path / "vouchers"))
-    monkeypatch.setattr(reservas, "RESERVAS_REGISTRADAS", {})
     return db_usuarios
 
 

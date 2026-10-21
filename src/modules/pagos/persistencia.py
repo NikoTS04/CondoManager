@@ -1,6 +1,7 @@
 """CON-22/70: operaciones financieras reales; nunca usa el almacén piloto."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -22,11 +23,9 @@ from src.modules.pagos.schemas import (
     ConciliacionResultResponse,
     ConciliarPagoRequest,
     ReportarPagoRequest,
-    VoucherSubidoResponse,
 )
 from src.modules.pagos.service import PagosService
 from src.modules.pagos.storage import MAX_BYTES, VoucherStorage
-from src.shared.decimal_types import redondear_moneda
 
 
 class PagosPersistentesService:
@@ -44,9 +43,9 @@ class PagosPersistentesService:
             numero_operacion=c.numero_operacion,
             fecha_operacion=c.fecha_operacion,
             monto=c.monto,
-            estado="CONCILIADO" if c.estado == "APROBADO" else c.estado,
+            estado=c.estado,
             idempotency_hash=c.idempotency_hash,
-            url_voucher=c.url_voucher,
+            url_voucher=f"/api/v1/pagos/{c.id}/voucher",
             motivo_rechazo=c.motivo_rechazo,
         )
 
@@ -99,33 +98,27 @@ class PagosPersistentesService:
                 )
             return resultado
 
-    async def subir(self, did: UUID, archivo: UploadFile, usuario: dict):
-        async with self.session.begin():
-            await self.repo.departamento(did, usuario, escritura=True, bloquear=True)
-            datos = await archivo.read(MAX_BYTES + 1)
-            nombre, content_type = await asyncio.to_thread(self.storage.guardar, datos)
-            try:
-                self.session.add(
-                    ArchivoVoucher(
-                        nombre=nombre,
-                        departamento_id=did,
-                        usuario_id=UUID(usuario["sub"]),
-                        content_type=content_type,
-                        size_bytes=len(datos),
-                    )
-                )
-                await self.session.flush()
-            except Exception:
-                await asyncio.to_thread(self.storage.eliminar, nombre)
-                raise
-            resultado = VoucherSubidoResponse(
-                url_voucher=nombre, content_type=content_type, size_bytes=len(datos)
+    @asynccontextmanager
+    async def archivo_nuevo(self, did, archivo, usuario):
+        datos = await archivo.read(MAX_BYTES + 1)
+        nombre, content_type = await asyncio.to_thread(self.storage.guardar, datos)
+        try:
+            subida = ArchivoVoucher(
+                nombre=nombre,
+                departamento_id=did,
+                usuario_id=UUID(usuario["sub"]),
+                content_type=content_type,
+                size_bytes=len(datos),
             )
-        # Si el commit pierde la conexión, el archivo se conserva para recuperación:
-        # no se puede distinguir un commit confirmado de uno con respuesta perdida.
-        return resultado
+            self.session.add(subida)
+            yield subida
+            await self.session.flush()
+        except BaseException:
+            await asyncio.to_thread(self.storage.eliminar, nombre)
+            raise
+        # El commit se realiza fuera: su respuesta perdida nunca autoriza borrar evidencia.
 
-    async def reportar(self, request: ReportarPagoRequest, usuario: dict):
+    async def reportar(self, request: ReportarPagoRequest, archivo: UploadFile, usuario: dict):
         async with self.session.begin():
             depto, condominio = await self.repo.departamento(
                 request.departamento_id, usuario, escritura=True, bloquear=True
@@ -151,63 +144,52 @@ class PagosPersistentesService:
                     raise APIError(
                         409, "VOUCHER_YA_CONCILIADO", "El comprobante ya fue conciliado."
                     )
-                if previo.estado != "EN_REVISION":
+                if previo.estado in {"OBSERVADO", "RECHAZADO"}:
                     raise APIError(
                         409,
-                        "VOUCHER_REQUIERE_REVISION",
-                        "El comprobante existente requiere revisión administrativa.",
+                        "VOUCHER_REQUIERE_SUBSANACION"
+                        if previo.estado == "OBSERVADO"
+                        else "VOUCHER_RECHAZADO",
+                        "Subsane el voucher observado."
+                        if previo.estado == "OBSERVADO"
+                        else "La operación fue rechazada.",
                     )
                 return ComprobanteRecibidoResponse(
                     comprobante_id=previo.id,
                     estado=previo.estado,
                     mensaje="El comprobante ya fue recibido y se encuentra en revisión.",
                     idempotency_hash=hash_id,
-                    error_code="VOUCHER_EN_EVALUACION",
+                    codigo="VOUCHER_EN_EVALUACION",
                 ), False
-            subida = await self.session.scalar(
-                select(ArchivoVoucher)
-                .where(ArchivoVoucher.nombre == request.url_voucher)
-                .with_for_update()
-            )
-            if (
-                subida is None
-                or subida.departamento_id != depto.id
-                or str(subida.usuario_id) != usuario["sub"]
-                or subida.comprobante_id is not None
-            ):
-                raise APIError(
-                    422, "VOUCHER_NO_AUTORIZADO", "Suba un voucher propio para este departamento."
+            async with self.archivo_nuevo(depto.id, archivo, usuario) as subida:
+                nuevo = ComprobantePago(
+                    id=uuid4(),
+                    departamento_id=depto.id,
+                    banco_origen=request.banco,
+                    numero_operacion=request.numero_operacion,
+                    fecha_operacion=request.fecha_operacion,
+                    monto=request.monto,
+                    url_voucher=subida.nombre,
+                    idempotency_hash=hash_id,
+                    estado="EN_REVISION",
                 )
-            await asyncio.to_thread(self.storage.ruta, subida.nombre)
-            nuevo = ComprobantePago(
-                id=uuid4(),
-                departamento_id=depto.id,
-                banco_origen=request.banco,
-                numero_operacion=request.numero_operacion.strip(),
-                fecha_operacion=request.fecha_operacion,
-                monto=redondear_moneda(request.monto),
-                url_voucher=subida.nombre,
-                idempotency_hash=hash_id,
-                estado="EN_REVISION",
-            )
-            self.session.add(nuevo)
-            await self.session.flush()
-            subida.comprobante_id = nuevo.id
-            await self.repo.auditar(
-                usuario,
-                condominio.id,
-                depto.id,
-                "COMPROBANTE_REPORTADO",
-                "REPORTE_PAGO_CON22",
-                {},
-                {
-                    "comprobante_id": str(nuevo.id),
-                    "estado": nuevo.estado,
-                    "monto": str(nuevo.monto),
-                },
-            )
-            self._evento(nuevo, condominio.id, "PagoReportadoEvent")
-            await self.session.flush()
+                self.session.add(nuevo)
+                await self.session.flush()
+                subida.comprobante_id = nuevo.id
+                await self.repo.auditar(
+                    usuario,
+                    condominio.id,
+                    depto.id,
+                    "COMPROBANTE_REPORTADO",
+                    "REPORTE_PAGO_CON22",
+                    {},
+                    {
+                        "comprobante_id": str(nuevo.id),
+                        "estado": nuevo.estado,
+                        "monto": f"{nuevo.monto:.2f}",
+                    },
+                )
+                self._evento(nuevo, condominio.id, "PagoReportadoEvent")
             resultado = ComprobanteRecibidoResponse(
                 comprobante_id=nuevo.id,
                 estado=nuevo.estado,
@@ -216,10 +198,50 @@ class PagosPersistentesService:
             )
         return resultado, True
 
+    async def subsanar(self, id, archivo, usuario):
+        async with self.session.begin():
+            comprobante, depto, condominio = await self.repo.comprobante(
+                id, usuario, escritura=True, bloquear=True
+            )
+            comprobante = await self.session.scalar(
+                select(ComprobantePago)
+                .where(ComprobantePago.id == id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if comprobante.estado != "OBSERVADO":
+                raise APIError(
+                    409,
+                    "ESTADO_COMPROBANTE_INVALIDO",
+                    "Solo puede subsanar un comprobante observado.",
+                )
+            anterior = {"estado": comprobante.estado, "archivo": comprobante.url_voucher}
+            async with self.archivo_nuevo(depto.id, archivo, usuario) as subida:
+                subida.comprobante_id = id
+                comprobante.url_voucher = subida.nombre
+                comprobante.estado = "EN_REVISION"
+                comprobante.motivo_rechazo = None
+                comprobante.conciliado_por = None
+                comprobante.conciliado_en = None
+                await self.repo.auditar(
+                    usuario,
+                    condominio.id,
+                    depto.id,
+                    "COMPROBANTE_SUBSANADO",
+                    "NUEVA_EVIDENCIA_CON72",
+                    anterior,
+                    {"estado": "EN_REVISION", "archivo": subida.nombre},
+                )
+                self._evento(comprobante, condominio.id, "PagoReportadoEvent")
+            return ComprobanteRecibidoResponse(
+                comprobante_id=id, idempotency_hash=comprobante.idempotency_hash
+            )
+
     async def revisar(self, id: UUID, request: ConciliarPagoRequest, usuario: dict):
         if usuario.get("rol") not in {"SUPERADMIN", "ADMIN_JUNTA"}:
             raise APIError(403, "ACCESO_DENEGADO", "Solo la administración puede revisar pagos.")
-        motivo = (request.motivo_rechazo or request.notas_internas or "").strip()
+        motivo = (request.motivo_rechazo or "").strip() if request.decision != "APROBADO" else ""
+        notas = (request.notas_internas or "").strip() or None
         if request.decision != "APROBADO" and not motivo:
             raise APIError(422, "MOTIVO_REQUERIDO", "Indique el motivo de observación o rechazo.")
         async with self.session.begin():
@@ -233,10 +255,18 @@ class PagosPersistentesService:
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
-            if comprobante.estado not in {"EN_REVISION", "OBSERVADO"}:
+            if comprobante.estado != "EN_REVISION":
+                revision = await self.revision_vigente(comprobante)
+                if (
+                    revision is not None
+                    and revision.decision == request.decision
+                    and (revision.motivo or "") == motivo
+                    and revision.notas_internas == notas
+                ):
+                    return self.resultado_revision(revision)
                 raise APIError(
                     409,
-                    "COMPROBANTE_YA_REVISADO",
+                    "ESTADO_COMPROBANTE_INVALIDO",
                     "La decisión ya es definitiva; no se vuelve a aplicar.",
                 )
             ahora = datetime.now(UTC)
@@ -290,6 +320,7 @@ class PagosPersistentesService:
                     cuotas, condominio.dias_gracia, ahora.date()
                 )
                 == CERO,
+                motivo_rechazo=comprobante.motivo_rechazo,
             )
             revision = RevisionPago(
                 id=uuid4(),
@@ -299,6 +330,8 @@ class PagosPersistentesService:
                 actor_id=UUID(usuario["sub"]),
                 creado_en=ahora,
                 resultado=resultado.model_dump(mode="json"),
+                archivo_nombre=comprobante.url_voucher,
+                notas_internas=notas,
             )
             self.session.add(revision)
             await self.repo.auditar(
@@ -312,8 +345,8 @@ class PagosPersistentesService:
             )
             evento = {
                 "APROBADO": "PagoConciliadoEvent",
-                "OBSERVADO": "PagoObservadoEvent",
-                "RECHAZADO": "PagoRechazadoEvent",
+                "OBSERVADO": "PagoRevisadoEvent",
+                "RECHAZADO": "PagoRevisadoEvent",
             }[request.decision]
             self._evento(
                 comprobante,
@@ -330,18 +363,41 @@ class PagosPersistentesService:
 
     async def resultado(self, id, usuario):
         async with self.session.begin():
-            await self.repo.comprobante(id, usuario)
-            revision = await self.session.scalar(
-                select(RevisionPago)
-                .where(RevisionPago.comprobante_id == id)
-                .order_by(RevisionPago.creado_en.desc(), RevisionPago.id.desc())
-                .limit(1)
-            )
+            comprobante, _, _ = await self.repo.comprobante(id, usuario)
+            revision = await self.revision_vigente(comprobante)
             if revision is None:
                 raise APIError(
                     404, "RESULTADO_NO_DISPONIBLE", "El comprobante aún no tiene revisión."
                 )
-            return ConciliacionResultResponse.model_validate(revision.resultado)
+            return self.resultado_revision(revision)
+
+    async def revision_vigente(self, comprobante):
+        if comprobante.estado == "EN_REVISION":
+            return None
+        revision = await self.session.scalar(
+            select(RevisionPago)
+            .where(
+                RevisionPago.comprobante_id == comprobante.id,
+            )
+            .order_by(RevisionPago.creado_en.desc(), RevisionPago.id.desc())
+            .limit(1)
+        )
+        return (
+            revision
+            if revision is not None and revision.archivo_nombre in (None, comprobante.url_voucher)
+            else None
+        )
+
+    @staticmethod
+    def resultado_revision(revision):
+        return ConciliacionResultResponse.model_validate(
+            {
+                **revision.resultado,
+                "motivo_rechazo": revision.resultado.get("motivo_rechazo", revision.motivo)
+                if revision.decision != "APROBADO"
+                else None,
+            }
+        )
 
     async def voucher(self, id, usuario):
         async with self.session.begin():
@@ -352,16 +408,31 @@ class PagosPersistentesService:
     def _evento(self, comprobante, cid, tipo, extra=None):
         id = uuid4()
         ahora = datetime.now(UTC)
-        compatibilidad = {}
-        if tipo == "PagoConciliadoEvent":
+        data = {
+            "comprobante_id": str(comprobante.id),
+            "departamento_id": str(comprobante.departamento_id),
+            "condominio_id": str(cid),
+        }
+        if tipo == "PagoReportadoEvent":
+            data.update(
+                estado="EN_REVISION",
+                monto=f"{comprobante.monto:.2f}",
+                fecha_operacion=comprobante.fecha_operacion.isoformat(),
+            )
+        else:
             resultado = extra["resultado"]
-            compatibilidad = {
-                "comprobante_id": str(comprobante.id),
-                "departamento_id": str(comprobante.departamento_id),
-                "monto_conciliado": resultado["monto_imputado"],
-                "saldo_restante_departamento": resultado["nuevo_saldo_departamento"],
-                "desbloqueo_reservas_habilitado": resultado["departamento_habilitado_reservas"],
-            }
+            campos = (
+                ("estado_final", "motivo_rechazo")
+                if tipo == "PagoRevisadoEvent"
+                else (
+                    "estado_final",
+                    "monto_imputado",
+                    "nuevo_saldo_departamento",
+                    "saldo_a_favor_generado",
+                    "departamento_habilitado_reservas",
+                )
+            )
+            data.update({k: resultado[k] for k in campos})
         self.session.add(
             EventoPagoOutbox(
                 id=id,
@@ -370,20 +441,12 @@ class PagosPersistentesService:
                 payload={
                     "event_id": str(id),
                     "event_type": tipo,
-                    "version": 1,
+                    "schema_version": 1,
                     "producer": "service.pagos",
                     "occurred_at": ahora.isoformat(),
-                    **compatibilidad,
-                    "data": {
-                        "comprobante_id": str(comprobante.id),
-                        "departamento_id": str(comprobante.departamento_id),
-                        "condominio_id": str(cid),
-                        "estado": comprobante.estado,
-                        "monto": str(comprobante.monto),
-                        "motivo": None,
-                        **(extra or {}),
-                        **compatibilidad,
-                    },
+                    "correlation_id": str(comprobante.id),
+                    "causation_id": None,
+                    "data": data,
                 },
             )
         )

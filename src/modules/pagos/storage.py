@@ -28,7 +28,7 @@ class VoucherStorage:
     @staticmethod
     def validar(datos: bytes) -> tuple[str, str]:
         if len(datos) > MAX_BYTES:
-            raise APIError(413, "VOUCHER_DEMASIADO_GRANDE", "El máximo permitido es 5 MiB.")
+            raise APIError(413, "ARCHIVO_DEMASIADO_GRANDE", "El máximo permitido es 5 MiB.")
         if not datos:
             raise APIError(422, "VOUCHER_INVALIDO", "Adjunte un archivo PNG, JPG o PDF válido.")
         try:
@@ -43,7 +43,9 @@ class VoucherStorage:
                 warnings.simplefilter("error", Image.DecompressionBombWarning)
                 with Image.open(io.BytesIO(datos)) as imagen:
                     formato = imagen.format
-                    if formato not in {"PNG", "JPEG"} or imagen.width * imagen.height > 20_000_000:
+                    if formato not in {"PNG", "JPEG"}:
+                        raise APIError(415, "FORMATO_VOUCHER_NO_SOPORTADO", "Use PNG, JPEG o PDF.")
+                    if imagen.width * imagen.height > 20_000_000:
                         raise ValueError("Imagen fuera de límites")
                     imagen.verify()
                 # verify no decodifica el raster JPEG: comprobar también su contenido.
@@ -51,7 +53,11 @@ class VoucherStorage:
                     imagen.load()
             extension = "png" if formato == "PNG" else "jpg"
             return extension, MIME[extension]
+        except APIError:
+            raise
         except (ValueError, OSError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
+            if not datos.startswith((b"%PDF-", b"\x89PNG", b"\xff\xd8")):
+                raise APIError(415, "FORMATO_VOUCHER_NO_SOPORTADO", "Use PNG, JPEG o PDF.") from exc
             raise APIError(
                 422, "VOUCHER_INVALIDO", "El contenido no es un PNG, JPG o PDF válido."
             ) from exc

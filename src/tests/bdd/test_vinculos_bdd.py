@@ -141,7 +141,12 @@ def unidad_revocada(vinculos):
     nuevo = ingresar(vinculos["client"], B, "Inquilino123!")
     assert (
         vinculos["client"]
-        .post("/api/v1/pagos/reportar", headers=nuevo, json=solicitud_pago(vinculos["unidades"][0]))
+        .post(
+            "/api/v1/pagos/reportar",
+            headers=nuevo,
+            data=solicitud_pago(vinculos["unidades"][0]),
+            files={"archivo_voucher": ("voucher.png", b"sin-acceso", "image/png")},
+        )
         .status_code
         == 403
     )

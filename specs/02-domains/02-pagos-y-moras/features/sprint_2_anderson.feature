@@ -4,7 +4,7 @@ Característica: Reporte y revisión durable de comprobantes locales
     Dado un residente activo vinculado a un departamento con deuda en mora
     Cuando sube un voucher válido y reporta su pago
     Entonces recibe un comprobante EN_REVISION persistido
-    Y url_voucher contiene únicamente el nombre del archivo local
+    Y url_voucher contiene la ruta autenticada del comprobante
     Y la deuda y el bloqueo de reservas no cambian
 
   Escenario: Aprobar una única vez y recuperar la solvencia

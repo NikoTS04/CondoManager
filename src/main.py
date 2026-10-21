@@ -3,8 +3,16 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException
 
-from src.core.errors import APIError, api_error_handler, request_validation_handler
+from src.core.errors import (
+    APIError,
+    ErrorResponse,
+    api_error_handler,
+    http_error_handler,
+    request_validation_handler,
+    unexpected_error_handler,
+)
 from src.modules.condominios.estructura.router import router as estructura_router
 from src.modules.condominios.router import router as condominios_router
 from src.modules.cuotas.distribucion.router import router as distribucion_router
@@ -20,6 +28,9 @@ app = FastAPI(
     title="CondoManager API",
     description="Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD)",
     version="0.1.0",
+    responses={
+        codigo: {"model": ErrorResponse} for codigo in (400, 401, 403, 404, 409, 413, 415, 422)
+    },
 )
 
 app.add_middleware(
@@ -32,6 +43,8 @@ app.add_middleware(
 
 app.add_exception_handler(APIError, api_error_handler)
 app.add_exception_handler(RequestValidationError, request_validation_handler)
+app.add_exception_handler(HTTPException, http_error_handler)
+app.add_exception_handler(Exception, unexpected_error_handler)
 
 
 app.include_router(usuarios_router, prefix="/api/v1")

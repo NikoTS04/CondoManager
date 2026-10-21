@@ -24,7 +24,7 @@ class ArchivoVoucher(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     comprobante_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("comprobantes_pago.id", ondelete="RESTRICT"), unique=True, nullable=True
+        ForeignKey("comprobantes_pago.id", ondelete="RESTRICT"), nullable=True
     )
 
     __table_args__ = (
@@ -51,6 +51,10 @@ class RevisionPago(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     resultado: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    archivo_nombre: Mapped[str | None] = mapped_column(
+        ForeignKey("archivos_voucher.nombre", ondelete="RESTRICT"), nullable=True
+    )
+    notas_internas: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         CheckConstraint(

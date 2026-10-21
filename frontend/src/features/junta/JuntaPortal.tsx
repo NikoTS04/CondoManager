@@ -146,7 +146,7 @@ export default function JuntaPortal() {
   }, [seleccionarCondominio, user]);
 
   const pendientes = useMemo(
-    () => comprobantes.filter((comprobante) => comprobante.estado === "EN_REVISION" || comprobante.estado === "OBSERVADO"),
+    () => comprobantes.filter((comprobante) => comprobante.estado === "EN_REVISION"),
     [comprobantes],
   );
   const presupuestoActual = presupuesto;
@@ -223,8 +223,8 @@ export default function JuntaPortal() {
           const alcance = resultado.generadas ?? 0;
           setFeedback(
             alcance > 0
-              ? `Comunicado enviado a ${alcance} destinatarios.`
-              : "Comunicado enviado correctamente.",
+              ? `Comunicado en cola para ${alcance} destinatarios. La entrega aún no está confirmada.`
+              : "No hay destinatarios activos para este comunicado.",
           );
           setTitulo("");
           setMensaje("");
@@ -408,6 +408,7 @@ export default function JuntaPortal() {
               onTituloChange={setTitulo}
               onMensajeChange={setMensaje}
               onSubmit={solicitarComunicado}
+              onActualizada={() => void loadData()}
             />
           )}
         </div>

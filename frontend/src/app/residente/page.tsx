@@ -20,6 +20,7 @@ import { SolvenciaBanner } from "@/components/domain/SolvenciaBanner";
 import { Spinner } from "@/components/ui/Feedback";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { AvisosList } from "@/features/residente/AvisosList";
 import {
   ResidenteNav,
   type ResidenteTab,
@@ -48,7 +49,6 @@ function ResidenteContent() {
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
-  const [revisionDisponibilidad, setRevisionDisponibilidad] = useState(0);
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
 
   // Estados de carga y error por recurso independiente
@@ -56,6 +56,7 @@ function ResidenteContent() {
   const [loadingReservas, setLoadingReservas] = useState(false);
   const [loadingComprobantes, setLoadingComprobantes] = useState(false);
   const [loadingAreas, setLoadingAreas] = useState(false);
+  const [revisionCalendario, setRevisionCalendario] = useState(0);
 
   const [errorDeptos, setErrorDeptos] = useState<string | null>(null);
   const [errorAreas, setErrorAreas] = useState<string | null>(null);
@@ -115,7 +116,7 @@ function ResidenteContent() {
   }, [contextoId]);
 
   const reloadReservas = useCallback(async () => {
-    setRevisionDisponibilidad((value) => value + 1);
+    setRevisionCalendario((r) => r + 1);
     setLoadingReservas(true);
     setErrorReservas(null);
     try {
@@ -234,8 +235,10 @@ function ResidenteContent() {
       {activeTab === "reservas" && (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
+            {loadingInitial ? <Spinner label="Cargando formulario de reserva…" /> : (
             <ReservarAreaForm
               key={departamentoId}
+              revisionExterna={revisionCalendario}
               areas={areas}
               condominioId={contextoId}
               departamentoId={departamentoId}
@@ -243,11 +246,11 @@ function ResidenteContent() {
               deudaVencida={deptoActual?.deuda_vencida}
               errorAreas={errorAreas}
               onRetryAreas={reloadAreas}
-              revisionDisponibilidad={revisionDisponibilidad}
               onSuccess={reloadReservas}
               onGoToPagos={() => setActiveTab("pagos")}
               onSolvenciaActualizada={actualizarSolvencia}
             />
+            )}
           </div>
           <div className="lg:col-span-2">
             <MisReservasList
@@ -268,12 +271,14 @@ function ResidenteContent() {
       {activeTab === "pagos" && (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
+            {loadingInitial ? <Spinner label="Cargando formulario de pago…" /> : (
             <ReportarPagoForm
               key={departamentoId}
               departamentoId={departamentoId}
               onSuccess={reloadComprobantes}
               comprobantesExistentes={comprobantes}
             />
+            )}
           </div>
           <div className="lg:col-span-2">
             <ComprobantesList
@@ -285,6 +290,10 @@ function ResidenteContent() {
             />
           </div>
         </div>
+      )}
+
+      {activeTab === "avisos" && contextoId && departamentoId && (
+        <AvisosList condominioId={contextoId} departamentoId={departamentoId} />
       )}
 
       {activeTab === "cuenta" && (

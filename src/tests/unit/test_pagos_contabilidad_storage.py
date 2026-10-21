@@ -79,7 +79,7 @@ def test_contenido_real_nombre_generado_y_recuperacion(tmp_path, formato, extens
 def test_archivo_corrupto_no_se_guarda(tmp_path, contenido):
     with pytest.raises(APIError) as exc:
         VoucherStorage(tmp_path).guardar(contenido)
-    assert exc.value.status_code == 422
+    assert exc.value.status_code == (415 if contenido.startswith(b"<html>") else 422)
     assert not list(tmp_path.iterdir())
 
 

@@ -143,13 +143,13 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
     def reservas_concurrentes(context, monkeypatch, finanzas_contrato):
         from fastapi import HTTPException
 
-        from src.modules.reservas import router
         from src.modules.reservas.schemas import CrearReservaRequest
+        from src.modules.reservas.service import ConflictoHorarioException
         from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
+        from src.tests import reservas_contrato as router
         from src.tests.areas import AreasCatalogoFake
-        from src.tests.departamentos import CatalogoDepartamentosFake
+        from src.tests.reservas_contrato import ReservasContrato
 
-        catalogo = CatalogoDepartamentosFake()
         area_id = uuid.uuid4()
         condominio_id = CONDOMINIO_PILOTO_ID
         monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {})
@@ -170,18 +170,17 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
                 hora_fin=context["hora_fin"],
             )
             try:
-                return await router.crear_reserva(
+                return await ReservasContrato(areas, finanzas_contrato).crear(
                     request,
-                    user={
+                    usuario={
                         "sub": "residente-" + numero,
                         "rol": "RESIDENTE",
                         "condominio_id": str(condominio_id),
                         "departamentos": [vinculo],
                     },
-                    solvencia=finanzas_contrato,
-                    repository=catalogo,
-                    areas_repository=areas,
                 )
+            except ConflictoHorarioException as exc:
+                return HTTPException(409, detail={"error_code": exc.error_code})
             except HTTPException as exc:
                 return exc
 

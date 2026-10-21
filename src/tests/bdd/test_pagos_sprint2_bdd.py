@@ -38,28 +38,23 @@ def flujo(db_pagos):
 def cargar(flujo):
     buffer = io.BytesIO()
     Image.new("RGB", (2, 2), "white").save(buffer, format="PNG")
-    subida = flujo["client"].post(
-        "/api/v1/pagos/vouchers",
-        headers=flujo["residente"],
-        data={"departamento_id": str(did())},
-        files={"voucher_file": ("evidencia.png", buffer.getvalue(), "image/png")},
-    )
-    assert subida.status_code == 201
-    flujo["nombre"] = subida.json()["url_voucher"]
+    flujo["files"] = {"archivo_voucher": ("evidencia.png", buffer.getvalue(), "image/png")}
     flujo["body"] = {
         "departamento_id": str(did()),
         "banco": "BCP",
         "numero_operacion": "BDD-12345",
         "fecha_operacion": "2026-10-15",
         "monto": "170.00",
-        "url_voucher": flujo["nombre"],
     }
 
 
 def reportar(flujo):
     cargar(flujo)
     response = flujo["client"].post(
-        "/api/v1/pagos/reportar", headers=flujo["residente"], json=flujo["body"]
+        "/api/v1/pagos/reportar",
+        headers=flujo["residente"],
+        data=flujo["body"],
+        files=flujo["files"],
     )
     assert response.status_code == 202
     flujo["id"] = response.json()["comprobante_id"]
@@ -90,9 +85,10 @@ def en_revision(flujo):
     )
 
 
-@then("url_voucher contiene únicamente el nombre del archivo local")
+@then("url_voucher contiene la ruta autenticada del comprobante")
 def nombre_local(flujo):
-    assert flujo["nombre"].endswith(".png") and "/" not in flujo["nombre"]
+    data = flujo["client"].get("/api/v1/pagos/comprobantes", headers=flujo["residente"]).json()[0]
+    assert data["url_voucher"] == f"/api/v1/pagos/{flujo['id']}/voucher"
 
 
 @then("la deuda y el bloqueo de reservas no cambian")
@@ -158,7 +154,7 @@ def no_reaplicar(flujo):
             json={"decision": "APROBADO"},
         )
         .status_code
-        == 409
+        == 200
     )
 
 
@@ -192,7 +188,10 @@ def dos_reportes(flujo):
 def concurrencia(flujo):
     def enviar(_):
         return flujo["client"].post(
-            "/api/v1/pagos/reportar", headers=flujo["residente"], json=flujo["body"]
+            "/api/v1/pagos/reportar",
+            headers=flujo["residente"],
+            data=flujo["body"],
+            files=flujo["files"],
         )
 
     with ThreadPoolExecutor(max_workers=2) as executor:

@@ -1,15 +1,16 @@
 "use client";
 
-import { Calendar, CreditCard, Coins } from "lucide-react";
+import { Calendar, CreditCard, Coins, Bell } from "lucide-react";
 import { Tabs, type TabItem } from "@/components/ui/Tabs";
 import { cn } from "@/lib/cn";
 
-export type ResidenteTab = "reservas" | "pagos" | "cuenta";
+export type ResidenteTab = "reservas" | "pagos" | "cuenta" | "avisos";
 
 const TAB_ITEMS: TabItem<ResidenteTab>[] = [
   { id: "reservas", label: "Reservas de Áreas Comunes", icon: Calendar },
   { id: "pagos", label: "Reportar Comprobante de Pago", icon: CreditCard },
   { id: "cuenta", label: "Estado de Cuenta", icon: Coins },
+  { id: "avisos", label: "Avisos", icon: Bell },
 ];
 
 export interface ResidenteNavProps {
@@ -37,7 +38,7 @@ export function ResidenteNav({ activeTab, onChangeTab, className }: ResidenteNav
         aria-label="Navegación móvil del residente"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface shadow-lg sm:hidden pb-[env(safe-area-inset-bottom)]"
       >
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {TAB_ITEMS.map((item) => {
             const isSelected = activeTab === item.id;
             const Icon = item.icon;
@@ -56,7 +57,7 @@ export function ResidenteNav({ activeTab, onChangeTab, className }: ResidenteNav
               >
                 {Icon && <Icon className={cn("h-5 w-5 shrink-0", isSelected ? "text-brand-700" : "text-muted")} aria-hidden />}
                 <span className="truncate max-w-full text-[11px] leading-tight text-center">
-                  {item.id === "reservas" ? "Reservas" : item.id === "pagos" ? "Pagos" : "Mi Cuenta"}
+                    {item.id === "reservas" ? "Reservas" : item.id === "pagos" ? "Pagos" : item.id === "avisos" ? "Avisos" : "Mi Cuenta"}
                 </span>
               </button>
             );

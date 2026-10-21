@@ -1,5 +1,11 @@
 # Criterios de Aceptación: Reservas de Áreas Comunes (BDD / Gherkin)
 
+CON-73/74: los escenarios ejecutables de
+[persistencia integrada](../02-domains/04-reservas/features/persistencia_sprint_2.feature)
+comprueban sesiones independientes, rollback, diez reservas concurrentes,
+deduplicación de eventos y recuperación de reintentos. Las comunicaciones con
+transporte SIMULADO quedan ENVIADO; no se acredita entrega de correo externo.
+
 ## Característica: Reserva de Áreas Comunes y Control de Solvencia
 
 CON-39: [catálogo persistente](../02-domains/04-reservas/catalogo-areas.md) y

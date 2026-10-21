@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Send } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, SkeletonList } from "@/components/ui/Feedback";
 import { Field, Input, Textarea } from "@/components/ui/Field";
-import type { NotificacionLog } from "@/lib/api";
+import { reenviarNotificacion, type NotificacionLog } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 
 interface ComunicadosSectionProps {
@@ -18,6 +18,7 @@ interface ComunicadosSectionProps {
   onTituloChange: (value: string) => void;
   onMensajeChange: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
+  onActualizada: () => void;
 }
 
 const ESTADOS_NOTIFICACION: Record<
@@ -25,6 +26,7 @@ const ESTADOS_NOTIFICACION: Record<
   { label: string; tone: "success" | "warning" | "danger" | "info" }
 > = {
   ENTREGADO: { label: "Entregado", tone: "success" },
+  ENVIADO: { label: "Aceptado, entrega sin confirmar", tone: "info" },
   REINTENTANDO: { label: "Reintentando", tone: "warning" },
   FALLIDO_PERMANENTE: { label: "Fallido", tone: "danger" },
   EN_COLA: { label: "En cola", tone: "info" },
@@ -39,7 +41,28 @@ export function ComunicadosSection({
   onTituloChange,
   onMensajeChange,
   onSubmit,
+  onActualizada,
 }: ComunicadosSectionProps) {
+  const [seleccion, setSeleccion] = useState<string | null>(null);
+  const [contacto, setContacto] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function reencolar(event: FormEvent) {
+    event.preventDefault();
+    if (!seleccion) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await reenviarNotificacion(seleccion, contacto.trim());
+      setSeleccion(null);
+      onActualizada();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No pudimos reencolar el aviso.");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <Card>
@@ -85,6 +108,7 @@ export function ComunicadosSection({
       <Card>
         <CardHeader title="Historial de envíos" />
         <CardBody>
+          {error && <Alert tone="danger">{error}</Alert>}
           {loading ? (
             <SkeletonList rows={3} label="Cargando historial de comunicados" />
           ) : notificaciones.length === 0 ? (
@@ -110,8 +134,24 @@ export function ComunicadosSection({
                         {formatDate(notificacion.fecha_creacion)}
                       </p>
                       <p className="text-xs text-muted">
-                        Intentos: {notificacion.intentos}
+                        Ciclo {notificacion.ciclo} · Intentos: {notificacion.intentos}
+                        {notificacion.transporte === "SIMULADO" ? " · Transporte simulado" : ""}
                       </p>
+                      {notificacion.proximo_reintento && <p className="text-xs text-muted">
+                        Próximo intento: {formatDate(notificacion.proximo_reintento)}
+                      </p>}
+                      {notificacion.error_mensaje && <p className="text-sm text-danger-700">{notificacion.error_mensaje}</p>}
+                      {!isAuditor && notificacion.estado === "FALLIDO_PERMANENTE" && (
+                        seleccion === notificacion.id ? <form onSubmit={reencolar} className="mt-3 space-y-2">
+                          <Field label="Contacto autorizado corregido" required>
+                            <Input value={contacto} onChange={(e) => setContacto(e.target.value)} required />
+                          </Field>
+                          <p className="text-xs text-muted">Debe coincidir con el contacto actualizado de este usuario en el padrón.</p>
+                          <Button type="submit" loading={busy}>Reencolar aviso</Button>
+                        </form> : <Button variant="secondary" size="sm" onClick={() => {
+                          setSeleccion(notificacion.id); setContacto(""); setError(null);
+                        }}>Corregir y reencolar</Button>
+                      )}
                     </div>
                     <Badge tone={estado.tone}>{estado.label}</Badge>
                   </li>

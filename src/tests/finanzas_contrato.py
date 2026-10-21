@@ -58,7 +58,7 @@ class FinanzasContrato:
             and puede_ver_departamento(usuario, c["departamento_id"])
         ]
 
-    async def reportar(self, request, usuario):
+    async def reportar(self, request, archivo, usuario):
         d = self.departamento(request.departamento_id, usuario, True)
         cantidad = len(self.comprobantes)
         try:

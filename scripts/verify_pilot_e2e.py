@@ -193,7 +193,6 @@ def main():
         numero_operacion="0089214",
         fecha_operacion=date(2026, 10, 24),
         monto=Decimal("170.00"),
-        url_voucher="https://s3.local/vouchers/voucher_0089214.jpg",
     )
 
     # Reporte 1

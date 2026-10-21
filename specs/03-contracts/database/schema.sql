@@ -227,7 +227,7 @@ CREATE TABLE archivos_voucher (
     content_type VARCHAR(30) NOT NULL CHECK (content_type IN ('image/png', 'image/jpeg', 'application/pdf')),
     size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 5242880),
     creado_en TIMESTAMPTZ NOT NULL,
-    comprobante_id UUID UNIQUE REFERENCES comprobantes_pago(id) ON DELETE RESTRICT
+    comprobante_id UUID REFERENCES comprobantes_pago(id) ON DELETE RESTRICT
 );
 CREATE INDEX idx_voucher_pendientes ON archivos_voucher(comprobante_id, creado_en);
 
@@ -238,7 +238,9 @@ CREATE TABLE revisiones_pago (
     motivo TEXT,
     actor_id UUID NOT NULL,
     creado_en TIMESTAMPTZ NOT NULL,
-    resultado JSONB NOT NULL
+    resultado JSONB NOT NULL,
+    archivo_nombre TEXT REFERENCES archivos_voucher(nombre) ON DELETE RESTRICT,
+    notas_internas TEXT
 );
 CREATE INDEX idx_revision_comprobante_fecha ON revisiones_pago(comprobante_id, creado_en);
 
@@ -282,8 +284,92 @@ CREATE TABLE reservas (
     hora_fin TIME NOT NULL CHECK (hora_fin > hora_inicio),
     costo_reserva NUMERIC(12,2) NOT NULL DEFAULT 0.00 CHECK (costo_reserva >= 0.00),
     estado VARCHAR(20) NOT NULL DEFAULT 'SOLICITADA' CHECK (estado IN ('SOLICITADA', 'CONFIRMADA', 'RECHAZADA', 'CANCELADA', 'COMPLETADA')),
-    creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
+    usuario_id UUID REFERENCES usuarios(id) ON DELETE RESTRICT,
+    area_nombre TEXT NOT NULL,
+    moneda VARCHAR(3) NOT NULL CHECK (moneda IN ('PEN', 'USD')),
+    zona_horaria VARCHAR(40) NOT NULL CHECK (zona_horaria IN ('UTC', 'America/Lima')),
+    fecha_cancelacion TIMESTAMPTZ,
+    cancelado_por UUID REFERENCES usuarios(id) ON DELETE RESTRICT,
+    motivo_cancelacion TEXT
 );
+CREATE INDEX idx_reservas_contexto_unidad ON reservas(condominio_id, departamento_id);
+CREATE INDEX idx_reservas_area_fecha ON reservas(area_id, fecha_reserva, estado);
+
+-- CON-73: bloqueos operativos, outbox y cola de comunicaciones durable.
+CREATE TABLE bloqueos_area (
+    id UUID PRIMARY KEY,
+    area_id UUID NOT NULL REFERENCES areas_comunes(id) ON DELETE RESTRICT,
+    inicio TIMESTAMPTZ NOT NULL,
+    fin TIMESTAMPTZ NOT NULL CHECK (fin > inicio),
+    activo BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE INDEX ix_bloqueos_area_area_id ON bloqueos_area(area_id);
+CREATE TABLE eventos_reserva_outbox (
+    id UUID PRIMARY KEY,
+    reserva_id UUID NOT NULL REFERENCES reservas(id) ON DELETE RESTRICT,
+    payload JSONB NOT NULL,
+    creado_en TIMESTAMPTZ NOT NULL,
+    publicado_en TIMESTAMPTZ
+);
+CREATE INDEX ix_eventos_reserva_outbox_reserva_id ON eventos_reserva_outbox(reserva_id);
+CREATE INDEX idx_evento_reserva_pendiente ON eventos_reserva_outbox(publicado_en, creado_en);
+CREATE TABLE notificaciones_logs (
+    id UUID PRIMARY KEY,
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
+    departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,
+    usuario_destinatario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    evento_id UUID NOT NULL,
+    operacion_id UUID NOT NULL,
+    tipo_evento TEXT NOT NULL,
+    canal VARCHAR(20) NOT NULL CHECK (canal IN ('EMAIL', 'WHATSAPP', 'SMS', 'PUSH')),
+    destinatario TEXT NOT NULL,
+    asunto TEXT,
+    cuerpo TEXT NOT NULL,
+    estado VARCHAR(30) NOT NULL CHECK (estado IN ('EN_COLA', 'ENVIADO', 'ENTREGADO', 'REINTENTANDO', 'FALLIDO_PERMANENTE')),
+    transporte VARCHAR(20) NOT NULL CHECK (transporte IN ('SIMULADO', 'PROVEEDOR')),
+    ciclo INTEGER NOT NULL CHECK (ciclo >= 1),
+    intentos INTEGER NOT NULL CHECK (intentos BETWEEN 0 AND 4),
+    proximo_reintento TIMESTAMPTZ,
+    bloqueado_hasta TIMESTAMPTZ,
+    proveedor_message_id TEXT,
+    error_mensaje TEXT,
+    fecha_creacion TIMESTAMPTZ NOT NULL,
+    fecha_actualizacion TIMESTAMPTZ NOT NULL,
+    CONSTRAINT uq_notificacion_logica UNIQUE(evento_id, operacion_id, usuario_destinatario_id, canal)
+);
+CREATE INDEX idx_notificacion_contexto_usuario ON notificaciones_logs(condominio_id, usuario_destinatario_id);
+CREATE INDEX idx_notificacion_pendiente ON notificaciones_logs(estado, proximo_reintento);
+CREATE TABLE notificaciones_intentos (
+    id UUID PRIMARY KEY,
+    notificacion_id UUID NOT NULL REFERENCES notificaciones_logs(id) ON DELETE RESTRICT,
+    ciclo INTEGER NOT NULL CHECK (ciclo >= 1),
+    numero INTEGER NOT NULL CHECK (numero BETWEEN 1 AND 4),
+    iniciado_en TIMESTAMPTZ NOT NULL,
+    terminado_en TIMESTAMPTZ,
+    error TEXT,
+    proveedor_message_id TEXT,
+    CONSTRAINT uq_notificacion_intento UNIQUE(notificacion_id, ciclo, numero)
+);
+CREATE TABLE notificaciones_eventos (
+    consumidor TEXT NOT NULL,
+    event_id UUID NOT NULL,
+    procesado_en TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY(consumidor, event_id)
+);
+CREATE TABLE notificaciones_incidencias (
+    clave TEXT PRIMARY KEY,
+    motivo TEXT NOT NULL,
+    creado_en TIMESTAMPTZ NOT NULL
+);
+ALTER TABLE reservas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bloqueos_area ENABLE ROW LEVEL SECURITY;
+ALTER TABLE eventos_reserva_outbox ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notificaciones_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notificaciones_intentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notificaciones_eventos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notificaciones_incidencias ENABLE ROW LEVEL SECURITY;
 
 -- 8. Bitácora Inmutable de Auditoría (7 campos obligatorios)
 CREATE TABLE auditoria_logs (

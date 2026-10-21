@@ -1,6 +1,6 @@
 # CON-72 — Contratos base de implementación del Sprint 2
 
-**Responsable:** Gerardo. **Base:** 20/10/2026. **Estado:** contratos definidos para implementar; validación automatizada, integración y revisión de pares pendientes. Los contratos pueden evolucionar mediante el procedimiento de cambios de la sección 9.
+**Responsable:** Gerardo. **Base:** 20/10/2026. **Estado:** implementación integrada y verificación local por CON-73/74; revisión de pares y esquema desplegado pendientes. Evidencia en [convergencia CON-72](../../docs/sprints/CON-72-convergencia.md). Los contratos pueden evolucionar mediante el procedimiento de cambios de la sección 9.
 
 ## 1. Fuentes y alcance
 
@@ -173,7 +173,11 @@ Además de los códigos por operación, se usan `401 NO_AUTENTICADO`, `TOKEN_INV
 
 Las firmas de colaboración se implementan en las historias de origen: lectura de catálogo y ocupaciones, evaluación de solvencia dentro de la sesión SQL, cancelación transaccional y cola de notificaciones. No crear repositorios alternativos en memoria para acreditar el cierre.
 
-**Verificación de esta entrega:** revisión documental. La validación automatizada, integración y revisión de pares quedan pendientes; publicar esta base no acredita el funcionamiento de las HU ni el cierre de CON-72.
+**Verificación:** las pruebas de convergencia contrastan respuestas de API y eventos
+reales con los esquemas publicados, con PostgreSQL migrado y autorización real.
+El recorrido Chromium incluye reporte, observación, subsanación, aprobación,
+descarga y aviso. Esta evidencia local no sustituye revisión de pares ni validación
+del esquema desplegado. El proveedor externo y el rediseño siguen fuera del alcance.
 
 ## 9. Procedimiento de cambios durante el sprint
 

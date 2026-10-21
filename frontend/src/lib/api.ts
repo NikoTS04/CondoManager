@@ -112,14 +112,15 @@ export interface Reserva {
   id: string;
   condominio_id: string;
   area_id: string;
-  area_nombre?: string;
+  area_nombre?: string | null;
   departamento_id: string;
   fecha_reserva: string;
   hora_inicio: string;
   hora_fin: string;
   costo_reserva: string;
-  moneda?: Moneda;
-  estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA";
+  moneda: Moneda;
+  zona_horaria: "America/Lima" | "UTC";
+  estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA" | "RECHAZADA" | "COMPLETADA";
   creado_en: string;
 }
 
@@ -130,23 +131,32 @@ export interface ComprobantePago {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  estado: "EN_REVISION" | "CONCILIADO" | "RECHAZADO" | "OBSERVADO";
+  estado: "EN_REVISION" | "APROBADO" | "RECHAZADO" | "OBSERVADO";
   idempotency_hash: string;
-  url_voucher?: string;
-  motivo_rechazo?: string;
+  url_voucher: string;
+  motivo_rechazo: string | null;
 }
 
 export interface NotificacionLog {
   id: string;
-  departamento_id?: string;
+  condominio_id: string;
+  departamento_id: string | null;
+  usuario_destinatario_id: string | null;
+  evento_id: string | null;
   tipo_evento: string;
-  canal: string;
+  canal: "EMAIL" | "WHATSAPP" | "SMS" | "PUSH";
   destinatario: string;
-  asunto?: string;
-  cuerpo?: string;
-  estado: "ENTREGADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
+  asunto: string | null;
+  cuerpo: string;
+  estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
   intentos: number;
+  ciclo: number;
+  transporte: "SIMULADO" | "PROVEEDOR";
+  proximo_reintento: string | null;
+  error_mensaje: string | null;
+  proveedor_message_id: string | null;
   fecha_creacion: string;
+  fecha_actualizacion: string;
 }
 
 export type Moneda = "PEN" | "USD";
@@ -368,8 +378,19 @@ async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response
 async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   const response = await fetchProtegido(ruta, { ...init, headers: getAuthHeaders() });
   const data = await response.json();
-  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo completar la operación."));
+  if (!response.ok) {
+    const payload = data.detail && typeof data.detail === "object" ? data.detail : data;
+    throw new ApiError(obtenerMensajeError(data, "No se pudo completar la operación."),
+      response.status, obtenerCodigoError(data), payload.detalles);
+  }
   return data as T;
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public errorCode?: string,
+    public detalles?: Record<string, unknown>) {
+    super(message);
+  }
 }
 
 function contextoQuery(condominioId?: string | null): string {
@@ -629,7 +650,7 @@ export async function crearReserva(payload: {
   fecha_reserva: string;
   hora_inicio: string;
   hora_fin: string;
-}): Promise<{ ok: boolean; data?: Reserva; error?: string }> {
+}): Promise<{ ok: boolean; data?: Reserva; error?: string; errorCode?: string }> {
   try {
     const data = await recursoRequest<Reserva>("/reservas", {
       method: "POST",
@@ -637,7 +658,8 @@ export async function crearReserva(payload: {
     });
     return { ok: true, data };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "No se pudo crear la reserva." };
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo crear la reserva.",
+      errorCode: error instanceof ApiError ? error.errorCode : undefined };
   }
 }
 
@@ -674,33 +696,35 @@ export async function reportarPago(payload: {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  url_voucher?: string;
+  archivo_voucher: File;
 }): Promise<{ ok: boolean; error?: string; errorCode?: string; duplicado?: boolean }> {
   try {
+    const form = new FormData();
+    for (const [campo, valor] of Object.entries(payload)) form.append(campo, valor);
+    const headers = getAuthHeaders();
+    delete headers["Content-Type"];
     const response = await fetchProtegido("/pagos/reportar", {
       method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload),
+      headers,
+      body: form,
     });
     const data = await response.json();
     const errorCode = obtenerCodigoError(data);
     if (!response.ok) return { ok: false, error: obtenerMensajeError(data, "No se pudo reportar el pago."), errorCode };
-    return { ok: true, duplicado: response.status === 200, errorCode };
+    return { ok: true, duplicado: data.codigo === "VOUCHER_EN_EVALUACION" };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
 }
 
-export async function subirVoucher(departamentoId: string, archivo: File): Promise<string> {
+export async function subsanarVoucher(comprobanteId: string, archivo: File): Promise<void> {
   const form = new FormData();
-  form.append("departamento_id", departamentoId);
-  form.append("voucher_file", archivo);
+  form.append("archivo_voucher", archivo);
   const headers = getAuthHeaders();
   delete headers["Content-Type"];
-  const response = await fetchProtegido("/pagos/vouchers", { method: "POST", headers, body: form });
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher`, { method: "PUT", headers, body: form });
   const data = await response.json();
   if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo subir el voucher."));
-  return data.url_voucher as string;
 }
 
 export async function descargarVoucher(comprobante: ComprobantePago): Promise<void> {
@@ -714,7 +738,8 @@ export async function descargarVoucher(comprobante: ComprobantePago): Promise<vo
   const url = URL.createObjectURL(await response.blob());
   const enlace = document.createElement("a");
   enlace.href = url;
-  enlace.download = comprobante.url_voucher?.match(/^[\da-f-]+\.(png|jpg|pdf)$/)?.[0] || `voucher-${comprobante.id}`;
+  const extension = { "image/png": "png", "image/jpeg": "jpg", "application/pdf": "pdf" }[response.headers.get("Content-Type") || ""];
+  enlace.download = `voucher-${comprobante.id}${extension ? `.${extension}` : ""}`;
   document.body.appendChild(enlace);
   enlace.click();
   enlace.remove();
@@ -777,9 +802,15 @@ export function fetchNotificaciones(condominioId?: string | null): Promise<Notif
   return recursoRequest(`/notificaciones/logs${contextoQuery(condominioId)}`);
 }
 
+export function reenviarNotificacion(id: string, nuevo_destinatario: string): Promise<NotificacionLog> {
+  return recursoRequest(`/notificaciones/reenviar/${encodeURIComponent(id)}`, {
+    method: "POST", body: JSON.stringify({ nuevo_destinatario }),
+  });
+}
+
 export async function enviarComunicadoMasivo(titulo: string, mensaje: string, condominioId: string): Promise<{ ok: boolean; generadas?: number }> {
   try {
-    const data = await recursoRequest<{ notificaciones_generadas: number }>("/notificaciones/comunicado-masivo", {
+    const data = await recursoRequest<{ generadas: number }>("/notificaciones/comunicado-masivo", {
       method: "POST",
       body: JSON.stringify({
         condominio_id: condominioId,
@@ -788,7 +819,7 @@ export async function enviarComunicadoMasivo(titulo: string, mensaje: string, co
         canal: "EMAIL",
       }),
     });
-    return { ok: true, generadas: data.notificaciones_generadas };
+    return { ok: true, generadas: data.generadas };
   } catch {
     return { ok: false };
   }

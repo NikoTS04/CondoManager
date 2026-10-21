@@ -5,7 +5,7 @@ info:
   version: 2.0.0
 x-contract-baseline: CON-72-2026-10-20
 x-contract-guide: ../../05-api/sprint-2-contratos.md
-x-payments-implementation-note: CON-72 es la base normativa. x-core-implementation conserva el contrato actual de pagos; multipart unificado, estado APROBADO, subsanacion y nuevos envelopes siguen pendientes de adaptar.
+x-payments-implementation-note: CON-72 es la base normativa implementada por pagos. x-core-implementation conserva únicamente una instantánea histórica anterior a la convergencia; no define API adicionales vigentes.
 security: [{ bearerAuth: [] }]
 servers:
   - url: http://localhost:8000/api/v1
@@ -900,43 +900,6 @@ paths:
         '422':
           $ref: '#/components/responses/Error422'
 
-  /pagos/vouchers:
-    post:
-      x-implementation-status: implementado
-      x-contract-role: extension-compatible-CORE
-      tags: [Pagos y Conciliación]
-      summary: Subir evidencia local privada para un departamento autorizado
-      operationId: subirVoucher
-      description: PNG/JPG/PDF de hasta 5 MiB; devuelve solo el nombre local generado, no una URL pública.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [departamento_id, voucher_file]
-              properties:
-                departamento_id: { type: string, format: uuid }
-                voucher_file: { type: string, format: binary }
-      responses:
-        '201':
-          description: Archivo guardado y subida persistida
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [url_voucher, content_type, size_bytes]
-                properties:
-                  url_voucher: { type: string, example: '8ac169e4-3928-4e52-b75d-84a2781e44fa.jpg' }
-                  content_type: { type: string, enum: [image/png, image/jpeg, application/pdf] }
-                  size_bytes: { type: integer, minimum: 1, maximum: 5242880 }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
-        '404': { $ref: '#/components/responses/Error404' }
-        '413': { description: Archivo mayor a 5 MiB }
-        '422': { $ref: '#/components/responses/Error422' }
-        '503': { description: Almacenamiento local no disponible }
-
   /pagos/solvencia/{departamento_id}:
     get:
       x-implementation-status: implementado
@@ -969,27 +932,7 @@ paths:
   /pagos/{comprobante_id}/voucher:
     $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1voucher'
   /pagos/{comprobante_id}/resultado:
-    get:
-      x-implementation-status: implementado
-      x-contract-role: extension-compatible-CORE
-      tags: [Pagos y Conciliación]
-      description: Devuelve la instantánea financiera de la última revisión confirmada.
-      summary: Consultar el último resultado de revisión persistido
-      operationId: consultarResultadoPago
-      parameters:
-        - name: comprobante_id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: Resultado real confirmado por la junta
-          content:
-            application/json:
-              schema: { $ref: '#/x-core-implementation/schemas/ConciliacionResultResponse' }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
-        '404': { $ref: '#/components/responses/Error404' }
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1resultado'
 
   /pagos/reportar:
     $ref: './sprint-2.paths.yaml#/paths/~1pagos~1reportar'
@@ -1528,9 +1471,9 @@ components:
             mensaje: El vencimiento debe pertenecer al periodo y la moneda debe coincidir con el condominio.
 
 x-core-implementation:
-  description: Contrato actual de CORE/CON-70 conservado para compatibilidad. No sustituye
-    la base normativa CON-72. Las rutas /pagos/{id} corresponden a /pagos/{comprobante_id}
-    en FastAPI.
+  description: Instantánea histórica de CORE/CON-70 anterior a CON-72; no registra
+    operaciones actuales ni exige mantener el upload separado o el alias CONCILIADO.
+    Consultar paths y los fragmentos normativos para el contrato vigente.
   paths:
     /pagos/comprobantes:
       get:
@@ -1918,25 +1861,13 @@ x-core-implementation:
           type: string
           format: date-time
   route-resolution:
-    /pagos/vouchers: 'Conservada como extension CORE implementada: subida privada
-      previa al reporte JSON. CON-72 exige multipart en reportar y no necesita esta
-      subida separada.'
+    /pagos/vouchers: 'Retirada al converger a multipart único; actualizar clientes antes del despliegue.'
     /pagos/solvencia/{departamento_id}: 'Conservada como extension compatible implementada:
       deuda persistida y gracia UTC por unidad. No depende de eventos ni permisos
       globales.'
-    /pagos/{comprobante_id}/voucher: GET y PUT normativos por referencia CON-72; GET
-      CORE existe, PUT de subsanacion sigue pendiente. Contrato anterior conservado
-      en paths de esta extension.
-    /pagos/{comprobante_id}/resultado: Conservada como extension CORE implementada,
-      con su respuesta actual; no exige motivo_rechazo que el DTO aun no devuelve.
-    /pagos/{comprobante_id}/conciliar: Referencia normativa CON-72; nombre del parametro
-      alineado con FastAPI. Contrato actual conservado en esta extension; falta motivo_rechazo
-      en respuesta y limites de notas del contrato objetivo.
-    /pagos/reportar: Referencia normativa CON-72 multipart; implementacion actual
-      JSON con url_voucher local de subida propia. Falta codigo normativo; conserva
-      error_code historico.
-    /pagos/comprobantes: Referencia normativa CON-72 con estado APROBADO; implementacion
-      actual expone alias CONCILIADO. No son formatos intercambiables.
-    /reservas: Referencia normativa CON-72 con estado parcial; contrato previo CORE
-      conservado en esta extension. Su presencia documental no acredita integracion
-      persistente completa.
+    /pagos/{comprobante_id}/voucher: GET privado y PUT de subsanación implementados; archivos anteriores conservados.
+    /pagos/{comprobante_id}/resultado: Resultado de la evidencia vigente con motivo público, sin notas internas.
+    /pagos/{comprobante_id}/conciliar: Revisión EN_REVISION e idempotencia del resultado vigente; contrato canónico.
+    /pagos/reportar: Multipart único con codigo normativo; no admite url_voucher del cliente.
+    /pagos/comprobantes: Estado APROBADO y enlaces autenticados; no publica CONCILIADO.
+    /reservas: Persistencia y autorización CON-73; respuestas contrastadas con CON-72.
