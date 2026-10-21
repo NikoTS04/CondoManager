@@ -10,6 +10,11 @@
 ---
 
 ## 2. Propósito y Límites del Dominio
+
+La integración CON-22/CON-70 y la consulta CON-42 siguen el
+[contrato Sprint 2](sprint-2-anderson.md), incluida la excepción temporal de
+almacenamiento local. La subida multipart precede al reporte JSON compatible.
+
 El dominio de Pagos y Moras es responsable de:
 1. Recibir, validar e indexar comprobantes de pago subidos por los residentes (Yape, Plin, transferencias CCI).
 2. Garantizar la idempotencia estricta para evitar la reutilización fraudulenta o accidental de vouchers bancarios.

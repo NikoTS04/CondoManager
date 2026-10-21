@@ -28,7 +28,7 @@ const MENSAJES: Record<string, string> = {
   CONDOMINIO_NO_ENCONTRADO: "No encontramos el condominio solicitado.",
   VOUCHER_YA_CONCILIADO: "Este comprobante ya fue aprobado anteriormente. No necesitas reportarlo de nuevo.",
   VOUCHER_EN_EVALUACION: "Este comprobante ya fue reportado y está en revisión por la junta.",
-  DEUDA_MORA_ACTIVA: "Tienes cuotas vencidas. Reporta tu pago para poder reservar áreas comunes.",
+  DEUDA_MORA_ACTIVA: "Tienes deuda en mora. El permiso se recupera cuando un pago aprobado cancela esa deuda, no solo al reportarlo.",
   CONFLICTO_HORARIO: "El área ya está reservada en ese horario. Elige otra franja.",
   LOTE_YA_EMITIDO: "Las cuotas de este periodo ya fueron emitidas.",
   PRESUPUESTO_NO_APROBADO: "Primero aprueba el presupuesto del periodo para emitir las cuotas.",

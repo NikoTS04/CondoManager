@@ -1,6 +1,10 @@
 extends:
   - spectral:oas
 
+functionsDir: .spectral-functions
+functions:
+  - oasDocumentSchema
+
 # La estructura y referencias siguen siendo bloqueantes. La documentación
 # incompleta del contrato actual se publica como warnings, no se oculta.
 # Línea base: 20 warnings (contacto ausente, descripciones y tags de operaciones).
@@ -10,3 +14,12 @@ rules:
   operation-description: warn
   operation-tags: warn
   oas3-api-servers: warn
+
+  # Validar Path Items externos tras resolverlos: el validador sin resolver de
+  # Spectral 6.15 rechaza $ref con unevaluatedProperties en OpenAPI 3.1.
+  # Las referencias rotas siguen siendo errores del resolver.
+  oas3-schema:
+    resolved: true
+    given: $
+    then:
+      function: oasDocumentSchema

@@ -12,6 +12,10 @@
 ## 2. Propósito y Alcance del Proceso
 Gestionar el ciclo completo de recaudación: desde la recepción y validación de comprobantes de pago reportados por los residentes (Yape, transferencias bancarias directas e interbancarias CCI), la bandeja de conciliación de la Junta Directiva, hasta el motor automático de cálculo y aplicación de moras sobre cuotas vencidas.
 
+Para CON-22/CON-70 rige el [contrato de integración del Sprint 2](../02-domains/02-pagos-y-moras/sprint-2-anderson.md):
+voucher local temporal, nombre en `url_voucher`, revisión persistente y outbox.
+Esta decisión sustituye únicamente el transporte S3 del voucher durante este periodo.
+
 ---
 
 ## 3. Disparadores y Eventos de Entrada

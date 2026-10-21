@@ -10,6 +10,7 @@ import {
   type Departamento,
   type Reserva,
   type ComprobantePago,
+  type Solvencia,
   fetchAreasComunes,
   fetchDepartamentos,
   fetchReservas,
@@ -177,6 +178,11 @@ function ResidenteContent() {
     departamentos.find((d) => d.id === departamentoId) ?? null;
 
   const estaEnMora = deptoActual?.estado_financiero === "EN_MORA";
+  const actualizarSolvencia = useCallback((solvencia: Solvencia) => {
+    setDepartamentos((actuales) => actuales.map((depto) => depto.id === solvencia.departamento_id
+      ? { ...depto, deuda_vencida: solvencia.saldo_vencido, estado_financiero: solvencia.habilitado_reservas ? "AL_DIA" : "EN_MORA" }
+      : depto));
+  }, []);
 
   return (
     <div className="space-y-6 pb-24 sm:pb-8">
@@ -240,6 +246,7 @@ function ResidenteContent() {
               revisionDisponibilidad={revisionDisponibilidad}
               onSuccess={reloadReservas}
               onGoToPagos={() => setActiveTab("pagos")}
+              onSolvenciaActualizada={actualizarSolvencia}
             />
           </div>
           <div className="lg:col-span-2">

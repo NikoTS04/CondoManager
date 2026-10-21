@@ -64,6 +64,15 @@ que la base ya registra esa cabeza y contiene las tablas de pagos; no se cambió
 `alembic_version`, no se ejecutó downgrade ni se incorporó la lógica de pagos de
 esa rama. En una base anterior, el arranque sí aplicará las migraciones pendientes.
 
+El 21 de octubre se integró `origin/develop` en `a60d7d5` (PR #20 de Anderson).
+Las dos migraciones ya forman parte de esa base compartida. Se conservan la
+validación financiera y la actualización de solvencia incorporadas por ese PR,
+junto con la consulta de disponibilidad de CON-40. El conflicto del botón de
+confirmación se resolvió exigiendo tanto disponibilidad consultada como solvencia
+verificada. La revisión manual reportada por Gerardo corresponde a la versión
+anterior a esta integración; conviene repetir el recorrido de reserva/cancelación
+con el nuevo control de solvencia antes de dar por revisada la versión integrada.
+
 ## Verificación estática realizada
 
 - Ruff: lint y formato correctos en los archivos Python modificados.

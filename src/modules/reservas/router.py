@@ -15,7 +15,8 @@ from src.core.authorization import (
 from src.core.database import get_db_session
 from src.core.roles import ROLES_ADMINISTRATIVOS
 from src.core.security import get_current_user
-from src.modules.reservas.areas.repository import get_areas_repository
+from src.modules.pagos.solvencia import get_solvencia_service
+from src.modules.reservas.areas.repository import AreasRepository, get_areas_repository
 from src.modules.reservas.areas.service import AreasService
 from src.modules.reservas.disponibilidad import DisponibilidadRepository, DisponibilidadService
 from src.modules.reservas.schemas import (
@@ -132,6 +133,11 @@ async def listar_reservas(
     return resultados
 
 
+def get_areas_reserva_repository(solvencia=Depends(get_solvencia_service)):
+    # Catalogo y solvencia comparten los locks de una sola transaccion financiera.
+    return AreasRepository(solvencia.session)
+
+
 @router.post(
     "/reservas",
     response_model=ReservaResponseDTO,
@@ -141,53 +147,52 @@ async def listar_reservas(
 async def crear_reserva(
     request: CrearReservaRequest,
     user: dict = Depends(get_current_user),
+    solvencia=Depends(get_solvencia_service),
     repository=Depends(get_departamentos_portal_repository),
-    areas_repository=Depends(get_areas_repository),
+    areas_repository=Depends(get_areas_reserva_repository),
 ):
     """Crea una reserva validando la solvencia financiera del departamento y la disponibilidad de horario."""
     autorizar_departamento(user, request.departamento_id, request.condominio_id, escritura=True)
-    # 1. Comprobar existencia del área
-    area = (
-        await AreasService(areas_repository).publica(
-            request.area_id,
-            user,
-            bloquear=True,
-            condominio_id=request.condominio_id,
-        )
-    ).model_dump()
-    area["hora_apertura"] = time.fromisoformat(area["hora_apertura"])
-    area["hora_cierre"] = time.fromisoformat(area["hora_cierre"])
-
-    # 2. Consultar estado financiero de una unidad conocida y autorizada.
-    depto = await repository.obtener(request.departamento_id)
-    if not depto:
-        raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
-    if depto["condominio_id"] != request.condominio_id or not depto["activo"]:
-        raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO"})
-    if area["edificio_id"] is not None and area["edificio_id"] != depto["edificio_id"]:
-        raise HTTPException(
-            403,
-            detail={
-                "error_code": "ACCESO_DENEGADO",
-                "mensaje": "La unidad no pertenece al edificio del área.",
-            },
-        )
-    estado_financiero = depto["estado_financiero"]
-    saldo_mora = depto["deuda_vencida"]
-
     try:
-        reserva_dto, _ = ReservasService.procesar_reserva(
-            request=request,
-            area=area,
-            estado_financiero_depto=estado_financiero,
-            saldo_mora_depto=saldo_mora,
-            reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
-        )
-        # Guardar en memoria
-        RESERVAS_REGISTRADAS[reserva_dto.id] = {
-            **reserva_dto.model_dump(),
-            "zona_horaria": area["zona_horaria"],
-        }
+        async with solvencia.para_reserva(request, user) as evaluacion:
+            # 1. Comprobar existencia del área
+            area = (
+                await AreasService(areas_repository).publica(
+                    request.area_id,
+                    user,
+                    bloquear=True,
+                    condominio_id=request.condominio_id,
+                )
+            ).model_dump()
+            area["hora_apertura"] = time.fromisoformat(area["hora_apertura"])
+            area["hora_cierre"] = time.fromisoformat(area["hora_cierre"])
+
+            # 2. Validar la unidad activa y su edificio; la solvencia usa deuda real.
+            depto = await repository.obtener(request.departamento_id)
+            if not depto:
+                raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
+            if depto["condominio_id"] != request.condominio_id or not depto["activo"]:
+                raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO"})
+            if area["edificio_id"] is not None and area["edificio_id"] != depto["edificio_id"]:
+                raise HTTPException(
+                    403,
+                    detail={
+                        "error_code": "ACCESO_DENEGADO",
+                        "mensaje": "La unidad no pertenece al edificio del área.",
+                    },
+                )
+            reserva_dto, _ = ReservasService.procesar_reserva(
+                request=request,
+                area=area,
+                estado_financiero_depto="AL_DIA",
+                saldo_mora_depto=evaluacion.saldo_vencido,
+                reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
+            )
+            # Guardar en memoria
+            RESERVAS_REGISTRADAS[reserva_dto.id] = {
+                **reserva_dto.model_dump(),
+                "zona_horaria": area["zona_horaria"],
+            }
         return reserva_dto
 
     except DeudaMoraActivaException as exc:

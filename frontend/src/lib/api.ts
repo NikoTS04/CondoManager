@@ -130,7 +130,7 @@ export interface ComprobantePago {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  estado: "EN_REVISION" | "CONCILIADO" | "RECHAZADO";
+  estado: "EN_REVISION" | "CONCILIADO" | "RECHAZADO" | "OBSERVADO";
   idempotency_hash: string;
   url_voucher?: string;
   motivo_rechazo?: string;
@@ -660,16 +660,61 @@ export async function reportarPago(payload: {
   fecha_operacion: string;
   monto: string;
   url_voucher?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; errorCode?: string; duplicado?: boolean }> {
   try {
-    await recursoRequest("/pagos/reportar", {
+    const response = await fetchProtegido("/pagos/reportar", {
       method: "POST",
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
-    return { ok: true };
+    const data = await response.json();
+    const errorCode = obtenerCodigoError(data);
+    if (!response.ok) return { ok: false, error: obtenerMensajeError(data, "No se pudo reportar el pago."), errorCode };
+    return { ok: true, duplicado: response.status === 200, errorCode };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
+}
+
+export async function subirVoucher(departamentoId: string, archivo: File): Promise<string> {
+  const form = new FormData();
+  form.append("departamento_id", departamentoId);
+  form.append("voucher_file", archivo);
+  const headers = getAuthHeaders();
+  delete headers["Content-Type"];
+  const response = await fetchProtegido("/pagos/vouchers", { method: "POST", headers, body: form });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo subir el voucher."));
+  return data.url_voucher as string;
+}
+
+export async function descargarVoucher(comprobante: ComprobantePago): Promise<void> {
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobante.id)}/voucher`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(obtenerMensajeError(data, "No se pudo recuperar el voucher."));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = comprobante.url_voucher?.match(/^[\da-f-]+\.(png|jpg|pdf)$/)?.[0] || `voucher-${comprobante.id}`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  // URL exclusiva de descarga; nunca se envía al servidor ni se persiste.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export interface Solvencia {
+  departamento_id: string;
+  saldo_vencido: string;
+  habilitado_reservas: boolean;
+}
+
+export function fetchSolvencia(departamentoId: string): Promise<Solvencia> {
+  return recursoRequest(`/pagos/solvencia/${encodeURIComponent(departamentoId)}`);
 }
 
 export function fetchComprobantes(condominioId?: string | null): Promise<ComprobantePago[]> {
@@ -678,7 +723,7 @@ export function fetchComprobantes(condominioId?: string | null): Promise<Comprob
 
 export async function conciliarComprobante(
   comprobanteId: string,
-  decision: "APROBADO" | "RECHAZADO",
+  decision: "APROBADO" | "RECHAZADO" | "OBSERVADO",
   motivo_rechazo?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
