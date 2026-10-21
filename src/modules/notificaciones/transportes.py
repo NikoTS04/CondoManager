@@ -355,7 +355,7 @@ def inspect_isawaitable(valor: Any) -> bool:
 class TransporteSMTP:
     """Transporte SMTP real basado en `smtplib` ejecutado en hilo."""
 
-    nombre: str = "SMTP"
+    nombre: str = "PROVEEDOR"
     es_simulado: bool = False
 
     def __init__(
@@ -465,6 +465,6 @@ def fallo_demostracion(notificacion: Any) -> ResultadoTransporte:
 
 def obtener_transporte() -> TransporteNotificacion:
     """Devuelve el adaptador de transporte según `settings.NOTIFICACIONES_TRANSPORTE`."""
-    if settings.NOTIFICACIONES_TRANSPORTE.strip().upper() == "SMTP":
+    if settings.NOTIFICACIONES_TRANSPORTE.strip().upper() in ("SMTP", "PROVEEDOR"):
         return TransporteSMTP()
     return TransporteSimulado(handler=fallo_demostracion)

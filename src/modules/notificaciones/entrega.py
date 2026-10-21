@@ -457,8 +457,12 @@ async def reprogramar_manual(
 ) -> Notificacion:
     """Reprograma una notificación `FALLIDO_PERMANENTE` abriendo un nuevo ciclo de intentos.
 
-    Los intentos de ciclos anteriores se conservan en `notificacion_intentos`
-    (únicos por `ciclo, numero`); el contador `intentos` vuelve a 0 para el ciclo nuevo.
+    - Si la notificación no está en `FALLIDO_PERMANENTE` (`EN_COLA`, `REINTENTANDO`,
+      `ENVIADO` o `ENTREGADO`), se devuelve sin cambios para reutilizar el registro vigente.
+    - En `FALLIDO_PERMANENTE`, exige un `nuevo_destinatario` válido y distinto del actual;
+      sin corrección responde `409 INTENTOS_AGOTADOS`.
+    - Los intentos de ciclos anteriores se conservan en `notificacion_intentos`
+      (únicos por `ciclo, numero`); el contador `intentos` vuelve a 0 para el ciclo nuevo.
     """
     momento = ahora or datetime.now(UTC)
     notificacion = await session.scalar(
@@ -472,22 +476,35 @@ async def reprogramar_manual(
         )
 
     if notificacion.estado != "FALLIDO_PERMANENTE":
+        return notificacion
+
+    if nuevo_destinatario is None or not nuevo_destinatario.strip():
         raise APIError(
             409,
-            "REENVIO_NO_PERMITIDO",
-            "Solo se pueden reprogramar notificaciones en estado FALLIDO_PERMANENTE.",
+            "INTENTOS_AGOTADOS",
+            "Los intentos del ciclo están agotados; corrija a un destinatario distinto para abrir un nuevo ciclo.",
         )
 
-    if nuevo_destinatario is not None and nuevo_destinatario.strip():
-        limpio = nuevo_destinatario.strip()
-        if not validar_destinatario(limpio, notificacion.canal):
-            raise APIError(
-                422,
-                "DESTINATARIO_INVALIDO",
-                "El nuevo destinatario no tiene un formato válido para el canal.",
-            )
-        notificacion.destinatario = limpio
+    limpio = nuevo_destinatario.strip()
+    actual = (notificacion.destinatario or "").strip()
+    mismo_destinatario = limpio == actual or (
+        notificacion.canal.upper() == "EMAIL" and limpio.lower() == actual.lower()
+    )
+    if mismo_destinatario:
+        raise APIError(
+            409,
+            "INTENTOS_AGOTADOS",
+            "El destinatario indicado coincide con el actual; corrija a un destinatario distinto para abrir un nuevo ciclo.",
+        )
 
+    if not validar_destinatario(limpio, notificacion.canal):
+        raise APIError(
+            422,
+            "DESTINATARIO_INVALIDO",
+            "El nuevo destinatario no tiene un formato válido para el canal.",
+        )
+
+    notificacion.destinatario = limpio
     notificacion.ciclo += 1
     notificacion.estado = "EN_COLA"
     notificacion.intentos = 0

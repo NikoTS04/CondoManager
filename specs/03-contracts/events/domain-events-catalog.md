@@ -93,3 +93,16 @@ esquema histórico ni exigir una migración inmediata a los consumidores.
 ### Transición al contrato CON-72
 
 La tabla inicial describe el contrato objetivo. El productor de CON-70 ya existe con outbox persistente, pero aún no emite `schema_version`, `correlation_id` ni `causation_id`: utiliza `version: 1` y los eventos `PagoObservadoEvent` y `PagoRechazadoEvent` en lugar de `PagoRevisadoEvent`. No validar estos mensajes directamente contra los esquemas `.v1` ni tratarlos como si ya cumplieran CON-72. La adaptación debe preservar el `event_id`, los importes y los resultados financieros confirmados, sin reaplicar saldos. Los campos planos de compatibilidad siguen vigentes hasta migrar sus consumidores.
+
+## Consumo en notificaciones (CON-32/34/36/37)
+
+- **Grupo de consumidores:** `notificaciones-workers` sobre el stream `condomanager:domain-events` (`python -m src.modules.notificaciones.worker`).
+- **Confirmación (`XACK`):** se ejecuta **únicamente después del commit** de la transacción en PostgreSQL (`eventos_consumidos` + `notificaciones`). Los fallos transitorios de base de datos o red no confirman el mensaje y se recuperan mediante `XAUTOCLAIM` y lectura de pendientes (`0`).
+- **Eventos ajenos:** cualquier `event_type` no registrado en el consumidor de notificaciones se confirma con `XACK` sin efecto.
+- **Errores de contrato (DLQ):** si un evento incumple su esquema o carece de datos persistidos requeridos (p. ej. falta `nuevo_saldo_departamento` en `PagoConciliadoEvent`), la transacción se revierte por completo, el mensaje se copia a `condomanager:domain-events:dlq` y se confirma con `XACK` para no bloquear el grupo.
+- **Claves de deduplicación lógica (`notificaciones.clave_deduplicacion`):**
+  - Cuotas (CON-32): `CUOTA:{cuota_id}:NOTIF_EMISION_CUOTA:{canal}:{usuario_id}`
+  - Pagos (CON-34): `COMPROBANTE:{comprobante_id}:{plantilla}:{canal}:{usuario_id}`
+  - Reservas (CON-36): `RESERVA:{reserva_id}:{plantilla}:{canal}:{usuario_id}`
+  - Comunicados: `COMUNICADO:{comunicado_id}:{canal}:{usuario_id}`
+
