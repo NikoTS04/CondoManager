@@ -33,6 +33,23 @@ El diseño garantiza la escalabilidad multi-edificio, permitiendo que un usuario
 
 ## 4. Reglas de Negocio
 
+### CON-04 — Alta administrativa vigente
+
+El administrador define la contraseña inicial y crea una cuenta inactiva. Solo
+SuperAdmin habilita o deshabilita su estado desde la aplicación. Login y peticiones
+protegidas verifican PostgreSQL y revisión de sesión. La invitación y la verificación
+por correo quedan para una evolución posterior. Contrato completo y criterios:
+[alta-administrativa.md](../02-domains/05-usuarios-rbac/alta-administrativa.md).
+
+### CON-06 — Asignación y revocación de roles
+
+SuperAdmin gestiona roles contextuales; Junta solo Auditor/Residente de su
+condominio, sin modificar a otros administradores ni a sí misma. Las asignaciones
+se revocan con `es_activo=false`, conservando vínculos e historial. Cada cambio
+real incrementa la revisión global y audita atómicamente. Repetir una operación
+idéntica es un no-op. Contrato y escenarios:
+[roles-y-permisos.md](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
+
 ### 4.1 Configuración Inicial del Condominio (CON-2)
 
 - Solo `SUPERADMIN` puede ejecutar `POST /api/v1/condominios`.
@@ -51,6 +68,11 @@ El diseño garantiza la escalabilidad multi-edificio, permitiendo que un usuario
   con el contexto de condominio autorizado.
 
 ### 4.2 Relación Usuario - Unidad Habitacional
+Contrato ejecutable de CON-05:
+[vinculos-departamentos.md](../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+El primer vínculo activo es de titular y no se retira al último sin reemplazo.
+La administración crea/cambia/restaura/revoca vínculos por UUID en su contexto;
+un cambio real audita e invalida sesiones atómicamente, conservando el historial.
 - Cada unidad inmobiliaria (departamento) debe tener al menos un **Propietario Titular** registrado con DNI/CE, nombre completo, teléfono y correo electrónico.
 - Una unidad puede tener opcionalmente uno o más **Inquilinos** registrados.
 - Si una unidad cambia de arrendatario:
@@ -66,7 +88,11 @@ El diseño garantiza la escalabilidad multi-edificio, permitiendo que un usuario
 - El backend resuelve automáticamente el usuario activo (`get_current_user`) y valida que:
   1. Si invoca acciones de administración (`ADMIN_JUNTA`, `SUPERADMIN`), su claim `rol` coincida exactamente.
   2. Si es `AUDITOR`, sus peticiones estén restringidas estrictamente a métodos de lectura idempotente (`GET`), rechazando cualquier mutación con `403 Forbidden`.
-  3. Si es `PROPIETARIO` o `INQUILINO`, cualquier operación sobre un `departamento_id` pertenezca a la lista de `departamentos` autorizados en su token.
+   3. Si es `RESIDENTE`, cualquier operación sobre un `departamento_id` pertenezca a
+      un vínculo activo de `departamentos` en su token y a su condominio.
+- Los cuatro roles coinciden con el SQL. Propietario/inquilino son relaciones de
+  tenencia por unidad, no roles. Contrato y renovación de sesiones en
+  [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/identidad-y-alcances.md).
 
 ---
 
@@ -99,13 +125,13 @@ auditoría, la transacción completa se revierte.
  [ Usuario ingresa Email y Contraseña ]
                   │
                   ▼
- [ API valida credenciales contra hash bcrypt ]
+ [ API valida credenciales y cuenta activa contra hash PBKDF2 en PostgreSQL ]
                   │
                   ▼
  [ Resuelve Roles y Departamentos asociados ]
                   │
                   ▼
- [ Emite JWT con claims {sub, email, rol, departamentos} ]
+ [ Emite JWT v2 con rol SQL y vínculos UUID por departamento ]
                   │
                   ▼
  [ Frontend adapta elementos de UI según el Rol ]

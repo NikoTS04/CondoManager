@@ -1,63 +1,191 @@
-"""Router FastAPI para Autenticación y RBAC (PROC-05)."""
+"""Autenticación SQL y administración de cuentas inactivas (CON-04)."""
 
-from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
+
+from src.core.config import settings
+from src.core.errors import APIError
 from src.core.security import get_current_user
+from src.modules.usuarios.repository import get_usuarios_repository
 from src.modules.usuarios.schemas import (
+    AsignacionRolResponse,
+    AsignarRolRequest,
+    AsignarVinculoRequest,
+    CambiarEstadoUsuarioRequest,
+    CrearUsuarioRequest,
+    CuentaUsuarioConRolResponse,
+    CuentaUsuarioResponse,
     LoginRequest,
     TokenResponse,
     UserContextResponse,
     UsuarioDTO,
+    VinculoUsuarioResponse,
 )
-from src.modules.usuarios.service import CredencialesInvalidasException, UsuariosService
+from src.modules.usuarios.service import UsuariosService
 
-router = APIRouter(prefix="/auth", tags=["Autenticación y RBAC"])
+router = APIRouter(tags=["Autenticación y RBAC"])
+
+
+@router.post("/auth/login", response_model=TokenResponse)
+async def login(request: LoginRequest, repository=Depends(get_usuarios_repository)):
+    return await UsuariosService(repository).autenticar(request)
+
+
+@router.get("/auth/me", response_model=UserContextResponse)
+async def get_me(current_user: dict = Depends(get_current_user)):
+    return UserContextResponse(
+        id=current_user["sub"],
+        **{
+            k: current_user[k]
+            for k in ("email", "nombre", "apellido", "rol", "condominio_id", "departamentos")
+        },
+    )
+
+
+@router.get("/auth/demo-users", response_model=list[UsuarioDTO])
+async def get_demo_users(repository=Depends(get_usuarios_repository)):
+    if not settings.DEMO_MODE:
+        raise APIError(404, "RECURSO_NO_ENCONTRADO", "El modo demo está deshabilitado.")
+    from src.modules.usuarios.demo import DEMO_CUENTAS
+
+    perfiles = []
+    for cuenta in DEMO_CUENTAS:
+        usuario = await repository.por_email(cuenta["email"])
+        if usuario is not None and usuario.esta_activo:
+            contextos = await repository.contextos(usuario.id)
+            perfil = await repository.perfil(usuario, contextos[0]["id"] if contextos else None)
+            if perfil is not None:
+                perfiles.append(perfil)
+    return perfiles
 
 
 @router.post(
-    "/login",
-    response_model=TokenResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Inicio de sesión y emisión de token JWT",
+    "/condominios/{condominio_id}/usuarios", response_model=CuentaUsuarioResponse, status_code=201
 )
-async def login(request: LoginRequest):
-    """Valida credenciales de usuario y retorna un access token JWT con sus claims y permisos."""
-    try:
-        response = UsuariosService.autenticar(request)
-        return response
-    except CredencialesInvalidasException as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error_code": "CREDENCIALES_INVALIDAS", "mensaje": str(exc)},
-        )
+async def crear_usuario(
+    condominio_id: UUID,
+    request: CrearUsuarioRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).crear(condominio_id, request, actor)
 
 
 @router.get(
-    "/me",
-    response_model=UserContextResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Contexto y perfil del usuario autenticado",
+    "/condominios/{condominio_id}/usuarios", response_model=list[CuentaUsuarioConRolResponse]
 )
-async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Retorna la información del perfil y departamentos autorizados según el token Bearer."""
-    return UserContextResponse(
-        id=current_user["sub"],
-        email=current_user["email"],
-        nombre=current_user.get("nombre", "").split()[0] if current_user.get("nombre") else "",
-        apellido=current_user.get("nombre", "").split()[-1] if current_user.get("nombre") else "",
-        rol=current_user["rol"],
-        condominio_id=current_user["condominio_id"],
-        departamentos=current_user.get("departamentos", []),
-        tipo_relacion=current_user.get("tipo_relacion"),
+async def listar_usuarios(
+    condominio_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).listar(condominio_id, actor, limit, offset)
+
+
+@router.get(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def consultar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).consultar_rol(condominio_id, usuario_id, actor)
+
+
+@router.put(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def asignar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    request: AsignarRolRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_rol(
+        condominio_id, usuario_id, request.rol, actor
+    )
+
+
+@router.delete(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def revocar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_rol(condominio_id, usuario_id, None, actor)
+
+
+@router.patch("/usuarios/{usuario_id}/estado", response_model=CuentaUsuarioResponse)
+async def cambiar_estado_usuario(
+    usuario_id: UUID,
+    condominio_id: UUID,
+    request: CambiarEstadoUsuarioRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).cambiar_estado(
+        condominio_id, usuario_id, request.esta_activo, actor
     )
 
 
 @router.get(
-    "/demo-users",
-    response_model=List[UsuarioDTO],
-    status_code=status.HTTP_200_OK,
-    summary="Listado de perfiles demo para pruebas de campo",
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/departamentos",
+    response_model=list[VinculoUsuarioResponse],
 )
-async def get_demo_users():
-    """Retorna los perfiles precargados para la demostración del piloto Villa Bonita 3."""
-    return UsuariosService.listar_usuarios_demo()
+async def listar_vinculos_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).listar_vinculos(condominio_id, usuario_id, actor)
+
+
+@router.put(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/departamentos/{departamento_id}",
+    response_model=VinculoUsuarioResponse,
+)
+async def asignar_vinculo_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    departamento_id: UUID,
+    request: AsignarVinculoRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_vinculo(
+        condominio_id,
+        usuario_id,
+        departamento_id,
+        request.tipo_relacion,
+        actor,
+    )
+
+
+@router.delete(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/departamentos/{departamento_id}",
+    response_model=VinculoUsuarioResponse,
+)
+async def revocar_vinculo_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    departamento_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_vinculo(
+        condominio_id,
+        usuario_id,
+        departamento_id,
+        None,
+        actor,
+    )

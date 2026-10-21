@@ -4,7 +4,35 @@ Cambios relevantes de CondoManager, organizados por entrega. Se registran capaci
 
 ## [Unreleased]
 
-### Candidato de entrega del Sprint 1
+### Candidato de entrega del Sprint 2
+
+Base integrada: `develop` hasta `52b4512` (merge del PR #27). Preparación para PR de `develop` a `main`, sin asignar una nueva versión ni declarar publicación. Alcance y evidencia consolidados en [CON-75](docs/sprints/CON-75-entrega-sprint-2.md).
+
+#### Agregado
+
+- **CON-04/05/06:** usuarios persistentes, habilitación manual por SuperAdmin, vínculos por unidad, roles contextuales, auditoría y revocación de sesiones.
+- **CON-22/23/70:** reporte multipart con voucher privado local, descarga autenticada, deduplicación durable, revisión y efectos financieros persistentes. Completa la continuidad de pagos trasladada del Sprint 1.
+- **CON-39/40/41/42/43/46:** catálogo y calendario SQL con bloqueos, solvencia desde deuda real, exclusión concurrente, reservas y cancelaciones persistentes, auditoría y outbox.
+- **CON-32/34/36/37:** avisos de cuotas, recepción/revisión de pagos y reservas, cola durable, consumo idempotente, reintentos y alertas administrativas. Transporte simulado identificado.
+- **CON-72/73/74:** contratos adoptados por API y frontend, subsanación de vouchers observados, errores públicos coherentes y persistencia integrada de reservas y comunicaciones.
+- **CON-75:** matriz de 20 elementos, guiones y evidencia reportada por el equipo, límites y preparación del merge. Esta consolidación documental no repite pruebas.
+
+#### Corregido e integrado
+
+- Grafo Alembic unificado con cabeza `20261021_0015`; restauración de contexto de reservas, bloqueos operativos, auditoría y eventos de confirmación tras integrar las ramas.
+- Reconciliación documentada del esquema legacy, conservando los registros originales y adoptando el esquema canónico.
+- Healthchecks de vida de workers para el arranque de Docker Compose.
+- README, índice de documentos y notas de entrega actualizados al Sprint 2; los resultados históricos conservan su corte y procedencia.
+
+#### Límites de la entrega
+
+- Vouchers locales privados durante este periodo; S3/MinIO diferidos.
+- Notificaciones `SIMULADO`: `ENVIADO` no acredita entrega externa. Invitaciones y verificación por correo diferidas.
+- Ajuste de cancelación `PENDIENTE` registra una solicitud, no una devolución ejecutada.
+- Rediseño, proveedor externo, despliegue automático y saneamiento de deuda histórica de lint/drift fuera del alcance de este corte.
+- La aprobación del PR y sus checks se registran en GitHub; no se declaran realizados por esta actualización documental.
+
+## Antecedente: candidato del Sprint 1
 
 Base de implementación: [`ce09564`](https://github.com/NikoTS04/CondoManager/commit/ce09564817d0f73e4375dfaa4a94a03d7ec968d0), merge del PR #9 de emisión de cuotas. Preparación en `release/sprint-1` para la versión propuesta `v0.1.0`. La fecha de publicación, el tag y la Release se registrarán cuando se apruebe y publique la entrega; esta sección no declara una versión ya liberada.
 
@@ -31,7 +59,7 @@ Base de implementación: [`ce09564`](https://github.com/NikoTS04/CondoManager/co
 | **CON-22 — Reportar un comprobante de pago** | **Anderson** | Completar carga y almacenamiento real del voucher, persistencia del comprobante e integración con autorización y deduplicación. |
 | **CON-23 — Evitar comprobantes duplicados** | **Brandon** | Completar deduplicación durable en PostgreSQL, restricción única y pruebas de reintentos y concurrencia junto con CON-22. |
 
-Ambas historias conservan el avance existente, pero **no se consideran terminadas ni se incluyen como funcionalidades entregadas**. La recepción de un comprobante en revisión tampoco implica aprobación del pago ni cancelación de la deuda.
+En el corte del Sprint 1 ambas historias conservaron su avance, pero **no se consideraron terminadas ni se incluyeron como funcionalidades entregadas**. Su integración posterior se registra en el candidato del Sprint 2 anterior. La recepción de un comprobante en revisión tampoco implica aprobación del pago ni cancelación de la deuda.
 
 ### Limitaciones de esta entrega
 

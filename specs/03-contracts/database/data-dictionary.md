@@ -4,6 +4,48 @@ Este documento especifica a nivel de campo y columna todas las tablas relacional
 
 ---
 
+## Identidad persistente — CON-04
+
+Contrato: [alta administrativa](../../02-domains/05-usuarios-rbac/alta-administrativa.md).
+
+`usuarios` conserva sus campos originales y añade:
+
+| Columna | Tipo | Nulo | Default | Regla |
+|---|---|---|---|---|
+| `esta_activo` | BOOLEAN | NO | `false` | Solo SuperAdmin cambia su estado mediante API. |
+| `auth_revision` | INTEGER | NO | `1` | Positivo; cambia atómicamente con el estado o los permisos e invalida JWT previos. |
+| `es_superadmin` | BOOLEAN | NO | `false` | Concesión global provisionada por CLI, no por API. |
+
+`email` usa índice único `lower(btrim(email))`; `documento_identidad` usa índice
+único `upper(btrim(documento_identidad))`. Se validan duplicados históricos al adoptar
+las tablas. `password_hash` guarda PBKDF2-SHA256 y nunca se expone.
+`usuario_roles` mantiene una asignación por `(usuario_id, condominio_id)` y
+`usuario_departamentos` un vínculo por `(usuario_id, departamento_id)`, ambos
+con claves foráneas y checks de los catálogos canónicos.
+
+## Asignaciones revocables — CON-06
+
+`usuario_roles.es_activo BOOLEAN NOT NULL DEFAULT true` distingue asignación
+vigente y revocada sin eliminar filas ni vínculos. La migración `20261020_0008`
+conserva las asignaciones existentes como activas. La unicidad del par y el check
+de cuatro roles SQL se mantienen; la API solo concede ADMIN_JUNTA/AUDITOR/RESIDENTE.
+Cambios reales actualizan `usuarios.auth_revision` y registran auditoría en la
+misma transacción. El downgrade elimina únicamente la columna de actividad y
+rechaza bajar si existen asignaciones revocadas, ya que la revisión anterior no
+representa esa revocación. Las filas y auditorías se conservan. Contrato:
+[roles y permisos](../../02-domains/05-usuarios-rbac/roles-y-permisos.md).
+
+## Vínculos de tenencia — CON-05
+
+Se reutiliza `usuario_departamentos`: UUID estable, FK de usuario y departamento,
+relación canónica y `es_activo`. PUT conserva la unicidad del par; la revocación no
+borra filas. Cada cambio real incrementa revisión y audita en la misma transacción.
+La regla del último titular se comprueba bajo bloqueo del usuario/contexto/unidad,
+incluidas carreras entre usuarios. La migración `20261020_0009` añade
+`idx_vinculos_titulares_activos` sobre `(departamento_id, tipo_relacion)` donde
+`es_activo IS TRUE`; no reescribe datos históricos. Contrato:
+[vínculos](../../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+
 ## 1. Tabla: `condominios`
 Almacena las comunidades inmobiliarias o edificios matrices.
 
@@ -178,7 +220,7 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 | `numero_operacion`| `VARCHAR(50)` | NO | - | - | Código de operación impreso en el voucher bancario. |
 | `fecha_operacion` | `DATE` | NO | - | - | Fecha en que se efectuó la transferencia. |
 | `monto` | `NUMERIC(12,2)` | NO | - | `CHECK (monto > 0.00)` | Importe total pagado según voucher. |
-| `url_voucher` | `TEXT` | NO | - | - | Ruta de almacenamiento del archivo en S3/MinIO. |
+| `url_voucher` | `TEXT` | NO | - | - | Clave privada del archivo vigente; la API publica una ruta autenticada, no esta clave. |
 | `idempotency_hash` | `VARCHAR(64)` | NO | - | `UNIQUE` | Hash SHA-256 para evitar duplicación del voucher. |
 | `estado` | `VARCHAR(20)` | NO | `'EN_REVISION'` | `CHECK (estado IN ('EN_REVISION', 'APROBADO', 'RECHAZADO', 'OBSERVADO'))` | Estado en la bandeja de conciliación. |
 | `motivo_rechazo` | `TEXT` | SÍ | `NULL` | - | Justificación obligatoria si el estado es `RECHAZADO`. |
@@ -187,8 +229,90 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 ---
 
+## Catálogo `areas_comunes` — CON-39
+
+Contrato: [catálogo persistente](../../02-domains/04-reservas/catalogo-areas.md).
+La migración `20261020_0010` crea/adopta la tabla y valida sus atributos base.
+
+| Columna | Tipo | Nulo | Default | Regla |
+|---|---|---|---|---|
+| `id` | UUID | NO | gen_random_uuid() | PK estable |
+| `condominio_id` | UUID | NO | — | FK CASCADE a condominios |
+| `edificio_id` | UUID | SÍ | NULL | FK SET NULL a edificios; mismo condominio |
+| `nombre` | VARCHAR(100) | NO | — | Nombre del área |
+| `descripcion` | TEXT | SÍ | NULL | Condiciones descriptivas |
+| `aforo_maximo` | INTEGER | NO | — | >0 |
+| `costo_reserva` | NUMERIC(12,2) | NO | 0.00 | >=0; por turno, moneda del condominio |
+| `tiempo_maximo_horas` | INTEGER | NO | 4 | >=1; nuevas configuraciones 1–24 |
+| `esta_activa` | BOOLEAN | NO | true | Desactivación lógica |
+| `hora_apertura` | TIME | NO | 00:00 | Hora local de Lima; precisión de minuto |
+| `hora_cierre` | TIME | NO | 23:59 | Posterior a apertura; mismo día |
+
+Check `ck_area_horario_catalogo`: cierre > apertura y segundos cero en ambas horas.
+Índice contextual `idx_areas_catalogo_contexto` sobre condominio, estado y nombre.
+No se eliminan reservas ni se alteran costos históricos al editar el catálogo.
+Auditoría de altas/cambios/estado atómica; no-op sin nueva entrada. El downgrade
+retira horas e índice, conservando tablas adoptadas o con datos/referencias.
+
 ## 6. Tabla: `reservas`
 Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
+
+CON-73 completa esta tabla mediante Alembic `20261020_0012`, posterior a la
+convergencia `0011`. Reutiliza el catálogo de CON-39. La adopción valida tipos,
+PK, FK y coherencia de condominio antes de completar columnas, sin borrar datos.
+
+| Columna añadida | Tipo | Regla |
+|---|---|---|
+| `condominio_id` | UUID NOT NULL FK RESTRICT | Contexto del área y unidad; validado dentro de la transacción. |
+| `usuario_id` | UUID FK RESTRICT | Actor de creación; NULL solo para históricos sin actor verificable. |
+| `area_nombre` | TEXT NOT NULL | Instantánea al confirmar; el catálogo puede cambiar de nombre después. |
+| `moneda` | VARCHAR(3) NOT NULL | PEN/USD, instantánea del contexto al confirmar. |
+| `zona_horaria` | VARCHAR(40) NOT NULL | America/Lima para nuevas; UTC para históricos sin marca. |
+| `fecha_cancelacion` | TIMESTAMPTZ NULL | Resultado original conservado al repetir cancelación. |
+| `cancelado_por` | UUID FK RESTRICT NULL | Actor de cancelación. |
+| `motivo_cancelacion` | TEXT NULL | Motivo conservado junto al evento. |
+
+Índices `(condominio_id, departamento_id)` y `(area_id, fecha_reserva, estado)`.
+La exclusión concurrente utiliza lock SQL estable sobre el área, no solo un índice.
+
+### Tablas de comunicaciones y recuperación CON-73
+
+- `bloqueos_area`: UUID PK, área FK RESTRICT, inicio/fin TIMESTAMPTZ, activo;
+  check fin > inicio. Índice de área. Escrituras operativas deben bloquear área
+  bajo el mismo protocolo de reservas; no se añade API pública de gestión.
+- `eventos_reserva_outbox`: UUID PK/event_id, reserva FK RESTRICT, payload JSONB,
+  creado_en y publicado_en TIMESTAMPTZ nullable. Índices de reserva y pendientes.
+- `notificaciones_logs`: UUID PK; condominio, departamento y usuario destinatario
+  FK RESTRICT NOT NULL; evento_id/operacion_id UUID; tipo_evento, canal, contacto,
+  asunto/cuerpo, estado, transporte, ciclo, intentos y próximo reintento;
+  lease interno `bloqueado_hasta` UTC (cinco minutos, no expuesto en la API);
+  referencia del proveedor, error sanitizado y fechas UTC. Unicidad lógica
+  `(evento_id, operacion_id, usuario_destinatario_id, canal)`; hasta cuatro intentos
+  por ciclo. Índices de contexto/destinatario y estado/próximo reintento.
+- `notificaciones_intentos`: UUID PK, aviso FK RESTRICT, ciclo/número únicos por
+  aviso, inicio/fin UTC, error sanitizado y referencia del proveedor. Un intento
+  sin terminar impide adquirir el aviso otra vez. Tras cinco minutos pasa a
+  revisión de aceptación incierta, sin reenvío automático.
+- `notificaciones_eventos`: PK `(consumidor, event_id)`, procesado_en UTC. Insertar
+  el marcador y los avisos en la misma transacción evita duplicar el consumo.
+- `notificaciones_incidencias`: hash SHA256 del mensaje como PK, motivo sanitizado
+  y fecha UTC; no conserva el contenido potencialmente sensible del mensaje.
+- `notificaciones_alertas` (CON-37, migración `20261021_0015`): UUID PK; aviso
+  FK `notificaciones_logs` RESTRICT, condominio FK RESTRICT y departamento FK RESTRICT,
+  todos NOT NULL; `ciclo` entero; `tipo` VARCHAR(40) con CHECK en `ERROR_DEFINITIVO`,
+  `INTENTOS_AGOTADOS`, `ACEPTACION_INCIERTA`, `DESTINATARIO_INVALIDO`,
+  `PROVEEDOR_NO_CONFIGURADO`; `mensaje` TEXT sin contactos ni datos sensibles;
+  `creada_en` TIMESTAMPTZ NOT NULL; `atendida_en` TIMESTAMPTZ y `atendida_por`
+  (FK `usuarios` RESTRICT) nulos. Restricciones: `ck_alerta_atencion`
+  `(atendida_en IS NULL) = (atendida_por IS NULL)` y unicidad
+  `uq_alerta_notificacion_tipo (notificacion_id, ciclo, tipo)`, que hace idempotente
+  la creación. Índice parcial `idx_alerta_abierta (condominio_id, creada_en)
+  WHERE atendida_en IS NULL`. RLS habilitado.
+
+Las tablas tienen RLS habilitado sin políticas públicas: el acceso del prototipo
+se realiza exclusivamente por la API con conexión privilegiada y autorización
+contextual. Una tabla previa incompatible hace fallar la migración de forma
+transaccional; no se inventan identidades para adoptar bitácoras incompletas.
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
 | :--- | :--- | :---: | :---: | :--- | :--- |
@@ -235,3 +359,35 @@ Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 - CON-11 crea `cuotas_mantenimiento` y completa `fk_aplicacion_saldo_cuota` con
   `ON DELETE RESTRICT`; `monto_total_exigible` conserva el bruto y `monto_pagado`
   incluye el crédito aplicado por CON-13. Migración `20261019_0006`.
+# Extensión financiera Sprint 2 (CON-22 / CON-70)
+
+Contrato: `specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md`.
+`comprobantes_pago.url_voucher` conserva TEXT; las nuevas filas almacenan solamente
+un nombre local UUID con extensión. El condominio se obtiene por departamento →
+edificio, sin añadir campos incompatibles al modelo existente.
+
+- `imputaciones_pago`: UUID PK, comprobante_id y cuota_id FK RESTRICT,
+  monto_aplicado NUMERIC(12,2) positivo, fecha_imputacion TIMESTAMPTZ.
+- `archivos_voucher`: nombre TEXT PK, departamento_id FK RESTRICT, usuario_id UUID,
+  content_type, size_bytes (1..5242880), creado_en TIMESTAMPTZ,
+  comprobante_id UUID nullable FK RESTRICT; varias versiones por comprobante desde
+  CON-72/0013. NULL conserva subidas históricas pendientes de limpieza.
+- `revisiones_pago`: UUID PK, comprobante_id FK RESTRICT, decision, motivo nullable,
+  actor_id UUID, creado_en TIMESTAMPTZ, resultado JSONB con importes como strings,
+  archivo_nombre FK RESTRICT y notas_internas privadas nullable.
+- `eventos_pago_outbox`: UUID PK, comprobante_id FK RESTRICT, payload JSONB,
+  creado_en TIMESTAMPTZ, publicado_en TIMESTAMPTZ nullable. No contiene el archivo.
+
+La revisión Alembic nueva crea o valida/adopta comprobantes e imputaciones sin
+borrar filas. El downgrade no elimina tablas adoptadas. No se alteran revisiones
+ya aplicadas ni tablas de reservas/notificaciones.
+# Adopción CON-72 — revisión de evidencia
+
+Alembic `20261021_0013` retira únicamente la unicidad de
+`archivos_voucher.comprobante_id`: el nombre privado sigue siendo PK y el FK al
+comprobante conserva RESTRICT. Se permiten varias versiones sin eliminar la
+anterior; `comprobantes_pago.url_voucher` identifica la evidencia vigente.
+`revisiones_pago.archivo_nombre` es FK nullable RESTRICT a esa evidencia y
+`notas_internas` es TEXT privado. La migración asocia revisiones anteriores a su
+único archivo registrado; deja NULL cuando no existe evidencia verificable.
+No modifica hashes, saldos, auditorías, resultados JSON ni eventos históricos.

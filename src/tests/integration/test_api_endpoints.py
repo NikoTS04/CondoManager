@@ -1,11 +1,15 @@
-from decimal import Decimal
-import uuid
-import pytest
 import os
+import uuid
+
+import pytest
+
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada", "finanzas_contrato")
 
 try:
     from fastapi.testclient import TestClient
+
     from src.main import app
+
     client = TestClient(app)
     HAS_FASTAPI = True
 except ImportError:
@@ -13,14 +17,34 @@ except ImportError:
     client = None
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+def auth():
+    from src.core.security import create_access_token
+    from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
+
+    return {
+        "Authorization": "Bearer "
+        + create_access_token(
+            {
+                "sub": "prueba-api",
+                "rol": "ADMIN_JUNTA",
+                "condominio_id": str(CONDOMINIO_PILOTO_ID),
+            }
+        )
+    }
+
+
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
 def test_health_check_endpoint():
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
 def test_api_emitir_lote_cuotas():
     payload = {
         "condominio_id": str(uuid.uuid4()),
@@ -34,38 +58,47 @@ def test_api_emitir_lote_cuotas():
     assert response.status_code == 401
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
 def test_api_reportar_pago_e_idempotencia():
+    from src.modules.usuarios.piloto import vinculo_piloto
+
+    client = TestClient(app, headers=auth())
     payload = {
-        "departamento_id": str(uuid.uuid4()),
+        "departamento_id": vinculo_piloto("102", "PROPIETARIO_TITULAR")["departamento_id"],
         "banco": "YAPE",
         "numero_operacion": "99881122",
         "fecha_operacion": "2026-10-15",
         "monto": "150.00",
-        "url_voucher": "https://s3.local/vouchers/voucher_yape.jpg",
     }
     # 1. Primer reporte
-    res1 = client.post("/api/v1/pagos/reportar", json=payload)
+    files = {"archivo_voucher": ("voucher.png", b"doble-explicito", "image/png")}
+    res1 = client.post("/api/v1/pagos/reportar", data=payload, files=files)
     assert res1.status_code == 202
     data1 = res1.json()
     assert data1["estado"] == "EN_REVISION"
     assert "idempotency_hash" in data1
 
     # 2. Reporte duplicado en revisión -> retorna el mismo comprobante sin duplicar
-    res2 = client.post("/api/v1/pagos/reportar", json=payload)
-    assert res2.status_code == 202
+    res2 = client.post("/api/v1/pagos/reportar", data=payload, files=files)
+    assert res2.status_code == 200
     assert res2.json()["comprobante_id"] == data1["comprobante_id"]
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
-def test_api_reservas_flujo_completo(monkeypatch):
-    from src.modules.reservas import router as reservas_router
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
+def test_api_reservas_flujo_completo(monkeypatch, autorizacion_aislada):
+    from src.tests import reservas_contrato as reservas_router
+
+    client = TestClient(app, headers=auth())
 
     # Aislar el calendario para que la prueba sea repetible y usar UUID,
     # tal como exige OpenAPI; "402" era rechazado por Pydantic antes del servicio.
     monkeypatch.setattr(reservas_router, "RESERVAS_REGISTRADAS", {})
-    departamentos = {d["numero"]: str(d["id"]) for d in reservas_router.DEPARTAMENTOS_MAP.values()}
-    condominio_id = str(reservas_router.CONDOMINIO_PILOTO_ID)
+    departamentos = {d["numero"]: str(d["id"]) for d in autorizacion_aislada.datos.values()}
+    condominio_id = str(next(iter(autorizacion_aislada.datos.values()))["condominio_id"])
     # 1. Catálogo de áreas comunes
     res_areas = client.get("/api/v1/areas")
     assert res_areas.status_code == 200
@@ -85,7 +118,7 @@ def test_api_reservas_flujo_completo(monkeypatch):
     }
     res_moroso = client.post("/api/v1/reservas", json=payload_moroso)
     assert res_moroso.status_code == 403
-    assert res_moroso.json()["detail"]["error_code"] == "DEUDA_MORA_ACTIVA"
+    assert res_moroso.json()["error_code"] == "DEUDA_MORA_ACTIVA"
 
     # 3. Reserva exitosa por residente solvente (102) -> 201 Created
     payload_solvente = {
@@ -113,7 +146,7 @@ def test_api_reservas_flujo_completo(monkeypatch):
     }
     res_conflicto = client.post("/api/v1/reservas", json=payload_conflicto)
     assert res_conflicto.status_code == 409
-    assert res_conflicto.json()["detail"]["error_code"] == "HORARIO_NO_DISPONIBLE"
+    assert res_conflicto.json()["error_code"] == "HORARIO_NO_DISPONIBLE"
 
     # 5. Cancelación por administración -> 200 OK
     res_cancelar = client.post(
@@ -124,12 +157,18 @@ def test_api_reservas_flujo_completo(monkeypatch):
     assert res_cancelar.json()["estado"] == "CANCELADA"
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
 def test_api_notificaciones_endpoints():
+    from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
+
+    client = TestClient(app, headers=auth())
+    depto_id = vinculo_piloto("105", "PROPIETARIO_TITULAR")["departamento_id"]
     # 1. Despacho individual
     payload_despacho = {
-        "condominio_id": "vb3-condo",
-        "departamento_id": "105",
+        "condominio_id": str(CONDOMINIO_PILOTO_ID),
+        "departamento_id": depto_id,
         "tipo_evento": "NOTIF_PAGO_CONCILIADO",
         "canal": "EMAIL",
         "destinatario": "residente105@gmail.com",
@@ -141,11 +180,11 @@ def test_api_notificaciones_endpoints():
         },
     }
     res_despacho = client.post("/api/v1/notificaciones/despachar", json=payload_despacho)
-    assert res_despacho.status_code == 201
+    assert res_despacho.status_code == 202
     log_id = res_despacho.json()["id"]
 
     # 2. Consulta de logs
-    res_logs = client.get("/api/v1/notificaciones/logs?departamento_id=105")
+    res_logs = client.get("/api/v1/notificaciones/logs", params={"departamento_id": depto_id})
     assert res_logs.status_code == 200
     logs = res_logs.json()
     assert len(logs) >= 1
@@ -157,11 +196,12 @@ def test_api_notificaciones_endpoints():
         json={"nuevo_destinatario": "nuevo_residente105@gmail.com"},
     )
     assert res_reenviar.status_code == 200
-    assert res_reenviar.json()["destinatario"] == "nuevo_residente105@gmail.com"
+    # Un aviso ya en cola se reutiliza; no se cambia el contacto ni se duplica el envío.
+    assert res_reenviar.json()["destinatario"] == payload_despacho["destinatario"]
 
     # 4. Comunicado masivo
     payload_masivo = {
-        "condominio_id": "vb3-condo",
+        "condominio_id": str(CONDOMINIO_PILOTO_ID),
         "titulo": "Asamblea General de Propietarios",
         "mensaje": "Se convoca a la asamblea anual ordinaria para el próximo mes.",
         "canal": "EMAIL",
@@ -170,8 +210,8 @@ def test_api_notificaciones_endpoints():
     res_masivo = client.post("/api/v1/notificaciones/comunicado-masivo", json=payload_masivo)
     assert res_masivo.status_code == 202
     data_masivo = res_masivo.json()
-    assert data_masivo["total_destinatarios"] == 139
-    assert data_masivo["notificaciones_generadas"] == 139
+    assert data_masivo["generadas"] == 0
+    assert data_masivo["estado_general"] == "EN_COLA"
 
 
 @pytest.mark.postgres
@@ -185,12 +225,20 @@ async def test_api_condominio_persistencia_postgres(monkeypatch):
     from httpx import ASGITransport, AsyncClient
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.pool import NullPool
 
     from src.core.database import get_db_session
     from src.core.models_audit import AuditoriaLogORM
     from src.core.security import create_access_token
+    from src.tests.usuarios_db import borrar_base, crear_base
 
-    engine = create_async_engine(database_url)
+    # Esquema aislado y migrado con Alembic: no depende de que la base ya esté migrada.
+    base = await crear_base(database_url)
+    engine = create_async_engine(
+        database_url,
+        poolclass=NullPool,
+        connect_args={"server_settings": {"search_path": base.esquema}},
+    )
     actor_id = str(uuid.uuid4())
     token = create_access_token({"sub": actor_id, "rol": "SUPERADMIN"})
     try:
@@ -241,3 +289,4 @@ async def test_api_condominio_persistencia_postgres(monkeypatch):
                     await transaction.rollback()
     finally:
         await engine.dispose()
+        await borrar_base(base)

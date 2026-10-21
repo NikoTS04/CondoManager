@@ -1,18 +1,25 @@
-"""Servicio del Dominio de Pagos y Conciliación (Tarqui - PROC-02).
+"""Servicio del Dominio de Pagos y Conciliación (Brandon - CON-23 / PROC-02).
 
 Implementa:
-1. Hash de idempotencia SHA-256 para evitar duplicidad de comprobantes.
-2. Conciliación y algoritmo de imputación contable en orden de prelación.
-3. Restablecimiento de solvencia financiera para reservas de áreas comunes.
+1. Hash de idempotencia SHA-256 canónico para evitar duplicidad de comprobantes.
+2. Detección y rechazo de comprobantes ya conciliados (409 VOUCHER_YA_CONCILIADO).
+3. Detección y rechazo de comprobantes intentados en unidades distintas (409 VOUCHER_UNIDAD_DISTINTA).
+4. Retorno idempotente de comprobantes en revisión sin duplicación (VOUCHER_EN_EVALUACION).
+5. Persistencia relacional mediante PagosRepository y protección ante carreras concurrentes.
+6. Conciliación y algoritmo de imputación contable en orden de prelación.
 """
 
+import hashlib
+import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
-import hashlib
 from typing import Dict, List, Optional
-import uuid
+
+from sqlalchemy.exc import IntegrityError
 
 from src.core.audit import AuditoriaPayload
+from src.modules.pagos.models import ComprobantePago
+from src.modules.pagos.repository import PagosRepository
 from src.modules.pagos.schemas import (
     ComprobanteRecibidoResponse,
     ConciliacionResultResponse,
@@ -38,8 +45,8 @@ class PagosService:
         monto: Decimal,
     ) -> str:
         """Calcula el hash SHA-256 normalizado según specs/01-architecture/idempotency-and-deduplication.md."""
-        banco_norm = banco.strip().upper()
-        num_op_clean = numero_operacion.strip().lstrip("0") or "0"
+        banco_norm = "".join(banco.split()).upper()
+        num_op_clean = "".join(numero_operacion.split()).lstrip("0") or "0"
         fecha_str = fecha_operacion.isoformat()
         monto_str = f"{redondear_moneda(monto):.2f}"
 
@@ -53,7 +60,7 @@ class PagosService:
         condominio_id: str,
         comprobantes_existentes: Dict[str, Dict],
     ) -> ComprobanteRecibidoResponse:
-        """Valida y registra un nuevo comprobante bancario garantizando idempotencia."""
+        """Valida y registra un nuevo comprobante bancario garantizando idempotencia en memoria."""
         idempotency_hash = cls.calcular_hash_idempotencia(
             condominio_id=condominio_id,
             banco=request.banco,
@@ -64,10 +71,22 @@ class PagosService:
 
         if idempotency_hash in comprobantes_existentes:
             previo = comprobantes_existentes[idempotency_hash]
+            if previo["departamento_id"] != request.departamento_id:
+                raise VoucherDuplicadoException(
+                    error_code="VOUCHER_UNIDAD_DISTINTA",
+                    mensaje="El comprobante no puede aplicarse a otra unidad.",
+                )
             if previo["estado"] == "APROBADO":
                 raise VoucherDuplicadoException(
                     error_code="VOUCHER_YA_CONCILIADO",
                     mensaje="El voucher bancario ya fue conciliado y aplicado anteriormente.",
+                )
+            if previo["estado"] in {"OBSERVADO", "RECHAZADO"}:
+                raise VoucherDuplicadoException(
+                    "VOUCHER_REQUIERE_SUBSANACION"
+                    if previo["estado"] == "OBSERVADO"
+                    else "VOUCHER_RECHAZADO",
+                    "La operación no admite otro reporte.",
                 )
             # Si está EN_REVISION, retornamos el comprobante previo sin duplicar
             return ComprobanteRecibidoResponse(
@@ -75,17 +94,20 @@ class PagosService:
                 estado=previo["estado"],
                 mensaje="El comprobante ya fue recibido previamente y se encuentra en revisión.",
                 idempotency_hash=idempotency_hash,
+                codigo="VOUCHER_EN_EVALUACION",
             )
 
         nuevo_id = uuid.uuid4()
         comprobante_data = {
             "id": nuevo_id,
+            "condominio_id": condominio_id,
             "departamento_id": request.departamento_id,
-            "banco_origen": request.banco,
-            "numero_operacion": request.numero_operacion,
+            "banco_origen": request.banco.strip().upper(),
+            "numero_operacion": request.numero_operacion.strip(),
             "fecha_operacion": request.fecha_operacion,
             "monto": redondear_moneda(request.monto),
-            "url_voucher": request.url_voucher,
+            "url_voucher": f"/api/v1/pagos/{nuevo_id}/voucher",
+            "motivo_rechazo": None,
             "idempotency_hash": idempotency_hash,
             "estado": "EN_REVISION",
             "creado_en": datetime.now(timezone.utc),
@@ -96,6 +118,81 @@ class PagosService:
             comprobante_id=nuevo_id,
             estado="EN_REVISION",
             mensaje="Comprobante recibido. En proceso de conciliación por la Junta Directiva.",
+            idempotency_hash=idempotency_hash,
+        )
+
+    @classmethod
+    async def procesar_reporte_pago_persistente(
+        cls,
+        request: ReportarPagoRequest,
+        condominio_id: str,
+        repository: PagosRepository,
+    ) -> ComprobanteRecibidoResponse:
+        """Valida y registra un nuevo comprobante en base de datos con protección de idempotencia."""
+        idempotency_hash = cls.calcular_hash_idempotencia(
+            condominio_id=condominio_id,
+            banco=request.banco,
+            numero_operacion=request.numero_operacion,
+            fecha_operacion=request.fecha_operacion,
+            monto=request.monto,
+        )
+
+        existente = await repository.buscar_por_hash(idempotency_hash)
+        if existente:
+            return cls._resolver_duplicado(existente, request.departamento_id, idempotency_hash)
+
+        nuevo_id = uuid.uuid4()
+        nuevo_comprobante = ComprobantePago(
+            id=nuevo_id,
+            departamento_id=request.departamento_id,
+            banco_origen=request.banco.strip().upper(),
+            numero_operacion=request.numero_operacion.strip(),
+            fecha_operacion=request.fecha_operacion,
+            monto=redondear_moneda(request.monto),
+            url_voucher=f"/api/v1/pagos/{nuevo_id}/voucher",
+            idempotency_hash=idempotency_hash,
+            estado="EN_REVISION",
+        )
+
+        try:
+            guardado = await repository.guardar(nuevo_comprobante)
+            return ComprobanteRecibidoResponse(
+                comprobante_id=guardado.id,
+                estado=guardado.estado,
+                mensaje="Comprobante recibido. En proceso de conciliación por la Junta Directiva.",
+                idempotency_hash=idempotency_hash,
+            )
+        except IntegrityError:
+            # En caso de carrera concurrente, consultar el registro que ganó el lock/insert
+            comprobante_ganador = await repository.buscar_por_hash(idempotency_hash)
+            if comprobante_ganador:
+                return cls._resolver_duplicado(
+                    comprobante_ganador, request.departamento_id, idempotency_hash
+                )
+            raise
+
+    @classmethod
+    def _resolver_duplicado(
+        cls,
+        comprobante: ComprobantePago,
+        departamento_id: uuid.UUID,
+        idempotency_hash: str,
+    ) -> ComprobanteRecibidoResponse:
+        """Evalúa un comprobante preexistente para garantizar la consistencia de respuestas."""
+        if comprobante.departamento_id != departamento_id:
+            raise VoucherDuplicadoException(
+                error_code="VOUCHER_UNIDAD_DISTINTA",
+                mensaje="El comprobante no puede aplicarse a otra unidad.",
+            )
+        if comprobante.estado == "APROBADO":
+            raise VoucherDuplicadoException(
+                error_code="VOUCHER_YA_CONCILIADO",
+                mensaje="El voucher bancario ya fue conciliado y aplicado anteriormente.",
+            )
+        return ComprobanteRecibidoResponse(
+            comprobante_id=comprobante.id,
+            estado=comprobante.estado,
+            mensaje="El comprobante ya fue recibido previamente y se encuentra en revisión.",
             idempotency_hash=idempotency_hash,
         )
 
@@ -111,17 +208,24 @@ class PagosService:
         """Aplica la decisión de la junta e imputa fondos en riguroso orden de prelación."""
         if decision == "RECHAZADO":
             if not motivo_rechazo or not motivo_rechazo.strip():
-                raise ValueError("El rechazo de un comprobante requiere especificar un motivo obligatorio.")
+                raise ValueError(
+                    "El rechazo de un comprobante requiere especificar un motivo obligatorio."
+                )
             comprobante["estado"] = "RECHAZADO"
             comprobante["motivo_rechazo"] = motivo_rechazo
 
             return ConciliacionResultResponse(
                 comprobante_id=comprobante["id"],
                 estado_final="RECHAZADO",
+                motivo_rechazo=motivo_rechazo,
                 monto_imputado=Decimal("0.00"),
-                nuevo_saldo_departamento=sum(c["monto_total_exigible"] - c["monto_pagado"] for c in cuotas_pendientes),
+                nuevo_saldo_departamento=sum(
+                    c["monto_total_exigible"] - c["monto_pagado"] for c in cuotas_pendientes
+                ),
                 saldo_a_favor_generado=Decimal("0.00"),
-                departamento_habilitado_reservas=(departamento.get("estado_financiero") == "AL_DIA"),
+                departamento_habilitado_reservas=(
+                    departamento.get("estado_financiero") == "AL_DIA"
+                ),
             )
 
         # Decisión == APROBADO: Imputación contable
@@ -158,7 +262,9 @@ class PagosService:
         # Si aún queda dinero tras pagar todas las cuotas pendientes -> Saldo a Favor
         saldo_a_favor_nuevo = Decimal("0.00")
         if monto_disponible > Decimal("0.00"):
-            departamento["saldo_a_favor"] = redondear_moneda(departamento.get("saldo_a_favor", Decimal("0.00")) + monto_disponible)
+            departamento["saldo_a_favor"] = redondear_moneda(
+                departamento.get("saldo_a_favor", Decimal("0.00")) + monto_disponible
+            )
             saldo_a_favor_nuevo = monto_disponible
 
         # Evaluar si el departamento queda al día
@@ -173,7 +279,7 @@ class PagosService:
             departamento["estado_financiero"] = "AL_DIA"
             habilitado_reservas = True
         else:
-            habilitado_reservas = (departamento.get("estado_financiero") == "AL_DIA")
+            habilitado_reservas = departamento.get("estado_financiero") == "AL_DIA"
 
         # Registro inmutable de auditoría (7 campos obligatorios)
         AuditoriaPayload(

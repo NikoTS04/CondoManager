@@ -7,6 +7,7 @@ specs/02-domains/03-notificaciones/features/notificaciones.feature
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
+
 import pytest
 
 try:
@@ -18,7 +19,6 @@ except ImportError:
 from src.modules.notificaciones.schemas import (
     CanalNotificacionEnum,
     DespacharNotificacionRequest,
-    EstadoNotificacionEnum,
 )
 from src.modules.notificaciones.service import NotificacionesService
 
@@ -55,6 +55,7 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
             contexto={
                 "nombre": f"Residente {depto}",
                 "dpto": depto,
+                "moneda": "S/",
                 "monto_abonado": str(Decimal("150.00")),
                 "saldo_restante": str(Decimal("0.00")),
             },
@@ -85,6 +86,7 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
                 "dpto": depto,
                 "monto_mora": str(Decimal("20.00")),
                 "nuevo_saldo": str(Decimal("170.00")),
+                "aviso_bloqueo_reservas": "Inhabilitado para reservar áreas comunes",
             },
         )
 

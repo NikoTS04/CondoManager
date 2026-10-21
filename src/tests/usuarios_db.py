@@ -1,0 +1,148 @@
+"""Fixtures de identidad y tenencia: migraciones y sesiones PostgreSQL independientes."""
+
+import asyncio
+import os
+from dataclasses import dataclass
+from importlib import import_module
+from uuid import uuid4
+
+import pytest
+import pytest_asyncio
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from scripts.seed_areas_demo import cargar_areas_demo
+from scripts.seed_usuarios_demo import cargar_demo
+from src.core.config import settings
+from src.core.database import get_db_session
+from src.main import app
+from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
+
+REVISIONES = (
+    "20261008_0001_crear_condominios_y_auditoria",
+    "20261008_0002_crear_presupuestos_mensuales",
+    "20261014_0003_crear_configuracion_distribucion",
+    "20261014_0004_crear_aplicaciones_saldo_favor",
+    "20261018_0005_estructura_inmobiliaria",
+    "20261019_0006_emision_cuotas",
+    "20261020_0007_alta_usuarios",
+    "20261020_0008_roles_revocables",
+    "20261020_0009_vinculos_departamentos",
+    "20261020_0010_catalogo_areas",
+    "20261020_0009_pagos_persistentes",
+    "20261020_0012_reservas_notificaciones",
+    "20261021_0013_convergencia_con72",
+)
+# Esquema completo (cabeza de Alembic) para la API: añade cancelaciones y alertas, que
+# las pruebas de migración aplican por separado sobre REVISIONES.
+REVISIONES_API = (
+    *REVISIONES,
+    "20261021_0012_cancelaciones_reserva",
+    "20261021_0014_unir_reservas_y_convergencia",
+    "20261021_0015_alertas_notificaciones",
+)
+
+
+def migrar(connection, revisiones=None):
+    revisiones = REVISIONES_API if revisiones is None else revisiones
+    with Operations.context(MigrationContext.configure(connection)):
+        for nombre in revisiones:
+            import_module("migrations.versions." + nombre).upgrade()
+
+
+@dataclass
+class BaseUsuarios:
+    engine: object
+    sessions: object
+    esquema: str
+    url: str
+    cid: str = str(CONDOMINIO_PILOTO_ID)
+
+
+async def crear_base(url):
+    esquema = "con04_" + uuid4().hex
+    admin = create_async_engine(url, poolclass=NullPool)
+    async with admin.begin() as conn:
+        await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
+    await admin.dispose()
+    engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": esquema}}
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(migrar)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    async with sessions() as session, session.begin():
+        await cargar_demo(session)
+        await cargar_areas_demo(session)
+    await engine.dispose()
+    return BaseUsuarios(engine, sessions, esquema, url)
+
+
+async def borrar_base(base):
+    await base.engine.dispose()
+    admin = create_async_engine(base.url, poolclass=NullPool)
+    async with admin.begin() as conn:
+        await conn.execute(text(f'DROP SCHEMA "{base.esquema}" CASCADE'))
+    await admin.dispose()
+
+
+@pytest.fixture
+def db_usuarios(monkeypatch):
+    url = (
+        os.getenv("CON46_TEST_DATABASE_URL")
+        or os.getenv("CON39_TEST_DATABASE_URL")
+        or os.getenv("CON05_TEST_DATABASE_URL")
+        or os.getenv("CON06_TEST_DATABASE_URL")
+        or os.getenv("CON04_TEST_DATABASE_URL")
+        or os.getenv("CON13_TEST_DATABASE_URL")
+    )
+    if not url:
+        pytest.skip(
+            "Defina CON46_TEST_DATABASE_URL o CON04_TEST_DATABASE_URL con PostgreSQL de pruebas."
+        )
+    base = asyncio.run(crear_base(url))
+    new_engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": base.esquema}}
+    )
+    base.engine = new_engine
+    base.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
+    # La copia piloto es global al proceso: no debe filtrar reservas entre pruebas.
+    monkeypatch.setattr("src.modules.reservas.router.RESERVAS_REGISTRADAS", {})
+
+    async def session():
+        async with base.sessions() as db:
+            try:
+                yield db
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
+
+    previous = app.dependency_overrides.get(get_db_session)
+    app.dependency_overrides[get_db_session] = session
+    yield base
+    if previous is None:
+        app.dependency_overrides.pop(get_db_session, None)
+    else:
+        app.dependency_overrides[get_db_session] = previous
+    asyncio.run(borrar_base(base))
+
+
+@pytest_asyncio.fixture
+async def api_usuarios(db_usuarios):
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
+    ) as client:
+        yield client, db_usuarios
+
+
+@pytest.fixture
+def cliente_usuarios(db_usuarios):
+    with TestClient(app) as client:
+        yield client, db_usuarios

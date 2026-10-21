@@ -137,8 +137,8 @@ export function PresupuestoMensual({
       aplicarPresupuesto(resultado.data);
       setMensaje(
         resultado.data.estado === "APROBADO"
-          ? "Presupuesto aprobado recuperado desde PostgreSQL."
-          : "Borrador recuperado desde PostgreSQL.",
+          ? "Presupuesto aprobado cargado."
+          : "Borrador cargado.",
       );
     }
 

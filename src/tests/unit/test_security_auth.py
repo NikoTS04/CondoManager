@@ -1,7 +1,10 @@
 """Pruebas unitarias de Autenticación, JWT y RBAC (PROC-05)."""
 
+import asyncio
 from datetime import timedelta
+
 import pytest
+
 from src.core.security import (
     HTTPException,
     create_access_token,
@@ -56,32 +59,32 @@ def test_jwt_expired_token():
     assert exc_info.value.detail["error_code"] == "TOKEN_EXPIRADO"
 
 
-def test_usuarios_service_autenticacion_exitosa():
+@pytest.mark.asyncio
+async def test_usuarios_service_autenticacion_exitosa(identidad_piloto):
     """Valida la autenticación de usuarios precargados en el piloto."""
     req_admin = LoginRequest(email="admin@villabonita3.pe", password="Admin123!")
-    res_admin = UsuariosService.autenticar(req_admin)
+    res_admin = await UsuariosService(identidad_piloto).autenticar(req_admin)
     assert res_admin.usuario.rol == "ADMIN_JUNTA"
     assert res_admin.token_type == "bearer"
     assert res_admin.access_token is not None
 
     req_residente = LoginRequest(email="residente102@villabonita3.pe", password="Residente123!")
-    res_residente = UsuariosService.autenticar(req_residente)
-    assert res_residente.usuario.rol == "PROPIETARIO"
-    assert "102" in res_residente.usuario.departamentos
+    res_residente = await UsuariosService(identidad_piloto).autenticar(req_residente)
+    assert res_residente.usuario.rol == "RESIDENTE"
+    assert res_residente.usuario.departamentos[0].numero == "102"
+    assert res_residente.usuario.departamentos[0].tipo_relacion == "PROPIETARIO_TITULAR"
 
 
-def test_usuarios_service_credenciales_invalidas():
+@pytest.mark.asyncio
+async def test_usuarios_service_credenciales_invalidas(identidad_piloto):
     """Verifica el rechazo ante contraseña errónea o usuario inexistente."""
     req_err = LoginRequest(email="admin@villabonita3.pe", password="WrongPassword!")
     with pytest.raises(CredencialesInvalidasException):
-        UsuariosService.autenticar(req_err)
+        await UsuariosService(identidad_piloto).autenticar(req_err)
 
     req_inexistente = LoginRequest(email="nadie@villabonita3.pe", password="Password123!")
     with pytest.raises(CredencialesInvalidasException):
-        UsuariosService.autenticar(req_inexistente)
-
-
-import asyncio
+        await UsuariosService(identidad_piloto).autenticar(req_inexistente)
 
 
 def test_require_role_enforcement():
@@ -93,8 +96,8 @@ def test_require_role_enforcement():
     result = asyncio.run(admin_checker(admin_user))
     assert result == admin_user
 
-    # 2. Usuario con rol denegado (PROPIETARIO) -> 403 Forbidden
-    residente_user = {"sub": "u2", "rol": "PROPIETARIO"}
+    # 2. Usuario con rol RESIDENTE intentando administrar -> 403 Forbidden
+    residente_user = {"sub": "u2", "rol": "RESIDENTE"}
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(admin_checker(residente_user))
     assert exc_info.value.status_code == 403
@@ -106,3 +109,61 @@ def test_require_role_enforcement():
         asyncio.run(admin_checker(auditor_user))
     assert exc_info_audit.value.status_code == 403
 
+
+@pytest.mark.parametrize(
+    ("email", "password", "relacion"),
+    [
+        ("residente102@villabonita3.pe", "Residente123!", "PROPIETARIO_TITULAR"),
+        ("inquilino504@villabonita3.pe", "Inquilino123!", "INQUILINO"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_residentes_comparten_rol_sql_y_vinculos_en_jwt(
+    email, password, relacion, identidad_piloto
+):
+    response = await UsuariosService(identidad_piloto).autenticar(
+        LoginRequest(email=email, password=password)
+    )
+    perfil = response.usuario.model_dump(mode="json")
+    claims = decode_access_token(response.access_token)
+    assert claims["rol"] == perfil["rol"] == "RESIDENTE"
+    assert claims["session_version"] == 2
+    assert claims["departamentos"] == perfil["departamentos"]
+    assert claims["departamentos"][0]["tipo_relacion"] == relacion
+    assert "tipo_relacion" not in perfil
+
+
+@pytest.mark.asyncio
+async def test_administrativos_sin_tenencia_no_reciben_relaciones_inventadas(identidad_piloto):
+    administrativos = [
+        await identidad_piloto.perfil(u)
+        for u in identidad_piloto.usuarios.values()
+        if not identidad_piloto.perfiles[u.email]["departamentos"]
+    ]
+    assert administrativos
+    assert all(u.departamentos == [] for u in administrativos)
+
+
+@pytest.mark.parametrize("rol", ["PROPIETARIO", "INQUILINO", "SISTEMA_AUTOMATICO", "DESCONOCIDO"])
+def test_roles_fuera_del_sql_requieren_renovar_sesion(rol):
+    token = create_access_token({"sub": "usuario", "rol": rol})
+    with pytest.raises(HTTPException) as error:
+        decode_access_token(token)
+    assert error.value.status_code == 401
+    assert error.value.detail["error_code"] == "SESION_DESACTUALIZADA"
+
+
+def test_token_de_contrato_anterior_no_se_restaura():
+    from src.core.security import ALGORITHM, SECRET_KEY, jwt
+
+    token = jwt.encode({"sub": "usuario", "rol": "ADMIN_JUNTA"}, SECRET_KEY, algorithm=ALGORITHM)
+    with pytest.raises(HTTPException) as error:
+        decode_access_token(token)
+    assert error.value.detail["error_code"] == "SESION_DESACTUALIZADA"
+
+
+def test_guardia_administrativa_no_permite_anonimos(monkeypatch):
+    monkeypatch.setenv("AUTH_STRICT_ENFORCEMENT", "false")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(require_role(["ADMIN_JUNTA"])(None))
+    assert error.value.status_code == 401

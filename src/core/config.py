@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     MINIO_ROOT_PASSWORD: str = "condo_minio_secret"
     MINIO_BUCKET_VOUCHERS: str = "condomanager-vouchers"
 
+    # CON-22: evidencia privada local durante el prototipo (ruta relativa al proyecto).
+    VOUCHERS_DIR: str = "uploads/vouchers"
+
     # JWT y Seguridad
     JWT_SECRET: str = "super_secret_condo_manager_jwt_key_development_only_2026_xyz"
     JWT_ALGORITHM: str = "HS256"
@@ -29,6 +32,7 @@ class Settings(BaseSettings):
 
     # Contexto del catálogo piloto; debe configurarse con el UUID creado por CON-2.
     CONDOMINIO_PILOTO_ID: str = ""
+    DEMO_MODE: bool = False
 
     # Servidor
     HOST: str = "0.0.0.0"

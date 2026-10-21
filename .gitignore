@@ -4,6 +4,9 @@ env/
 venv/
 ENV/
 
+# Graphify
+graphify-out/
+
 # Python cache y compilados
 __pycache__/
 *.py[cod]
@@ -45,5 +48,9 @@ Thumbs.db
 data/
 uploads/
 
+# Documentación local
+/usuarios-y-alcances.md
+
 # carpetas skills
 .opencode/
+

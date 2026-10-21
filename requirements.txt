@@ -1,4 +1,4 @@
-fastapi>=0.110.0
+fastapi>=0.114.0
 uvicorn[standard]>=0.28.0
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
@@ -16,3 +16,5 @@ pytest>=8.1.0
 pytest-asyncio>=0.23.0
 pytest-bdd>=7.1.0
 ruff>=0.3.0
+Pillow>=11.0.0
+pypdf>=6.0.0

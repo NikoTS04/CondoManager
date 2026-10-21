@@ -1,112 +1,95 @@
 # Seguridad y Control de Acceso (Security & RBAC)
 
-## 1. Modelo de Identidad y Roles
+## 1. Identidad y fuente de verdad
 
-CondoManager implementa un esquema de **Control de Acceso Basado en Roles (RBAC)** con granularidad por edificio/condominio.
+`condomanager_schema.sql` define exactamente cuatro roles de autorización:
+`SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR` y `RESIDENTE`.
+Propietario e inquilino son perfiles funcionales de un residente, determinados por
+`usuario_departamentos.tipo_relacion`: `PROPIETARIO_TITULAR`, `COPROPIETARIO` o
+`INQUILINO`. La relación pertenece a cada vínculo, nunca al rol global del usuario.
+Una misma persona puede ser propietaria de una unidad e inquilina de otra.
 
-```
-                  ┌──────────────────────┐
-                  │      SUPERADMIN      │  (Gestor de Plataforma / Administradora)
-                  └──────────┬───────────┘
-                             │
-            ┌────────────────┴────────────────┐
-            ▼                                 ▼
-   [ Condominio / Edificio 1 ]       [ Condominio / Edificio 2 ]
-            │
-            ├─▶ [ Administrador / Junta Directiva ] (Gestión operativa y conciliación)
-            ├─▶ [ Auditor / Revisor Fiscal ]        (Solo lectura y reportes)
-            ├─▶ [ Propietario ]                     (Dueño de 1 o N departamentos)
-            └─▶ [ Inquilino ]                       (Residente arrendatario de 1 dpto)
-```
+Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/identidad-y-alcances.md).
 
----
+## 2. Matriz de permisos implementados
 
-## 2. Matriz de Permisos (RBAC Matrix)
+| Recurso / operación | SUPERADMIN | ADMIN_JUNTA | AUDITOR | RESIDENTE |
+|---|---|---|---|---|
+| Crear y listar condominios globalmente | Sí | No | No | No |
+| Consultar estructura, presupuestos y distribución | Cualquier condominio | Su condominio | Su condominio | No |
+| Modificar estructura, aprobar presupuestos y emitir cuotas | Sí | Su condominio | No | No |
+| Consultar unidades del portal, comprobantes y reservas | Contexto seleccionado | Su condominio | Su condominio | Sus vínculos activos |
+| Reportar pagos, crear/cancelar reservas | Soporte | Soporte de su condominio | No | Sus vínculos activos |
+| Conciliar pagos, evaluar moras y enviar/reintentar comunicados | Sí | Su condominio | No | No |
+| Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | No |
+| Asignar/revocar ADMIN_JUNTA | Sí, excepto propia asignación o identidad global | No | No | No |
+| Asignar/revocar AUDITOR y RESIDENTE | Sí | Su condominio, sin modificar Junta ni su propia asignación | No | No |
+| Crear/cambiar/revocar vínculos de departamentos | Contexto seleccionado | Su condominio | No | No |
+| Crear/editar/activar/desactivar áreas comunes | Contexto seleccionado | Su condominio | No | No |
+| Consultar catálogo administrativo de áreas | Contexto seleccionado | Su condominio | Su condominio | No |
 
-| Recurso / Operación | SuperAdmin | Admin / Junta | Auditor | Propietario | Inquilino |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Crear y Configurar Condominios/Edificios** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Gestionar Presupuesto y Emisión de Cuotas** | ✅ | ✅ | 👁️ (Lectura) | ❌ | ❌ |
-| **Reportar Pagos (Subir Comprobante Yape/CCI)** | ❌ | ✅ (Manual) | ❌ | ✅ (Sus dptos) | ✅ (Su dpto) |
-| **Bandeja de Conciliación (Aprobar/Rechazar)** | ✅ | ✅ | 👁️ (Lectura) | ❌ | ❌ |
-| **Cálculo y Ajuste de Moras** | ✅ | ✅ (Ajuste) | 👁️ (Lectura) | ❌ | ❌ |
-| **Consultar Estado de Cuenta** | ✅ | ✅ (Todos) | ✅ (Todos) | ✅ (Sus dptos) | ✅ (Su dpto) |
-| **Reservar Áreas Comunes** | ❌ | ✅ (Manual) | ❌ | ✅ (Si está al día) | ✅ (Si está al día) |
-| **Bloquear/Desbloquear Reservas** | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **Registrar Egresos y Proveedores** | ✅ | ✅ | 👁️ (Lectura) | ❌ | ❌ |
-| **Abrir Tickets de Incidencias** | ❌ | ✅ | 👁️ (Lectura) | ✅ | ✅ |
-| **Asignar y Cerrar Tickets** | ✅ | ✅ | 👁️ (Lectura) | ❌ | ❌ |
-| **Descargar Balances y Auditoría** | ✅ | ✅ | ✅ | 👁️ (Balance pub.) | ❌ |
-| **Gestión de Traspaso de Mando de Junta** | ✅ | ✅ | ❌ | ❌ | ❌ |
+Todas las rutas de negocio requieren Bearer JWT. Ausencia de token: `401`;
+rol/contexto/unidad no autorizados: `403`. No existe un modo anónimo de desarrollo.
+La consulta del calendario de disponibilidad devuelve únicamente horarios ocupados,
+sin datos del departamento que reservó.
 
-*Leyenda: ✅ Permitido | ❌ Denegado | 👁️ Solo Lectura*
+## 3. Contexto y renovación de sesión
 
----
+- JWT firmado HS256: `sub`, `rol`, `condominio_id`, `departamentos`, `session_version`,
+  `iat`, `exp`; el login añade `email`, `nombre` y `apellido` sin truncarlos.
+- `departamentos` es un arreglo de vínculos con `departamento_id` UUID, `numero`,
+  `tipo_relacion` y `es_activo`. Solo se autoriza mediante UUID y vínculo activo.
+- Administrativos sin tenencia: `departamentos: []`; no se inventan relaciones
+  `ADMINISTRADOR`, `AUDITOR` o `SUPERADMIN`. No hay relación de tenencia de usuario.
+- Un token antiguo, con rol desconocido, con vínculos antiguos o sin
+  `session_version: 2` responde `401 SESION_DESACTUALIZADA`. Se debe iniciar sesión
+  de nuevo. `SISTEMA_AUTOMATICO` sigue siendo un actor interno, nunca un rol de login.
+- El frontend restaura la sesión consultando `/auth/me`, descarta cachés de roles
+  antiguos y valida el UUID seleccionado en URL/localStorage contra los vínculos.
+- El JWT dura 24 horas. No hay refresh token; la renovación se realiza mediante login.
+  `auth_revision` identifica la revisión persistida de la cuenta. Toda ruta protegida
+  comprueba estado activo, revisión, asignación y contexto vigentes. Desactivar y
+   reactivar una cuenta invalida los tokens previos, incluso antes de su expiración.
 
-## 3. Políticas de Autenticación y Autorización
+CON-06 aplica la misma revisión global a los cambios reales de asignación. Solo
+`usuario_roles.es_activo=true` autoriza un contexto. Revocar conserva la fila y
+sus vínculos; repetir el rol/estado no modifica revisión ni auditoría. Contrato:
+[roles y permisos](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
 
-1. **Autenticación Basada en Tokens (JWT):**
-   - Access Tokens con expiración corta (15 a 60 minutos) firmados con algoritmo HS256.
-   - Claims obligatorios en el Payload del JWT:
-     - `sub`: UUID del usuario.
-     - `email`: Correo electrónico institucional o personal.
-     - `rol`: `"SUPERADMIN"` | `"ADMIN_JUNTA"` | `"AUDITOR"` | `"PROPIETARIO"` | `"INQUILINO"`.
-     - `condominio_id`: Identificador del condominio activo. Puede ser `null` únicamente
-       para un `SUPERADMIN` que ejecuta operaciones globales como el alta de un
-       condominio; para los demás roles es obligatorio.
-     - `departamentos`: Lista de números de departamento asignados (ej. `["102"]`).
-     - `tipo_relacion`: `"PROPIETARIO_TITULAR"` | `"INQUILINO"` | `"COPROPIETARIO"` | `"ADMINISTRADOR"`.
-   - Refresh Tokens almacenados con hash en base de datos y rotación automática.
-2. **Multi-Tenancy y Context Isolation:**
-   - Cada solicitud contextual usa el `condominio_id` verificado mediante los claims
-     del token JWT o una asignación consultada en base de datos.
-   - Un `condominio_id` enviado en ruta, query o body selecciona un recurso, pero nunca
-     concede autorización por sí solo.
-   - Prohibida la consulta cruzada de datos entre condominios distintos (Row-Level
-     Security o filtros forzados en el ORM).
-   - `POST /api/v1/condominios` y `GET /api/v1/condominios/{condominio_id}` son
-     operaciones globales exclusivas de `SUPERADMIN`; la creación no requiere un
-     condominio activo previo.
-3. **Múltiples Propiedades por Usuario:**
-   - Un propietario que posee 2 o más departamentos dentro del mismo condominio (o en condominios distintos) puede alternar su vista sin requerir cuentas de correo separadas.
-   - El estado de morosidad se evalúa a nivel de **unidad habitacional (departamento)** para no bloquear injustamente una propiedad que se encuentra al día si otra presenta atraso, salvo política expresa del condominio.
+## 4. Aislamiento y reglas de negocio
 
----
+El condominio recibido en ruta, query o body selecciona un recurso, pero no concede
+permisos. Salvo `SUPERADMIN`, debe coincidir con el contexto firmado del usuario.
+Cada operación comprueba también el condominio real del recurso. No se aceptan
+departamentos desconocidos como solventes. `AUDITOR` solo tiene permisos de lectura.
 
-## 4. Matriz de Elementos de Interfaz de Usuario (UI Elements por Pantalla y Rol)
+Un residente solo puede reportar pagos o crear/cancelar reservas de sus vínculos
+activos en el contexto de sesión. La mora se evalúa por unidad. La cancelación de un
+residente requiere al menos 24 horas de anticipación; el servidor deriva el permiso
+administrativo del rol e ignora cualquier intento de elevarlo mediante `es_admin`.
 
-| Pantalla / Vista | Elemento de Interfaz | `SUPERADMIN` | `ADMIN_JUNTA` | `AUDITOR` | `PROPIETARIO` | `INQUILINO` |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Header Global** | Enlace / Acceso `/junta` | ✅ | ✅ | ✅ (Solo Lectura) | ❌ (Oculto) | ❌ (Oculto) |
-| | Enlace / Acceso `/residente` | ✅ | ✅ (Soporte) | ❌ (Oculto) | ✅ | ✅ |
-| | Selector de Condominio Activo | ✅ (Si tiene >1) | ❌ (Fijo por JWT) | ❌ (Fijo por JWT) | ❌ (Fijo por JWT) | ❌ (Fijo por JWT) |
-| | Selector de Departamentos | ❌ | ❌ | ❌ | ✅ (Si tiene >1) | ❌ (Fijo a 1) |
-| | Badge de Rol Activo | ✅ ("SISTEMA") | ✅ ("JUNTA") | ✅ ("AUDITORÍA")| ✅ ("PROPIETARIO")| ✅ ("INQUILINO") |
-| **Portal Residente** | Widget Estado de Cuenta | ✅ | ✅ (Cualquiera)| 👁️ (Lectura) | ✅ (Sus dptos) | ✅ (Su dpto) |
-| | Formulario Reporte Pago | ❌ | ✅ (Manual) | ❌ | ✅ | ✅ |
-| | Botón Reservar Área Común | ❌ | ✅ (Manual) | ❌ | ✅ (Solvente) / 🔒 (Mora) | ✅ (Solvente) / 🔒 (Mora) |
-| | Botón Cancelar Reserva | ❌ | ✅ | ❌ | ✅ (>24h antes) | ✅ (>24h antes) |
-| **Portal Junta** | Botón Emitir Lote Cuotas | ✅ | ✅ | ❌ (Oculto/Inactivo)| ❌ | ❌ |
-| | Botón Ejecutar Motor Moras| ✅ | ✅ | ❌ (Oculto/Inactivo)| ❌ | ❌ |
-| | Botón Aprobar Comprobante | ✅ | ✅ | ❌ (Oculto/Inactivo)| ❌ | ❌ |
-| | Botón Rechazar Comprobante| ✅ | ✅ | ❌ (Oculto/Inactivo)| ❌ | ❌ |
-| | Banner Informativo de Modo| ❌ | ❌ | ✅ ("Modo Auditor") | ❌ | ❌ |
-| **Auditoría** | Visualización 7 Campos | ✅ | ✅ | ✅ | ❌ | ❌ |
-| | Botón Validar Hash SHA256| ✅ | ✅ | ✅ | ❌ | ❌ |
-| | Exportar Bitácora Criptográfica | ✅ | ✅ | ✅ | ❌ | ❌ |
+## 5. Piloto y persistencia
 
-*Leyenda: ✅ Permitido / Visible | ❌ Denegado / Oculto | 🔒 Deshabilitado por Invariante de Negocio | 👁️ Solo Lectura*
+CON-39 utiliza catálogo de áreas en PostgreSQL y filtra las áreas exclusivas de
+edificio según vínculos activos para residentes. Las condiciones al reservar se
+leen bajo el mismo bloqueo contextual utilizado para editar/desactivar. Contrato:
+[catálogo de áreas](../02-domains/04-reservas/catalogo-areas.md).
 
----
+CON-05 administra vínculos persistentes, invalida sesiones en cada cambio real y
+resuelve unidades del portal y de operaciones de pagos/reservas desde PostgreSQL.
+La relación de titular se conserva aunque la cuenta no tenga acceso. Contrato:
+[vínculos](../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
-## 5. Módulo de Transición y Documentación Interna (Gobernanza)
+CON-04 utiliza identidades, roles y vínculos persistentes para login y autorización.
+Los recursos de pagos/reservas/notificaciones conservan su estado piloto hasta sus
+entregas de persistencia. Los datos demo se provisionan explícitamente y el login
+siempre consulta PostgreSQL. Véase [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
 
-Para mitigar el riesgo de pérdida de conocimiento o traumatismo operativo al renovar la Junta Directiva (Riesgo 1.4 de la plantilla de negocio):
+El SQL exige `usuario_roles.condominio_id NOT NULL`: representa una **asignación
+persistida por condominio**. El `condominio_id: null` del `SUPERADMIN` piloto es un
+**contexto activo global de sesión**, no una fila de `usuario_roles`. La concesión
+global persistida se representa mediante `usuarios.es_superadmin`, provisionada por
+CLI; las API de alta y estado no modifican esa concesión. Se conserva la restricción SQL.
 
-1. **Protocolo de Traspaso de Mando (Handover Protocol):**
-   - El Administrador saliente genera un *Acta Digital de Entrega de Cargo* generada automáticamente por el sistema con un clic.
-   - Contiene: saldo en cuentas, cuentas por cobrar, morosidad histórica acumulada, contratos vigentes con proveedores y tickets de incidencias pendientes.
-2. **Repositorio de Actas y Acuerdos:**
-   - Sección digital protegida para almacenar PDFs firmados de actas de asambleas ordinarias y extraordinarias, estatutos del edificio y manual de convivencia.
-3. **Guías Operativas Integradas:**
-   - Asistente guiado dentro del panel administrativo para inducir a los nuevos directivos en la revisión de pagos, emisión de cuotas y manejo de proveedores.
+Egresos, proveedores, tickets, exportación de balances y traspaso de Junta son
+capacidades documentales futuras; no amplían los permisos de los endpoints actuales.

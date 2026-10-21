@@ -1,29 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { iniciarSesion } from "@/lib/api";
+import { iniciarSesion, obtenerSesion } from "@/lib/api";
+import { isSessionUser, seleccionarUnidad, UUID_PATTERN, type SessionUser, type UserRole } from "@/lib/session";
 
-export type UserRole = "SUPERADMIN" | "ADMIN_JUNTA" | "AUDITOR" | "PROPIETARIO" | "INQUILINO";
-
-export const ROLE_LABELS: Record<UserRole, string> = {
-  SUPERADMIN: "Superadministración",
-  ADMIN_JUNTA: "Junta Directiva",
-  AUDITOR: "Auditoría",
-  PROPIETARIO: "Propietario",
-  INQUILINO: "Inquilino",
-};
-
-export interface UserProfile {
-  id: string;
-  email: string;
-  nombre: string;
-  apellido: string;
-  rol: UserRole;
-  condominio_id: string | null;
-  departamentos: string[];
-  tipo_relacion?: string;
-}
+export { ROLE_LABELS, type UserRole } from "@/lib/session";
+export type UserProfile = SessionUser;
 
 export interface DemoPersona {
   key: string;
@@ -58,14 +41,14 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     email: "auditor@villabonita3.pe",
     password: "Auditor123!",
     rol: "AUDITOR",
-    description: "Solo lectura irrestricta: inspección de bitácora y balances",
+    description: "Solo lectura de su condominio: inspección de bitácora y balances",
   },
   {
     key: "residente102",
     label: "Propietario Solvente (Dpto. 102)",
     email: "residente102@villabonita3.pe",
     password: "Residente123!",
-    rol: "PROPIETARIO",
+    rol: "RESIDENTE",
     depto: "102",
     description: "Al día: reporta pagos y reserva áreas comunes sin restricción",
   },
@@ -74,7 +57,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     label: "Propietario Moroso (Dpto. 402)",
     email: "moroso402@villabonita3.pe",
     password: "Moroso123!",
-    rol: "PROPIETARIO",
+    rol: "RESIDENTE",
     depto: "402",
     description: "En mora: bloqueado automáticamente para realizar reservas",
   },
@@ -83,7 +66,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     label: "Inquilino (Dpto. 504)",
     email: "inquilino504@villabonita3.pe",
     password: "Inquilino123!",
-    rol: "INQUILINO",
+    rol: "RESIDENTE",
     depto: "504",
     description: "Arrendatario: reporta pagos y reserva para su unidad asignada",
   },
@@ -95,7 +78,7 @@ interface AuthContextType {
   activeDepartment: string;
   authReady: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password?: string) => Promise<LoginResult>;
+  login: (email: string, password?: string, condominioId?: string) => Promise<LoginResult>;
   logout: () => void;
   switchDemoPersona: (personaKey: string) => Promise<boolean>;
   setActiveDepartment: (depto: string) => void;
@@ -109,91 +92,110 @@ export interface LoginResult {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function limpiarSesion() {
+  ["condo_token", "condo_user", "condo_depto", "condo_active_id"].forEach((key) => localStorage.removeItem(key));
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [activeDepartment, setActiveDepartment] = useState<string>("102");
+  const [activeDepartment, actualizarDepartamento] = useState<string>("");
   const [authReady, setAuthReady] = useState(false);
   const router = useRouter();
 
-  // Inicializar con la persona demo predeterminada o sesión guardada
+  const login = useCallback(async (email: string, password = "", condominioId?: string): Promise<LoginResult> => {
+    try {
+      const session = await iniciarSesion(email.trim().toLowerCase(), password, condominioId);
+      if (!isSessionUser(session.usuario)) throw new Error("Contrato de sesión incompatible. Inicia sesión de nuevo.");
+      const newUser = session.usuario;
+      const depto = seleccionarUnidad(newUser);
+      limpiarSesion();
+      localStorage.setItem("condo_token", session.access_token);
+      localStorage.setItem("condo_user", JSON.stringify(newUser));
+      localStorage.setItem("condo_depto", depto);
+      setUser(newUser);
+      setToken(session.access_token);
+      actualizarDepartamento(depto);
+      return { ok: true, user: newUser };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }, []);
+
   useEffect(() => {
+    function revocar() {
+      limpiarSesion();
+      setUser(null);
+      setToken(null);
+      actualizarDepartamento("");
+      router.replace("/login");
+    }
+    window.addEventListener("condomanager:sesion-revocada", revocar);
+    return () => window.removeEventListener("condomanager:sesion-revocada", revocar);
+  }, [router]);
+
+  // La caché no concede permisos: restaurar siempre contra /auth/me.
+  useEffect(() => {
+    let cancelled = false;
     async function restoreSession() {
       try {
         const savedToken = localStorage.getItem("condo_token");
         const savedUser = localStorage.getItem("condo_user");
         const savedDepto = localStorage.getItem("condo_depto");
 
-        if (savedToken && savedUser) {
+        if (savedToken || savedUser) {
           try {
-            const parsed = JSON.parse(savedUser) as UserProfile;
-            const contextoValido =
-              parsed.rol === "SUPERADMIN" || UUID_PATTERN.test(parsed.condominio_id || "");
-            if (contextoValido) {
-              setUser(parsed);
-              setToken(savedToken);
-              if (savedDepto) setActiveDepartment(savedDepto);
-              else if (parsed.departamentos?.length > 0) {
-                setActiveDepartment(parsed.departamentos[0]);
-              }
-              return;
-            }
-            localStorage.removeItem("condo_token");
-            localStorage.removeItem("condo_user");
-            localStorage.removeItem("condo_active_id");
+            if (!savedToken || !isSessionUser(JSON.parse(savedUser || "null"))) throw new Error("Sesión antigua");
+            const perfil = await obtenerSesion();
+            if (!isSessionUser(perfil)) throw new Error("Sesión incompatible");
+            if (cancelled) return;
+            const depto = seleccionarUnidad(perfil, savedDepto);
+            setUser(perfil);
+            setToken(savedToken);
+            actualizarDepartamento(depto);
+            localStorage.setItem("condo_user", JSON.stringify(perfil));
+            localStorage.setItem("condo_depto", depto);
           } catch {
-            // Si la sesión guardada no se puede leer, continúa con el modo configurado.
+            if (!cancelled) {
+              limpiarSesion();
+              router.replace("/login");
+            }
           }
+          return; // Nunca sustituir una sesión antigua por un login demo automático.
         }
 
-        if (process.env.NEXT_PUBLIC_DEMO_MODE !== "false") {
-          await switchDemoPersona("admin");
+        if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+          const persona = DEMO_PERSONAS.find((p) => p.key === "admin")!;
+          if (!cancelled) await login(persona.email, persona.password);
         }
       } finally {
-        setAuthReady(true);
+        if (!cancelled) setAuthReady(true);
       }
     }
 
     void restoreSession();
-  }, []);
+    return () => { cancelled = true; };
+  }, [login, router]);
+
+  const setActiveDepartment = useCallback((depto: string) => {
+    if (!user) return;
+    if (user.rol === "RESIDENTE" && !user.departamentos.some((v) => v.es_activo && v.departamento_id === depto)) return;
+    if (depto && !UUID_PATTERN.test(depto)) return;
+    actualizarDepartamento(depto);
+    localStorage.setItem("condo_depto", depto);
+  }, [user]);
 
   async function switchDemoPersona(personaKey: string): Promise<boolean> {
     const persona = DEMO_PERSONAS.find((p) => p.key === personaKey) || DEMO_PERSONAS[0];
     return (await login(persona.email, persona.password)).ok;
   }
 
-  async function login(email: string, password = ""): Promise<LoginResult> {
-    const cleanEmail = email.trim().toLowerCase();
-    try {
-      const session = await iniciarSesion(cleanEmail, password);
-      const newUser = session.usuario as UserProfile;
-      const depto = newUser.departamentos[0] || "102";
-      setUser(newUser);
-      setToken(session.access_token);
-      setActiveDepartment(depto);
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem("condo_token", session.access_token);
-        localStorage.setItem("condo_user", JSON.stringify(newUser));
-        localStorage.setItem("condo_depto", depto);
-      }
-      return { ok: true, user: newUser };
-    } catch (error) {
-      return { ok: false, error };
-    }
-  }
-
   function logout() {
     setUser(null);
     setToken(null);
+    actualizarDepartamento("");
     if (typeof window !== "undefined") {
-      localStorage.removeItem("condo_token");
-      localStorage.removeItem("condo_user");
-      localStorage.removeItem("condo_depto");
-      localStorage.removeItem("condo_active_id");
+      limpiarSesion();
     }
     router.push("/login");
   }

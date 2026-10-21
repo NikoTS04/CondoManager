@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from importlib import import_module
+from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -32,6 +33,8 @@ from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorServic
 from src.modules.cuotas.schemas import EmitirLoteRequest
 from src.modules.cuotas.worker import emitir_pendientes, publicar_pendientes
 
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
+
 REVISIONES = (
     "20261008_0001_crear_condominios_y_auditoria",
     "20261008_0002_crear_presupuestos_mensuales",
@@ -42,14 +45,14 @@ REVISIONES = (
 )
 
 
-def migrar(conn):
+def migrar(conn, revisiones=REVISIONES):
     with Operations.context(MigrationContext.configure(conn)):
-        for revision in REVISIONES:
+        for revision in revisiones:
             import_module(f"migrations.versions.{revision}").upgrade()
 
 
 @asynccontextmanager
-async def base_emision():
+async def base_emision(revisiones=REVISIONES):
     url = os.getenv("CON11_TEST_DATABASE_URL") or os.getenv("CON13_TEST_DATABASE_URL")
     if not url:
         pytest.skip(
@@ -62,7 +65,7 @@ async def base_emision():
         async with admin.begin() as conn:
             await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
             await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
-            await conn.run_sync(migrar)
+            await conn.run_sync(lambda c: migrar(c, revisiones))
         yield async_sessionmaker(engine, expire_on_commit=False)
     finally:
         await engine.dispose()
@@ -285,7 +288,7 @@ async def test_http_identidad_contexto_contrato_y_persistencia(factory):
                 response = await client.post(
                     ruta, json=body, headers={"Authorization": f"Bearer {token}"}
                 )
-                assert response.status_code == 403
+                assert response.status_code == (401 if rol == "SISTEMA_AUTOMATICO" else 403)
             token = create_access_token(
                 {"sub": "test", "rol": "ADMIN_JUNTA", "condominio_id": str(cid)}
             )
@@ -320,3 +323,121 @@ async def test_migracion_reversible_y_fk_con13(factory):
                 revision.upgrade()
 
         await conn.run_sync(ciclo)
+
+
+async def crear_cuotas_legacy(conn):
+    # El extracto versionado reproduce defaults, comentarios e índices del backup.
+    backup = (Path(__file__).resolve().parents[1] / "fixtures/cuotas_legacy.sql").read_text()
+    for sentencia in backup.split(";"):
+        if sentencia.strip():
+            await conn.execute(text(sentencia))
+
+
+@pytest.mark.asyncio
+async def test_migracion_adopta_backup_con_datos_y_downgrade_conserva_cuotas():
+    async with base_emision(REVISIONES[:-1]) as factory:
+        cid = await preparar(factory)
+        async with factory() as session, session.begin():
+            conn = await session.connection()
+            await crear_cuotas_legacy(conn)
+            cuota_id = await conn.scalar(
+                text(
+                    "INSERT INTO cuotas_mantenimiento "
+                    "(departamento_id, periodo, monto_ordinario, monto_total_exigible, "
+                    "fecha_emision, fecha_vencimiento) "
+                    "VALUES (:depto, '2026-09', 150.00, 150.00, '2026-09-01', '2026-09-20') "
+                    "RETURNING id"
+                ),
+                {"depto": UUID(int=1)},
+            )
+            await conn.execute(
+                text(
+                    "CREATE TABLE referencia_legacy (cuota_id uuid PRIMARY KEY "
+                    "REFERENCES cuotas_mantenimiento(id) ON DELETE RESTRICT)"
+                )
+            )
+            await conn.execute(text("INSERT INTO referencia_legacy VALUES (:id)"), {"id": cuota_id})
+            previo = (await conn.execute(text("SELECT * FROM cuotas_mantenimiento"))).one()
+
+            def ciclo(c):
+                revision = import_module(f"migrations.versions.{REVISIONES[-1]}")
+                comentario = inspect(c).get_table_comment("cuotas_mantenimiento")
+                indices = inspect(c).get_indexes("cuotas_mantenimiento")
+                columnas = inspect(c).get_columns("cuotas_mantenimiento")
+                defaults = {col["name"]: col["default"] for col in columnas}
+                with Operations.context(MigrationContext.configure(c)):
+                    revision.upgrade()
+                    assert {"lotes_cuotas", "eventos_lote_outbox"}.issubset(
+                        inspect(c).get_table_names()
+                    )
+                    assert any(
+                        fk["name"] == "fk_aplicacion_saldo_cuota"
+                        for fk in inspect(c).get_foreign_keys("aplicaciones_saldo_favor")
+                    )
+                    revision.downgrade()
+                    assert "cuotas_mantenimiento" in inspect(c).get_table_names()
+                    assert "lotes_cuotas" not in inspect(c).get_table_names()
+                    assert "eventos_lote_outbox" not in inspect(c).get_table_names()
+                    assert not any(
+                        fk["name"] == "fk_aplicacion_saldo_cuota"
+                        for fk in inspect(c).get_foreign_keys("aplicaciones_saldo_favor")
+                    )
+                    revision.upgrade()
+                assert inspect(c).get_table_comment("cuotas_mantenimiento") == comentario
+                assert inspect(c).get_indexes("cuotas_mantenimiento") == indices
+                assert {
+                    col["name"]: col["default"]
+                    for col in inspect(c).get_columns("cuotas_mantenimiento")
+                } == defaults
+
+            await conn.run_sync(ciclo)
+            assert (await conn.execute(text("SELECT * FROM cuotas_mantenimiento"))).one() == previo
+            assert await conn.scalar(text("SELECT cuota_id FROM referencia_legacy")) == cuota_id
+        # Las cuotas nuevas también se emiten sobre la tabla adoptada.
+        response = await emitir(factory, cid)
+        assert response.total_cuotas_emitidas == 3
+        async with factory() as session:
+            assert await session.scalar(select(func.count()).select_from(CuotaMantenimiento)) == 4
+            assert (await session.get(CuotaMantenimiento, cuota_id)).monto_ordinario == Decimal(
+                "150"
+            )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("alteracion", "error"),
+    [
+        ("ALTER COLUMN monto_ordinario TYPE numeric(10,2)", "monto_ordinario"),
+        ("ALTER COLUMN periodo DROP NOT NULL", "periodo"),
+        ("DROP CONSTRAINT uq_departamento_periodo", "unicidad"),
+        ("DROP CONSTRAINT cuotas_mantenimiento_departamento_id_fkey", "relación"),
+        (
+            "DROP CONSTRAINT ck_cuota_monto_pagado, ADD CONSTRAINT ck_cuota_monto_pagado "
+            "CHECK (monto_pagado >= -1.00)",
+            "ck_cuota_monto_pagado",
+        ),
+        (
+            "DROP CONSTRAINT ck_cuota_estado, ADD CONSTRAINT ck_cuota_estado "
+            "CHECK (estado IN ('EMITIDA', 'PENDIENTE', 'PAGO_PARCIAL', 'PAGADA', 'VENCIDA', "
+            "'EN_MORA', 'OTRO'))",
+            "ck_cuota_estado",
+        ),
+        (
+            "DROP CONSTRAINT ck_cuota_monto_mora, ADD CONSTRAINT ck_cuota_monto_mora "
+            "CHECK (monto_mora >= 0.00) NOT VALID",
+            "sin validar",
+        ),
+    ],
+)
+async def test_migracion_rechaza_cuotas_legacy_incompatibles(alteracion, error):
+    async with base_emision(REVISIONES[:-1]) as factory:
+        async with factory() as session, session.begin():
+            conn = await session.connection()
+            await crear_cuotas_legacy(conn)
+            await conn.execute(text(f"ALTER TABLE cuotas_mantenimiento {alteracion}"))
+            with pytest.raises(RuntimeError, match=error):
+                await conn.run_sync(lambda c: migrar(c, REVISIONES[-1:]))
+            tablas = await conn.run_sync(lambda c: inspect(c).get_table_names())
+            assert "cuotas_mantenimiento" in tablas
+            assert "lotes_cuotas" not in tablas
+            assert "eventos_lote_outbox" not in tablas

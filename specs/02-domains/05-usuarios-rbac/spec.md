@@ -3,6 +3,15 @@
 La implementación de CON-3 / USR-02 y su columna `departamentos.activo` se define
 en [estructura-inmobiliaria.md](estructura-inmobiliaria.md).
 
+CON-04 / USR-03 se define en [alta-administrativa.md](alta-administrativa.md): alta
+inactiva, contraseña inicial administrativa, login SQL y estado editable por SuperAdmin.
+
+CON-06 / USR-05 se define en [roles-y-permisos.md](roles-y-permisos.md): asignación
+contextual, revocación lógica, autoridad administrativa y renovación de sesiones.
+
+CON-05 / USR-04 se define en [vinculos-departamentos.md](vinculos-departamentos.md):
+tenencia por unidad real, conservación de titulares y revocación del acceso por vínculo.
+
 ## 1. Ficha del Dominio
 
 - **Identificador:** DOM-05 / PROC-05
@@ -77,7 +86,7 @@ usar `float` para validarlos, persistirlos o serializarlos.
 - Si contiene más de uno, el cliente exige una selección explícita y no asume el
   primero creado ni el más reciente.
 - Al crear un nuevo condominio, este se convierte en el contexto activo del cliente.
-- `ADMIN_JUNTA`, `AUDITOR`, `PROPIETARIO` e `INQUILINO` no utilizan el listado global:
+- `ADMIN_JUNTA`, `AUDITOR` y `RESIDENTE` no utilizan el listado global:
   su contexto se obtiene del claim `condominio_id` validado.
 
 ### 3.5 Aislamiento multi-condominio
@@ -117,8 +126,9 @@ La creación registra una entrada inmutable con:
   proveedores), sin permiso para crear otros condominios.
 - `AUDITOR`: Lectura de auditoría y estados financieros dentro de los condominios
   autorizados.
-- `PROPIETARIO`: Gestión de sus propiedades, consulta de cuentas y reserva de áreas.
-- `INQUILINO`: Reporte de pagos, tickets y reservas de su departamento arrendado.
+- `RESIDENTE`: Consulta de cuentas, reporte de pagos y reservas de sus vínculos activos.
+  `PROPIETARIO_TITULAR`, `COPROPIETARIO` e `INQUILINO` son relaciones por unidad,
+  no roles adicionales. Contrato: [identidad-y-alcances.md](identidad-y-alcances.md).
 
 ---
 

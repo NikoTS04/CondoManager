@@ -99,3 +99,8 @@ Escenario: Despacho automático de alerta preventiva 3 días antes de vencimient
   Entonces el sistema genera y despacha una notificación de recordatorio preventivo al residente
   Y registra el envío con estado "ENTREGADO" en la bitácora de notificaciones.
 ```
+# Persistencia CON-73
+
+Cola, intentos y consumo durable siguen el
+[contrato integrado](../02-domains/04-reservas/persistencia-sprint-2.md).
+El transporte SIMULADO acredita aceptación (ENVIADO), no entrega física.

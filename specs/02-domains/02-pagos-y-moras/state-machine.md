@@ -1,5 +1,14 @@
 # Máquina de Estados: Comprobante de Pago y Conciliación
 
+## Integración Sprint 2
+
+EN_REVISION → OBSERVADO / RECHAZADO / APROBADO. OBSERVADO puede revisarse nuevamente;
+observar o rechazar exige motivo y nunca aplica fondos. APROBADO y RECHAZADO son
+terminales para el prototipo. La aprobación e imputación son una única transacción;
+CONCILIADO es el alias de consulta de APROBADO, no otro estado SQL. El contrato
+[CON-22/70/42](sprint-2-anderson.md) prevalece sobre el diagrama histórico inferior
+para este alcance. Las anulaciones compensatorias no se implementan en estos tickets.
+
 ```
    [ Residente envía voucher ]
                  │
