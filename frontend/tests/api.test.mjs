@@ -145,3 +145,48 @@ test("un token revocado al gestionar roles notifica el cierre de sesión y propa
     delete globalThis.localStorage;
   }
 });
+
+test("los vínculos se gestionan por UUID sin enviar roles ni estados de cuenta", async (t) => {
+  const cid = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+  const uid = "8d3f2f64-1111-4222-8333-444455556666";
+  const did = "11111111-1111-4111-8111-111111111101";
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    const vinculo = { usuario_id: uid, departamento_id: did, tipo_relacion: "INQUILINO", es_activo: init.method !== "DELETE" };
+    return new Response(JSON.stringify(init.method ? vinculo : [vinculo]));
+  });
+  await api.listarVinculosUsuario(cid, uid);
+  assert.equal((await api.asignarVinculoUsuario(cid, uid, did, "INQUILINO")).es_activo, true);
+  assert.equal((await api.revocarVinculoUsuario(cid, uid, did)).es_activo, false);
+  assert.equal(new URL(solicitudes[0].url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/departamentos`);
+  assert.equal(new URL(solicitudes[1].url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/departamentos/${did}`);
+  assert.equal(solicitudes[1].init.method, "PUT");
+  assert.deepEqual(JSON.parse(solicitudes[1].init.body), { tipo_relacion: "INQUILINO" });
+  assert.equal(solicitudes[2].init.method, "DELETE");
+  assert.equal(solicitudes[2].init.body, undefined);
+});
+
+test("el catálogo administrativo transmite costo como cadena y el estado en su recurso propio", async (t) => {
+  const cid = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+  const aid = "11111111-1111-4111-8111-111111111101";
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    return new Response(JSON.stringify({ id: aid, costo_reserva: "0.10", esta_activa: true }));
+  });
+  const datos = { nombre: "Sala", aforo_maximo: 12, costo_reserva: "0.10", hora_apertura: "08:00", hora_cierre: "22:00", tiempo_maximo_horas: 4, descripcion: null, edificio_id: null };
+  await api.listarCatalogoAreas(cid, false, 25, 50);
+  assert.equal(new URL(solicitudes[0].url).searchParams.get("esta_activa"), "false");
+  assert.equal(new URL(solicitudes[0].url).searchParams.get("offset"), "50");
+  await api.registrarArea(cid, datos);
+  await api.configurarArea(cid, aid, datos);
+  await api.cambiarEstadoArea(cid, aid, false);
+  assert.equal(solicitudes[1].init.method, "POST");
+  assert.equal(JSON.parse(solicitudes[1].init.body).costo_reserva, "0.10");
+  assert.equal(solicitudes[2].init.method, "PUT");
+  assert.equal(new URL(solicitudes[2].url).pathname, `/api/v1/condominios/${cid}/areas/${aid}`);
+  assert.equal(solicitudes[3].init.method, "PATCH");
+  assert.deepEqual(JSON.parse(solicitudes[3].init.body), { esta_activa: false });
+  assert.equal(new URL(solicitudes[3].url).pathname.endsWith(`/${aid}/estado`), true);
+});

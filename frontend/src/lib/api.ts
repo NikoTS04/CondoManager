@@ -1,10 +1,11 @@
 /** Cliente autenticado: los fallos de red o autorización nunca generan éxitos simulados. */
-import type { SessionUser } from "./session";
+import type { SessionUser, TipoRelacion } from "./session";
 
 export interface Departamento {
   id: string;
   condominio_id?: string;
   edificio_id?: string;
+  edificio_nombre?: string;
   activo?: boolean;
   numero: string;
   piso: number;
@@ -61,10 +62,50 @@ export interface AreaComun {
   id: string;
   condominio_id: string;
   nombre: string;
-  descripcion: string;
+  descripcion: string | null;
   aforo_maximo: number;
   costo_reserva: string;
   esta_activa: boolean;
+  edificio_id: string | null;
+  edificio_nombre: string | null;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+  moneda: Moneda;
+  zona_horaria: "America/Lima";
+}
+
+export interface ConfigurarAreaPayload {
+  nombre: string;
+  descripcion: string | null;
+  edificio_id: string | null;
+  aforo_maximo: number;
+  costo_reserva: string;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+}
+
+function rutaAreas(condominioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/areas`;
+}
+
+export function listarCatalogoAreas(condominioId: string, activa?: boolean, limit = 50, offset = 0): Promise<AreaComun[]> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (activa !== undefined) params.set("esta_activa", String(activa));
+  return recursoRequest(`${rutaAreas(condominioId)}?${params}`);
+}
+
+export function registrarArea(condominioId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(rutaAreas(condominioId), { method: "POST", body: JSON.stringify(datos) });
+}
+
+export function configurarArea(condominioId: string, areaId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
+export function cambiarEstadoArea(condominioId: string, areaId: string, esta_activa: boolean): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}/estado`, { method: "PATCH", body: JSON.stringify({ esta_activa }) });
 }
 
 export interface Reserva {
@@ -77,6 +118,7 @@ export interface Reserva {
   hora_inicio: string;
   hora_fin: string;
   costo_reserva: string;
+  moneda?: Moneda;
   estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA";
   creado_en: string;
 }
@@ -198,6 +240,37 @@ export interface CuentaUsuarioConRol extends CuentaUsuario {
   rol: AsignacionRol["rol"];
   rol_activo: boolean;
   es_superadmin: boolean;
+}
+
+export interface VinculoUsuario {
+  id: string;
+  usuario_id: string;
+  condominio_id: string;
+  departamento_id: string;
+  numero: string;
+  edificio_id: string;
+  edificio_nombre: string;
+  tipo_relacion: TipoRelacion;
+  es_activo: boolean;
+  departamento_activo: boolean;
+}
+
+function rutaVinculos(condominioId: string, usuarioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/usuarios/${encodeURIComponent(usuarioId)}/departamentos`;
+}
+
+export function listarVinculosUsuario(condominioId: string, usuarioId: string): Promise<VinculoUsuario[]> {
+  return recursoRequest(rutaVinculos(condominioId, usuarioId));
+}
+
+export function asignarVinculoUsuario(condominioId: string, usuarioId: string, departamentoId: string, tipo_relacion: TipoRelacion): Promise<VinculoUsuario> {
+  return recursoRequest(`${rutaVinculos(condominioId, usuarioId)}/${encodeURIComponent(departamentoId)}`, {
+    method: "PUT", body: JSON.stringify({ tipo_relacion }),
+  });
+}
+
+export function revocarVinculoUsuario(condominioId: string, usuarioId: string, departamentoId: string): Promise<VinculoUsuario> {
+  return recursoRequest(`${rutaVinculos(condominioId, usuarioId)}/${encodeURIComponent(departamentoId)}`, { method: "DELETE" });
 }
 
 function rutaRol(condominioId: string, usuarioId: string): string {

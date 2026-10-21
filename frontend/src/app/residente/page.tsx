@@ -193,6 +193,11 @@ function ResidenteContent() {
       />
 
       {/* Error de departamentos si falló la carga */}
+      {!loadingInitial && !errorDeptos && departamentos.length === 0 && (
+        <Alert tone="info" title="Sin departamentos vinculados">
+          La administración debe registrar un vínculo activo para que puedas consultar tu unidad y realizar operaciones.
+        </Alert>
+      )}
       {errorDeptos && (
         <Alert
           tone="danger"

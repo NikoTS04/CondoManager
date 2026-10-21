@@ -29,6 +29,15 @@ El módulo garantiza la equidad en el uso de los espacios comunes, evita solapam
 
 ## 4. Reglas de Negocio
 
+### CON-39 — Catálogo administrativo persistente
+
+Contrato vigente: [catálogo de áreas](../02-domains/04-reservas/catalogo-areas.md).
+SuperAdmin/Junta configuran áreas de su contexto; Auditor consulta. Edificio
+opcional, aforo, costo por turno y duración máxima se guardan junto con apertura/
+cierre diarios en hora de Lima. Cambios y auditoría son atómicos. Desactivar no
+cancela ni borra reservas anteriores y bloquea nuevas solicitudes. Las reservas
+leen condiciones SQL y respetan horario, duración y edificio autorizado.
+
 ### 4.1 Validación Cruzada de Solvencia Financiera
 Antes de evaluar la disponibilidad física de un espacio, el motor consulta el estado financiero del departamento solicitante:
 - **Condición de Rechazo Automático:** Si el departamento posee al menos una cuota en estado `EN_MORA` o con vencimiento superado tras el periodo de gracia:

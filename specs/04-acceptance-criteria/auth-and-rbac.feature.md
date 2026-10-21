@@ -27,6 +27,11 @@ BDD: [roles_permisos.feature](../02-domains/05-usuarios-rbac/features/roles_perm
 
 ## Característica: Autenticación JWT y Control Granular de Pantallas por Rol
 
+CON-05: [contrato de vínculos](../02-domains/05-usuarios-rbac/vinculos-departamentos.md)
+y [BDD ejecutable](../02-domains/05-usuarios-rbac/features/vinculos_departamentos.feature).
+Probar relaciones mixtas, mínimo un titular, unicidad/idempotencia, acceso por
+unidad real, revocación de sesión, inactividad, aislamiento y rollback de auditoría.
+
 ### Escenario 1: Inicio de sesión exitoso y generación de claims
 ```gherkin
 Dado que existe un usuario con correo "admin@villabonita3.pe" y rol "ADMIN_JUNTA"

@@ -1,56 +1,29 @@
 """Modelos ORM de Áreas Comunes y Reservas (Brandon - PROC-04)."""
 
+import uuid
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
-import uuid
+
 from sqlalchemy import (
-    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
-    Integer,
     Numeric,
     String,
-    Text,
     Time,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
+
 from src.core.database import Base
-
-
-class AreaComun(Base):
-    __tablename__ = "areas_comunes"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    condominio_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("condominios.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    nombre: Mapped[str] = mapped_column(String(100), nullable=False)
-    descripcion: Mapped[str] = mapped_column(Text, nullable=True)
-    aforo_maximo: Mapped[int] = mapped_column(Integer, nullable=False)
-    costo_reserva: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2), nullable=False, default=Decimal("0.00")
-    )
-    esta_activa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-
-    __table_args__ = (
-        CheckConstraint("aforo_maximo > 0", name="ck_area_aforo"),
-        CheckConstraint("costo_reserva >= 0.00", name="ck_area_costo"),
-    )
+from src.modules.reservas.areas.models import AreaComun as AreaComun
 
 
 class Reserva(Base):
     __tablename__ = "reservas"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     area_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("areas_comunes.id", ondelete="RESTRICT"),
@@ -67,9 +40,7 @@ class Reserva(Base):
     costo_reserva: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=Decimal("0.00")
     )
-    estado: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="SOLICITADA"
-    )
+    estado: Mapped[str] = mapped_column(String(20), nullable=False, default="SOLICITADA")
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

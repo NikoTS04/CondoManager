@@ -145,22 +145,19 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
 
         from src.modules.reservas import router
         from src.modules.reservas.schemas import CrearReservaRequest
-        from src.modules.usuarios.piloto import vinculo_piloto
+        from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
+        from src.tests.areas import AreasCatalogoFake
+        from src.tests.departamentos import CatalogoDepartamentosFake
 
+        catalogo = CatalogoDepartamentosFake()
         area_id = uuid.uuid4()
-        condominio_id = router.CONDOMINIO_PILOTO_ID
+        condominio_id = CONDOMINIO_PILOTO_ID
         monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {})
-        monkeypatch.setattr(
-            router,
-            "AREAS_REGISTRADAS",
-            {
-                area_id: {
-                    "nombre": context["area"],
-                    "esta_activa": True,
-                    "condominio_id": condominio_id,
-                },
-            },
-        )
+        areas = AreasCatalogoFake()
+        area = next(iter(areas.datos.values()))
+        area.id = area_id
+        area.nombre = context["area"]
+        areas.datos = {area_id: area}
 
         async def solicitar(numero):
             vinculo = vinculo_piloto(numero, "PROPIETARIO_TITULAR")
@@ -182,6 +179,8 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
                         "departamentos": [vinculo],
                     },
                     solvencia=finanzas_contrato,
+                    repository=catalogo,
+                    areas_repository=areas,
                 )
             except HTTPException as exc:
                 return exc

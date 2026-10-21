@@ -115,6 +115,10 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 - Un propietario puede estar vinculado con uno o varios departamentos.
 - Un inquilino solo accede a los departamentos cuyo vínculo se encuentre vigente.
 - Cada departamento debe tener al menos un propietario titular registrado.
+- El primer vínculo activo es de titular; no se retira al último sin reemplazo.
+- Los vínculos se revocan sin eliminar su historial; los cambios reales invalidan
+  sesiones y quedan auditados. El portal utiliza departamentos SQL por UUID.
+- Contrato CON-05: [vínculos](../../specs/02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## USR-05 — Asignar roles y permisos
 
@@ -457,6 +461,10 @@ Resultado general: COMPLETADO CON OBSERVACIONES
 **Objetivo de la épica:** administrar espacios compartidos, disponibilidad, solvencia y concurrencia de reservas.
 
 ## RES-01 — Administrar el catálogo de áreas comunes
+
+Contrato CON-39: [catálogo persistente](../../specs/02-domains/04-reservas/catalogo-areas.md).
+Incluye administración contextual, edificio exclusivo, horario diario de Lima,
+duración máxima, tarifa decimal en la moneda del condominio y desactivación auditada.
 
 **Historia:** Como administrador, quiero configurar las áreas comunes, para publicar sus condiciones de uso y reserva.
 

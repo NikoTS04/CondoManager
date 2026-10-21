@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql as pg
 
-revision = "20261020_0009"
+revision = "20261020_0009_pagos"
 down_revision = "20261020_0008"
 branch_labels = None
 depends_on = None

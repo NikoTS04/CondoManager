@@ -127,6 +127,12 @@ CON-75: pruebas de errores y evidencia durante todo el sprint
 
 ## CON-05 — Vincular usuarios con departamentos
 
+Contrato: [vínculos persistentes](../../specs/02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+Gestión administrativa por contexto, titular previo a inquilinos/copropietarios,
+protección del último titular y renovación de sesión en cambios reales. El portal
+y la validación de unidades de pagos/reservas utilizan el padrón SQL.
+Guion y resultados: [entrega CON-05](CON-05-vinculos-departamentos.md).
+
 **Historia:** Como administrador, quiero vincular propietarios, copropietarios e inquilinos con sus departamentos, para delimitar la información y las operaciones que pueden realizar.
 
 **Debe incluir:**
@@ -272,6 +278,12 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 **Trazabilidad:** [NOT-06 del backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#not-06--reintentar-notificaciones-fallidas), [política de entrega y reintentos](../../specs/02-domains/03-notificaciones/delivery-policy.md), [BDD de notificaciones](../../specs/02-domains/03-notificaciones/features/notificaciones.feature), [resiliencia y excepciones](../../specs/01-architecture/resilience-and-exceptions.md).
 
 ## CON-39 — Administrar el catálogo de áreas comunes
+
+Contrato: [catálogo persistente](../../specs/02-domains/04-reservas/catalogo-areas.md).
+Configuración contextual de áreas, horarios diarios en Lima, duración, aforo y costo
+Decimal; conservación de estado/historial y validación del edificio exclusivo.
+El catálogo SQL se implementa aquí como base compartida para CON-73.
+Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
 
 **Historia:** Como administrador, quiero configurar las áreas comunes, para publicar sus condiciones de uso y reserva.
 

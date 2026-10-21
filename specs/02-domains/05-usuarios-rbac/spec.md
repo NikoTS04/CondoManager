@@ -9,6 +9,9 @@ inactiva, contraseña inicial administrativa, login SQL y estado editable por Su
 CON-06 / USR-05 se define en [roles-y-permisos.md](roles-y-permisos.md): asignación
 contextual, revocación lógica, autoridad administrativa y renovación de sesiones.
 
+CON-05 / USR-04 se define en [vinculos-departamentos.md](vinculos-departamentos.md):
+tenencia por unidad real, conservación de titulares y revocación del acceso por vínculo.
+
 ## 1. Ficha del Dominio
 
 - **Identificador:** DOM-05 / PROC-05

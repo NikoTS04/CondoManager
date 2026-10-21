@@ -68,7 +68,6 @@ def solicitud_pago(numero="102"):
 def aislar_recursos(monkeypatch, finanzas_contrato):
     monkeypatch.setattr(reservas, "RESERVAS_REGISTRADAS", {})
     monkeypatch.setattr(notificaciones, "NOTIFICACIONES_REGISTRADAS", {})
-    monkeypatch.setattr(reservas, "DEPARTAMENTOS_MAP", finanzas_contrato.departamentos)
 
 
 def test_login_me_y_demo_comparten_perfil_y_nombres_completos():
