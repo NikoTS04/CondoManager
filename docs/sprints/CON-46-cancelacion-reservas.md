@@ -46,14 +46,19 @@ transacción de solo lectura, interceptando las escrituras: validación estructu
 correcta. Operaciones previstas: añadir zona y check a `reservas`, crear las tres
 tablas auxiliares, su índice y activar RLS. Se comprobó después que Alembic seguía
 en `20261020_0011`, sin la columna ni las tablas nuevas. Esta simulación no
-sustituye las dos integraciones pendientes con PostgreSQL de pruebas.
+sustituye las integraciones con PostgreSQL de pruebas.
 
-La creación actual sigue siendo el productor piloto en memoria, pendiente de
-CON-41/73. Al cancelar una reserva de ese piloto, CON-46 la incorpora a `reservas`
-y la cancela dentro de la misma transacción; después del commit actualiza la
-copia local. Las cancelaciones sobreviven al reinicio. Las reservas piloto que
-nunca se cancelaron todavía dependen de la integración de su productor SQL.
-No se acredita exclusión de nuevas reservas entre procesos hasta integrar CON-41/43.
+Tras integrar `origin/develop` con CON-41/43, la creación utiliza
+`ReservasRepository` y conserva `usuario_id` y `zona_horaria`. El repositorio
+hace flush dentro de la transacción de solvencia y catálogo; la respuesta y la
+copia de compatibilidad en memoria se actualizan después del commit. Creación
+y cancelación comparten el orden de locks. Los solapamientos se comparan como
+instantes para admitir históricos UTC y turnos de Lima.
+
+CON-46 cancela directamente las reservas SQL. Conserva el puente para una
+reserva piloto anterior: la incorpora a `reservas` y la cancela en la misma
+transacción. Las pruebas históricas sin SQL utilizan un adaptador explícito;
+un error de base de datos del productor real no genera éxito en memoria.
 
 Una tarifa no acredita un pago. Sin un cobro efectivo vinculado, el resultado es
 `NO_APLICA`, monto `0.00`. `cobros_reserva` representa un único cobro por reserva,
@@ -70,12 +75,13 @@ Publicar en Redis no acredita envío de correo. El worker no se inicia desde la 
 
 ## Preparación manual
 
-No se arrancaron servicios ni se aplicaron migraciones a la base configurada
-durante esta implementación. Para probar desde tu entorno, aplica la migración
-antes de iniciar el recorrido:
+No se aplicaron cambios a Supabase desde el agente. Con Docker, reconstruye el
+backend y frontend para incorporar el código: el backend ejecuta
+`alembic upgrade head` al arrancar. Comprueba la revisión antes del recorrido:
 
 ```powershell
-.venv/Scripts/python.exe -m alembic upgrade head
+docker compose up -d --build --wait --wait-timeout 180 backend frontend
+docker compose exec backend python -m alembic current
 ```
 
 1. Inicia el backend y frontend con tu configuración habitual e ingresa como
@@ -87,8 +93,8 @@ antes de iniciar el recorrido:
 4. Cancela una reserva a menos de 24 horas: el residente recibe `422`; un
    administrador autorizado puede cancelarla. Otra unidad, otro condominio y
    un auditor reciben rechazo. Enviar `es_admin=true` no cambia el permiso.
-5. Reinicia el backend y consulta el historial: la cancelación debe conservarse.
-   Esto comprueba la cancelación persistente, no la creación piloto pendiente.
+5. Reinicia el backend y consulta el historial: tanto la creación SQL como la
+   cancelación deben conservarse. Verifica también una reserva aún confirmada.
 
 Para verificar publicación de eventos, ejecuta el relay anterior en tu entorno
 con Redis disponible. La entrega final de notificaciones se valida con CON-36/73.

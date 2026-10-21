@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.models_audit import AuditoriaLogORM
+from src.main import app
 from src.modules.pagos.models import ComprobantePago
 from src.modules.reservas import router
 from src.modules.reservas.cancelaciones import CancelacionesService
@@ -94,10 +95,11 @@ def migrar(connection):
 
 
 @pytest_asyncio.fixture
-async def caso_cancelacion(api_pagos):
+async def caso_cancelacion(api_pagos, monkeypatch):
     client, base = api_pagos
     async with base.engine.begin() as conn:
         await conn.run_sync(migrar)
+    monkeypatch.delitem(app.dependency_overrides, router.get_creacion_reservas_repository)
     residente = await login(client, "residente102@villabonita3.pe", "Residente123!")
     creada = await client.post("/api/v1/reservas", headers=residente, json=turno(base, AREA))
     assert creada.status_code == 201, creada.text
@@ -128,9 +130,9 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
     creador_id = UUID(datos["usuario_id"])
     comprobante_id = uuid4()
     async with base.sessions() as db, db.begin():
-        registro = {c.name: datos[c.name] for c in Reserva.__table__.columns}
-        registro["usuario_id"] = creador_id
-        db.add(Reserva(**registro))
+        guardada = await db.get(Reserva, rid)
+        assert guardada is not None and guardada.estado == "CONFIRMADA"
+        assert guardada.usuario_id == creador_id and guardada.zona_horaria == "America/Lima"
         db.add(
             ComprobantePago(
                 id=comprobante_id,
@@ -191,7 +193,8 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
     monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {})
     assert (await client.post(ruta, headers=residente)).json() == original
     historial = await client.get("/api/v1/reservas", headers=residente)
-    assert historial.status_code == 200 and historial.json()[0]["estado"] == "CANCELADA"
+    assert historial.status_code == 200
+    assert next(r for r in historial.json() if r["id"] == str(rid))["estado"] == "CANCELADA"
     async with base.sessions() as db:
         assert (await db.get(Reserva, rid)).estado == "CANCELADA"
         assert (await db.get(Reserva, rid)).usuario_id == UUID(datos["usuario_id"])
@@ -224,7 +227,7 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
         assert (await db.scalar(select(EventoReservaOutbox))).publicado_en is not None
 
 
-async def test_fallo_transaccional_revierte_adopcion_auditoria_y_evento(
+async def test_fallo_transaccional_revierte_estado_auditoria_y_evento(
     caso_cancelacion, monkeypatch
 ):
     client, base, residente, rid = caso_cancelacion
@@ -243,7 +246,7 @@ async def test_fallo_transaccional_revierte_adopcion_auditoria_y_evento(
     )
     assert router.RESERVAS_REGISTRADAS[rid]["estado"] == "CONFIRMADA"
     async with base.sessions() as db:
-        assert await db.get(Reserva, rid) is None
+        assert (await db.get(Reserva, rid)).estado == "CONFIRMADA"
         assert await db.scalar(select(func.count()).select_from(CancelacionReserva)) == 0
         assert await db.scalar(select(func.count()).select_from(EventoReservaOutbox)) == 0
         assert (

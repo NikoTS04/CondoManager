@@ -21,6 +21,7 @@ from scripts.seed_usuarios_demo import cargar_demo
 from src.core.config import settings
 from src.core.database import get_db_session
 from src.main import app
+from src.modules.reservas.router import get_creacion_reservas_repository
 from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
 
 REVISIONES = (
@@ -67,6 +68,7 @@ async def crear_base(url):
     async with sessions() as session, session.begin():
         await cargar_demo(session)
         await cargar_areas_demo(session)
+    await engine.dispose()
     return BaseUsuarios(engine, sessions, esquema, url)
 
 
@@ -89,9 +91,14 @@ def db_usuarios(monkeypatch):
         or os.getenv("CON13_TEST_DATABASE_URL")
     )
     if not url:
-        pytest.skip("Defina CON46_TEST_DATABASE_URL o CON04_TEST_DATABASE_URL con PostgreSQL de pruebas.")
+        pytest.skip(
+            "Defina CON46_TEST_DATABASE_URL o CON04_TEST_DATABASE_URL con PostgreSQL de pruebas."
+        )
     base = asyncio.run(crear_base(url))
     monkeypatch.setattr(settings, "DEMO_MODE", True)
+    # Estas fixtures migran identidad/catálogo, no el productor de reservas.
+    # CON-46 elimina este adaptador y aplica su migración para probar SQL real.
+    monkeypatch.setitem(app.dependency_overrides, get_creacion_reservas_repository, lambda: None)
 
     async def session():
         async with base.sessions() as db:

@@ -5,6 +5,7 @@ from datetime import date, time
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.authorization import (
@@ -13,12 +14,14 @@ from src.core.authorization import (
     puede_ver_departamento,
 )
 from src.core.database import get_db_session
+from src.core.errors import APIError
 from src.core.security import get_current_user
 from src.modules.pagos.solvencia import get_solvencia_service
 from src.modules.reservas.areas.repository import AreasRepository, get_areas_repository
 from src.modules.reservas.areas.service import AreasService
 from src.modules.reservas.cancelaciones import get_cancelaciones_service
 from src.modules.reservas.disponibilidad import DisponibilidadRepository, DisponibilidadService
+from src.modules.reservas.repository import ReservasRepository
 from src.modules.reservas.schemas import (
     AreaComunDTO,
     CancelarReservaRequest,
@@ -139,6 +142,11 @@ def get_areas_reserva_repository(solvencia=Depends(get_solvencia_service)):
     return AreasRepository(solvencia.session)
 
 
+def get_creacion_reservas_repository(solvencia=Depends(get_solvencia_service)):
+    # CON-41/43 y CON-46 comparten transacción y orden de locks.
+    return ReservasRepository(solvencia.session)
+
+
 @router.post(
     "/reservas",
     response_model=ReservaResponseDTO,
@@ -151,6 +159,7 @@ async def crear_reserva(
     solvencia=Depends(get_solvencia_service),
     repository=Depends(get_departamentos_portal_repository),
     areas_repository=Depends(get_areas_reserva_repository),
+    reservas_repository=Depends(get_creacion_reservas_repository),
 ):
     """Crea una reserva validando la solvencia financiera del departamento y la disponibilidad de horario."""
     autorizar_departamento(user, request.departamento_id, request.condominio_id, escritura=True)
@@ -208,19 +217,32 @@ async def crear_reserva(
                 }
                 for h in ocupados
             ]
-            reserva_dto, _ = ReservasService.procesar_reserva(
-                request=request,
-                area=area,
-                estado_financiero_depto="AL_DIA",
-                saldo_mora_depto=evaluacion.saldo_vencido,
-                reservas_existentes=existentes,
-            )
-            # Guardar en memoria
-            RESERVAS_REGISTRADAS[reserva_dto.id] = {
-                **reserva_dto.model_dump(),
-                "zona_horaria": area["zona_horaria"],
-                "usuario_id": user["sub"],
-            }
+            if isinstance(reservas_repository, ReservasRepository):
+                reserva_dto = await ReservasService.procesar_reserva_persistente(
+                    request=request,
+                    area=area,
+                    estado_financiero_depto="AL_DIA",
+                    saldo_mora_depto=evaluacion.saldo_vencido,
+                    repository=reservas_repository,
+                    usuario_id=uuid.UUID(user["sub"]),
+                    reservas_existentes=existentes,
+                )
+            else:
+                # Adaptador explícito de pruebas históricas, sin fallback ante
+                # fallos SQL del productor de CON-41.
+                reserva_dto, _ = ReservasService.procesar_reserva(
+                    request=request,
+                    area=area,
+                    estado_financiero_depto="AL_DIA",
+                    saldo_mora_depto=evaluacion.saldo_vencido,
+                    reservas_existentes=existentes,
+                )
+        # La copia de compatibilidad se actualiza únicamente tras el commit.
+        RESERVAS_REGISTRADAS[reserva_dto.id] = {
+            **reserva_dto.model_dump(),
+            "zona_horaria": area["zona_horaria"],
+            "usuario_id": user["sub"],
+        }
         return reserva_dto
 
     except DeudaMoraActivaException as exc:
@@ -254,6 +276,12 @@ async def crear_reserva(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error_code": exc.error_code, "mensaje": exc.mensaje},
         )
+    except SQLAlchemyError as exc:
+        raise APIError(
+            503,
+            "RESERVA_NO_DISPONIBLE",
+            "No se pudo confirmar la reserva. Intente nuevamente más tarde.",
+        ) from exc
 
 
 @router.post(

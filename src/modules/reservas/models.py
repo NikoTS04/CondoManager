@@ -1,4 +1,4 @@
-"""Modelos ORM de Áreas Comunes y Reservas (Brandon - PROC-04)."""
+"""Modelos ORM de Áreas Comunes y Reservas (Brandon - PROC-04 / CON-41 / CON-43)."""
 
 import uuid
 from datetime import date, datetime, time, timezone
@@ -65,6 +65,8 @@ class Reserva(Base):
             "estado IN ('SOLICITADA', 'CONFIRMADA', 'RECHAZADA', 'CANCELADA', 'COMPLETADA')",
             name="ck_reserva_estado",
         ),
+        Index("idx_reservas_area_fecha_estado", "area_id", "fecha_reserva", "estado"),
+        Index("idx_reservas_depto_estado", "departamento_id", "estado"),
     )
 
 

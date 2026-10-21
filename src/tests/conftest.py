@@ -14,7 +14,10 @@ from src.core.security import decode_access_token, get_current_user, security_sc
 from src.main import app
 from src.modules.reservas.areas.repository import get_areas_repository
 from src.modules.reservas.cancelaciones import get_cancelaciones_service
-from src.modules.reservas.router import get_areas_reserva_repository
+from src.modules.reservas.router import (
+    get_areas_reserva_repository,
+    get_creacion_reservas_repository,
+)
 from src.modules.usuarios.departamentos import get_departamentos_portal_repository
 from src.modules.usuarios.repository import get_usuarios_repository
 from src.tests.areas import AreasCatalogoFake
@@ -38,6 +41,7 @@ def autorizacion_aislada():
     areas = AreasCatalogoFake()
     app.dependency_overrides[get_areas_repository] = lambda: areas
     app.dependency_overrides[get_areas_reserva_repository] = lambda: areas
+    app.dependency_overrides[get_creacion_reservas_repository] = lambda: None
     cancelaciones = CancelacionesContrato()
     app.dependency_overrides[get_cancelaciones_service] = lambda: cancelaciones
     yield catalogo
@@ -45,6 +49,7 @@ def autorizacion_aislada():
     app.dependency_overrides.pop(get_departamentos_portal_repository, None)
     app.dependency_overrides.pop(get_areas_repository, None)
     app.dependency_overrides.pop(get_areas_reserva_repository, None)
+    app.dependency_overrides.pop(get_creacion_reservas_repository, None)
     app.dependency_overrides.pop(get_cancelaciones_service, None)
 
 
