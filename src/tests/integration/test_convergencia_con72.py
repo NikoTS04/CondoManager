@@ -324,7 +324,11 @@ async def test_reservas_y_comunicados_cumplen_los_esquemas_publicados(api_pagos)
         "tipo_evento": "NOTIF_COMUNICADO_GENERAL",
         "canal": "EMAIL",
         "destinatario": "residente102@villabonita3.pe",
-        "contexto": {"titulo": "Aviso manual", "mensaje": "Texto del aviso"},
+        "contexto": {
+            "titulo": "Aviso manual",
+            "mensaje": "Texto del aviso",
+            "remitente": "Junta Directiva",
+        },
     }
     validar("DespacharNotificacion", manual)
     log = respuesta(
