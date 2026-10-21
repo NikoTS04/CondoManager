@@ -7,17 +7,17 @@ Base acordada el 20/10/2026. Los contratos HTTP y las reglas asociadas están en
 | Evento | Productor | Consumidor y efecto | Esquema canónico | Estado del productor |
 |---|---|---|---|---|
 | `CuotasEmitidasEvent` | CON-11, cuotas | CON-32 genera avisos por cuota y destinatario desde el lote persistido. | [cuotas-emitidas.schema.json](schemas/cuotas-emitidas.schema.json) | Existente con outbox; conservar compatibilidad. |
-| `PagoReportadoEvent` | Anderson, CON-22/70; Brandon integra CON-23 | CON-34 confirma recepción sin aplicar saldos; también por subsanación real de un observado. | [pago-reportado.v1.schema.json](schemas/pago-reportado.v1.schema.json) | Integración pendiente. |
-| `PagoConciliadoEvent` | Anderson, resultado aprobado de CON-70 | CON-34 comunica el resultado; los demás consumidores refrescan vistas sin aplicar otra vez el pago. | [pago-conciliado.v1.schema.json](schemas/pago-conciliado.v1.schema.json) | Integración pendiente. |
+| `PagoReportadoEvent` | Anderson, CON-22/70; Brandon integra CON-23 | CON-34 confirma recepción sin aplicar saldos; también por subsanación real de un observado. | [pago-reportado.v1.schema.json](schemas/pago-reportado.v1.schema.json) | Adaptación a CON-72 pendiente; productor actual descrito abajo. |
+| `PagoConciliadoEvent` | Anderson, resultado aprobado de CON-70 | CON-34 comunica el resultado; los demás consumidores refrescan vistas sin aplicar otra vez el pago. | [pago-conciliado.v1.schema.json](schemas/pago-conciliado.v1.schema.json) | Adaptación a CON-72 pendiente; productor actual descrito abajo. |
 | `PagoRevisadoEvent` | Anderson, revisión observada/rechazada de CON-70 | CON-34 comunica motivo e instrucciones. No modifica saldos. | [pago-revisado.v1.schema.json](schemas/pago-revisado.v1.schema.json) | Integración pendiente. |
 | `ReservaConfirmadaEvent` | Brandon, CON-41 | CON-36 comunica área, fecha, horario, costo y moneda; normas opcionales si existe una fuente acordada. | [reserva-confirmada.v1.schema.json](schemas/reserva-confirmada.v1.schema.json) | Integración persistente pendiente. |
 | `ReservaCanceladaEvent` | Gerardo, CON-46 | CON-36 comunica cancelación y estado real del ajuste económico. | [reserva-cancelada.v1.schema.json](schemas/reserva-cancelada.v1.schema.json) | Integración persistente pendiente. |
 
 Alejandro implementa consumo, plantillas y reintentos. Nicolás implementa persistencia de notificaciones y eventos pendientes en CON-73 y coordina la integración. No hay evento de invitación requerido para cerrar CON-04: la habilitación es administrativa y manual.
 
-## Envelope propio, versión 1
+## Envelope objetivo propio, versión 1
 
-Los mensajes nuevos utilizan [event-envelope.v1.schema.json](schemas/event-envelope.v1.schema.json). Es un formato propio de CondoManager; no se declara conformidad con CloudEvents.
+El contrato objetivo para mensajes nuevos utiliza [event-envelope.v1.schema.json](schemas/event-envelope.v1.schema.json). Es un formato propio de CondoManager; no se declara conformidad con CloudEvents.
 
 ```json
 {
@@ -59,8 +59,37 @@ Los mensajes nuevos utilizan [event-envelope.v1.schema.json](schemas/event-envel
 
 `CuotasEmitidasEvent` ya está implementado y conserva exactamente su esquema y relay actuales: `event_id`, `event_type`, `producer`, `occurred_at` y `data`. No se le agregan los campos del nuevo envelope. El consumidor reconoce este formato histórico sin `schema_version` como versión 1 únicamente para este evento; puede usar su `event_id` para la trazabilidad interna sin alterar el mensaje persistido.
 
-Los archivos sin sufijo `.v1` de [pago conciliado](schemas/pago-conciliado.schema.json), [reserva confirmada](schemas/reserva-confirmada.schema.json), [mora aplicada](schemas/mora-aplicada.schema.json) y [cuota emitida](schemas/cuota-emitida.schema.json) se conservan como contratos históricos. Los nuevos productores de pagos y reservas usan los esquemas `.v1` de la tabla.
+Los archivos sin sufijo `.v1` de [pago conciliado](schemas/pago-conciliado.schema.json), [reserva confirmada](schemas/reserva-confirmada.schema.json), [mora aplicada](schemas/mora-aplicada.schema.json) y [cuota emitida](schemas/cuota-emitida.schema.json) se conservan como contratos históricos. Los nuevos productores de pagos y reservas tienen como objetivo los esquemas `.v1` de la tabla. CON-70 conserva por ahora el formato descrito abajo; su adaptación a CON-72 sigue pendiente.
 
 Si hay un consumidor de mensajes planos, su adaptación se entrega junto con el productor: preservar `event_id`, resolver contexto desde registros autorizados y transformar campos explícitamente. `monto_conciliado` y `saldo_restante_departamento` históricos requieren comprobar su significado frente al resultado financiero real. No inventar UUID o importes ausentes.
 
 `CuotaEmitidaEvent` histórico describe un agregado y no se usa para volver a notificar un lote de `CuotasEmitidasEvent`. `MoraAplicadaEvent` queda fuera de los nuevos productores de este sprint; conserva su versión histórica hasta una evolución explícita.
+
+
+## Integración de pagos de CON-70
+
+El productor real es `src.modules.pagos.persistencia.PagosPersistentesService`.
+El relay `python -m src.modules.pagos.worker` publica en el mismo Stream que CON-11 y un envelope histórico propio, con `version: 1` y `event_id` estable. No cambia el relay de cuotas.
+
+| Evento | Origen confirmado | Consumidor |
+|---|---|---|
+| PagoReportadoEvent | Comprobante nuevo EN_REVISION | CON-34 / notificaciones |
+| PagoConciliadoEvent | Aprobación e imputaciones confirmadas | CON-34 / notificaciones |
+| PagoObservadoEvent | Observación con motivo, sin imputaciones | CON-34 / notificaciones |
+| PagoRechazadoEvent | Rechazo con motivo, sin imputaciones | CON-34 / notificaciones |
+
+`data` incluye comprobante_id, departamento_id, condominio_id, estado, monto y
+motivo; en revisiones añade revision_id y resultado financiero persistido.
+Los importes son strings decimales. Los consumidores deduplican por event_id;
+confirmar publicación en SQL después de Redis permite reentrega, no pérdida.
+El envelope versionado se valida contra `schemas/pago-sprint-2.schema.json`.
+`PagoConciliadoEvent` informa un resultado ya confirmado: ningún consumidor debe volver a imputar pagos, modificar saldos ni conceder reservas por el booleano histórico. La solvencia se consulta desde deuda persistida por unidad.
+
+PagoConciliadoEvent también conserva los campos planos del contrato histórico
+(`monto_conciliado`, `saldo_restante_departamento`, `desbloqueo_reservas_habilitado`
+y UUID de comprobante/unidad), tanto en la raíz como en `data`, sin modificar el
+esquema histórico ni exigir una migración inmediata a los consumidores.
+
+### Transición al contrato CON-72
+
+La tabla inicial describe el contrato objetivo. El productor de CON-70 ya existe con outbox persistente, pero aún no emite `schema_version`, `correlation_id` ni `causation_id`: utiliza `version: 1` y los eventos `PagoObservadoEvent` y `PagoRechazadoEvent` en lugar de `PagoRevisadoEvent`. No validar estos mensajes directamente contra los esquemas `.v1` ni tratarlos como si ya cumplieran CON-72. La adaptación debe preservar el `event_id`, los importes y los resultados financieros confirmados, sin reaplicar saldos. Los campos planos de compatibilidad siguen vigentes hasta migrar sus consumidores.

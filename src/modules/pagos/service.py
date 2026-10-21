@@ -45,8 +45,8 @@ class PagosService:
         monto: Decimal,
     ) -> str:
         """Calcula el hash SHA-256 normalizado según specs/01-architecture/idempotency-and-deduplication.md."""
-        banco_norm = banco.strip().upper()
-        num_op_clean = numero_operacion.strip().lstrip("0") or "0"
+        banco_norm = "".join(banco.split()).upper()
+        num_op_clean = "".join(numero_operacion.split()).lstrip("0") or "0"
         fecha_str = fecha_operacion.isoformat()
         monto_str = f"{redondear_moneda(monto):.2f}"
 
@@ -198,7 +198,9 @@ class PagosService:
         """Aplica la decisión de la junta e imputa fondos en riguroso orden de prelación."""
         if decision == "RECHAZADO":
             if not motivo_rechazo or not motivo_rechazo.strip():
-                raise ValueError("El rechazo de un comprobante requiere especificar un motivo obligatorio.")
+                raise ValueError(
+                    "El rechazo de un comprobante requiere especificar un motivo obligatorio."
+                )
             comprobante["estado"] = "RECHAZADO"
             comprobante["motivo_rechazo"] = motivo_rechazo
 
@@ -206,9 +208,13 @@ class PagosService:
                 comprobante_id=comprobante["id"],
                 estado_final="RECHAZADO",
                 monto_imputado=Decimal("0.00"),
-                nuevo_saldo_departamento=sum(c["monto_total_exigible"] - c["monto_pagado"] for c in cuotas_pendientes),
+                nuevo_saldo_departamento=sum(
+                    c["monto_total_exigible"] - c["monto_pagado"] for c in cuotas_pendientes
+                ),
                 saldo_a_favor_generado=Decimal("0.00"),
-                departamento_habilitado_reservas=(departamento.get("estado_financiero") == "AL_DIA"),
+                departamento_habilitado_reservas=(
+                    departamento.get("estado_financiero") == "AL_DIA"
+                ),
             )
 
         # Decisión == APROBADO: Imputación contable
@@ -245,7 +251,9 @@ class PagosService:
         # Si aún queda dinero tras pagar todas las cuotas pendientes -> Saldo a Favor
         saldo_a_favor_nuevo = Decimal("0.00")
         if monto_disponible > Decimal("0.00"):
-            departamento["saldo_a_favor"] = redondear_moneda(departamento.get("saldo_a_favor", Decimal("0.00")) + monto_disponible)
+            departamento["saldo_a_favor"] = redondear_moneda(
+                departamento.get("saldo_a_favor", Decimal("0.00")) + monto_disponible
+            )
             saldo_a_favor_nuevo = monto_disponible
 
         # Evaluar si el departamento queda al día
@@ -260,7 +268,7 @@ class PagosService:
             departamento["estado_financiero"] = "AL_DIA"
             habilitado_reservas = True
         else:
-            habilitado_reservas = (departamento.get("estado_financiero") == "AL_DIA")
+            habilitado_reservas = departamento.get("estado_financiero") == "AL_DIA"
 
         # Registro inmutable de auditoría (7 campos obligatorios)
         AuditoriaPayload(

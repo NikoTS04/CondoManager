@@ -1,4 +1,5 @@
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
+import { VoucherDownloadButton } from "@/components/domain/VoucherDownloadButton";
 import { ComprobanteStatusChip } from "@/components/domain/ComprobanteStatusChip";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -10,7 +11,7 @@ interface ConciliacionSectionProps {
   loading: boolean;
   comprobantes: ComprobantePago[];
   isAuditor: boolean;
-  onDecide: (id: string, decision: "APROBADO" | "RECHAZADO") => void;
+  onDecide: (id: string, decision: "APROBADO" | "RECHAZADO" | "OBSERVADO") => void;
 }
 
 export function ConciliacionSection({
@@ -69,7 +70,8 @@ export function ConciliacionSection({
                     <ComprobanteStatusChip status={comprobante.estado} />
                   </td>
                   <td className="p-3 text-right">
-                    {!isAuditor && comprobante.estado === "EN_REVISION" && (
+                    <VoucherDownloadButton comprobante={comprobante} />
+                    {!isAuditor && (comprobante.estado === "EN_REVISION" || comprobante.estado === "OBSERVADO") && (
                       <div className="flex justify-end gap-2">
                         <Button
                           size="sm"
@@ -83,6 +85,9 @@ export function ConciliacionSection({
                           onClick={() => onDecide(comprobante.id, "RECHAZADO")}
                         >
                           Rechazar
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => onDecide(comprobante.id, "OBSERVADO")}>
+                          Observar
                         </Button>
                       </div>
                     )}
