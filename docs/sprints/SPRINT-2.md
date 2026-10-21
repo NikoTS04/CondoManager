@@ -279,6 +279,12 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-39 — Administrar el catálogo de áreas comunes
 
+Contrato: [catálogo persistente](../../specs/02-domains/04-reservas/catalogo-areas.md).
+Configuración contextual de áreas, horarios diarios en Lima, duración, aforo y costo
+Decimal; conservación de estado/historial y validación del edificio exclusivo.
+El catálogo SQL se implementa aquí como base compartida para CON-73.
+Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
+
 **Historia:** Como administrador, quiero configurar las áreas comunes, para publicar sus condiciones de uso y reserva.
 
 **Debe incluir:**

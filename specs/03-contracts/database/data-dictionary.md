@@ -229,6 +229,31 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 ---
 
+## Catálogo `areas_comunes` — CON-39
+
+Contrato: [catálogo persistente](../../02-domains/04-reservas/catalogo-areas.md).
+La migración `20261020_0010` crea/adopta la tabla y valida sus atributos base.
+
+| Columna | Tipo | Nulo | Default | Regla |
+|---|---|---|---|---|
+| `id` | UUID | NO | gen_random_uuid() | PK estable |
+| `condominio_id` | UUID | NO | — | FK CASCADE a condominios |
+| `edificio_id` | UUID | SÍ | NULL | FK SET NULL a edificios; mismo condominio |
+| `nombre` | VARCHAR(100) | NO | — | Nombre del área |
+| `descripcion` | TEXT | SÍ | NULL | Condiciones descriptivas |
+| `aforo_maximo` | INTEGER | NO | — | >0 |
+| `costo_reserva` | NUMERIC(12,2) | NO | 0.00 | >=0; por turno, moneda del condominio |
+| `tiempo_maximo_horas` | INTEGER | NO | 4 | >=1; nuevas configuraciones 1–24 |
+| `esta_activa` | BOOLEAN | NO | true | Desactivación lógica |
+| `hora_apertura` | TIME | NO | 00:00 | Hora local de Lima; precisión de minuto |
+| `hora_cierre` | TIME | NO | 23:59 | Posterior a apertura; mismo día |
+
+Check `ck_area_horario_catalogo`: cierre > apertura y segundos cero en ambas horas.
+Índice contextual `idx_areas_catalogo_contexto` sobre condominio, estado y nombre.
+No se eliminan reservas ni se alteran costos históricos al editar el catálogo.
+Auditoría de altas/cambios/estado atómica; no-op sin nueva entrada. El downgrade
+retira horas e índice, conservando tablas adoptadas o con datos/referencias.
+
 ## 6. Tabla: `reservas`
 Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 

@@ -68,6 +68,20 @@ Un cambio real invalida JWT anteriores y registra el departamento en auditoría.
 `GET /cuotas/departamentos` y lectura de unidades en pagos/reservas usan SQL real;
 el portal añade edificio para distinguir números de unidad repetidos.
 
+### Catálogo de áreas comunes (CON-39 / PROC-04)
+
+Contrato: [catálogo de áreas](../02-domains/04-reservas/catalogo-areas.md).
+`GET|POST /condominios/{cid}/areas`, `GET|PUT /condominios/{cid}/areas/{aid}` y
+`PATCH /condominios/{cid}/areas/{aid}/estado`. Administración contextual; Auditor
+solo lee. Configuración completa: nombre, descripción, edificio opcional, aforo,
+costo decimal como cadena, apertura/cierre `HH:MM` y duración máxima entera.
+POST devuelve 201; consultas, PUT y estado 200. No-op sin nueva auditoría.
+El portal `GET /areas` usa SQL activo y edificio autorizado, con moneda del
+condominio y `zona_horaria=America/Lima`. Nuevas reservas leen esas condiciones:
+409 AREA_INACTIVA, 400 HORARIO_INVALIDO o 403 por edificio/contexto no autorizado.
+Cambios y auditoría son atómicos; no hay borrado físico. Validaciones de catálogo:
+422 DATOS_AREA_INVALIDOS. Pertenencia desconocida: 404, sin filtrar datos ajenos.
+
 ### Distribución de cuotas (CON-10)
 
 Base: `/api/v1/condominios/{condominio_id}/distribucion`. Requiere Bearer Token.

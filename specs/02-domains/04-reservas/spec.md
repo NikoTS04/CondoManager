@@ -1,5 +1,8 @@
 # Dominio 04: Reservas de Áreas Comunes y Control de Solvencia (Brandon)
 
+CON-39 / RES-01: [catálogo persistente](catalogo-areas.md), autoridad contextual,
+condiciones de uso, dinero Decimal y coordinación de persistencia con CON-73.
+
 ## 1. Ficha del Dominio
 - **Identificador:** DOM-04 / PROC-04
 - **Responsable:** **Brandon**
