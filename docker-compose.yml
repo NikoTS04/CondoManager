@@ -59,8 +59,12 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["python", "-m", "src.modules.cuotas.worker"]
+    # Sin HTTP: sano mientras el proceso del worker sea el PID 1 del contenedor.
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-c", "import sys; sys.exit(b'src.modules.cuotas.worker' not in open('/proc/1/cmdline', 'rb').read())"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     environment:
       - DATABASE_URL=${DATABASE_URL}
@@ -78,8 +82,12 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["python", "-m", "src.modules.pagos.worker"]
+    # Sin HTTP: sano mientras el proceso del worker sea el PID 1 del contenedor.
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-c", "import sys; sys.exit(b'src.modules.pagos.worker' not in open('/proc/1/cmdline', 'rb').read())"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     environment:
       - DATABASE_URL=${DATABASE_URL}
@@ -98,8 +106,12 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["python", "-m", "src.modules.notificaciones.worker"]
+    # Sin HTTP: sano mientras el proceso del worker sea el PID 1 del contenedor.
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-c", "import sys; sys.exit(b'src.modules.notificaciones.worker' not in open('/proc/1/cmdline', 'rb').read())"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     environment:
       - DATABASE_URL=${DATABASE_URL}

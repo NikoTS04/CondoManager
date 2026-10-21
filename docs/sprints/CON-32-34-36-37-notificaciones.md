@@ -97,6 +97,7 @@ problemas de ramas integradas que no pertenecen a notificaciones:
 | `54c8f81` fix(ci): alinear la reconciliación de esquema legacy con la cabeza 20261021_0015 | Llegó con develop (PR #26) sellando en `20261021_0013` y retirando la unicidad `uq_evento_reserva_tipo`, que el modelo vigente exige; su prueba no quitaba `notificaciones_alertas` y fallaba por la FK. Ahora aplica también la migración de alertas, conserva la unicidad y sella en la cabeza actual. |
 | `63ef543` test(CON-72): completar el contexto del despacho manual con remitente | Efecto de este cambio: `NOTIF_COMUNICADO_GENERAL` exige `remitente`, que antes inventaba la plantilla; la prueba de convergencia recibía `422 CONTEXTO_PLANTILLA_INCOMPLETO`. |
 | `a013aff` fix(CON-36): completar el contexto de la notificación del recorrido piloto | Efecto de este cambio: `scripts/verify_pilot_e2e.py` (Docker / Smoke) despachaba `NOTIF_RESERVA_CONFIRMADA` sin costo, moneda ni normas. Usa la tarifa de la reserva aprobada del escenario y el texto de normas del consumidor. |
+| fix(ci): healthcheck de vida para los workers | En GitHub Actions, `docker compose up --wait` rechazaba los workers con `healthcheck: disable: true` ("has no healthcheck configured") y el smoke fallaba. Los tres workers comprueban ahora que su proceso sigue siendo el PID 1 del contenedor. |
 
 ## Pruebas automatizadas
 
