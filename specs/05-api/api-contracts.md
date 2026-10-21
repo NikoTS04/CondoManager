@@ -1,20 +1,23 @@
 # Contratos de API y Especificación OpenAPI (API Contracts)
 
+Base de implementación del Sprint 2: [CON-72 — contratos por historia](sprint-2-contratos.md). La guía reúne los acuerdos y enlaza OpenAPI y eventos. El OpenAPI describe el contrato objetivo y distingue operaciones pendientes/parciales; su publicación no implica que los endpoints estén implementados.
+
 ## 1. Filosofía de Contratos en SDD
 
 En el Desarrollo Guiado por Especificaciones (SDD), los contratos de API sirven como el **acuerdo formal desacoplado** entre el Frontend (Next.js/TypeScript) y el Backend (FastAPI/Python), así como entre los diferentes módulos desarrollados por los integrantes del equipo (Anderson, Tarqui, Alejandro, Brandon).
 
-Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con las siguientes convenciones:
+Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y respuesta binaria para su descarga. Convenciones:
 - **Prefijo base:** `/api/v1`
-- **Formatos de fecha:** ISO-8601 en UTC (`YYYY-MM-DDTHH:MM:SSZ`)
-- **Formatos monetarios:** Cadenas de texto o números decimales con 2 dígitos (`"150.00"` / `150.00`) validados estrictamente por Pydantic.
+- **Fechas y horas:** calendario `America/Lima`, fechas `YYYY-MM-DD`, configuración del catálogo `HH:MM` y nuevas reservas `HH:MM:00`; instantes de auditoría/eventos en UTC. Intervalos `[inicio, fin)`; históricos sin marca local conservan interpretación UTC.
+- **Importes:** respuestas/eventos con dos decimales (`"150.00"`), dentro de `NUMERIC(12,2)`; cálculos con `Decimal`. La configuración CON-39 acepta cadenas con hasta dos decimales y normaliza su salida. Los nuevos contratos rechazan números JSON, exponentes y precisión adicional.
+- **Errores:** objeto en raíz; `detalles` opcional es un objeto, con validaciones en `detalles.errores`. No incluir valores sensibles.
 - **Manejo de errores estándar:**
   ```json
   {
     "error_code": "DEUDA_MORA_ACTIVA",
     "mensaje": "Su departamento mantiene cuotas vencidas pendientes. Regularice su situación antes de reservar.",
     "detalles": {
-      "departamento_id": "dpto-501",
+      "departamento_id": "6c78c3b5-1efb-4d0b-a5f8-78fc17364083",
       "saldo_vencido": "170.00"
     }
   }
@@ -304,78 +307,40 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
     `422` padrón/configuración inválidos o condominio inactivo.
   - Transacción única con CON-10 y CON-13; evento durable en outbox.
 
-### 2.4 Módulo de Pagos y Moras (Tarqui)
-- **`POST /api/v1/pagos/reportar`**
-  - *Descripción:* El residente carga un comprobante de pago bancario (Yape/CCI).
-  - *Request Body (Multipart/Form-Data):*
-    - `departamento_id`: UUID
-    - `banco_origen`: `"BCP"` | `"INTERBANK"` | `"BBVA"` | `"YAPE"` | `"PLIN"`
-    - `numero_operacion`: `"00984123"`
-    - `fecha_operacion`: `"2026-10-15"`
-    - `monto`: `"170.00"`
-    - `archivo_voucher`: File (PNG / JPG / PDF)
-  - *Response (202 Accepted):*
-    ```json
-    {
-      "comprobante_id": "7b8a1c9e-1234-4567-89ab-cdef01234567",
-      "estado": "EN_REVISION",
-      "mensaje": "Comprobante recibido. En proceso de conciliación por la Junta Directiva."
-    }
-    ```
+### 2.4 Pagos — Anderson / CON-22 y CON-70; Brandon / CON-23
 
-- **`POST /api/v1/pagos/{id}/conciliar`**
-  - *Descripción:* La Junta aprueba o rechaza el comprobante.
-  - *Request Body:*
-    ```json
-    {
-      "decision": "APROBADO",
-      "motivo_rechazo": null,
-      "notas_internas": "Validado en extracto de cuenta BCP"
-    }
-    ```
-  - *Response (200 OK):* Retorna la liquidación e imputación a cuotas y el nuevo saldo del departamento.
+Contrato completo, estados y errores: [pagos del Sprint 2](sprint-2-contratos.md#5-pagos--anderson-y-brandon-persistencia-con-70). Esquemas y campos obligatorios: [sprint-2.schemas.yaml](../03-contracts/openapi/sprint-2.schemas.yaml).
 
-### 2.5 Módulo de Reservas (Brandon)
-- **`POST /api/v1/reservas`**
-  - *Descripción:* El residente solicita el uso de un área común.
-  - *Request Body:*
-    ```json
-    {
-      "area_id": "parrilla-01",
-      "departamento_id": "dpto-302",
-      "fecha": "2026-10-25",
-      "hora_inicio": "19:00",
-      "hora_fin": "22:00"
-    }
-    ```
-  - *Response (201 Created) - Residente Solvente:*
-    ```json
-    {
-      "reserva_id": "res-9988-aabb",
-      "estado": "CONFIRMADA",
-      "area": "Zona de Parrilla 1",
-      "fecha": "2026-10-25",
-      "horario": "19:00 - 22:00"
-    }
-    ```
-  - *Response (403 Forbidden) - Residente con Deuda en Mora:*
-    ```json
-    {
-      "error_code": "DEUDA_MORA_ACTIVA",
-      "mensaje": "No es posible reservar: Su departamento mantiene cuotas vencidas pendientes."
-    }
-    ```
-  - *Response (409 Conflict) - Horario Ocupado:*
-    ```json
-    {
-      "error_code": "HORARIO_NO_DISPONIBLE",
-      "mensaje": "El área común ya se encuentra reservada en el horario solicitado."
-    }
-    ```
+| Operación | Entrada / resultado |
+|---|---|
+| `POST /pagos/reportar` | Multipart: UUID de departamento, `banco`, `numero_operacion`, `fecha_operacion`, `monto`, `archivo_voucher`. PNG/JPEG/PDF hasta 5 MiB. `202` nuevo o `200` reintento propio en revisión, con UUID, estado, código, mensaje y hash. |
+| `GET /pagos/comprobantes` | Registros autorizados con estado `EN_REVISION`, `APROBADO`, `OBSERVADO` o `RECHAZADO`; descarga privada mediante ruta generada por servidor. |
+| `GET /pagos/{comprobante_id}/voucher` | Archivo binario con autorización de recurso y `Cache-Control: no-store`. |
+| `PUT /pagos/{comprobante_id}/voucher` | Multipart de archivo para subsanar un observado; preserva metadatos/hash, versiona el archivo y vuelve a revisión; `202`. |
+| `POST /pagos/{comprobante_id}/conciliar` | Administración decide aprobación, observación o rechazo; motivo para los dos últimos; `200` con resultado financiero real persistido. |
 
-### 2.6 Módulo de Notificaciones (Alejandro)
-- **`POST /api/v1/notificaciones/despachar`**
-  - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
+No se acepta `url_voucher` del cliente como prueba de carga. La recepción no cancela deuda. Una aprobación previa o reutilización en otra unidad responde `409`; las respuestas nunca revelan datos de una unidad ajena. Normalización, unicidad y subsanación se definen en la guía del Sprint 2 enlazada arriba.
+
+### 2.5 Catálogo, disponibilidad y reservas
+
+Contrato completo: [reservas del Sprint 2](sprint-2-contratos.md#4-catálogo-disponibilidad-y-reservas). Catálogo CON-39 de Jerson; disponibilidad CON-40 y cancelación CON-46 de Gerardo; creación y concurrencia CON-41/43 de Brandon; deuda CON-42 de Anderson; persistencia CON-73 de Nicolás.
+
+| Operación | Contrato |
+|---|---|
+| `GET /areas` | Catálogo SQL activo del portal, filtrado por contexto y edificio, con apertura/cierre diarios, duración máxima y moneda. |
+| `GET|POST /condominios/{cid}/areas`, `GET|PUT /condominios/{cid}/areas/{aid}`, `PATCH .../{aid}/estado` | Gestión CON-39 ya integrada; consulta administrativa incluye inactivas, Auditor solo lee y las mutaciones conservan historial. |
+| `GET /areas/{area_id}/disponibilidad?fecha=YYYY-MM-DD` | Arreglo de intervalos ocupados sin datos personales; se cruza con el horario del catálogo. |
+| `GET /reservas` | Reservas autorizadas, no calendario general de otras unidades. |
+| `POST /reservas` | UUID de condominio, área y departamento; `fecha_reserva`, `hora_inicio`, `hora_fin`. `201` tras commit, `403 DEUDA_MORA_ACTIVA`, `409 HORARIO_NO_DISPONIBLE`. |
+| `POST /reservas/{reserva_id}/cancelar` | Motivo opcional, permiso desde sesión; `200` idempotente con fecha original y estado real del ajuste económico. |
+
+La respuesta de creación es `Reserva`: `id`, `condominio_id`, `area_id`, `area_nombre` opcional, `departamento_id`, fecha, horas, `zona_horaria`, `costo_reserva`, `moneda`, `estado` y `creado_en`. Nuevas reservas usan horas `HH:MM:00` en America/Lima; las históricas sin marca local conservan interpretación UTC. Intervalos `[inicio, fin)`; cancelación voluntaria con `>= 24h` tras convertir el inicio según su zona. `es_admin` del cliente no concede privilegios. Se conservan `400 HORARIO_INVALIDO` y `409 AREA_INACTIVA` de CON-39.
+
+### 2.6 Notificaciones — Alejandro
+
+Contrato y reglas de entrega/reintento: [comunicaciones del Sprint 2](sprint-2-contratos.md#6-notificaciones--alejandro-persistencia-con-73). Los eventos confirmados producen avisos automáticos; las rutas de despacho/reenviar/comunicado son administrativas.
+
+`GET /notificaciones/logs` filtra contexto y destinatario autorizado; `POST /notificaciones/despachar` y `/comunicado-masivo` confirman registros en cola con `202`; `/reenviar/{log_id}` devuelve `200` sin duplicar avisos entregados o aceptados por proveedor. `EN_COLA`, `ENVIADO`, `ENTREGADO`, `REINTENTANDO` y `FALLIDO_PERMANENTE` distinguen persistencia, aceptación y confirmación. El log identifica transporte simulado o real y conserva ciclos/intentos.
 
 ### 2.7 Módulo de Autenticación y RBAC (PROC-05)
 
@@ -386,7 +351,7 @@ endpoints de autenticación usan el contrato v2 descrito en
 es_activo}`. No existe una relación global de usuario; los administrativos sin
 tenencia devuelven `[]`. JWT con `session_version: 2`; tokens anteriores o roles
 antiguos/desconocidos reciben `401 SESION_DESACTUALIZADA` y requieren login.
-`GET /auth/demo-users` devuelve la lista de perfiles públicos con la misma forma.
+El JWT incorpora además `auth_revision`, validada contra PostgreSQL. `GET /auth/demo-users` devuelve perfiles persistidos solo con `DEMO_MODE=true`; en otro caso responde `404`. La creación, estado, selección de contexto y revocación se rigen por [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
 
 Pagos, reservas y notificaciones requieren Bearer. Las listas se filtran por contexto
 y vínculo activo; UUID de unidad ajena o condominio distinto responde `403`.
@@ -406,7 +371,7 @@ y vínculo activo; UUID de unidad ajena o condominio distinto responde `403`.
     {
       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
       "token_type": "bearer",
-      "expires_in": 3600,
+      "expires_in": 86400,
       "usuario": {
         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "email": "admin@villabonita3.pe",

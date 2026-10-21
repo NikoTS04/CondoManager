@@ -1,8 +1,10 @@
 openapi: 3.1.0
 info:
   title: CondoManager API
-  description: API formal para el Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD).
-  version: 1.7.0
+  description: Contrato objetivo del Sprint 2 acordado en CON-72. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
+  version: 2.0.0
+x-contract-baseline: CON-72-2026-10-20
+x-contract-guide: ../../05-api/sprint-2-contratos.md
 security: [{ bearerAuth: [] }]
 servers:
   - url: http://localhost:8000/api/v1
@@ -279,19 +281,7 @@ paths:
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
   /pagos/comprobantes:
-    get:
-      operationId: listarComprobantes
-      summary: Comprobantes de unidades autorizadas en el contexto
-      parameters:
-        - $ref: '#/components/parameters/ContextoConsulta'
-      responses:
-        '200':
-          description: Comprobantes autorizados; nunca datos de otra unidad para residentes
-          content:
-            application/json:
-              schema: { type: array, items: { $ref: '#/components/schemas/ComprobantePagoDTO' } }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1comprobantes'
   /condominios/{condominio_id}/areas:
     parameters:
       - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -401,47 +391,9 @@ paths:
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
   /areas/{area_id}/disponibilidad:
-    get:
-      operationId: disponibilidadArea
-      summary: Horarios ocupados sin información privada de otras unidades
-      parameters:
-        - { name: area_id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: fecha, in: query, required: true, schema: { type: string, format: date } }
-      responses:
-        '200':
-          description: Intervalos ocupados
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  required: [hora_inicio, hora_fin]
-                  properties:
-                    hora_inicio: { type: string }
-                    hora_fin: { type: string }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
+    $ref: './sprint-2.paths.yaml#/paths/~1areas~1%7Barea_id%7D~1disponibilidad'
   /reservas/{reserva_id}/cancelar:
-    post:
-      operationId: cancelarReserva
-      summary: Cancelar una reserva autorizada; permiso administrativo derivado del JWT
-      parameters:
-        - { name: reserva_id, in: path, required: true, schema: { type: string, format: uuid } }
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                motivo: { type: string }
-                es_admin: { type: boolean, description: Compatibilidad; el servidor no confía en este valor }
-      responses:
-        '200': { description: Reserva cancelada }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
-        '422': { description: Cancelación fuera del plazo o estado no permitido }
+    $ref: './sprint-2.paths.yaml#/paths/~1reservas~1%7Breserva_id%7D~1cancelar'
   /moras/evaluar:
     post:
       operationId: evaluarMoras
@@ -461,78 +413,13 @@ paths:
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
   /notificaciones/logs:
-    get:
-      operationId: listarNotificaciones
-      summary: Bitácora del contexto para administración y auditoría
-      parameters:
-        - $ref: '#/components/parameters/ContextoConsulta'
-        - { name: departamento_id, in: query, schema: { type: string, format: uuid } }
-        - { name: estado, in: query, schema: { type: string, enum: [EN_COLA, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE] } }
-        - { name: canal, in: query, schema: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] } }
-      responses:
-        '200': { description: Notificaciones exclusivamente del contexto autorizado }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1logs'
   /notificaciones/despachar:
-    post:
-      operationId: despacharNotificacion
-      summary: Despacho manual exclusivo de administración del contexto
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [condominio_id, departamento_id, tipo_evento, destinatario, contexto]
-              properties:
-                condominio_id: { type: string, format: uuid }
-                departamento_id: { type: string, format: uuid }
-                tipo_evento: { type: string }
-                destinatario: { type: string }
-                canal: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] }
-                contexto: { type: object }
-      responses:
-        '201': { description: Notificación despachada }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1despachar'
   /notificaciones/reenviar/{log_id}:
-    post:
-      operationId: reenviarNotificacion
-      summary: Reenvío manual exclusivo de administración del recurso
-      parameters:
-        - { name: log_id, in: path, required: true, schema: { type: string, format: uuid } }
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                nuevo_destinatario: { type: [string, 'null'] }
-      responses:
-        '200': { description: Notificación reenviada }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1reenviar~1%7Blog_id%7D'
   /notificaciones/comunicado-masivo:
-    post:
-      operationId: enviarComunicadoMasivo
-      summary: Comunicado a unidades activas del contexto autorizado
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [condominio_id, titulo, mensaje]
-              properties:
-                condominio_id: { type: string, format: uuid }
-                titulo: { type: string, minLength: 5, maxLength: 150 }
-                mensaje: { type: string, minLength: 10 }
-                canal: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] }
-                remitente: { type: string }
-      responses:
-        '202': { description: Comunicado generado en el catálogo piloto }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1comunicado-masivo'
   /condominios/{condominio_id}/edificios:
     parameters:
       - $ref: '#/components/parameters/ContextoEstructura'
@@ -1011,108 +898,13 @@ paths:
           $ref: '#/components/responses/Error422'
 
   /pagos/reportar:
-    post:
-      summary: Reporte de comprobante de pago bancario por residente
-      operationId: reportarPago
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [departamento_id, banco, numero_operacion, fecha_operacion, monto, url_voucher]
-              properties:
-                departamento_id: { type: string, format: uuid }
-                banco: { type: string, enum: [YAPE, PLIN, BCP, INTERBANK, BBVA, SCOTIABANK] }
-                numero_operacion: { type: string, minLength: 4, maxLength: 30 }
-                fecha_operacion: { type: string, format: date }
-                monto: { type: string, pattern: '^[0-9]+(\\.[0-9]{2})?$' }
-                url_voucher: { type: string }
-      responses:
-        '202':
-          description: Comprobante recibido y encolado para revisión
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ComprobanteRecibidoResponse'
-        '409':
-          description: Comprobante ya registrado o conciliado previamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /pagos/{id}/conciliar:
-    post:
-      summary: Aprobación o rechazo de comprobante por la Junta Directiva
-      operationId: conciliarPago
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConciliarPagoRequest'
-      responses:
-        '200':
-          description: Conciliación procesada exitosamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConciliacionResultResponse'
-
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1reportar'
+  /pagos/{comprobante_id}/voucher:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1voucher'
+  /pagos/{comprobante_id}/conciliar:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1conciliar'
   /reservas:
-    get:
-      summary: Consultar reservas de unidades autorizadas
-      operationId: listarReservas
-      parameters:
-        - $ref: '#/components/parameters/ContextoConsulta'
-        - name: area_id
-          in: query
-          required: false
-          schema: { type: string, format: uuid }
-        - name: fecha
-          in: query
-          required: false
-          schema: { type: string, format: date }
-      responses:
-        '200':
-          description: Lista de reservas existentes para el área y fecha
-          content:
-            application/json:
-              schema: { type: array, items: { $ref: '#/components/schemas/ReservaConfirmadaResponse' } }
-    post:
-      summary: Solicitud de reserva de área común (con validación de solvencia)
-      operationId: crearReserva
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CrearReservaRequest'
-      responses:
-        '201':
-          description: Reserva confirmada exitosamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReservaConfirmadaResponse'
-        '403':
-          description: Denegado por mora o por contexto o edificio o unidad no autorizados
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: Horario ocupado o área inactiva
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+    $ref: './sprint-2.paths.yaml#/paths/~1reservas'
 
 components:
   parameters:
@@ -1288,19 +1080,7 @@ components:
         edificio_id: { type: string, format: uuid }
         edificio_nombre: { type: string }
     ComprobantePagoDTO:
-      type: object
-      required: [id, departamento_id, banco, numero_operacion, fecha_operacion, monto, estado, idempotency_hash, url_voucher]
-      properties:
-        id: { type: string, format: uuid }
-        departamento_id: { type: string, format: uuid }
-        banco: { type: string }
-        numero_operacion: { type: string }
-        fecha_operacion: { type: string, format: date }
-        monto: { type: string }
-        estado: { type: string, enum: [EN_REVISION, CONCILIADO, RECHAZADO] }
-        idempotency_hash: { type: string }
-        url_voucher: { type: string }
-        motivo_rechazo: { type: [string, 'null'] }
+      $ref: './sprint-2.schemas.yaml#/schemas/Comprobante'
     CrearEdificioRequest:
       type: object
       additionalProperties: false
@@ -1532,63 +1312,22 @@ components:
         fecha_vencimiento: { type: string, format: date }
 
     ComprobanteRecibidoResponse:
-      type: object
-      properties:
-        comprobante_id: { type: string, format: uuid }
-        estado: { type: string, example: "EN_REVISION" }
-        mensaje: { type: string }
+      $ref: './sprint-2.schemas.yaml#/schemas/ComprobanteRecibido'
 
     ConciliarPagoRequest:
-      type: object
-      required: [decision]
-      properties:
-        decision: { type: string, enum: [APROBADO, RECHAZADO, OBSERVADO] }
-        motivo_rechazo: { type: string, nullable: true }
-        notas_internas: { type: string, nullable: true }
+      $ref: './sprint-2.schemas.yaml#/schemas/ConciliarPago'
 
     ConciliacionResultResponse:
-      type: object
-      properties:
-        comprobante_id: { type: string, format: uuid }
-        estado_final: { type: string, example: "APROBADO" }
-        monto_imputado: { type: string }
-        nuevo_saldo_departamento: { type: string }
+      $ref: './sprint-2.schemas.yaml#/schemas/ResultadoRevision'
 
     CrearReservaRequest:
-      type: object
-      required: [condominio_id, area_id, departamento_id, fecha_reserva, hora_inicio, hora_fin]
-      properties:
-        condominio_id: { type: string, format: uuid }
-        area_id: { type: string, format: uuid }
-        departamento_id: { type: string, format: uuid }
-        fecha_reserva: { type: string, format: date }
-        hora_inicio: { type: string, example: "19:00" }
-        hora_fin: { type: string, example: "22:00" }
+      $ref: './sprint-2.schemas.yaml#/schemas/CrearReserva'
 
     ReservaConfirmadaResponse:
-      type: object
-      required: [id, condominio_id, area_id, departamento_id, fecha_reserva, hora_inicio, hora_fin, costo_reserva, moneda, estado, creado_en]
-      properties:
-        id: { type: string, format: uuid }
-        condominio_id: { type: string, format: uuid }
-        departamento_id: { type: string, format: uuid }
-        estado: { type: string, example: "CONFIRMADA" }
-        area_id: { type: string, format: uuid }
-        area_nombre: { type: [string, 'null'] }
-        fecha_reserva: { type: string, format: date }
-        hora_inicio: { type: string }
-        hora_fin: { type: string }
-        costo_reserva: { type: string }
-        moneda: { type: string, enum: [PEN, USD] }
-        creado_en: { type: string, format: date-time }
+      $ref: './sprint-2.schemas.yaml#/schemas/ReservaConfirmada'
 
     ErrorResponse:
-      type: object
-      required: [error_code, mensaje]
-      properties:
-        error_code: { type: string, example: "DEUDA_MORA_ACTIVA" }
-        mensaje: { type: string, example: "No es posible reservar: Su departamento mantiene cuotas vencidas pendientes." }
-        detalles: { type: object }
+      $ref: './sprint-2.schemas.yaml#/schemas/Error'
 
   responses:
     AreaCatalogoResponse:
