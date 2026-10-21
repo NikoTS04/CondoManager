@@ -27,6 +27,26 @@ Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y res
 
 ## 2. Contratos Principales por Módulo
 
+### Pagos persistentes y solvencia (CON-22 / CON-70 / CON-42)
+
+Contrato canónico: [integración financiera Sprint 2](../02-domains/02-pagos-y-moras/sprint-2-anderson.md).
+La excepción temporal a S3 usa carpeta local privada y solo nombre en `url_voucher`.
+`POST /pagos/vouchers` recibe multipart `departamento_id` y `voucher_file` (PNG/JPG/PDF,
+máximo 5 MiB); devuelve 201 con nombre, MIME y tamaño. `POST /pagos/reportar` mantiene
+su JSON y devuelve 202 para creación, 200 `VOUCHER_EN_EVALUACION` para duplicado
+propio en revisión o 409 para reutilización inválida. El hash no sustituye permisos.
+`GET /pagos/comprobantes` conserva CONCILIADO como alias público de APROBADO.
+`GET /pagos/{id}/voucher` descarga privada; `GET /pagos/{id}/resultado` consulta el
+resultado persistido de revisión. `POST /pagos/{id}/conciliar` admite aprobación,
+observación y rechazo; solo administración autorizada, con motivo obligatorio para
+las dos últimas. Los estados terminales no se vuelven a aplicar.
+Errores controlados: 401 sin sesión, 403 fuera de alcance o AUDITOR escribiendo,
+404 recurso inexistente/archivo histórico no local, 413 archivo mayor a 5 MiB,
+422 archivo/contenido/datos inválidos y 503 almacenamiento local no disponible.
+CON-42 aporta guard y `GET /pagos/solvencia/{departamento_id}`; devuelve
+`departamento_id`, `saldo_vencido`, `habilitado_reservas`. Una reserva bloqueada
+conserva 403 `DEUDA_MORA_ACTIVA` con saldo autorizado y no ocupa el horario.
+
 ### Usuarios y autenticación persistente (CON-04 / PROC-05)
 
 Contrato canónico: [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).

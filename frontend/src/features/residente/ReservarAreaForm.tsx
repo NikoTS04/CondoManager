@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { formatMoney } from "@/lib/money";
-import { crearReserva, fetchDisponibilidad, type AreaComun, type HorarioOcupado } from "@/lib/api";
+import { crearReserva, fetchDisponibilidad, fetchSolvencia, type AreaComun, type HorarioOcupado, type Solvencia } from "@/lib/api";
 
 function getTodayLima(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -37,18 +37,20 @@ export interface ReservarAreaFormProps {
   onRetryAreas?: () => void;
   onSuccess?: () => void;
   onGoToPagos?: () => void;
+  onSolvenciaActualizada?: (solvencia: Solvencia) => void;
 }
 
 export function ReservarAreaForm({
   areas,
   condominioId,
   departamentoId,
-  estaEnMora,
-  deudaVencida,
+  estaEnMora: moraIndicada,
+  deudaVencida: deudaIndicada,
   errorAreas,
   onRetryAreas,
   onSuccess,
   onGoToPagos,
+  onSolvenciaActualizada,
 }: ReservarAreaFormProps) {
   const [selectedAreaId, setSelectedAreaId] = useState<string>(areas[0]?.id || "");
   const [fechaReserva, setFechaReserva] = useState<string>(getTodayLima());
@@ -60,6 +62,28 @@ export function ReservarAreaForm({
   const [ocupados, setOcupados] = useState<HorarioOcupado[]>([]);
   const [errorDisponibilidad, setErrorDisponibilidad] = useState<string | null>(null);
   const [revisionCalendario, setRevisionCalendario] = useState(0);
+  const [solvencia, setSolvencia] = useState<Solvencia | null>(null);
+  const [errorSolvencia, setErrorSolvencia] = useState<string | null>(null);
+  const [revisionSolvencia, setRevisionSolvencia] = useState(0);
+  const estaEnMora = solvencia ? !solvencia.habilitado_reservas : moraIndicada;
+  const deudaVencida = solvencia?.saldo_vencido ?? deudaIndicada;
+
+  useEffect(() => {
+    let cancelado = false;
+    setSolvencia(null);
+    setErrorSolvencia(null);
+    if (departamentoId) {
+      void fetchSolvencia(departamentoId)
+        .then((data) => {
+          if (!cancelado) {
+            setSolvencia(data);
+            onSolvenciaActualizada?.(data);
+          }
+        })
+        .catch(() => { if (!cancelado) setErrorSolvencia("No pudimos verificar la deuda del departamento."); });
+    }
+    return () => { cancelado = true; };
+  }, [departamentoId, revisionSolvencia, moraIndicada, deudaIndicada, onSolvenciaActualizada]);
 
   // Asegura área por defecto si la lista se carga después
   const effectiveAreaId = areas.some((area) => area.id === selectedAreaId) ? selectedAreaId : areas[0]?.id || "";
@@ -103,6 +127,10 @@ export function ReservarAreaForm({
       setReservaError("No puedes reservar áreas comunes mientras mantengas cuotas vencidas.");
       return;
     }
+    if (!solvencia || solvencia.departamento_id !== departamentoId) {
+      setReservaError("Actualiza la solvencia antes de solicitar la reserva.");
+      return;
+    }
 
     if (!effectiveAreaId) {
       setReservaError("Selecciona un espacio común.");
@@ -131,6 +159,7 @@ export function ReservarAreaForm({
       if (onSuccess) onSuccess();
     } else {
       setReservaError(res.error || "No se pudo registrar la reserva. Inténtalo de nuevo.");
+      setRevisionSolvencia((valor) => valor + 1);
     }
   }
 
@@ -143,6 +172,13 @@ export function ReservarAreaForm({
       />
 
       <CardBody className="space-y-4">
+        <div className="space-y-2">
+          <Button type="button" size="sm" variant="secondary" onClick={() => setRevisionSolvencia((valor) => valor + 1)}>
+            Actualizar solvencia
+          </Button>
+          {errorSolvencia && <Alert tone="danger">{errorSolvencia}</Alert>}
+          {!solvencia && !errorSolvencia && <p role="status" className="text-sm text-muted">Verificando deuda persistida…</p>}
+        </div>
         {errorAreas && (
           <Alert
             tone="danger"
@@ -255,7 +291,7 @@ export function ReservarAreaForm({
                     </p>
                     <p className="text-xs text-danger-700 leading-relaxed">
                       Tu departamento registra cuotas pendientes
-                      {deudaVencida ? ` por ${formatMoney(deudaVencida, "PEN")}` : ""}. Regulariza tu saldo para habilitar las reservas.
+                       {deudaVencida ? ` por ${formatMoney(deudaVencida, "PEN")}` : ""}. Un reporte en revisión no cancela esta deuda; debe aplicarse el pago aprobado.
                     </p>
                   </div>
                 </div>
@@ -278,7 +314,7 @@ export function ReservarAreaForm({
                 type="submit"
                 variant="primary"
                 fullWidth
-                disabled={areas.length === 0}
+                disabled={areas.length === 0 || !solvencia || solvencia.departamento_id !== departamentoId}
                 loading={isSubmitting}
                 loadingText="Verificando disponibilidad…"
               >

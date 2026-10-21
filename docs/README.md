@@ -8,3 +8,5 @@
 | [Sprints](./sprints/) | Planificación y alcance de cada sprint. |
 
 Las especificaciones técnicas y funcionales detalladas se mantienen en [`specs/`](../specs/).
+
+Sprint 2: [uso y verificación de CON-22, CON-70 y CON-42 (Anderson)](sprints/SPRINT-2-ANDERSON-USO.md).

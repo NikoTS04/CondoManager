@@ -181,7 +181,7 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 - Departamento autorizado, banco, número de operación, fecha, monto y voucher obligatorio.
 - Carga de PNG, JPG o PDF mediante un contrato de subida de archivo acordado en CON-72, con tamaño máximo documentado y validación efectiva del contenido.
-- Almacenamiento del archivo en el servicio de objetos y persistencia de una referencia recuperable por los usuarios autorizados.
+- **Excepción temporal acordada:** almacenamiento privado en `uploads/vouchers/` y persistencia únicamente del nombre generado en `comprobantes_pago.url_voucher`; recuperación autenticada por comprobante. S3/MinIO se difiere para esta entrega. Véase el [contrato de integración de Anderson](../../specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md).
 - Creación del comprobante en `EN_REVISION`, integrado con la deduplicación de CON-23.
 - Ninguna modificación de saldos o solvencia por el solo hecho de reportar el comprobante.
 - Respuesta `202 Accepted` para una recepción nueva, con identificador persistido, estado y mensaje coherentes con la interfaz.
@@ -403,7 +403,7 @@ Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
 - Migraciones reproducibles que validen las tablas preexistentes y conserven sus datos al adoptar el esquema actual.
 - Pruebas de rollback, consulta desde una nueva sesión, recuperación tras reinicio e idempotencia concurrente.
 
-**Se considera terminada cuando:** el recorrido de cuotas y pagos del prototipo puede reconstruirse desde PostgreSQL y almacenamiento de objetos, sin depender del estado de un proceso en memoria ni producir registros duplicados al reintentar.
+**Se considera terminada cuando:** el recorrido de cuotas y pagos del prototipo puede reconstruirse desde PostgreSQL y el almacenamiento privado de vouchers (local durante este periodo), sin depender del estado de un proceso en memoria ni producir registros duplicados al reintentar. Instrucciones: [uso y verificación de Anderson](SPRINT-2-ANDERSON-USO.md).
 
 **Trazabilidad:** [Sprint 1](SPRINT-1.md), [dominio de cuotas](../../specs/02-domains/01-cuotas/spec.md), [dominio de pagos](../../specs/02-domains/02-pagos-y-moras/spec.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [precisión decimal](../../specs/01-architecture/adr/ADR-002-decimal-accounting.md), [idempotencia](../../specs/01-architecture/idempotency-and-deduplication.md).
 
