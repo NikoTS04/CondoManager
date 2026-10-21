@@ -43,14 +43,14 @@ En una única transacción:
 3. Agrega contexto, moneda y nombre de área a reservas mediante sus relaciones.
    Recupera fecha, actor y motivo desde `cancelaciones_reserva`. No cambia horas,
    zonas horarias, UUID, costos, estados ni los registros originales de cancelación.
-4. Conserva los outboxes y su columna legacy `tipo`. Retira su unicidad incompatible
-   y su valor por defecto para que eventos nuevos no se etiqueten falsamente como
-   cancelaciones. No publica ni reescribe eventos históricos.
-5. Ejecuta la migración canónica 0013, valida columnas, tipos, nulabilidad, PK,
+4. Conserva los outboxes con su columna `tipo` y su unicidad, que ya coinciden con
+   el modelo vigente. No publica ni reescribe eventos históricos.
+5. Ejecuta las migraciones canónicas 0013 y 0015 (0014 solo une ramas, sin DDL;
+   0015 crea `notificaciones_alertas`), valida columnas, tipos, nulabilidad, PK,
    FK, unicidades y presencia de checks del modelo. Conserva restricciones,
    índices y RLS adicionales compatibles del despliegue.
 6. Comprueba las huellas históricas; **solo entonces** cambia el marcador a
-   `20261021_0013`. Cualquier fallo revierte también DDL y marcador.
+   `20261021_0015`. Cualquier fallo revierte también DDL y marcador.
 
 ## Aplicación y resultado
 

@@ -39,7 +39,7 @@ from src.modules.reservas.models import BloqueoArea, Reserva  # noqa: F401
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol  # noqa: F401
 
 LEGACY = "20261021_0012"
-HEAD = "20261021_0013"
+HEAD = "20261021_0015"
 NUEVAS = (BloqueoArea, Notificacion, IntentoNotificacion, EventoConsumido, IncidenciaEvento)
 
 
@@ -166,12 +166,11 @@ def reconciliar(conn):
     conn.execute(sa.text("CREATE INDEX idx_reservas_contexto_unidad ON reservas (condominio_id, departamento_id)"))
     conn.execute(sa.text("ALTER INDEX idx_reservas_area_fecha RENAME TO idx_reservas_area_fecha_legacy"))
     conn.execute(sa.text("CREATE INDEX idx_reservas_area_fecha ON reservas (area_id, fecha_reserva, estado)"))
-    # Se conservan tipo y los eventos originales, pero su unicidad impediría eventos nuevos.
-    conn.execute(sa.text("ALTER TABLE eventos_reserva_outbox DROP CONSTRAINT uq_evento_reserva_tipo"))
-    conn.execute(sa.text("ALTER TABLE eventos_reserva_outbox ALTER COLUMN tipo DROP NOT NULL, ALTER COLUMN tipo DROP DEFAULT"))
     conn.execute(sa.text("CREATE INDEX ix_eventos_reserva_outbox_reserva_id ON eventos_reserva_outbox (reserva_id)"))
     with Operations.context(MigrationContext.configure(conn)):
         import_module("migrations.versions.20261021_0013_convergencia_con72").upgrade()
+        # 0014 solo une ramas sin DDL; 0015 crea notificaciones_alertas sobre las tablas nuevas.
+        import_module("migrations.versions.20261021_0015_alertas_notificaciones").upgrade()
     validar_modelos(conn)
     if antes != huellas(conn, tablas, archivo):
         raise RuntimeError("Cambió una columna histórica; reparación revertida.")
