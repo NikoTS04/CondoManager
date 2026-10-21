@@ -89,3 +89,32 @@ class ReenviarNotificacionRequest(BaseModel):
         if valor is None:
             raise ValueError("Omita el campo o indique un contacto")
         return valor
+
+
+class TipoAlertaEnum(str, Enum):
+    ERROR_DEFINITIVO = "ERROR_DEFINITIVO"
+    INTENTOS_AGOTADOS = "INTENTOS_AGOTADOS"
+    ACEPTACION_INCIERTA = "ACEPTACION_INCIERTA"
+    DESTINATARIO_INVALIDO = "DESTINATARIO_INVALIDO"
+    PROVEEDOR_NO_CONFIGURADO = "PROVEEDOR_NO_CONFIGURADO"
+
+
+class EstadoAlertaEnum(str, Enum):
+    ABIERTA = "ABIERTA"
+    ATENDIDA = "ATENDIDA"
+
+
+class AlertaNotificacionDTO(BaseModel):
+    id: uuid.UUID
+    notificacion_id: uuid.UUID
+    condominio_id: str
+    departamento_id: str
+    departamento_numero: str
+    tipo_evento: str
+    ciclo: int = Field(ge=1)
+    tipo: TipoAlertaEnum
+    mensaje: str
+    estado: EstadoAlertaEnum
+    creada_en: datetime
+    atendida_en: Optional[datetime] = None
+    atendida_por: Optional[uuid.UUID] = None

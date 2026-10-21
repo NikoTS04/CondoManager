@@ -4,15 +4,17 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import select, update
 
-from src.core.authorization import autorizar_condominio
+from src.core.authorization import autorizar_condominio, contexto_consulta
 from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.core.security import validar_sesion
-from src.modules.notificaciones.models import Notificacion
+from src.modules.condominios.models import Departamento
+from src.modules.notificaciones.models import AlertaNotificacion, Notificacion
 from src.modules.notificaciones.repository import NotificacionesRepository
-from src.modules.notificaciones.schemas import NotificacionLogDTO
+from src.modules.notificaciones.schemas import AlertaNotificacionDTO, NotificacionLogDTO
+from src.modules.notificaciones.templates import PlantillaIncompletaError
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
 
@@ -59,17 +61,24 @@ class NotificacionesPersistentesService:
                 )
             u, d, contacto = destino
             evento = uuid4()
-            log = await self.repo.encolar(
-                cid=cid,
-                did=did,
-                usuario=u,
-                contacto=contacto,
-                evento=evento,
-                operacion=evento,
-                tipo=request.tipo_evento,
-                canal=request.canal.value,
-                contexto={**request.contexto, "nombre": u.nombre, "dpto": d.numero},
-            )
+            try:
+                log = await self.repo.encolar(
+                    cid=cid,
+                    did=did,
+                    usuario=u,
+                    contacto=contacto,
+                    evento=evento,
+                    operacion=evento,
+                    tipo=request.tipo_evento,
+                    canal=request.canal.value,
+                    contexto={**request.contexto, "nombre": u.nombre, "dpto": d.numero},
+                )
+            except PlantillaIncompletaError:
+                raise APIError(
+                    422,
+                    "CONTEXTO_PLANTILLA_INCOMPLETO",
+                    "El tipo de evento o el contexto no completan la plantilla.",
+                ) from None
             return self.dto(log)
 
     async def comunicado(self, request, usuario):
@@ -137,6 +146,15 @@ class NotificacionesPersistentesService:
                     "El contacto no pertenece al destinatario activo.",
                 )
             anterior = {"ciclo": log.ciclo, "estado": log.estado}
+            ahora = datetime.now(UTC)
+            await self.session.execute(
+                update(AlertaNotificacion)
+                .where(
+                    AlertaNotificacion.notificacion_id == log.id,
+                    AlertaNotificacion.atendida_en.is_(None),
+                )
+                .values(atendida_en=ahora, atendida_por=UUID(str(usuario["sub"])))
+            )
             log.destinatario = nuevo
             log.ciclo += 1
             log.intentos = 0
@@ -145,7 +163,7 @@ class NotificacionesPersistentesService:
             log.bloqueado_hasta = None
             log.error_mensaje = None
             log.proveedor_message_id = None
-            log.fecha_actualizacion = datetime.now(UTC)
+            log.fecha_actualizacion = ahora
             await SQLAlchemyPagosRepository(self.session).auditar(
                 usuario,
                 log.condominio_id,
@@ -156,6 +174,81 @@ class NotificacionesPersistentesService:
                 {"ciclo": log.ciclo, "estado": log.estado},
             )
             return self.dto(log)
+
+    @staticmethod
+    def alerta_dto(alerta, numero, tipo_evento):
+        return AlertaNotificacionDTO(
+            id=alerta.id,
+            notificacion_id=alerta.notificacion_id,
+            condominio_id=str(alerta.condominio_id),
+            departamento_id=str(alerta.departamento_id),
+            departamento_numero=numero,
+            tipo_evento=tipo_evento,
+            ciclo=alerta.ciclo,
+            tipo=alerta.tipo,
+            mensaje=alerta.mensaje,
+            estado="ATENDIDA" if alerta.atendida_en else "ABIERTA",
+            creada_en=alerta.creada_en,
+            atendida_en=alerta.atendida_en,
+            atendida_por=alerta.atendida_por,
+        )
+
+    def _consulta_alertas(self):
+        return (
+            select(AlertaNotificacion, Departamento.numero, Notificacion.tipo_evento)
+            .join(Departamento, Departamento.id == AlertaNotificacion.departamento_id)
+            .join(Notificacion, Notificacion.id == AlertaNotificacion.notificacion_id)
+        )
+
+    async def listar_alertas(self, usuario, cid=None, estado="ABIERTA"):
+        cid = contexto_consulta(usuario, cid)
+        consulta = self._consulta_alertas().where(AlertaNotificacion.condominio_id == cid)
+        if estado == "ATENDIDA":
+            consulta = consulta.where(AlertaNotificacion.atendida_en.is_not(None))
+        else:
+            consulta = consulta.where(AlertaNotificacion.atendida_en.is_(None))
+        async with self.session.begin():
+            filas = (
+                await self.session.execute(
+                    consulta.order_by(AlertaNotificacion.creada_en.desc(), AlertaNotificacion.id)
+                )
+            ).all()
+            return [self.alerta_dto(*fila) for fila in filas]
+
+    async def atender_alerta(self, alerta_id, usuario):
+        async with self.session.begin():
+            alerta = await self.session.get(AlertaNotificacion, alerta_id)
+            if alerta is None:
+                raise APIError(404, "ALERTA_NO_HALLADA", "No existe la alerta.")
+            autorizar_condominio(usuario, alerta.condominio_id, escritura=True)
+            identidad = SQLAlchemyUsuariosRepository(self.session)
+            await identidad.contexto(alerta.condominio_id, bloquear=True)
+            await validar_sesion(usuario, identidad)
+            alerta = await self.session.scalar(
+                select(AlertaNotificacion)
+                .where(AlertaNotificacion.id == alerta_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if alerta.atendida_en is None:
+                alerta.atendida_en = datetime.now(UTC)
+                alerta.atendida_por = UUID(str(usuario["sub"]))
+                await SQLAlchemyPagosRepository(self.session).auditar(
+                    usuario,
+                    alerta.condominio_id,
+                    alerta.departamento_id,
+                    "NOTIFICACION_ALERTA_ATENDIDA",
+                    "ALERTA_ATENDIDA_MANUALMENTE",
+                    {"alerta_id": str(alerta.id), "tipo": alerta.tipo, "estado": "ABIERTA"},
+                    {"alerta_id": str(alerta.id), "tipo": alerta.tipo, "estado": "ATENDIDA"},
+                )
+                await self.session.flush()
+            fila = (
+                await self.session.execute(
+                    self._consulta_alertas().where(AlertaNotificacion.id == alerta_id)
+                )
+            ).one()
+            return self.alerta_dto(*fila)
 
 
 def get_notificaciones_service(session=Depends(get_db_session, use_cache=False)):

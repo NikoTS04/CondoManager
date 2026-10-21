@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends
 from src.core.security import get_current_user, require_role
 from src.modules.notificaciones.persistencia import get_notificaciones_service
 from src.modules.notificaciones.schemas import (
+    AlertaNotificacionDTO,
     CanalNotificacionEnum,
     DespacharNotificacionRequest,
     EnviarComunicadoMasivoRequest,
     EnviarComunicadoMasivoResponse,
+    EstadoAlertaEnum,
     EstadoNotificacionEnum,
     NotificacionLogDTO,
     ReenviarNotificacionRequest,
@@ -18,6 +20,7 @@ from src.modules.notificaciones.schemas import (
 
 router = APIRouter(prefix="/notificaciones", tags=["Notificaciones y Comunicaciones"])
 admin = require_role(["SUPERADMIN", "ADMIN_JUNTA"])
+consulta_alertas = require_role(["SUPERADMIN", "ADMIN_JUNTA", "AUDITOR"])
 
 
 @router.get("/logs", response_model=list[NotificacionLogDTO])
@@ -58,3 +61,22 @@ async def despachar_comunicado_masivo(
     service=Depends(get_notificaciones_service),
 ):
     return await service.comunicado(request, user)
+
+
+@router.get("/alertas", response_model=list[AlertaNotificacionDTO])
+async def listar_alertas(
+    condominio_id: UUID | None = None,
+    estado: EstadoAlertaEnum = EstadoAlertaEnum.ABIERTA,
+    user=Depends(consulta_alertas),
+    service=Depends(get_notificaciones_service),
+):
+    return await service.listar_alertas(user, condominio_id, estado.value)
+
+
+@router.post("/alertas/{alerta_id}/atender", response_model=AlertaNotificacionDTO)
+async def atender_alerta(
+    alerta_id: UUID,
+    user=Depends(admin),
+    service=Depends(get_notificaciones_service),
+):
+    return await service.atender_alerta(alerta_id, user)
