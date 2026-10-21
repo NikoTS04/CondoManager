@@ -5,7 +5,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 revision = "20261021_0012"
-down_revision = "20261020_0011"
+down_revision = "20261020_0012"
 branch_labels = None
 depends_on = None
 MARCA = "CON-46 / Alembic 20261021_0012"
@@ -72,7 +72,7 @@ def upgrade():
         actual = columnas.get(nombre)
         if (
             actual is None
-            or actual["nullable"]
+            or (actual["nullable"] and nombre != "usuario_id")
             or (
                 actual["type"].compile(dialect=op.get_bind().dialect)
                 != tipo.compile(dialect=op.get_bind().dialect)
@@ -106,6 +106,13 @@ def upgrade():
         "estado",
         "creado_en",
         "zona_horaria",
+        # Extensión de CON-73, previa a esta revisión.
+        "condominio_id",
+        "moneda",
+        "area_nombre",
+        "fecha_cancelacion",
+        "cancelado_por",
+        "motivo_cancelacion",
     }
     for nombre, columna in columnas.items():
         if (
@@ -172,34 +179,65 @@ def upgrade():
         sa.Column("fecha_cancelacion", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resultado", JSONB(), nullable=False),
     )
-    op.create_table(
-        "eventos_reserva_outbox",
-        sa.Column("id", UUID(), primary_key=True),
-        sa.Column(
-            "reserva_id",
-            UUID(),
-            sa.ForeignKey("reservas.id", ondelete="RESTRICT"),
-            nullable=False,
-        ),
-        sa.Column("tipo", sa.String(60), nullable=False, server_default="ReservaCanceladaEvent"),
-        sa.Column("payload", JSONB(), nullable=False),
-        sa.Column("creado_en", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("publicado_en", sa.DateTime(timezone=True)),
-        sa.UniqueConstraint("reserva_id", "tipo", name="uq_evento_reserva_tipo"),
-    )
-    op.create_index(
-        "idx_evento_reserva_pendiente", "eventos_reserva_outbox", ["publicado_en", "creado_en"]
-    )
+    if "eventos_reserva_outbox" not in inspector.get_table_names():
+        op.create_table(
+            "eventos_reserva_outbox",
+            sa.Column("id", UUID(), primary_key=True),
+            sa.Column(
+                "reserva_id",
+                UUID(),
+                sa.ForeignKey("reservas.id", ondelete="RESTRICT"),
+                nullable=False,
+            ),
+            sa.Column(
+                "tipo", sa.String(60), nullable=False, server_default="ReservaCanceladaEvent"
+            ),
+            sa.Column("payload", JSONB(), nullable=False),
+            sa.Column("creado_en", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("publicado_en", sa.DateTime(timezone=True)),
+            sa.UniqueConstraint("reserva_id", "tipo", name="uq_evento_reserva_tipo"),
+            comment=MARCA,
+        )
+        op.create_index(
+            "idx_evento_reserva_pendiente", "eventos_reserva_outbox", ["publicado_en", "creado_en"]
+        )
+        op.execute("ALTER TABLE eventos_reserva_outbox ENABLE ROW LEVEL SECURITY")
+    else:
+        # Cola creada por CON-73 sin tipo: se deduce del sobre del evento ya persistido.
+        op.add_column(
+            "eventos_reserva_outbox",
+            sa.Column(
+                "tipo",
+                sa.String(60),
+                nullable=False,
+                server_default="ReservaCanceladaEvent",
+                comment=MARCA,
+            ),
+        )
+        op.execute(
+            "UPDATE eventos_reserva_outbox SET tipo = payload->>'event_type' "
+            "WHERE payload->>'event_type' IS NOT NULL"
+        )
+        op.create_unique_constraint(
+            "uq_evento_reserva_tipo", "eventos_reserva_outbox", ["reserva_id", "tipo"]
+        )
     # Las tablas existentes de Supabase ya tienen RLS. Las nuevas siguen esa
     # protección; el acceso del backend conserva el rol de conexión existente.
-    for tabla in ("cobros_reserva", "cancelaciones_reserva", "eventos_reserva_outbox"):
+    for tabla in ("cobros_reserva", "cancelaciones_reserva"):
         op.execute(f"ALTER TABLE {tabla} ENABLE ROW LEVEL SECURITY")
 
 
+def outbox_creada(inspector):
+    return inspector.get_table_comment("eventos_reserva_outbox").get("text") == MARCA
+
+
 def downgrade():
+    inspector = sa.inspect(op.get_bind())
     # El rollback del esquema no debe borrar una cancelación confirmada ni
     # reinterpretar como UTC una reserva local ya registrada.
     for tabla in ("eventos_reserva_outbox", "cancelaciones_reserva", "cobros_reserva"):
+        if tabla == "eventos_reserva_outbox" and not outbox_creada(inspector):
+            continue
         if op.get_bind().scalar(sa.text(f"SELECT EXISTS (SELECT 1 FROM {tabla})")):
             raise RuntimeError("CON-46: el downgrade requiere tablas de cancelación vacías.")
     inspector = sa.inspect(op.get_bind())
@@ -211,7 +249,11 @@ def downgrade():
         sa.text("SELECT EXISTS (SELECT 1 FROM reservas WHERE zona_horaria <> 'UTC')")
     ):
         raise RuntimeError("CON-46: no se retira la zona de reservas locales existentes.")
-    op.drop_table("eventos_reserva_outbox")
+    if outbox_creada(inspector):
+        op.drop_table("eventos_reserva_outbox")
+    else:
+        op.drop_constraint("uq_evento_reserva_tipo", "eventos_reserva_outbox", type_="unique")
+        op.drop_column("eventos_reserva_outbox", "tipo")
     op.drop_table("cancelaciones_reserva")
     op.drop_table("cobros_reserva")
     if creada:

@@ -217,12 +217,13 @@ class ReservasPersistentesService:
             data.update(
                 fecha_cancelacion=reserva.fecha_cancelacion.isoformat(),
                 motivo=reserva.motivo_cancelacion,
-                ajuste_economico=self.cancelada(reserva).ajuste_economico,
+                ajuste_economico=self.cancelada(reserva).ajuste_economico.model_dump(mode="json"),
             )
         self.session.add(
             EventoReservaOutbox(
                 id=eid,
                 reserva_id=reserva.id,
+                tipo=tipo,
                 creado_en=ahora,
                 payload={
                     "event_id": str(eid),

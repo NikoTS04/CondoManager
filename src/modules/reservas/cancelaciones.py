@@ -16,7 +16,6 @@ from src.core.authorization import autorizar_departamento, puede_ver_departament
 from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.core.models_audit import AuditoriaLogORM
-from src.modules.condominios.models import Condominio
 from src.modules.pagos.models import ComprobantePago
 from src.modules.reservas.areas.models import AreaComun
 from src.modules.reservas.areas.repository import AreasRepository
@@ -59,9 +58,8 @@ class CancelacionesService:
             if not await self.session.scalar(text("SELECT to_regclass('reservas') IS NOT NULL")):
                 return []
             query = (
-                select(Reserva, AreaComun, Condominio.moneda)
+                select(Reserva, AreaComun)
                 .join(AreaComun, AreaComun.id == Reserva.area_id)
-                .join(Condominio, Condominio.id == AreaComun.condominio_id)
                 .where(AreaComun.condominio_id == cid)
                 .order_by(Reserva.fecha_reserva, Reserva.hora_inicio, Reserva.id)
             )
@@ -70,10 +68,8 @@ class CancelacionesService:
             if fecha is not None:
                 query = query.where(Reserva.fecha_reserva == fecha)
             return [
-                ReservaResponseDTO(
-                    **self.representar(reserva, area), area_nombre=area.nombre, moneda=moneda
-                )
-                for reserva, area, moneda in await self.session.execute(query)
+                ReservaResponseDTO(**self.representar(reserva, area))
+                for reserva, area in await self.session.execute(query)
                 if puede_ver_departamento(actor, reserva.departamento_id)
             ]
         except SQLAlchemyError as exc:

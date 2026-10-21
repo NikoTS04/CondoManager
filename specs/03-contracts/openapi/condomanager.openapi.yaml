@@ -19,6 +19,8 @@ tags:
     description: Presupuestos y emisión mensual de cuotas.
   - name: Pagos y Conciliación
     description: Evidencia privada, revisión financiera y solvencia persistentes.
+  - name: Notificaciones y Comunicaciones
+    description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
   /auth/login:
     post:
@@ -421,6 +423,10 @@ paths:
     $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1despachar'
   /notificaciones/reenviar/{log_id}:
     $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1reenviar~1%7Blog_id%7D'
+  /notificaciones/alertas:
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1alertas'
+  /notificaciones/alertas/{alerta_id}/atender:
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1alertas~1%7Balerta_id%7D~1atender'
   /notificaciones/comunicado-masivo:
     $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1comunicado-masivo'
   /condominios/{condominio_id}/edificios:

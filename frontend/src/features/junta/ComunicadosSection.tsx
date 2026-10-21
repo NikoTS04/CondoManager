@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Send } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -6,12 +6,20 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, SkeletonList } from "@/components/ui/Feedback";
 import { Field, Input, Textarea } from "@/components/ui/Field";
-import { reenviarNotificacion, type NotificacionLog } from "@/lib/api";
+import {
+  atenderAlertaNotificacion,
+  listarAlertasNotificacion,
+  reenviarNotificacion,
+  type AlertaNotificacion,
+  type NotificacionLog,
+  type TipoAlertaNotificacion,
+} from "@/lib/api";
 import { formatDate } from "@/lib/format";
 
 interface ComunicadosSectionProps {
   loading: boolean;
   notificaciones: NotificacionLog[];
+  condominioId: string | null;
   isAuditor: boolean;
   titulo: string;
   mensaje: string;
@@ -32,9 +40,123 @@ const ESTADOS_NOTIFICACION: Record<
   EN_COLA: { label: "En cola", tone: "info" },
 };
 
+const TIPOS_ALERTA: Record<TipoAlertaNotificacion, string> = {
+  ERROR_DEFINITIVO: "Error definitivo de entrega",
+  INTENTOS_AGOTADOS: "Intentos agotados",
+  ACEPTACION_INCIERTA: "Aceptación sin confirmar",
+  DESTINATARIO_INVALIDO: "Destinatario inválido",
+  PROVEEDOR_NO_CONFIGURADO: "Proveedor no configurado",
+};
+
+function AlertasEntrega({
+  condominioId,
+  isAuditor,
+  version,
+}: {
+  condominioId: string | null;
+  isAuditor: boolean;
+  version: number;
+}) {
+  const [alertas, setAlertas] = useState<AlertaNotificacion[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
+  const [atendiendo, setAtendiendo] = useState<string | null>(null);
+
+  const cargar = useCallback(async () => {
+    if (!condominioId) {
+      setAlertas([]);
+      setCargando(false);
+      return;
+    }
+    setCargando(true);
+    setError(null);
+    try {
+      setAlertas(await listarAlertasNotificacion(condominioId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No pudimos cargar las alertas de entrega.");
+    } finally {
+      setCargando(false);
+    }
+  }, [condominioId]);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar, version]);
+
+  async function atender(id: string) {
+    setAtendiendo(id);
+    setErrorAccion(null);
+    try {
+      await atenderAlertaNotificacion(id);
+      await cargar();
+    } catch (e) {
+      setErrorAccion(e instanceof Error ? e.message : "No pudimos marcar la alerta como atendida.");
+    } finally {
+      setAtendiendo(null);
+    }
+  }
+
+  return (
+    <Card className="xl:col-span-2">
+      <CardHeader
+        title="Alertas de entrega"
+        description="Avisos que no pudieron entregarse y requieren revisar los datos de contacto."
+      />
+      <CardBody>
+        {errorAccion && <Alert tone="danger">{errorAccion}</Alert>}
+        {cargando ? (
+          <SkeletonList rows={2} label="Cargando alertas de entrega" />
+        ) : error ? (
+          <div className="space-y-3">
+            <Alert tone="danger">{error}</Alert>
+            <Button variant="secondary" size="sm" onClick={() => void cargar()}>
+              Reintentar
+            </Button>
+          </div>
+        ) : alertas.length === 0 ? (
+          <EmptyState
+            title="Sin alertas abiertas"
+            description="Las entregas fallidas que requieran atención aparecerán aquí."
+          />
+        ) : (
+          <ul className="divide-y divide-line">
+            {alertas.map((alerta) => (
+              <li
+                key={alerta.id}
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
+              >
+                <div>
+                  <p className="font-medium">
+                    Dpto. {alerta.departamento_numero} · {TIPOS_ALERTA[alerta.tipo] ?? alerta.tipo}
+                  </p>
+                  <p className="mt-1 text-sm">{alerta.mensaje}</p>
+                  <p className="mt-1 text-xs text-muted">{formatDate(alerta.creada_en)}</p>
+                </div>
+                {!isAuditor && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={atendiendo === alerta.id}
+                    disabled={atendiendo !== null}
+                    onClick={() => void atender(alerta.id)}
+                  >
+                    Marcar como atendida
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
 export function ComunicadosSection({
   loading,
   notificaciones,
+  condominioId,
   isAuditor,
   titulo,
   mensaje,
@@ -47,6 +169,7 @@ export function ComunicadosSection({
   const [contacto, setContacto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [versionAlertas, setVersionAlertas] = useState(0);
 
   async function reencolar(event: FormEvent) {
     event.preventDefault();
@@ -56,6 +179,7 @@ export function ComunicadosSection({
     try {
       await reenviarNotificacion(seleccion, contacto.trim());
       setSeleccion(null);
+      setVersionAlertas((v) => v + 1);
       onActualizada();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No pudimos reencolar el aviso.");
@@ -161,6 +285,12 @@ export function ComunicadosSection({
           )}
         </CardBody>
       </Card>
+
+      <AlertasEntrega
+        condominioId={condominioId}
+        isAuditor={isAuditor}
+        version={versionAlertas}
+      />
     </div>
   );
 }

@@ -121,7 +121,6 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
             numero_operacion=op,
             fecha_operacion=date(2026, 10, 15),
             monto=Decimal(monto),
-            url_voucher="https://s3/v1.png",
         )
         resp = PagosService.procesar_reporte_pago(req, "condo-01", context["comprobantes"])
         context["comprobantes"][resp.idempotency_hash]["estado"] = "APROBADO"
@@ -139,7 +138,6 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
             numero_operacion=op,
             fecha_operacion=date(2026, 10, 15),
             monto=Decimal("150.00"),
-            url_voucher="https://s3/v2.png",
         )
         try:
             PagosService.procesar_reporte_pago(req, "condo-01", context["comprobantes"])

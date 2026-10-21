@@ -297,6 +297,17 @@ La exclusión concurrente utiliza lock SQL estable sobre el área, no solo un í
   el marcador y los avisos en la misma transacción evita duplicar el consumo.
 - `notificaciones_incidencias`: hash SHA256 del mensaje como PK, motivo sanitizado
   y fecha UTC; no conserva el contenido potencialmente sensible del mensaje.
+- `notificaciones_alertas` (CON-37, migración `20261021_0015`): UUID PK; aviso
+  FK `notificaciones_logs` RESTRICT, condominio FK RESTRICT y departamento FK RESTRICT,
+  todos NOT NULL; `ciclo` entero; `tipo` VARCHAR(40) con CHECK en `ERROR_DEFINITIVO`,
+  `INTENTOS_AGOTADOS`, `ACEPTACION_INCIERTA`, `DESTINATARIO_INVALIDO`,
+  `PROVEEDOR_NO_CONFIGURADO`; `mensaje` TEXT sin contactos ni datos sensibles;
+  `creada_en` TIMESTAMPTZ NOT NULL; `atendida_en` TIMESTAMPTZ y `atendida_por`
+  (FK `usuarios` RESTRICT) nulos. Restricciones: `ck_alerta_atencion`
+  `(atendida_en IS NULL) = (atendida_por IS NULL)` y unicidad
+  `uq_alerta_notificacion_tipo (notificacion_id, ciclo, tipo)`, que hace idempotente
+  la creación. Índice parcial `idx_alerta_abierta (condominio_id, creada_en)
+  WHERE atendida_en IS NULL`. RLS habilitado.
 
 Las tablas tienen RLS habilitado sin políticas públicas: el acceso del prototipo
 se realiza exclusivamente por la API con conexión privilegiada y autorización

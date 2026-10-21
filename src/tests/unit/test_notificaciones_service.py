@@ -12,6 +12,8 @@ Valida:
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+import pytest
+
 from src.modules.notificaciones.schemas import (
     CanalNotificacionEnum,
     DespacharNotificacionRequest,
@@ -19,27 +21,33 @@ from src.modules.notificaciones.schemas import (
     EstadoNotificacionEnum,
 )
 from src.modules.notificaciones.service import NotificacionesService
-from src.modules.notificaciones.templates import PLANTILLAS_CONFIG, PlantillasService
+from src.modules.notificaciones.templates import (
+    PLANTILLAS_CONFIG,
+    VARIABLES_OBLIGATORIAS,
+    PlantillaIncompletaError,
+    PlantillasService,
+)
 
 
 def test_renderizado_todas_las_plantillas():
     """Valida que todas las plantillas del catálogo se rendericen correctamente sin KeyError."""
     contexto_prueba = {
+        "moneda": "S/",
+        "costo": "35.00",
+        "ajuste": "SIN_AJUSTE",
+        "medios_pago": "Consulte los medios de pago vigentes con la administración.",
         "nombre": "Carlos Sánchez",
         "dpto": "502",
         "periodo": "2026-10",
         "monto": str(Decimal("150.00")),
         "vencimiento": "2026-10-20",
-        "cci_banco": "002-191-000000000000-54",
         "fecha_corte": "2026-10-20",
         "monto_pendiente": str(Decimal("150.00")),
         "banco": "BCP",
         "numero_operacion": "992812",
         "monto_abonado": str(Decimal("150.00")),
         "saldo_restante": str(Decimal("0.00")),
-        "recibo_url": "https://app.condomanager.pe/recibos/rec-01.pdf",
         "motivo_rechazo": "Comprobante no visible",
-        "enlace_subir_nuevo": "https://app.condomanager.pe/pagos/reportar",
         "monto_mora": str(Decimal("20.00")),
         "nuevo_saldo": str(Decimal("170.00")),
         "aviso_bloqueo_reservas": "Inhabilitado para reservar",
@@ -61,6 +69,42 @@ def test_renderizado_todas_las_plantillas():
         assert "{" not in cuerpo
 
 
+def test_plantilla_sin_variable_lanza_error_sin_filtrar_valores():
+    contexto = {"nombre": "Secreto Confidencial", "dpto": "402", "moneda": "S/"}
+    with pytest.raises(PlantillaIncompletaError) as exc:
+        PlantillasService.renderizar("NOTIF_PAGO_CONCILIADO", contexto)
+    assert exc.value.faltantes == ["monto_abonado", "saldo_restante"]
+    assert "Secreto Confidencial" not in str(exc.value)
+    assert isinstance(exc.value, ValueError)
+
+
+@pytest.mark.parametrize("vacio", [None, "", "   "])
+def test_variable_nula_o_vacia_cuenta_como_faltante(vacio):
+    contexto = {
+        "nombre": "Ana",
+        "dpto": "101",
+        "moneda": "S/",
+        "monto_abonado": "10.00",
+        "saldo_restante": vacio,
+    }
+    with pytest.raises(PlantillaIncompletaError) as exc:
+        PlantillasService.renderizar("NOTIF_PAGO_CONCILIADO", contexto)
+    assert exc.value.faltantes == ["saldo_restante"]
+
+
+def test_tipo_desconocido_lanza_error_y_no_vuelca_el_contexto():
+    with pytest.raises(PlantillaIncompletaError) as exc:
+        PlantillasService.renderizar("NOTIF_INEXISTENTE", {"dato": "privado-123"})
+    assert "privado-123" not in str(exc.value) and exc.value.faltantes == []
+
+
+def test_variables_obligatorias_coinciden_con_los_placeholders():
+    assert set(VARIABLES_OBLIGATORIAS) == set(PLANTILLAS_CONFIG)
+    assert VARIABLES_OBLIGATORIAS["NOTIF_EMISION_CUOTA"] == sorted(
+        ["dpto", "medios_pago", "moneda", "monto", "nombre", "periodo", "vencimiento"]
+    )
+
+
 def test_despacho_notificacion_exitoso():
     """Valida el flujo estándar de envío exitoso que pasa a estado ENTREGADO."""
     req = DespacharNotificacionRequest(
@@ -72,6 +116,7 @@ def test_despacho_notificacion_exitoso():
         contexto={
             "nombre": "María Flores",
             "dpto": "105",
+            "moneda": "S/",
             "monto_abonado": str(Decimal("150.00")),
             "saldo_restante": str(Decimal("0.00")),
         },
@@ -99,6 +144,7 @@ def test_reintento_automatico_error_temporal_503():
             "dpto": "601",
             "monto_mora": str(Decimal("20.00")),
             "nuevo_saldo": str(Decimal("170.00")),
+            "aviso_bloqueo_reservas": "Inhabilitado para reservar áreas comunes",
         },
     )
 
@@ -127,7 +173,15 @@ def test_agotamiento_de_reintentos_hasta_fallido_permanente():
         tipo_evento="NOTIF_EMISION_CUOTA",
         canal=CanalNotificacionEnum.EMAIL,
         destinatario="residente202@gmail.com",
-        contexto={"nombre": "Lucía Gómez", "dpto": "202"},
+        contexto={
+            "nombre": "Lucía Gómez",
+            "dpto": "202",
+            "moneda": "S/",
+            "periodo": "2026-10",
+            "monto": "150.00",
+            "vencimiento": "2026-10-20",
+            "medios_pago": "Consulte los medios de pago vigentes con la administración.",
+        },
     )
 
     log = NotificacionesService.despachar_notificacion(
@@ -161,7 +215,13 @@ def test_hard_bounce_inmediato_550():
         tipo_evento="NOTIF_MORA_APLICADA",
         canal=CanalNotificacionEnum.EMAIL,
         destinatario="correo_falso_inexistente@gmail.com",
-        contexto={"nombre": "Inexistente", "dpto": "402"},
+        contexto={
+            "nombre": "Inexistente",
+            "dpto": "402",
+            "monto_mora": "20.00",
+            "nuevo_saldo": "170.00",
+            "aviso_bloqueo_reservas": "Inhabilitado para reservar áreas comunes",
+        },
     )
 
     def transport_hard_bounce(dest, canal, asunto, cuerpo):
@@ -186,7 +246,13 @@ def test_reenviar_notificacion_manual_tras_correccion():
         tipo_evento="NOTIF_MORA_APLICADA",
         canal=CanalNotificacionEnum.EMAIL,
         destinatario="correo_erroneo@gmail.com",
-        contexto={"nombre": "Residente 402", "dpto": "402"},
+        contexto={
+            "nombre": "Residente 402",
+            "dpto": "402",
+            "monto_mora": "20.00",
+            "nuevo_saldo": "170.00",
+            "aviso_bloqueo_reservas": "Inhabilitado para reservar áreas comunes",
+        },
     )
 
     # Primer intento rebotó

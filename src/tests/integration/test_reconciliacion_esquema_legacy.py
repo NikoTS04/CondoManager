@@ -12,25 +12,18 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 
 async def preparar_legacy(conn):
     # Solo el esquema efímero creado por db_usuarios; nunca se usa contra el despliegue.
-    for table in ("notificaciones_intentos", "notificaciones_logs", "notificaciones_eventos", "notificaciones_incidencias", "bloqueos_area"):
+    for table in ("notificaciones_alertas", "notificaciones_intentos", "notificaciones_logs", "notificaciones_eventos", "notificaciones_incidencias", "bloqueos_area"):
         await conn.execute(text(f"DROP TABLE {table}"))
     await conn.execute(text("""CREATE TABLE notificaciones_logs (
         id UUID PRIMARY KEY, payload_resumen JSONB NOT NULL DEFAULT '{}')"""))
     await conn.execute(text("ALTER TABLE notificaciones_logs ENABLE ROW LEVEL SECURITY"))
     await conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
     await conn.execute(text("INSERT INTO alembic_version VALUES ('20261021_0012')"))
-    await conn.execute(text("CREATE TABLE cobros_reserva (reserva_id UUID PRIMARY KEY)"))
-    await conn.execute(text("""CREATE TABLE cancelaciones_reserva (
-        reserva_id UUID PRIMARY KEY REFERENCES reservas(id), actor_id UUID NOT NULL,
-        motivo TEXT NOT NULL, fecha_cancelacion TIMESTAMPTZ NOT NULL, resultado JSONB)"""))
     for columna in ("condominio_id", "moneda", "area_nombre", "fecha_cancelacion", "cancelado_por", "motivo_cancelacion"):
         await conn.execute(text(f"ALTER TABLE reservas DROP COLUMN {columna}"))
     await conn.execute(text("ALTER TABLE reservas ALTER COLUMN usuario_id SET NOT NULL, ALTER COLUMN zona_horaria TYPE VARCHAR(30)"))
     await conn.execute(text("DROP INDEX idx_reservas_area_fecha"))
     await conn.execute(text("CREATE INDEX idx_reservas_area_fecha ON reservas (area_id, fecha_reserva)"))
-    await conn.execute(text("""ALTER TABLE eventos_reserva_outbox
-        ADD COLUMN tipo VARCHAR(60) NOT NULL DEFAULT 'ReservaCanceladaEvent',
-        ADD CONSTRAINT uq_evento_reserva_tipo UNIQUE (reserva_id,tipo)"""))
     await conn.execute(text("DROP INDEX ix_eventos_reserva_outbox_reserva_id"))
     await conn.execute(text("ALTER TABLE revisiones_pago DROP COLUMN archivo_nombre, DROP COLUMN notas_internas"))
     await conn.execute(text("ALTER TABLE archivos_voucher ADD CONSTRAINT legacy_archivo_comprobante UNIQUE (comprobante_id)"))
@@ -61,7 +54,9 @@ async def test_reconcilia_o_revierte_atomicamente(db_usuarios, monkeypatch, fall
             elif fallo == "cancelacion":
                 await conn.execute(text("DELETE FROM cancelaciones_reserva WHERE reserva_id=:id"), {"id": rid})
             elif fallo == "cobro":
-                await conn.execute(text("INSERT INTO cobros_reserva VALUES (:id)"), {"id": rid})
+                await conn.execute(text("""ALTER TABLE cobros_reserva
+                    ALTER COLUMN comprobante_id DROP NOT NULL, ALTER COLUMN monto DROP NOT NULL"""))
+                await conn.execute(text("INSERT INTO cobros_reserva (reserva_id) VALUES (:id)"), {"id": rid})
             elif fallo == "validacion_final":
                 def rechazar(_conn):
                     raise RuntimeError("Fallo al final del DDL")
@@ -70,12 +65,12 @@ async def test_reconcilia_o_revierte_atomicamente(db_usuarios, monkeypatch, fall
                 with pytest.raises(RuntimeError):
                     async with conn.begin_nested():
                         await conn.run_sync(reconciliar)
-                assert await conn.scalar(text("SELECT version_num FROM alembic_version")) != "20261021_0013"
+                assert await conn.scalar(text("SELECT version_num FROM alembic_version")) != "20261021_0015"
                 assert await conn.scalar(text("SELECT to_regclass('bloqueos_area')")) is None
                 assert await conn.scalar(text("SELECT count(*) FROM reservas")) == 1
                 return
             result = await conn.run_sync(reconciliar)
-            assert result["revision"] == "20261021_0013"
+            assert result["revision"] == "20261021_0015"
             await conn.run_sync(validar_modelos)
             row = (await conn.execute(text("SELECT * FROM reservas WHERE id=:id"), {"id": rid})).mappings().one()
             assert row["fecha_cancelacion"].isoformat() == "2026-10-21T15:00:00+00:00"

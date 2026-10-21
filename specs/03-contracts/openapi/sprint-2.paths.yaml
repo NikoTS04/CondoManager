@@ -285,6 +285,7 @@ paths:
     post:
       operationId: despacharNotificacion
       summary: Registrar un envío manual para procesamiento asíncrono
+      description: Responde 422 CONTEXTO_PLANTILLA_INCOMPLETO si el tipo de evento no tiene plantilla o faltan variables del contexto; el error no reproduce valores del contexto.
       x-historias: [CON-36, CON-73]
       x-implementation-status: implementado
       requestBody:
@@ -330,6 +331,46 @@ paths:
         '403': {$ref: '#/responses/Error'}
         '404': {$ref: '#/responses/Error'}
         '409': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /notificaciones/alertas:
+    get:
+      operationId: listarAlertasNotificacion
+      tags: [Notificaciones y Comunicaciones]
+      summary: Consultar alertas administrativas por fallos permanentes de notificación
+      description: SUPERADMIN, ADMIN_JUNTA y AUDITOR en su contexto; los residentes no acceden. Sin estado se devuelven las alertas ABIERTAS. Los mensajes no contienen contactos ni datos sensibles.
+      x-historias: [CON-37]
+      x-implementation-status: implementado
+      parameters:
+        - {$ref: '#/parameters/Contexto'}
+        - {name: estado, in: query, schema: {type: string, enum: [ABIERTA, ATENDIDA], default: ABIERTA}}
+      responses:
+        '200':
+          description: Alertas del contexto, de la más reciente a la más antigua.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: './sprint-2.schemas.yaml#/schemas/AlertaNotificacion'}}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /notificaciones/alertas/{alerta_id}/atender:
+    parameters:
+      - {name: alerta_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: atenderAlertaNotificacion
+      tags: [Notificaciones y Comunicaciones]
+      summary: Marcar una alerta administrativa como atendida
+      description: SUPERADMIN o ADMIN_JUNTA del contexto; el auditor no puede atender. Idempotente, repetir la operación no cambia quién ni cuándo la atendió. Registra auditoría NOTIFICACION_ALERTA_ATENDIDA.
+      x-historias: [CON-37]
+      x-implementation-status: implementado
+      responses:
+        '200':
+          description: Alerta atendida.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/AlertaNotificacion'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
         '422': {$ref: '#/responses/Error'}
   /notificaciones/comunicado-masivo:
     post:

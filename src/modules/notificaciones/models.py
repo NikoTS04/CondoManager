@@ -3,7 +3,16 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
@@ -100,3 +109,51 @@ class IncidenciaEvento(Base):
     clave: Mapped[str] = mapped_column(Text, primary_key=True)
     motivo: Mapped[str] = mapped_column(Text, nullable=False)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+TIPOS_ALERTA = (
+    "ERROR_DEFINITIVO",
+    "INTENTOS_AGOTADOS",
+    "ACEPTACION_INCIERTA",
+    "DESTINATARIO_INVALIDO",
+    "PROVEEDOR_NO_CONFIGURADO",
+)
+
+
+class AlertaNotificacion(Base):
+    __tablename__ = "notificaciones_alertas"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    notificacion_id: Mapped[UUID] = mapped_column(
+        ForeignKey("notificaciones_logs.id", ondelete="RESTRICT"), nullable=False
+    )
+    condominio_id: Mapped[UUID] = mapped_column(
+        ForeignKey("condominios.id", ondelete="RESTRICT"), nullable=False
+    )
+    departamento_id: Mapped[UUID] = mapped_column(
+        ForeignKey("departamentos.id", ondelete="RESTRICT"), nullable=False
+    )
+    ciclo: Mapped[int] = mapped_column(nullable=False)
+    tipo: Mapped[str] = mapped_column(String(40), nullable=False)
+    mensaje: Mapped[str] = mapped_column(Text, nullable=False)
+    creada_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    atendida_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    atendida_por: Mapped[UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("notificacion_id", "ciclo", "tipo", name="uq_alerta_notificacion_tipo"),
+        CheckConstraint("tipo IN ('" + "','".join(TIPOS_ALERTA) + "')", name="ck_alerta_tipo"),
+        CheckConstraint(
+            "(atendida_en IS NULL) = (atendida_por IS NULL)", name="ck_alerta_atencion"
+        ),
+        Index(
+            "idx_alerta_abierta",
+            "condominio_id",
+            "creada_en",
+            postgresql_where=text("atendida_en IS NULL"),
+        ),
+    )

@@ -217,6 +217,24 @@ schemas:
       transporte: {type: string, enum: [SIMULADO, PROVEEDOR]}
       fecha_creacion: {$ref: '#/schemas/InstanteUTC'}
       fecha_actualizacion: {$ref: '#/schemas/InstanteUTC'}
+  AlertaNotificacion:
+    type: object
+    additionalProperties: false
+    required: [id, notificacion_id, condominio_id, departamento_id, departamento_numero, tipo_evento, ciclo, tipo, mensaje, estado, creada_en, atendida_en, atendida_por]
+    properties:
+      id: {$ref: '#/schemas/UUID'}
+      notificacion_id: {$ref: '#/schemas/UUID'}
+      condominio_id: {$ref: '#/schemas/UUID'}
+      departamento_id: {$ref: '#/schemas/UUID'}
+      departamento_numero: {type: string}
+      tipo_evento: {type: string}
+      ciclo: {type: integer, minimum: 1}
+      tipo: {type: string, enum: [ERROR_DEFINITIVO, INTENTOS_AGOTADOS, ACEPTACION_INCIERTA, DESTINATARIO_INVALIDO, PROVEEDOR_NO_CONFIGURADO]}
+      mensaje: {type: string, description: Texto operativo sin contactos ni datos sensibles.}
+      estado: {type: string, enum: [ABIERTA, ATENDIDA]}
+      creada_en: {$ref: '#/schemas/InstanteUTC'}
+      atendida_en: {type: [string, 'null'], format: date-time}
+      atendida_por: {type: [string, 'null'], format: uuid}
   DespacharNotificacion:
     type: object
     additionalProperties: false

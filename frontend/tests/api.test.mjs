@@ -225,3 +225,25 @@ test("el catálogo administrativo transmite costo como cadena y el estado en su 
   assert.deepEqual(JSON.parse(solicitudes[3].init.body), { esta_activa: false });
   assert.equal(new URL(solicitudes[3].url).pathname.endsWith(`/${aid}/estado`), true);
 });
+
+test("las alertas de entrega usan la ruta y el método correctos y propagan errores", async (t) => {
+  const cid = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+  const solicitudes = [];
+  const mock = t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url: String(url), init });
+    return new Response(JSON.stringify([]));
+  });
+  await api.listarAlertasNotificacion(cid);
+  const lista = new URL(solicitudes[0].url);
+  assert.equal(lista.pathname.endsWith("/notificaciones/alertas"), true);
+  assert.equal(lista.searchParams.get("condominio_id"), cid);
+  assert.equal(solicitudes[0].init.method, undefined);
+  await api.atenderAlertaNotificacion("alerta/1");
+  assert.equal(new URL(solicitudes[1].url).pathname.endsWith("/notificaciones/alertas/alerta%2F1/atender"), true);
+  assert.equal(solicitudes[1].init.method, "POST");
+  mock.mock.mockImplementation(async () => new Response(
+    JSON.stringify({ detail: { mensaje: "Acceso denegado" } }), { status: 403 },
+  ));
+  await assert.rejects(api.listarAlertasNotificacion(cid), /Acceso denegado/);
+  await assert.rejects(api.atenderAlertaNotificacion("alerta"), /Acceso denegado/);
+});

@@ -3,6 +3,7 @@
 Implementa la matriz de plantillas dinámicas según specs/02-domains/03-notificaciones/spec.md.
 """
 
+from string import Formatter
 from typing import Any, Dict, Tuple
 
 PLANTILLAS_CONFIG = {
@@ -13,7 +14,7 @@ PLANTILLAS_CONFIG = {
             "Se ha emitido la cuota de mantenimiento ordinaria correspondiente al periodo {periodo}.\n"
             "• Monto a pagar: {moneda} {monto}\n"
             "• Fecha límite de vencimiento: {vencimiento}\n"
-            "• Cuenta de recaudación / CCI: {cci_banco}\n\n"
+            "• Medios de pago: {medios_pago}\n\n"
             "Recuerde subir su comprobante una vez efectuado el abono desde la plataforma.\n"
             "Atentamente,\nJunta Directiva"
         ),
@@ -45,7 +46,7 @@ PLANTILLAS_CONFIG = {
             "Nos complace informarle que su comprobante de pago ha sido validado y conciliado con éxito.\n"
             "• Monto abonado: {moneda} {monto_abonado}\n"
             "• Saldo restante del departamento: {moneda} {saldo_restante}\n"
-            "• Comprobante digital: {recibo_url}\n\n"
+            "Puede consultar el detalle en su historial de pagos.\n\n"
             "Gracias por su compromiso y puntualidad con el edificio.\n"
             "Atentamente,\nJunta Directiva"
         ),
@@ -65,7 +66,7 @@ PLANTILLAS_CONFIG = {
         "cuerpo": (
             "Estimado(a) {nombre} (Dpto. {dpto}):\n"
             "Su comprobante requiere revisión. Motivo: {motivo_rechazo}\n"
-            "Adjunte un nuevo archivo desde Subsanar voucher en su historial: {enlace_subir_nuevo}\n"
+            "Para subsanarlo, adjunte un nuevo archivo con la opción Subsanar voucher de su historial de pagos.\n"
             "No se han aplicado saldos por esta observación."
         ),
     },
@@ -113,50 +114,50 @@ PLANTILLAS_CONFIG = {
 }
 
 
+class PlantillaIncompletaError(ValueError):
+    """Plantilla desconocida o sin todas sus variables; el mensaje nunca incluye valores."""
+
+    def __init__(self, tipo_evento: str, faltantes: list[str] | None = None):
+        self.tipo_evento = tipo_evento
+        self.faltantes = sorted(faltantes or [])
+        detalle = (
+            f"Faltan variables: {', '.join(self.faltantes)}."
+            if self.faltantes
+            else "Tipo de plantilla no soportado."
+        )
+        super().__init__(f"Plantilla {tipo_evento} incompleta. {detalle}")
+
+
+def _campos(texto: str) -> set[str]:
+    return {nombre for _, nombre, _, _ in Formatter().parse(texto) if nombre}
+
+
+# Variables obligatorias derivadas de los placeholders de cada plantilla.
+VARIABLES_OBLIGATORIAS = {
+    tipo: sorted(_campos(config["asunto"]) | _campos(config["cuerpo"]))
+    for tipo, config in PLANTILLAS_CONFIG.items()
+}
+
+
 class PlantillasService:
     @staticmethod
+    def variables_requeridas(tipo_evento: str) -> list[str]:
+        if tipo_evento not in VARIABLES_OBLIGATORIAS:
+            raise PlantillaIncompletaError(tipo_evento)
+        return list(VARIABLES_OBLIGATORIAS[tipo_evento])
+
+    @staticmethod
     def renderizar(tipo_evento: str, contexto: Dict[str, Any]) -> Tuple[str, str]:
-        """Renderiza de forma segura el asunto y el cuerpo de una plantilla inyectando variables de contexto."""
-        config = PLANTILLAS_CONFIG.get(tipo_evento)
-        if not config:
-            asunto = f"CondoManager Notificación: {tipo_evento}"
-            cuerpo = str(contexto)
-            return asunto, cuerpo
-
-        # Valores por defecto seguros para evitar KeyErrors
-        contexto_seguro = {
-            "moneda": "S/",
-            "costo": "No disponible",
-            "ajuste": "No disponible",
-            "nombre": "Residente",
-            "dpto": "-",
-            "periodo": "-",
-            "monto": "0.00",
-            "vencimiento": "-",
-            "cci_banco": "002-191-000000000000-54",
-            "fecha_corte": "-",
-            "monto_pendiente": "0.00",
-            "banco": "BANCO",
-            "numero_operacion": "000000",
-            "monto_abonado": "0.00",
-            "saldo_restante": "0.00",
-            "recibo_url": "https://app.condomanager.pe/recibos/",
-            "motivo_rechazo": "Comprobante no coincide con extracto",
-            "enlace_subir_nuevo": "https://app.condomanager.pe/pagos/reportar",
-            "monto_mora": "20.00",
-            "nuevo_saldo": "0.00",
-            "aviso_bloqueo_reservas": "Inhabilitado para reservar áreas comunes",
-            "area": "Área Común",
-            "fecha": "-",
-            "horario": "-",
-            "normas_convivencia": "Aforo máximo respetado y limpieza obligatoria",
-            "motivo": "Cancelación solicitada",
-            "titulo": "Comunicado General",
-            "mensaje": "",
-            "remitente": "Junta Directiva",
-        }
-        contexto_seguro.update(contexto)
-
-        asunto = config["asunto"].format(**contexto_seguro)
-        cuerpo = config["cuerpo"].format(**contexto_seguro)
-        return asunto, cuerpo
+        """Renderiza asunto y cuerpo; no completa ningún dato que falte con valores por defecto."""
+        requeridas = PlantillasService.variables_requeridas(tipo_evento)
+        contexto = contexto or {}
+        faltantes = [
+            nombre
+            for nombre in requeridas
+            if contexto.get(nombre) is None or str(contexto[nombre]).strip() == ""
+        ]
+        if faltantes:
+            raise PlantillaIncompletaError(tipo_evento, faltantes)
+        config = PLANTILLAS_CONFIG[tipo_evento]
+        valores = {nombre: contexto[nombre] for nombre in requeridas}
+        return config["asunto"].format(**valores), config["cuerpo"].format(**valores)

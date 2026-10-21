@@ -383,6 +383,7 @@ export default function JuntaPortal() {
             <ComunicadosSection
               loading={loading}
               notificaciones={notificaciones}
+              condominioId={condominioActivoId}
               isAuditor={isAuditor}
               titulo={titulo}
               mensaje={mensaje}

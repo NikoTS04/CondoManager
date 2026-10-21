@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     String,
+    Text,
     Time,
     UniqueConstraint,
 )
@@ -37,11 +38,15 @@ class Reserva(Base):
         ForeignKey("departamentos.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    usuario_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("usuarios.id", ondelete="RESTRICT"),
-        nullable=False,
+    condominio_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("condominios.id", ondelete="RESTRICT"), nullable=False
     )
+    # Nulo solo en reservas históricas adoptadas por CON-73.
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=True
+    )
+    moneda: Mapped[str] = mapped_column(String(3), nullable=False)
+    area_nombre: Mapped[str] = mapped_column(Text, nullable=False)
     fecha_reserva: Mapped[date] = mapped_column(Date, nullable=False)
     hora_inicio: Mapped[time] = mapped_column(Time, nullable=False)
     hora_fin: Mapped[time] = mapped_column(Time, nullable=False)
@@ -50,14 +55,20 @@ class Reserva(Base):
     )
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="SOLICITADA")
     # Los históricos sin marca eran UTC; las nuevas reservas conservan su zona.
-    zona_horaria: Mapped[str] = mapped_column(String(30), nullable=False, default="UTC")
+    zona_horaria: Mapped[str] = mapped_column(String(40), nullable=False, default="UTC")
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    fecha_cancelacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelado_por: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT")
+    )
+    motivo_cancelacion: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
+        CheckConstraint("moneda IN ('PEN', 'USD')", name="ck_reserva_moneda"),
         CheckConstraint("zona_horaria IN ('UTC', 'America/Lima')", name="ck_reserva_zona"),
         CheckConstraint("hora_fin > hora_inicio", name="ck_reserva_horario"),
         CheckConstraint("costo_reserva >= 0.00", name="ck_reserva_costo"),
@@ -65,9 +76,23 @@ class Reserva(Base):
             "estado IN ('SOLICITADA', 'CONFIRMADA', 'RECHAZADA', 'CANCELADA', 'COMPLETADA')",
             name="ck_reserva_estado",
         ),
-        Index("idx_reservas_area_fecha_estado", "area_id", "fecha_reserva", "estado"),
-        Index("idx_reservas_depto_estado", "departamento_id", "estado"),
+        Index("idx_reservas_contexto_unidad", "condominio_id", "departamento_id"),
+        Index("idx_reservas_area_fecha", "area_id", "fecha_reserva", "estado"),
     )
+
+
+class BloqueoArea(Base):
+    __tablename__ = "bloqueos_area"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    area_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("areas_comunes.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    fin: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    activo: Mapped[bool] = mapped_column(default=True, nullable=False)
+
+    __table_args__ = (CheckConstraint("fin > inicio", name="ck_bloqueo_intervalo"),)
 
 
 class CobroReserva(Base):
@@ -119,7 +144,7 @@ class EventoReservaOutbox(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     reserva_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("reservas.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("reservas.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     tipo: Mapped[str] = mapped_column(
         String(60),

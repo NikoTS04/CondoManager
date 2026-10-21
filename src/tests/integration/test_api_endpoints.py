@@ -225,12 +225,20 @@ async def test_api_condominio_persistencia_postgres(monkeypatch):
     from httpx import ASGITransport, AsyncClient
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.pool import NullPool
 
     from src.core.database import get_db_session
     from src.core.models_audit import AuditoriaLogORM
     from src.core.security import create_access_token
+    from src.tests.usuarios_db import borrar_base, crear_base
 
-    engine = create_async_engine(database_url)
+    # Esquema aislado y migrado con Alembic: no depende de que la base ya esté migrada.
+    base = await crear_base(database_url)
+    engine = create_async_engine(
+        database_url,
+        poolclass=NullPool,
+        connect_args={"server_settings": {"search_path": base.esquema}},
+    )
     actor_id = str(uuid.uuid4())
     token = create_access_token({"sub": actor_id, "rol": "SUPERADMIN"})
     try:
@@ -281,3 +289,4 @@ async def test_api_condominio_persistencia_postgres(monkeypatch):
                     await transaction.rollback()
     finally:
         await engine.dispose()
+        await borrar_base(base)
