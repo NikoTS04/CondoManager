@@ -17,7 +17,8 @@ import {
   fetchComprobantes,
 } from "@/lib/api";
 import { SolvenciaBanner } from "@/components/domain/SolvenciaBanner";
-import { Spinner } from "@/components/ui/Feedback";
+import { SkeletonList, Spinner } from "@/components/ui/Feedback";
+import { TabPanel } from "@/components/ui/Tabs";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { AvisosList } from "@/features/residente/AvisosList";
@@ -45,7 +46,7 @@ function ResidenteContent() {
   const departamentoId = user ? seleccionarUnidad(user, dptoParam, activeDepartment, departamentos.map((d) => d.id)) : "";
   const [contextoId] = useState(() => user?.condominio_id ||
     (user?.rol === "SUPERADMIN" ? localStorage.getItem("condo_active_id") : null));
-  const [activeTab, setActiveTab] = useState<ResidenteTab>("reservas");
+  const [activeTab, setActiveTab] = useState<ResidenteTab>("cuenta");
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
@@ -220,7 +221,7 @@ function ResidenteContent() {
       )}
 
       {/* Solo mostrar SolvenciaBanner si el departamento está confirmado por backend */}
-      {deptoActual && !loadingInitial && !errorDeptos && (
+      {activeTab !== "cuenta" && deptoActual && !loadingInitial && !errorDeptos && deptoActual.estado_financiero !== "OBSERVADO" && (
         <SolvenciaBanner
           solvente={deptoActual.estado_financiero === "AL_DIA"}
           deudaVencida={deptoActual.deuda_vencida}
@@ -231,6 +232,7 @@ function ResidenteContent() {
       {/* Navegación responsiva: Tabs en sm+ y barra inferior fija en móvil */}
       <ResidenteNav activeTab={activeTab} onChangeTab={setActiveTab} />
 
+      <TabPanel idPrefix="residente" id={activeTab}>
       {/* Contenido según la pestaña activa */}
       {activeTab === "reservas" && (
         <div className="grid gap-6 lg:grid-cols-3">
@@ -304,8 +306,10 @@ function ResidenteContent() {
               loading={loadingInitial}
               error={errorDeptos}
               onRetry={() => void loadData()}
+              onReportarPago={() => setActiveTab("pagos")}
+              onReservar={() => setActiveTab("reservas")}
             />
-          ) : (
+          ) : loadingInitial ? <SkeletonList rows={3} label="Cargando tu cuenta…" /> : (
             <Alert
               tone="warning"
               title="Información de cuenta no disponible"
@@ -324,6 +328,7 @@ function ResidenteContent() {
           )}
         </>
       )}
+      </TabPanel>
     </div>
   );
 }

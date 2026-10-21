@@ -17,8 +17,8 @@ export function ResidenteHeader({ depto, departamentos, onSelectDepartamento, us
   const isJunta = user?.rol === "ADMIN_JUNTA" || user?.rol === "SUPERADMIN";
   return (
     <PageHeader
-      title={depto ? `Portal del Residente · Dpto. ${depto.numero}` : "Portal del Residente"}
-      description={depto ? `${depto.edificio_nombre ? `${depto.edificio_nombre} · ` : ""}Piso ${depto.piso} · Alícuota: ${depto.coeficiente}%` : "Consulta tus cuotas, comprobantes y reservas."}
+      title={depto ? `Departamento ${depto.numero}` : "Tu departamento"}
+      description={depto ? `${depto.edificio_nombre ? `${depto.edificio_nombre} · ` : ""}Piso ${depto.piso}` : "Consulta tu cuenta, reporta pagos y reserva espacios."}
       eyebrow={(
         <Badge tone={isJunta ? "info" : "neutral"}>
           {isJunta ? "Soporte Junta Directiva" : user ? etiquetaResidente(user, depto?.id || "") : "Residente"}

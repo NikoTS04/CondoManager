@@ -4,12 +4,13 @@ import { ComprobanteStatusChip } from "@/components/domain/ComprobanteStatusChip
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, SkeletonList } from "@/components/ui/Feedback";
-import type { ComprobantePago } from "@/lib/api";
+import type { ComprobantePago, DepartamentoRegistrado } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 
 interface ConciliacionSectionProps {
   loading: boolean;
   comprobantes: ComprobantePago[];
+  departamentos: DepartamentoRegistrado[];
   isAuditor: boolean;
   onDecide: (id: string, decision: "APROBADO" | "RECHAZADO" | "OBSERVADO") => void;
 }
@@ -17,6 +18,7 @@ interface ConciliacionSectionProps {
 export function ConciliacionSection({
   loading,
   comprobantes,
+  departamentos,
   isAuditor,
   onDecide,
 }: ConciliacionSectionProps) {
@@ -57,7 +59,8 @@ export function ConciliacionSection({
               {comprobantes.map((comprobante) => (
                 <tr key={comprobante.id} className="border-b border-line">
                   <th scope="row" className="p-3 text-left">
-                    {comprobante.departamento_id}
+                    {departamentos.find((d) => d.id === comprobante.departamento_id)?.numero ?? comprobante.departamento_id}
+                    <span className="mt-1 block text-xs font-normal text-muted">ID {comprobante.departamento_id}</span>
                   </th>
                   <td className="p-3">
                     {comprobante.banco} · {comprobante.numero_operacion}

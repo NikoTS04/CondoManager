@@ -54,26 +54,29 @@ export function JuntaNav({ section, isSuperAdmin, isAuditor, pendientes, onNavig
   return (
     <nav
       aria-label="Secciones de Junta"
-      className="flex gap-2 overflow-x-auto pb-2 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0"
+      className="flex gap-2 overflow-x-auto pb-2 md:block md:space-y-1 md:overflow-visible md:pb-0"
     >
       {items.map(({ id, label, Icon }) => (
         <button
           key={id}
           type="button"
           aria-current={section === id ? "page" : undefined}
+          aria-label={label}
+          title={label}
           onClick={() => onNavigate(id)}
           className={cn(
             "flex min-h-11 shrink-0 items-center gap-3 rounded-lg px-3",
-            "text-sm font-medium transition-colors lg:w-full",
+            "text-left text-sm font-medium transition-colors duration-150 md:w-full md:justify-center md:px-2 lg:justify-start lg:px-3",
+            (id === "presupuesto" || id === "comunicados") && "md:!mt-5",
             section === id
-              ? "bg-info-50 text-info-700"
+              ? "bg-brand-50 text-brand-800"
               : "text-muted hover:bg-canvas hover:text-ink",
           )}
         >
           <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-          <span>{label}</span>
+          <span className="md:hidden lg:inline">{label}</span>
           {id === "conciliacion" && pendientes > 0 && (
-            <Badge tone="warning">{pendientes}</Badge>
+            <span className="md:hidden lg:inline"><Badge tone="warning">{pendientes}</Badge></span>
           )}
         </button>
       ))}
