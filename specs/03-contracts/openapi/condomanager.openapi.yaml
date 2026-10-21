@@ -10,6 +10,8 @@ servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
 tags:
+  - name: Catálogo de áreas
+    description: Condiciones persistentes y administración contextual de áreas comunes.
   - name: Usuarios y permisos
     description: Asignaciones contextuales y revocación de permisos.
   - name: Cuotas de Mantenimiento
@@ -280,10 +282,114 @@ paths:
         '403': { $ref: '#/components/responses/Error403' }
   /pagos/comprobantes:
     $ref: './sprint-2.paths.yaml#/paths/~1pagos~1comprobantes'
+  /condominios/{condominio_id}/areas:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listarCatalogoAdministrativo
+      tags: [Catálogo de áreas]
+      summary: Consultar áreas activas e inactivas del condominio
+      description: SuperAdmin y Junta administran su contexto; Auditor solo consulta.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: esta_activa, in: query, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Catálogo contextual persistido
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AreaCatalogo' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: CONDOMINIO_NO_ENCONTRADO }
+        '422': { description: DATOS_AREA_INVALIDOS }
+    post:
+      operationId: crearAreaComun
+      tags: [Catálogo de áreas]
+      summary: Registrar un área activa y sus condiciones
+      description: Administración autorizada; valida edificio y registra auditoría en la misma transacción.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfigurarArea' }
+      responses:
+        '201': { $ref: '#/components/responses/AreaCatalogoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o edificio no encontrados en el contexto }
+        '422': { description: DATOS_AREA_INVALIDOS }
+  /condominios/{condominio_id}/areas/{area_id}:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: area_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: consultarAreaComun
+      tags: [Catálogo de áreas]
+      summary: Consultar la configuración administrativa de un área
+      description: Incluye áreas inactivas sin mezclar condominios.
+      responses:
+        '200': { $ref: '#/components/responses/AreaCatalogoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: AREA_NO_ENCONTRADA o CONDOMINIO_NO_ENCONTRADO }
+        '422': { description: DATOS_AREA_INVALIDOS }
+    put:
+      operationId: configurarAreaComun
+      tags: [Catálogo de áreas]
+      summary: Reemplazar condiciones conservando identidad y estado
+      description: No cambia reservas anteriores; configuración idéntica no duplica auditoría.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfigurarArea' }
+      responses:
+        '200': { $ref: '#/components/responses/AreaCatalogoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Área o edificio o condominio no encontrados en el contexto }
+        '422': { description: DATOS_AREA_INVALIDOS }
+  /condominios/{condominio_id}/areas/{area_id}/estado:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: area_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: cambiarEstadoAreaComun
+      tags: [Catálogo de áreas]
+      summary: Activar o desactivar un área sin borrarla
+      description: Una desactivación confirmada impide nuevas reservas y conserva el historial.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [esta_activa]
+              properties:
+                esta_activa: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/AreaCatalogoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: AREA_NO_ENCONTRADA o CONDOMINIO_NO_ENCONTRADO }
+        '422': { description: DATOS_AREA_INVALIDOS }
   /areas:
-    $ref: './sprint-2.paths.yaml#/paths/~1areas'
-  /areas/{area_id}:
-    $ref: './sprint-2.paths.yaml#/paths/~1areas~1%7Barea_id%7D'
+    get:
+      operationId: listarAreas
+      summary: Áreas comunes activas del contexto autorizado
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+      responses:
+        '200':
+          description: Catálogo SQL activo autorizado por contexto y edificio
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AreaCatalogo' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
   /areas/{area_id}/disponibilidad:
     $ref: './sprint-2.paths.yaml#/paths/~1areas~1%7Barea_id%7D~1disponibilidad'
   /reservas/{reserva_id}/cancelar:
@@ -833,6 +939,38 @@ components:
       bearerFormat: JWT
 
   schemas:
+    ConfigurarArea:
+      type: object
+      additionalProperties: false
+      required: [nombre, aforo_maximo, costo_reserva, hora_apertura, hora_cierre, tiempo_maximo_horas]
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 100 }
+        descripcion: { type: [string, 'null'], maxLength: 4000 }
+        edificio_id: { type: [string, 'null'], format: uuid }
+        aforo_maximo: { type: integer, minimum: 1, maximum: 2147483647 }
+        costo_reserva: { type: string, pattern: '^[0-9]{1,10}(?:\.[0-9]{1,2})?$' }
+        hora_apertura: { type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$' }
+        hora_cierre: { type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$' }
+        tiempo_maximo_horas: { type: integer, minimum: 1, maximum: 24 }
+    AreaCatalogo:
+      type: object
+      additionalProperties: false
+      required: [id, condominio_id, edificio_id, edificio_nombre, nombre, descripcion, aforo_maximo, costo_reserva, hora_apertura, hora_cierre, tiempo_maximo_horas, esta_activa, moneda, zona_horaria]
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        edificio_id: { type: [string, 'null'], format: uuid }
+        edificio_nombre: { type: [string, 'null'] }
+        nombre: { type: string }
+        descripcion: { type: [string, 'null'] }
+        aforo_maximo: { type: integer, minimum: 1 }
+        costo_reserva: { type: string, pattern: '^\d+\.\d{2}$' }
+        hora_apertura: { type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$' }
+        hora_cierre: { type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$' }
+        tiempo_maximo_horas: { type: integer, minimum: 1 }
+        esta_activa: { type: boolean }
+        moneda: { type: string, enum: [PEN, USD], readOnly: true }
+        zona_horaria: { type: string, const: America/Lima, readOnly: true }
     CrearUsuario:
       type: object
       additionalProperties: false
@@ -1192,6 +1330,11 @@ components:
       $ref: './sprint-2.schemas.yaml#/schemas/Error'
 
   responses:
+    AreaCatalogoResponse:
+      description: Condiciones persistidas del área
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AreaCatalogo' }
     Error400:
       description: Solicitud mal formada o parámetros inválidos
       content:

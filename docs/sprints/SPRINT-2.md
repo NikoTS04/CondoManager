@@ -279,6 +279,12 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-39 — Administrar el catálogo de áreas comunes
 
+Contrato: [catálogo persistente](../../specs/02-domains/04-reservas/catalogo-areas.md).
+Configuración contextual de áreas, horarios diarios en Lima, duración, aforo y costo
+Decimal; conservación de estado/historial y validación del edificio exclusivo.
+El catálogo SQL se implementa aquí como base compartida para CON-73.
+Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
+
 **Historia:** Como administrador, quiero configurar las áreas comunes, para publicar sus condiciones de uso y reserva.
 
 **Debe incluir:**
@@ -407,7 +413,7 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 **Base de implementación:** [contratos del Sprint 2 / CON-72](../../specs/05-api/sprint-2-contratos.md), para que cada responsable implemente su HU. La entrega se limita a OpenAPI, esquemas de eventos, catálogo y guía de contratos. Los ajustes de dominio, proceso y persistencia se incorporan junto con la implementación de cada HU.
 
-CON-72 conserva las interfaces de CON-05/06 integradas en `develop`: vínculos mediante `GET/PUT/DELETE` y una asignación contextual mediante `/rol`. Sus rutas y esquemas se mantienen en el OpenAPI principal; los fragmentos del sprint cubren los contratos restantes.
+CON-72 conserva las interfaces de CON-05/06/39 integradas en `develop`: vínculos mediante `GET/PUT/DELETE`, una asignación contextual mediante `/rol` y catálogo SQL con horarios diarios, moneda y restricciones por edificio. Sus rutas y esquemas se mantienen en el OpenAPI principal; los fragmentos del sprint cubren los contratos restantes.
 
 **Estado de verificación:** revisión documental; adopción por los módulos, validación automatizada y revisión de pares pendientes. Publicar estos contratos no acredita el cierre de CON-72.
 

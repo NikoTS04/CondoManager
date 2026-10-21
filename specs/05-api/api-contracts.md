@@ -8,8 +8,8 @@ En el Desarrollo Guiado por Especificaciones (SDD), los contratos de API sirven 
 
 Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y respuesta binaria para su descarga. Convenciones:
 - **Prefijo base:** `/api/v1`
-- **Fechas y horas:** calendario `America/Lima`, fechas `YYYY-MM-DD` y horas `HH:MM:00`; instantes de auditoría/eventos en UTC. Intervalos `[inicio, fin)`.
-- **Importes:** cadenas con dos decimales (`"150.00"`), dentro de `NUMERIC(12,2)`; cálculos con `Decimal`. Se rechazan números JSON, exponentes y precisión adicional.
+- **Fechas y horas:** calendario `America/Lima`, fechas `YYYY-MM-DD`, configuración del catálogo `HH:MM` y nuevas reservas `HH:MM:00`; instantes de auditoría/eventos en UTC. Intervalos `[inicio, fin)`; históricos sin marca local conservan interpretación UTC.
+- **Importes:** respuestas/eventos con dos decimales (`"150.00"`), dentro de `NUMERIC(12,2)`; cálculos con `Decimal`. La configuración CON-39 acepta cadenas con hasta dos decimales y normaliza su salida. Los nuevos contratos rechazan números JSON, exponentes y precisión adicional.
 - **Errores:** objeto en raíz; `detalles` opcional es un objeto, con validaciones en `detalles.errores`. No incluir valores sensibles.
 - **Manejo de errores estándar:**
   ```json
@@ -70,6 +70,20 @@ Primer vínculo de titular; retirar/cambiar al último titular responde
 Un cambio real invalida JWT anteriores y registra el departamento en auditoría.
 `GET /cuotas/departamentos` y lectura de unidades en pagos/reservas usan SQL real;
 el portal añade edificio para distinguir números de unidad repetidos.
+
+### Catálogo de áreas comunes (CON-39 / PROC-04)
+
+Contrato: [catálogo de áreas](../02-domains/04-reservas/catalogo-areas.md).
+`GET|POST /condominios/{cid}/areas`, `GET|PUT /condominios/{cid}/areas/{aid}` y
+`PATCH /condominios/{cid}/areas/{aid}/estado`. Administración contextual; Auditor
+solo lee. Configuración completa: nombre, descripción, edificio opcional, aforo,
+costo decimal como cadena, apertura/cierre `HH:MM` y duración máxima entera.
+POST devuelve 201; consultas, PUT y estado 200. No-op sin nueva auditoría.
+El portal `GET /areas` usa SQL activo y edificio autorizado, con moneda del
+condominio y `zona_horaria=America/Lima`. Nuevas reservas leen esas condiciones:
+409 AREA_INACTIVA, 400 HORARIO_INVALIDO o 403 por edificio/contexto no autorizado.
+Cambios y auditoría son atómicos; no hay borrado físico. Validaciones de catálogo:
+422 DATOS_AREA_INVALIDOS. Pertenencia desconocida: 404, sin filtrar datos ajenos.
 
 ### Distribución de cuotas (CON-10)
 
@@ -313,14 +327,14 @@ Contrato completo: [reservas del Sprint 2](sprint-2-contratos.md#4-catálogo-dis
 
 | Operación | Contrato |
 |---|---|
-| `GET /areas` | Catálogo autorizado con horarios y zona; áreas inactivas solo para consulta administrativa/auditor expresamente solicitada. |
-| `POST /areas`, `PATCH /areas/{area_id}` | Alta/edición/desactivación administrativa, conservando historial. |
+| `GET /areas` | Catálogo SQL activo del portal, filtrado por contexto y edificio, con apertura/cierre diarios, duración máxima y moneda. |
+| `GET|POST /condominios/{cid}/areas`, `GET|PUT /condominios/{cid}/areas/{aid}`, `PATCH .../{aid}/estado` | Gestión CON-39 ya integrada; consulta administrativa incluye inactivas, Auditor solo lee y las mutaciones conservan historial. |
 | `GET /areas/{area_id}/disponibilidad?fecha=YYYY-MM-DD` | Arreglo de intervalos ocupados sin datos personales; se cruza con el horario del catálogo. |
 | `GET /reservas` | Reservas autorizadas, no calendario general de otras unidades. |
 | `POST /reservas` | UUID de condominio, área y departamento; `fecha_reserva`, `hora_inicio`, `hora_fin`. `201` tras commit, `403 DEUDA_MORA_ACTIVA`, `409 HORARIO_NO_DISPONIBLE`. |
 | `POST /reservas/{reserva_id}/cancelar` | Motivo opcional, permiso desde sesión; `200` idempotente con fecha original y estado real del ajuste económico. |
 
-La respuesta de creación es `Reserva`: `id`, `condominio_id`, `area_id`, `area_nombre` opcional, `departamento_id`, fecha, horas, `zona_horaria`, `costo_reserva`, `estado` y `creado_en`. Horas `HH:MM:00` en America/Lima, intervalos `[inicio, fin)`; cancelación voluntaria con `>= 24h` tras convertir el inicio a instante UTC. `es_admin` del cliente no concede privilegios.
+La respuesta de creación es `Reserva`: `id`, `condominio_id`, `area_id`, `area_nombre` opcional, `departamento_id`, fecha, horas, `zona_horaria`, `costo_reserva`, `moneda`, `estado` y `creado_en`. Nuevas reservas usan horas `HH:MM:00` en America/Lima; las históricas sin marca local conservan interpretación UTC. Intervalos `[inicio, fin)`; cancelación voluntaria con `>= 24h` tras convertir el inicio según su zona. `es_admin` del cliente no concede privilegios. Se conservan `400 HORARIO_INVALIDO` y `409 AREA_INACTIVA` de CON-39.
 
 ### 2.6 Notificaciones — Alejandro
 

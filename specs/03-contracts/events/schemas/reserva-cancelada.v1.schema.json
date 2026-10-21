@@ -17,7 +17,7 @@
         "fecha_reserva": {"type": "string", "format": "date"},
         "hora_inicio": {"$ref": "./event-envelope.v1.schema.json#/$defs/hora_local"},
         "hora_fin": {"$ref": "./event-envelope.v1.schema.json#/$defs/hora_local"},
-        "zona_horaria": {"const": "America/Lima"},
+        "zona_horaria": {"enum": ["America/Lima", "UTC"], "description": "Conserva la interpretación de la reserva; UTC solo para registros históricos sin marca local."},
         "fecha_cancelacion": {"$ref": "./event-envelope.v1.schema.json#/$defs/instante_utc"},
         "motivo": {"type": "string", "minLength": 1, "maxLength": 500},
         "ajuste_economico": {"$ref": "./event-envelope.v1.schema.json#/$defs/ajuste_cancelacion"}

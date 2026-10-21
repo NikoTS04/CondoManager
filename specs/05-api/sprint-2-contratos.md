@@ -13,15 +13,16 @@
 
 CON-72 entrega interfaces para que cada responsable implemente sus historias. Definir un endpoint en OpenAPI no lo incorpora a FastAPI. Los routers, DTO Python, tipos TypeScript, repositorios y migraciones actuales deben adoptar estos contratos en las HU indicadas; los almacenes piloto en memoria no satisfacen la integración persistente.
 
-CON-04/05/06 conservan las interfaces ya integradas en `develop`: alta administrativa, vínculos persistentes y una asignación de rol por usuario y condominio. Sus rutas y esquemas permanecen en el OpenAPI principal; los fragmentos del sprint no los duplican.
+CON-04/05/06/39 conservan las interfaces ya integradas en `develop`: alta administrativa, vínculos persistentes, una asignación de rol por usuario y condominio y catálogo SQL de áreas. Sus rutas y esquemas permanecen en el OpenAPI principal; los fragmentos del sprint no los duplican.
 
 Para los contratos del Sprint 2 se usan los artefactos de esta tabla. Cada responsable alinea los documentos de dominio, proceso y persistencia afectados en el PR que implemente su HU; esas actualizaciones generales quedan fuera de esta entrega.
 
 ## 2. Convenciones comunes
 
 - HTTP REST con JSON, excepto subida multipart y descarga binaria de vouchers. No se exige el formato JSON:API. Prefijo `/api/v1`, identificadores UUID y cuerpos con campos adicionales rechazados, salvo mapas expresamente abiertos.
-- Dinero como cadena de dos posiciones, sin notación exponencial y dentro de `NUMERIC(12,2)`. Se rechaza precisión adicional; los cálculos usan `Decimal`. La moneda se hereda del condominio; el cliente no elige otra para una reserva o comprobante.
-- Calendario en `America/Lima`. Fechas `YYYY-MM-DD`; horas `HH:MM:00`, con precisión de minuto. No se cruza medianoche: dividir usos de distintos días en operaciones separadas. Intervalos semiabiertos `[inicio, fin)`; dos intervalos contiguos no se solapan.
+- Importes de respuestas, eventos y nuevos contratos como cadenas de dos posiciones, sin notación exponencial y dentro de `NUMERIC(12,2)`. La configuración de áreas CON-39 conserva su entrada decimal como cadena con hasta dos decimales y salida normalizada a dos. Se rechaza precisión adicional; los cálculos usan `Decimal`. La moneda se hereda del condominio (PEN/USD); el cliente no elige otra para una reserva o comprobante.
+- Calendario en `America/Lima`. Fechas `YYYY-MM-DD`; apertura/cierre del catálogo en `HH:MM` y horas de nuevas reservas en `HH:MM:00`, con precisión de minuto. No se cruza medianoche: dividir usos de distintos días en operaciones separadas. Intervalos semiabiertos `[inicio, fin)`; dos intervalos contiguos no se solapan.
+- CON-39 conserva la interpretación UTC de reservas históricas sin marca de zona. No reinterpretarlas como horas de Lima; CON-73 preserva sus instantes y CON-40 convierte al calendario local al consultar ocupaciones. Las reservas nuevas guardan su zona y moneda junto con la tarifa confirmada.
 - Instantes de auditoría, confirmación, cancelación y eventos en UTC, con `Z` u offset `+00:00`. Para aplicar 24 horas se convierte fecha/hora local del inicio a un instante; nunca asignar UTC directamente a una hora de Lima.
 - El calendario local no modifica la planificación UTC ya implementada por el worker de cuotas de CON-11; cualquier cambio de ese cron se acuerda en su propia historia.
 - Bearer obligatorio salvo login, salud y demo según su contrato. `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE` son los únicos roles; propietario, copropietario e inquilino son relaciones por departamento.
@@ -59,23 +60,27 @@ La mutación serializa asignaciones, revalida al actor y confirma rol, auditorí
 
 ## 4. Catálogo, disponibilidad y reservas
 
-### CON-39 — Jerson; persistencia CON-73 — Nicolás
+### CON-39 — catálogo integrado por Jerson
 
-`GET /areas?condominio_id=...` devuelve áreas activas, horarios, reglas y `zona_horaria=America/Lima`. Administración/auditor pueden usar `incluir_inactivas=true`; para residentes ese filtro se rechaza.
+Se conserva el [contrato de catálogo integrado](../02-domains/04-reservas/catalogo-areas.md). `GET /areas?condominio_id=...` devuelve el catálogo SQL activo del portal, con moneda y `zona_horaria=America/Lima`; el residente solo consulta áreas compartidas o de edificios con unidades activamente vinculadas.
 
-`POST /areas` crea nombre, descripción, aforo positivo, costo no negativo, normas y horarios. `PATCH /areas/{area_id}` edita condiciones o desactiva, solo para administración del contexto. Horarios semanales: `dia_semana` ISO 1–7, inicio menor a fin y sin solapamientos dentro del mismo día. El alta requiere al menos un horario. No se cambia condominio ni se borran reservas; una edición no recalcula costos de reservas ya confirmadas.
+Administración usa `GET|POST /condominios/{condominio_id}/areas`, `GET|PUT /condominios/{condominio_id}/areas/{area_id}` y `PATCH /condominios/{condominio_id}/areas/{area_id}/estado`. Auditor solo consulta. El listado administrativo admite `limit`, `offset` y `esta_activa`; POST devuelve `201`, consultas/edición/estado `200`.
 
-CON-73 define además lectura de bloqueos operativos persistidos por área/fecha/intervalo, activos y sin datos personales. Si no existen, la colección es vacía. La API de gestión de bloqueos no se añade al alcance de CON-39; cualquier nueva operación se acuerda mediante PR.
+POST/PUT reciben nombre, aforo, costo, `hora_apertura`, `hora_cierre` y `tiempo_maximo_horas`; descripción y edificio son opcionales. Apertura/cierre `HH:MM`, iguales para todos los días, apertura menor a cierre y duración máxima entera 1–24 horas. No hay horarios semanales ni campo de normas en esta entrega. El cliente no determina moneda, contexto ni estado mediante ese cuerpo. El cambio de estado recibe únicamente `esta_activa`.
+
+Desactivar impide nuevas reservas, conserva historial y no recalcula tarifas previas. Las áreas exclusivas exigen que el departamento de la reserva pertenezca al edificio correspondiente, también para actores administrativos. CON-73 reutiliza `areas_comunes` y la migración `20261020_0010`; no crea un catálogo paralelo.
+
+CON-73 define lectura de bloqueos operativos persistidos por área/fecha/intervalo, activos y sin datos personales. Si no existen, la colección es vacía. Su gestión no está implementada por CON-39; cualquier nueva operación pública se acuerda mediante PR.
 
 ### CON-40 — Gerardo
 
 `GET /areas/{area_id}/disponibilidad?fecha=YYYY-MM-DD`: `200` con arreglo de `HorarioOcupado`, ordenado y con solapamientos fusionados. Considera reservas `CONFIRMADA` de todas las unidades y bloqueos activos; no devuelve nombres, contacto, UUID de reserva o unidad de terceros. El frontend cruza ese resultado con los horarios permitidos del catálogo. Un arreglo vacío no significa uso ilimitado fuera del horario.
 
-Área inexistente: `404 AREA_NO_ENCONTRADA`; inactiva: `422 AREA_INACTIVA`; fecha inválida: `422 DATOS_DISPONIBILIDAD_INVALIDOS`; contexto ajeno: `403 ACCESO_DENEGADO`. Una fecha pasada se rechaza con `422 FECHA_RESERVA_INVALIDA`. Consultar hoy no habilita a reservar intervalos ya iniciados.
+Área inexistente: `404 AREA_NO_ENCONTRADA`; inactiva: `409 AREA_INACTIVA`; fecha inválida: `422 DATOS_DISPONIBILIDAD_INVALIDOS`; contexto o edificio no autorizado: `403 ACCESO_DENEGADO`. Una fecha pasada se rechaza con `422 FECHA_RESERVA_INVALIDA`. Consultar hoy no habilita a reservar intervalos ya iniciados.
 
 ### CON-41/43 — Brandon; CON-42 — Anderson
 
-`POST /reservas` recibe exclusivamente contexto, área, departamento, fecha e intervalo. Responde `201 Reserva` en estado `CONFIRMADA`, con costo e instante determinados por servidor. Validar unidad existente/activa/autorizada, área activa, fecha no pasada, inicio futuro, horario del catálogo, solvencia y exclusión de solapamientos dentro de la misma transacción.
+`POST /reservas` recibe exclusivamente contexto, área, departamento, fecha e intervalo. Responde `201 Reserva` en estado `CONFIRMADA`, con costo, moneda e instante determinados por servidor. Validar unidad existente/activa/autorizada y compatible con el edificio, área activa, fecha no pasada, inicio futuro, apertura/cierre diarios, duración máxima, solvencia y exclusión de solapamientos dentro de la misma transacción. Conservar `400 HORARIO_INVALIDO` por horario/duración y `409 AREA_INACTIVA` de CON-39.
 
 `403 DEUDA_MORA_ACTIVA` incluye solo deuda autorizada de esa unidad, sin crear reserva ni confirmación. `409 HORARIO_NO_DISPONIBLE` deja un único ganador ante concurrencia; la protección SQL funciona también si el intervalo no tiene filas previas. Una consulta previa de disponibilidad no sustituye esa protección.
 
@@ -85,7 +90,7 @@ Contrato interno de CON-42: entrada `condominio_id`, `departamento_id` y sesión
 
 ### CON-46 — Gerardo
 
-`POST /reservas/{reserva_id}/cancelar` recibe motivo opcional y devuelve `200 ReservaCancelada`. La presencia histórica de `es_admin` se ignora; el permiso procede de la sesión. Residente: `inicio - ahora >= 24 horas`; administración autorizada puede exceptuar el plazo. Estados diferentes de `CONFIRMADA` o `CANCELADA` responden `422 ESTADO_RESERVA_INVALIDO`.
+`POST /reservas/{reserva_id}/cancelar` recibe motivo opcional y devuelve `200 ReservaCancelada`. La presencia histórica de `es_admin` se ignora; el permiso procede de la sesión. Residente: `inicio - ahora >= 24 horas`, interpretando el inicio según la zona conservada de la reserva (UTC para históricos sin marca local); administración autorizada puede exceptuar el plazo. Estados diferentes de `CONFIRMADA` o `CANCELADA` responden `422 ESTADO_RESERVA_INVALIDO`.
 
 La cancelación guarda estado, fecha original, actor, motivo, auditoría y evento en una transacción. Repetir `CANCELADA` devuelve el resultado original sin cambiar fecha, repetir evento ni ajuste. Compartir protección SQL con creación para liberar y volver a ocupar el turno de forma consistente.
 
@@ -159,7 +164,7 @@ Además de los códigos por operación, se usan `401 NO_AUTENTICADO`, `TOKEN_INV
 
 | Responsable | Qué debe implementar usando esta base |
 |---|---|
-| Jerson | Catálogo CON-39; conservar alta CON-04, vínculos CON-05 y rol contextual revocable CON-06 ya integrados. |
+| Jerson | Conservar alta CON-04, vínculos CON-05, rol contextual revocable CON-06 y catálogo SQL CON-39 ya integrados. |
 | Anderson | Multipart, recuperación y subsanación CON-22, persistencia/revisión CON-70 y consulta de solvencia CON-42. |
 | Brandon | Respuestas y unicidad CON-23, creación CON-41 y garantía SQL CON-43. |
 | Alejandro | Consumidores y estados de CON-32/34/36/37; distinguir transporte simulado, aceptación y entrega. |

@@ -1,5 +1,5 @@
 # Esquemas del contrato objetivo de CON-72. No registran endpoints en FastAPI.
-# Los esquemas de usuarios, roles y vínculos se conservan en el documento principal.
+# Los esquemas de usuarios, roles, vínculos y catálogo CON-39 se conservan en el documento principal.
 schemas:
   UUID:
     type: string
@@ -32,61 +32,6 @@ schemas:
         type: object
         additionalProperties: true
         description: Detalles autorizados; validaciones en detalles.errores, sin valores sensibles.
-  HorarioArea:
-    type: object
-    additionalProperties: false
-    required: [dia_semana, hora_inicio, hora_fin]
-    properties:
-      dia_semana: {type: integer, minimum: 1, maximum: 7, description: Lunes=1; domingo=7.}
-      hora_inicio: {$ref: '#/schemas/HoraLocal'}
-      hora_fin: {$ref: '#/schemas/HoraLocal'}
-  CrearArea:
-    type: object
-    additionalProperties: false
-    required: [condominio_id, nombre, descripcion, aforo_maximo, costo_reserva, horarios]
-    properties:
-      condominio_id: {$ref: '#/schemas/UUID'}
-      nombre: {type: string, minLength: 1, maxLength: 100}
-      descripcion: {type: string, maxLength: 2000}
-      aforo_maximo: {type: integer, minimum: 1}
-      costo_reserva: {$ref: '#/schemas/Dinero'}
-      horarios:
-        type: array
-        minItems: 1
-        items: {$ref: '#/schemas/HorarioArea'}
-      normas_uso: {type: string, maxLength: 4000, default: ''}
-  EditarArea:
-    type: object
-    additionalProperties: false
-    minProperties: 1
-    properties:
-      nombre: {type: string, minLength: 1, maxLength: 100}
-      descripcion: {type: string, maxLength: 2000}
-      aforo_maximo: {type: integer, minimum: 1}
-      costo_reserva: {$ref: '#/schemas/Dinero'}
-      horarios:
-        type: array
-        minItems: 1
-        items: {$ref: '#/schemas/HorarioArea'}
-      normas_uso: {type: string, maxLength: 4000}
-      esta_activa: {type: boolean}
-  Area:
-    type: object
-    additionalProperties: false
-    required: [id, condominio_id, nombre, descripcion, aforo_maximo, costo_reserva, esta_activa, zona_horaria, horarios, normas_uso]
-    properties:
-      id: {$ref: '#/schemas/UUID'}
-      condominio_id: {$ref: '#/schemas/UUID'}
-      nombre: {type: string}
-      descripcion: {type: string}
-      aforo_maximo: {type: integer, minimum: 1}
-      costo_reserva: {$ref: '#/schemas/Dinero'}
-      esta_activa: {type: boolean}
-      zona_horaria: {type: string, const: America/Lima}
-      horarios:
-        type: array
-        items: {$ref: '#/schemas/HorarioArea'}
-      normas_uso: {type: string}
   HorarioOcupado:
     type: object
     additionalProperties: false
@@ -108,7 +53,7 @@ schemas:
   Reserva:
     type: object
     additionalProperties: false
-    required: [id, condominio_id, area_id, departamento_id, fecha_reserva, hora_inicio, hora_fin, zona_horaria, costo_reserva, estado, creado_en]
+    required: [id, condominio_id, area_id, departamento_id, fecha_reserva, hora_inicio, hora_fin, zona_horaria, costo_reserva, moneda, estado, creado_en]
     properties:
       id: {$ref: '#/schemas/UUID'}
       condominio_id: {$ref: '#/schemas/UUID'}
@@ -118,8 +63,9 @@ schemas:
       fecha_reserva: {type: string, format: date}
       hora_inicio: {$ref: '#/schemas/HoraLocal'}
       hora_fin: {$ref: '#/schemas/HoraLocal'}
-      zona_horaria: {type: string, const: America/Lima}
+      zona_horaria: {type: string, enum: [America/Lima, UTC], description: America/Lima para nuevas reservas; UTC solo para registros históricos sin marca local.}
       costo_reserva: {$ref: '#/schemas/Dinero'}
+      moneda: {type: string, enum: [PEN, USD]}
       estado: {type: string, enum: [SOLICITADA, CONFIRMADA, RECHAZADA, CANCELADA, COMPLETADA]}
       creado_en: {$ref: '#/schemas/InstanteUTC'}
   ReservaConfirmada:
@@ -127,6 +73,7 @@ schemas:
       - {$ref: '#/schemas/Reserva'}
     properties:
       estado: {type: string, const: CONFIRMADA}
+      zona_horaria: {type: string, const: America/Lima}
   CancelarReserva:
     type: object
     additionalProperties: false

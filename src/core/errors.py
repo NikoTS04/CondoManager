@@ -37,8 +37,24 @@ async def api_error_handler(_request: Request, exc: APIError) -> JSONResponse:
 
 
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """Adapta validaciones de FastAPI a los contratos públicos de CON-2 y CON-9."""
+    """Adapta validaciones de FastAPI al recurso correspondiente sin exponer entradas."""
 
+    if (
+        request.url.path == "/api/v1/areas"
+        or request.url.path.startswith("/api/v1/areas/")
+        or (
+            request.url.path.startswith("/api/v1/condominios/")
+            and request.url.path.split("/")[5:6] == ["areas"]
+        )
+    ):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error_code": "DATOS_AREA_INVALIDOS",
+                "mensaje": "Revise los datos del área y sus condiciones.",
+                "detalles": [{"campo": list(e["loc"]), "tipo": e["type"]} for e in exc.errors()],
+            },
+        )
     if (
         request.url.path.startswith("/api/v1/condominios/")
         and "/usuarios/" in request.url.path

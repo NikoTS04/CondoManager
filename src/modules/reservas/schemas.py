@@ -3,23 +3,14 @@
 Cumple estrictamente con las especificaciones de OpenAPI 3.1 y SDD.
 """
 
+import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Dict, Optional
-import uuid
+from typing import Any, Dict, Literal, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class AreaComunDTO(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    condominio_id: uuid.UUID
-    nombre: str
-    descripcion: Optional[str] = None
-    aforo_maximo: int = Field(gt=0, description="Aforo máximo de personas permitidas")
-    costo_reserva: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"), description="Costo por turno de uso en PEN")
-    esta_activa: bool = True
+from src.modules.reservas.areas.schemas import AreaComunDTO as AreaComunDTO
 
 
 class CrearReservaRequest(BaseModel):
@@ -43,6 +34,7 @@ class ReservaResponseDTO(BaseModel):
     hora_inicio: time
     hora_fin: time
     costo_reserva: Decimal
+    moneda: Literal["PEN", "USD"] = "PEN"
     estado: str  # SOLICITADA, CONFIRMADA, RECHAZADA, CANCELADA, COMPLETADA
     creado_en: datetime
 
@@ -50,11 +42,11 @@ class ReservaResponseDTO(BaseModel):
 class CancelarReservaRequest(BaseModel):
     motivo: str = Field(
         default="Cancelación voluntaria por residente",
-        description="Motivo explicativo de la cancelación"
+        description="Motivo explicativo de la cancelación",
     )
     es_admin: bool = Field(
         default=False,
-        description="Indica si la cancelación es forzada por un administrador de la Junta"
+        description="Indica si la cancelación es forzada por un administrador de la Junta",
     )
 
 

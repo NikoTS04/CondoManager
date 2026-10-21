@@ -1,6 +1,6 @@
 # Fragmentos referenciados desde condomanager.openapi.yaml.
 # Contrato objetivo: las HU de origen implementan rutas, persistencia y permisos.
-# CON-05/06 conservan sus rutas ya integradas en el documento principal.
+# CON-05/06/39 conservan sus rutas ya integradas en el documento principal.
 parameters:
   AreaPath: {name: area_id, in: path, required: true, schema: {type: string, format: uuid}}
   ReservaPath: {name: reserva_id, in: path, required: true, schema: {type: string, format: uuid}}
@@ -17,74 +17,13 @@ responses:
       application/json:
         schema: {$ref: './sprint-2.schemas.yaml#/schemas/Error'}
 paths:
-  /areas:
-    get:
-      operationId: listarAreas
-      summary: Catálogo persistente del condominio autorizado
-      x-historias: [CON-39]
-      x-implementation-status: parcial
-      parameters:
-        - {$ref: '#/parameters/Contexto'}
-        - {name: incluir_inactivas, in: query, schema: {type: boolean, default: false}, description: Solo administración y auditor del contexto.}
-      responses:
-        '200':
-          description: Áreas con horarios y zona horaria; arreglo vacío si no hay áreas publicadas.
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: './sprint-2.schemas.yaml#/schemas/Area'}}
-        '401': {$ref: '#/responses/Error'}
-        '403': {$ref: '#/responses/Error'}
-        '422': {$ref: '#/responses/Error'}
-    post:
-      operationId: crearArea
-      summary: Crear un área con horarios; administración autorizada
-      x-historias: [CON-39]
-      x-implementation-status: pendiente
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: './sprint-2.schemas.yaml#/schemas/CrearArea'}
-      responses:
-        '201':
-          description: Área activa persistida con zona America/Lima.
-          content:
-            application/json:
-              schema: {$ref: './sprint-2.schemas.yaml#/schemas/Area'}
-        '401': {$ref: '#/responses/Error'}
-        '403': {$ref: '#/responses/Error'}
-        '404': {$ref: '#/responses/Error'}
-        '422': {$ref: '#/responses/Error'}
-  /areas/{area_id}:
-    parameters:
-      - {$ref: '#/parameters/AreaPath'}
-    patch:
-      operationId: editarArea
-      summary: Editar condiciones o desactivar un área sin borrar reservas
-      x-historias: [CON-39]
-      x-implementation-status: pendiente
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: './sprint-2.schemas.yaml#/schemas/EditarArea'}
-      responses:
-        '200':
-          description: Área persistida; no se alteran reservas históricas ni sus costos.
-          content:
-            application/json:
-              schema: {$ref: './sprint-2.schemas.yaml#/schemas/Area'}
-        '401': {$ref: '#/responses/Error'}
-        '403': {$ref: '#/responses/Error'}
-        '404': {$ref: '#/responses/Error'}
-        '422': {$ref: '#/responses/Error'}
   /areas/{area_id}/disponibilidad:
     parameters:
       - {$ref: '#/parameters/AreaPath'}
     get:
       operationId: disponibilidadArea
       summary: Horarios ocupados de todas las unidades sin información privada
-      description: Fecha y horas de America/Lima; intervalos [inicio, fin). La consulta no garantiza una reserva futura. Se aplica también el horario del catálogo.
+      description: Fecha y horas de America/Lima; intervalos [inicio, fin). Usa apertura/cierre diarios y acceso por edificio del catálogo CON-39. Área inactiva responde 409 AREA_INACTIVA. La consulta no garantiza una reserva futura.
       x-historias: [CON-40]
       x-implementation-status: parcial
       parameters:
@@ -98,6 +37,7 @@ paths:
         '401': {$ref: '#/responses/Error'}
         '403': {$ref: '#/responses/Error'}
         '404': {$ref: '#/responses/Error'}
+        '409': {$ref: '#/responses/Error'}
         '422': {$ref: '#/responses/Error'}
   /reservas:
     get:
@@ -122,6 +62,7 @@ paths:
     post:
       operationId: crearReserva
       summary: Confirmar una reserva con solvencia y exclusión de horarios en PostgreSQL
+      description: Conserva validaciones de CON-39; unidad del edificio autorizado, apertura/cierre y duración máxima. Horario o duración inválidos responden 400 HORARIO_INVALIDO; área inactiva responde 409 AREA_INACTIVA. Costo y moneda proceden del catálogo SQL.
       x-historias: [CON-41, CON-42, CON-43]
       x-implementation-status: parcial
       requestBody:
@@ -135,6 +76,7 @@ paths:
           content:
             application/json:
               schema: {$ref: './sprint-2.schemas.yaml#/schemas/ReservaConfirmada'}
+        '400': {$ref: '#/responses/Error'}
         '401': {$ref: '#/responses/Error'}
         '403': {$ref: '#/responses/Error'}
         '404': {$ref: '#/responses/Error'}

@@ -10,7 +10,7 @@ Base acordada el 20/10/2026. Los contratos HTTP y las reglas asociadas están en
 | `PagoReportadoEvent` | Anderson, CON-22/70; Brandon integra CON-23 | CON-34 confirma recepción sin aplicar saldos; también por subsanación real de un observado. | [pago-reportado.v1.schema.json](schemas/pago-reportado.v1.schema.json) | Integración pendiente. |
 | `PagoConciliadoEvent` | Anderson, resultado aprobado de CON-70 | CON-34 comunica el resultado; los demás consumidores refrescan vistas sin aplicar otra vez el pago. | [pago-conciliado.v1.schema.json](schemas/pago-conciliado.v1.schema.json) | Integración pendiente. |
 | `PagoRevisadoEvent` | Anderson, revisión observada/rechazada de CON-70 | CON-34 comunica motivo e instrucciones. No modifica saldos. | [pago-revisado.v1.schema.json](schemas/pago-revisado.v1.schema.json) | Integración pendiente. |
-| `ReservaConfirmadaEvent` | Brandon, CON-41 | CON-36 comunica área, fecha, horario, costo y normas. | [reserva-confirmada.v1.schema.json](schemas/reserva-confirmada.v1.schema.json) | Integración persistente pendiente. |
+| `ReservaConfirmadaEvent` | Brandon, CON-41 | CON-36 comunica área, fecha, horario, costo y moneda; normas opcionales si existe una fuente acordada. | [reserva-confirmada.v1.schema.json](schemas/reserva-confirmada.v1.schema.json) | Integración persistente pendiente. |
 | `ReservaCanceladaEvent` | Gerardo, CON-46 | CON-36 comunica cancelación y estado real del ajuste económico. | [reserva-cancelada.v1.schema.json](schemas/reserva-cancelada.v1.schema.json) | Integración persistente pendiente. |
 
 Alejandro implementa consumo, plantillas y reintentos. Nicolás implementa persistencia de notificaciones y eventos pendientes en CON-73 y coordina la integración. No hay evento de invitación requerido para cerrar CON-04: la habilitación es administrativa y manual.
@@ -44,7 +44,7 @@ Los mensajes nuevos utilizan [event-envelope.v1.schema.json](schemas/event-envel
 - `occurred_at` representa el hecho confirmado en UTC, no la hora del último reintento. El evento no cambia al retransmitirse.
 - `correlation_id` enlaza el recorrido; el productor lo genera si el origen no aporta uno válido. `causation_id` referencia otro evento cuando lo hay, o es nulo.
 - `data.condominio_id` y los UUID de la operación delimitan el contexto. Destinatarios se resuelven desde registros autorizados; no incluir contraseñas, tokens, documento de identidad ni contenido del voucher.
-- Importes como cadenas de dos decimales. Horas de reservas en `America/Lima`; instantes de auditoría/eventos en UTC.
+- Importes como cadenas de dos decimales; las confirmaciones conservan la moneda del costo. Horas de nuevas reservas en `America/Lima`; cancelaciones históricas conservan la interpretación UTC previa cuando corresponda. Instantes de auditoría/eventos en UTC. CON-39 no incorpora un campo de normas: no exigir ni inventar ese contenido para publicar una confirmación.
 
 ## Publicación y consumo
 

@@ -7,10 +7,11 @@ Implementa:
 4. Política Zero-Float (ADR-002) con tipos Decimal.
 """
 
+import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
-import uuid
+
 from pydantic import BaseModel
 
 from src.core.audit import AuditoriaPayload
@@ -21,10 +22,10 @@ from src.modules.reservas.schemas import (
     ReservaResponseDTO,
 )
 
-
 # ============================================================================
 # Excepciones de Dominio (PROC-04)
 # ============================================================================
+
 
 class DeudaMoraActivaException(Exception):
     def __init__(self, departamento_id: str, saldo_vencido: Decimal):
@@ -86,6 +87,7 @@ class HorarioInvalidoException(Exception):
 # Compatibilidad con Suite de Pruebas BDD / Unitarias Iniciales
 # ============================================================================
 
+
 class SolicitudReservaDTO(BaseModel):
     condominio_id: str
     departamento_id: str
@@ -137,11 +139,10 @@ class GestorReservasService:
 # Servicio Principal de Reservas y Disponibilidad (SDD Completo)
 # ============================================================================
 
+
 class ReservasService:
     @staticmethod
-    def hay_solapamiento_horario(
-        inicio_a: time, fin_a: time, inicio_b: time, fin_b: time
-    ) -> bool:
+    def hay_solapamiento_horario(inicio_a: time, fin_a: time, inicio_b: time, fin_b: time) -> bool:
         """Evalúa si dos intervalos de tiempo se solapan [inicio, fin)."""
         return inicio_a < fin_b and fin_a > inicio_b
 
@@ -177,11 +178,30 @@ class ReservasService:
         reservas_existentes: List[Dict[str, Any]],
     ) -> Tuple[ReservaResponseDTO, AuditoriaPayload]:
         """Orquesta la creación de una reserva con validación atómica de solvencia y calendario."""
+        if any(
+            h.tzinfo is not None or h.second != 0 or h.microsecond != 0
+            for h in (request.hora_inicio, request.hora_fin)
+        ):
+            raise HorarioInvalidoException("Use horas locales HH:MM sin zona horaria ni segundos.")
         if request.hora_fin <= request.hora_inicio:
             raise HorarioInvalidoException("La hora de fin debe ser posterior a la hora de inicio.")
 
         if not area.get("esta_activa", True):
             raise AreaInactivaException(str(request.area_id))
+
+        apertura = area.get("hora_apertura", time(0))
+        cierre = area.get("hora_cierre", time(23, 59))
+        if request.hora_inicio < apertura or request.hora_fin > cierre:
+            raise HorarioInvalidoException(
+                "El turno debe quedar dentro del horario de apertura y cierre del área."
+            )
+        minutos = (
+            (request.hora_fin.hour - request.hora_inicio.hour) * 60
+            + request.hora_fin.minute
+            - request.hora_inicio.minute
+        )
+        if minutos > area.get("tiempo_maximo_horas", 24) * 60:
+            raise HorarioInvalidoException("El turno supera la duración máxima permitida del área.")
 
         # 1. Invariante Innegociable de Solvencia Financiera
         if saldo_mora_depto > Decimal("0.00") or estado_financiero_depto == "EN_MORA":
@@ -191,8 +211,14 @@ class ReservasService:
                 accion_ejecutada="SOLICITUD_RESERVA_RECHAZADA_MORA",
                 motivo=f"Intento de reserva bloqueado: departamento mantiene deuda morosa de S/ {saldo_mora_depto:.2f}",
                 resultado="FALLIDO",
-                estado_anterior={"estado_financiero": estado_financiero_depto, "saldo_mora": str(saldo_mora_depto)},
-                estado_posterior={"estado_financiero": estado_financiero_depto, "resultado_reserva": "RECHAZADA"},
+                estado_anterior={
+                    "estado_financiero": estado_financiero_depto,
+                    "saldo_mora": str(saldo_mora_depto),
+                },
+                estado_posterior={
+                    "estado_financiero": estado_financiero_depto,
+                    "resultado_reserva": "RECHAZADA",
+                },
             )
             raise DeudaMoraActivaException(
                 departamento_id=str(request.departamento_id),
@@ -215,7 +241,10 @@ class ReservasService:
                 accion_ejecutada="SOLICITUD_RESERVA_RECHAZADA_CONFLICTO",
                 motivo=f"Horario ocupado para el área {request.area_id} en fecha {request.fecha_reserva}",
                 resultado="FALLIDO",
-                estado_anterior={"area_id": str(request.area_id), "fecha": str(request.fecha_reserva)},
+                estado_anterior={
+                    "area_id": str(request.area_id),
+                    "fecha": str(request.fecha_reserva),
+                },
                 estado_posterior={"resultado_reserva": "RECHAZADA_CONFLICTO"},
             )
             raise ConflictoHorarioException(
@@ -243,6 +272,7 @@ class ReservasService:
                 "fecha_reserva": str(request.fecha_reserva),
                 "horario": f"{request.hora_inicio.strftime('%H:%M')}-{request.hora_fin.strftime('%H:%M')}",
                 "costo_reserva": str(costo_reserva),
+                "moneda": area.get("moneda", "PEN"),
                 "estado": "CONFIRMADA",
             },
         )
@@ -257,6 +287,7 @@ class ReservasService:
             hora_inicio=request.hora_inicio,
             hora_fin=request.hora_fin,
             costo_reserva=costo_reserva,
+            moneda=area.get("moneda", "PEN"),
             estado="CONFIRMADA",
             creado_en=creado_en,
         )
@@ -285,7 +316,12 @@ class ReservasService:
         if not request.es_admin:
             fecha_res = reserva["fecha_reserva"]
             hora_ini = reserva["hora_inicio"]
-            inicio_reserva_dt = datetime.combine(fecha_res, hora_ini, tzinfo=timezone.utc)
+            zona = (
+                timezone(timedelta(hours=-5))
+                if reserva.get("zona_horaria") == "America/Lima"
+                else timezone.utc
+            )
+            inicio_reserva_dt = datetime.combine(fecha_res, hora_ini, tzinfo=zona)
 
             limite_cancelacion = inicio_reserva_dt - timedelta(hours=24)
             if momento_actual > limite_cancelacion:
