@@ -43,7 +43,6 @@ def test_reporte_nuevo_comprobante_en_memoria():
         numero_operacion="789012",
         fecha_operacion=date(2026, 10, 21),
         monto=Decimal("180.50"),
-        url_voucher="https://s3/vouchers/v1.png",
     )
 
     resp = PagosService.procesar_reporte_pago(req, "condo-01", comprobantes)
@@ -63,7 +62,6 @@ def test_reintento_comprobante_en_revision_retorna_existente():
         numero_operacion="445566",
         fecha_operacion=date(2026, 10, 21),
         monto=Decimal("300.00"),
-        url_voucher="https://s3/vouchers/v2.jpg",
     )
 
     resp1 = PagosService.procesar_reporte_pago(req, "condo-01", comprobantes)
@@ -85,7 +83,6 @@ def test_rechazo_voucher_ya_conciliado():
         numero_operacion="999888",
         fecha_operacion=date(2026, 10, 21),
         monto=Decimal("50.00"),
-        url_voucher="https://s3/vouchers/yape.jpg",
     )
 
     resp1 = PagosService.procesar_reporte_pago(req, "condo-01", comprobantes)
@@ -110,7 +107,6 @@ def test_rechazo_voucher_reutilizado_en_otra_unidad():
         numero_operacion="112233",
         fecha_operacion=date(2026, 10, 21),
         monto=Decimal("120.00"),
-        url_voucher="https://s3/vouchers/plin.jpg",
     )
     req2 = ReportarPagoRequest(
         departamento_id=depto_2,
@@ -118,7 +114,6 @@ def test_rechazo_voucher_reutilizado_en_otra_unidad():
         numero_operacion="112233",
         fecha_operacion=date(2026, 10, 21),
         monto=Decimal("120.00"),
-        url_voucher="https://s3/vouchers/plin.jpg",
     )
 
     PagosService.procesar_reporte_pago(req1, "condo-01", comprobantes)
@@ -140,7 +135,6 @@ async def test_flujo_persistente_con_repositorio_exitoso():
         numero_operacion="556677",
         fecha_operacion=date(2026, 10, 21),
         monto=Decimal("200.00"),
-        url_voucher="https://s3/v1.png",
     )
 
     repo_mock = AsyncMock()
@@ -168,7 +162,6 @@ async def test_flujo_persistente_carrera_concurrente_integrity_error():
         numero_operacion="778899",
         fecha_operacion=date(2026, 10, 21),
         monto=Decimal("350.00"),
-        url_voucher="https://s3/v3.png",
     )
 
     comprobante_existente = ComprobantePago(

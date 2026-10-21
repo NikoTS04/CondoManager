@@ -141,14 +141,15 @@ class PagosService:
         if existente:
             return cls._resolver_duplicado(existente, request.departamento_id, idempotency_hash)
 
+        nuevo_id = uuid.uuid4()
         nuevo_comprobante = ComprobantePago(
-            id=uuid.uuid4(),
+            id=nuevo_id,
             departamento_id=request.departamento_id,
             banco_origen=request.banco.strip().upper(),
             numero_operacion=request.numero_operacion.strip(),
             fecha_operacion=request.fecha_operacion,
             monto=redondear_moneda(request.monto),
-            url_voucher=request.url_voucher,
+            url_voucher=f"/api/v1/pagos/{nuevo_id}/voucher",
             idempotency_hash=idempotency_hash,
             estado="EN_REVISION",
         )
