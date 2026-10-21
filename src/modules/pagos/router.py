@@ -99,34 +99,37 @@ async def reportar_pago(
     condominio_id = str(depto["condominio_id"])
 
     try:
-        # Intentar flujo persistente con el repositorio
-        try:
-            resp = await PagosService.procesar_reporte_pago_persistente(
-                request=request,
-                condominio_id=condominio_id,
-                repository=pagos_repository,
-            )
-            # Sincronizar en memoria para endpoints dependientes
-            COMPROBANTES_REGISTRADOS[resp.idempotency_hash] = {
-                "id": resp.comprobante_id,
-                "condominio_id": UUID(condominio_id),
-                "departamento_id": request.departamento_id,
-                "banco_origen": request.banco.strip().upper(),
-                "numero_operacion": request.numero_operacion.strip(),
-                "fecha_operacion": request.fecha_operacion,
-                "monto": request.monto,
-                "url_voucher": request.url_voucher,
-                "idempotency_hash": resp.idempotency_hash,
-                "estado": resp.estado,
-            }
-            return resp
-        except (ConnectionRefusedError, OSError):
-            # Fallback en memoria si la BD física no está levantada
-            return PagosService.procesar_reporte_pago(
-                request=request,
-                condominio_id=condominio_id,
-                comprobantes_existentes=COMPROBANTES_REGISTRADOS,
-            )
+        # Intentar flujo persistente si el repositorio es una instancia válida
+        if isinstance(pagos_repository, PagosRepository):
+            try:
+                resp = await PagosService.procesar_reporte_pago_persistente(
+                    request=request,
+                    condominio_id=condominio_id,
+                    repository=pagos_repository,
+                )
+                # Sincronizar en memoria para endpoints dependientes
+                COMPROBANTES_REGISTRADOS[resp.idempotency_hash] = {
+                    "id": resp.comprobante_id,
+                    "condominio_id": UUID(condominio_id),
+                    "departamento_id": request.departamento_id,
+                    "banco_origen": request.banco.strip().upper(),
+                    "numero_operacion": request.numero_operacion.strip(),
+                    "fecha_operacion": request.fecha_operacion,
+                    "monto": request.monto,
+                    "url_voucher": request.url_voucher,
+                    "idempotency_hash": resp.idempotency_hash,
+                    "estado": resp.estado,
+                }
+                return resp
+            except (ConnectionRefusedError, OSError):
+                pass
+
+        # Fallback en memoria si la BD física no está levantada o en tests directos
+        return PagosService.procesar_reporte_pago(
+            request=request,
+            condominio_id=condominio_id,
+            comprobantes_existentes=COMPROBANTES_REGISTRADOS,
+        )
     except VoucherDuplicadoException as exc:
         raise HTTPException(409, detail={"error_code": exc.error_code, "mensaje": exc.mensaje})
 
