@@ -12,12 +12,16 @@ from src.core.config import settings
 from src.core.errors import APIError
 from src.core.security import decode_access_token, get_current_user, security_scheme
 from src.main import app
-from src.modules.notificaciones.persistencia import get_notificaciones_service
 from src.modules.reservas.areas.repository import get_areas_repository
-from src.modules.reservas.persistencia import get_reservas_service
+from src.modules.reservas.cancelaciones import get_cancelaciones_service
+from src.modules.reservas.router import (
+    get_areas_reserva_repository,
+    get_creacion_reservas_repository,
+)
 from src.modules.usuarios.departamentos import get_departamentos_portal_repository
 from src.modules.usuarios.repository import get_usuarios_repository
 from src.tests.areas import AreasCatalogoFake
+from src.tests.cancelaciones_contrato import CancelacionesContrato
 from src.tests.departamentos import CatalogoDepartamentosFake
 from src.tests.identidad import RepositorioIdentidadDemo
 
@@ -25,13 +29,7 @@ pytest_plugins = ["src.tests.usuarios_db", "src.tests.finanzas_contrato", "src.t
 
 
 @pytest.fixture
-def autorizacion_aislada(finanzas_contrato, monkeypatch):
-    from src.tests import reservas_contrato
-    from src.tests.reservas_contrato import NotificacionesContrato, ReservasContrato
-
-    monkeypatch.setattr(reservas_contrato, "RESERVAS_REGISTRADAS", {})
-    monkeypatch.setattr(reservas_contrato, "NOTIFICACIONES_REGISTRADAS", {})
-
+def autorizacion_aislada():
     async def actor(auth=Depends(security_scheme)):
         if auth is None:
             raise APIError(401, "NO_AUTENTICADO", "Se requiere un Bearer Token válido.")
@@ -42,16 +40,17 @@ def autorizacion_aislada(finanzas_contrato, monkeypatch):
     app.dependency_overrides[get_departamentos_portal_repository] = lambda: catalogo
     areas = AreasCatalogoFake()
     app.dependency_overrides[get_areas_repository] = lambda: areas
-    app.dependency_overrides[get_reservas_service] = lambda: ReservasContrato(
-        areas, finanzas_contrato
-    )
-    app.dependency_overrides[get_notificaciones_service] = lambda: NotificacionesContrato()
+    app.dependency_overrides[get_areas_reserva_repository] = lambda: areas
+    app.dependency_overrides[get_creacion_reservas_repository] = lambda: None
+    cancelaciones = CancelacionesContrato()
+    app.dependency_overrides[get_cancelaciones_service] = lambda: cancelaciones
     yield catalogo
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(get_departamentos_portal_repository, None)
     app.dependency_overrides.pop(get_areas_repository, None)
-    app.dependency_overrides.pop(get_reservas_service, None)
-    app.dependency_overrides.pop(get_notificaciones_service, None)
+    app.dependency_overrides.pop(get_areas_reserva_repository, None)
+    app.dependency_overrides.pop(get_creacion_reservas_repository, None)
+    app.dependency_overrides.pop(get_cancelaciones_service, None)
 
 
 @pytest.fixture

@@ -21,6 +21,7 @@ services:
 
   backend:
     image: condomanager-api:ci
+    volumes: []
     environment:
       DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
       JWT_SECRET: ${CI_JWT_SECRET:?Generar CI_JWT_SECRET}
@@ -31,6 +32,13 @@ services:
 
   cuotas-worker:
     image: condomanager-api:ci
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
+      DEBUG: "false"
+
+  pagos-worker:
+    image: condomanager-api:ci
+    volumes: []
     environment:
       DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
       DEBUG: "false"

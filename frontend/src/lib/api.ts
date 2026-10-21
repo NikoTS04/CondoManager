@@ -632,7 +632,7 @@ export function fetchAreasComunes(condominioId?: string | null): Promise<AreaCom
 export interface HorarioOcupado { hora_inicio: string; hora_fin: string }
 
 export function fetchDisponibilidad(areaId: string, fecha: string): Promise<HorarioOcupado[]> {
-  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`);
+  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`, { cache: "no-store" });
 }
 
 export function fetchReservas(areaId?: string, fecha?: string, condominioId?: string | null): Promise<Reserva[]> {
@@ -663,13 +663,28 @@ export async function crearReserva(payload: {
   }
 }
 
-export async function cancelarReserva(reservaId: string): Promise<{ ok: boolean; error?: string }> {
+export interface ReservaCancelada {
+  id: string;
+  estado: "CANCELADA";
+  mensaje: string;
+  fecha_cancelacion: string;
+  ajuste_economico: {
+    estado: "NO_APLICA" | "PENDIENTE" | "APLICADO";
+    monto: string;
+    referencia: string | null;
+  };
+}
+
+export async function cancelarReserva(
+  reservaId: string,
+  motivo = "Cancelación voluntaria",
+): Promise<{ ok: boolean; data?: ReservaCancelada; error?: string }> {
   try {
-    await recursoRequest(`/reservas/${encodeURIComponent(reservaId)}/cancelar`, {
+    const data = await recursoRequest<ReservaCancelada>(`/reservas/${encodeURIComponent(reservaId)}/cancelar`, {
       method: "POST",
-      body: JSON.stringify({ motivo: "Cancelación voluntaria" }),
+      body: JSON.stringify({ motivo }),
     });
-    return { ok: true };
+    return { ok: true, data };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo cancelar." };
   }

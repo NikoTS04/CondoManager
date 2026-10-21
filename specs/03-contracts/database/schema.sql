@@ -278,6 +278,7 @@ CREATE TABLE reservas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     area_id UUID NOT NULL REFERENCES areas_comunes(id) ON DELETE RESTRICT,
     departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
     fecha_reserva DATE NOT NULL,
     hora_inicio TIME NOT NULL,
     hora_fin TIME NOT NULL CHECK (hora_fin > hora_inicio),

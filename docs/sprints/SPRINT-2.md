@@ -303,6 +303,9 @@ Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
 
 ## CON-40 — Consultar disponibilidad
 
+Avance de implementación y recorrido manual: [entrega CON-40](CON-40-disponibilidad.md).
+La persistencia completa y la lectura de bloqueos operativos se integran con CON-73.
+
 **Historia:** Como residente, quiero consultar fechas y horarios disponibles, para escoger una opción antes de solicitar la reserva.
 
 **Debe incluir:**
@@ -372,6 +375,10 @@ Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
 **Trazabilidad:** [RES-05 del backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#res-05--evitar-reservas-simultáneas), [concurrencia y bloqueos](../../specs/01-architecture/concurrency-and-locking.md), [estrategia de pruebas](../../specs/04-verification/test-strategy.md), [BDD de reservas](../../specs/02-domains/04-reservas/features/reservas.feature).
 
 ## CON-46 — Cancelar una reserva
+
+Implementación y guion manual: [entrega CON-46](CON-46-cancelacion-reservas.md).
+Cancelación SQL y outbox implementados, con creación persistente de CON-41/43
+integrada desde `develop`; el consumo de CON-36 y los bloqueos de CON-73 siguen pendientes.
 
 **Historia:** Como residente, quiero cancelar una reserva dentro del plazo permitido, para liberar el horario cuando ya no vaya a utilizarlo.
 

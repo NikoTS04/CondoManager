@@ -21,6 +21,7 @@ from scripts.seed_usuarios_demo import cargar_demo
 from src.core.config import settings
 from src.core.database import get_db_session
 from src.main import app
+from src.modules.reservas.router import get_creacion_reservas_repository
 from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
 
 REVISIONES = (
@@ -34,9 +35,6 @@ REVISIONES = (
     "20261020_0008_roles_revocables",
     "20261020_0009_vinculos_departamentos",
     "20261020_0010_catalogo_areas",
-    "20261020_0009_pagos_persistentes",
-    "20261020_0012_reservas_notificaciones",
-    "20261021_0013_convergencia_con72",
 )
 
 
@@ -70,6 +68,7 @@ async def crear_base(url):
     async with sessions() as session, session.begin():
         await cargar_demo(session)
         await cargar_areas_demo(session)
+    await engine.dispose()
     return BaseUsuarios(engine, sessions, esquema, url)
 
 
@@ -84,7 +83,7 @@ async def borrar_base(base):
 @pytest.fixture
 def db_usuarios(monkeypatch):
     url = (
-        os.getenv("CON73_TEST_DATABASE_URL")
+        os.getenv("CON46_TEST_DATABASE_URL")
         or os.getenv("CON39_TEST_DATABASE_URL")
         or os.getenv("CON05_TEST_DATABASE_URL")
         or os.getenv("CON06_TEST_DATABASE_URL")
@@ -92,9 +91,19 @@ def db_usuarios(monkeypatch):
         or os.getenv("CON13_TEST_DATABASE_URL")
     )
     if not url:
-        pytest.skip("Defina CON04_TEST_DATABASE_URL con una base PostgreSQL de pruebas.")
+        pytest.skip(
+            "Defina CON46_TEST_DATABASE_URL o CON04_TEST_DATABASE_URL con PostgreSQL de pruebas."
+        )
     base = asyncio.run(crear_base(url))
+    new_engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": base.esquema}}
+    )
+    base.engine = new_engine
+    base.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
     monkeypatch.setattr(settings, "DEMO_MODE", True)
+    # Estas fixtures migran identidad/catálogo, no el productor de reservas.
+    # CON-46 elimina este adaptador y aplica su migración para probar SQL real.
+    monkeypatch.setitem(app.dependency_overrides, get_creacion_reservas_repository, lambda: None)
 
     async def session():
         async with base.sessions() as db:
