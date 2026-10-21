@@ -48,6 +48,7 @@ function ResidenteContent() {
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [revisionDisponibilidad, setRevisionDisponibilidad] = useState(0);
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
 
   // Estados de carga y error por recurso independiente
@@ -114,6 +115,7 @@ function ResidenteContent() {
   }, [contextoId]);
 
   const reloadReservas = useCallback(async () => {
+    setRevisionDisponibilidad((value) => value + 1);
     setLoadingReservas(true);
     setErrorReservas(null);
     try {
@@ -241,6 +243,7 @@ function ResidenteContent() {
               deudaVencida={deptoActual?.deuda_vencida}
               errorAreas={errorAreas}
               onRetryAreas={reloadAreas}
+              revisionDisponibilidad={revisionDisponibilidad}
               onSuccess={reloadReservas}
               onGoToPagos={() => setActiveTab("pagos")}
               onSolvenciaActualizada={actualizarSolvencia}

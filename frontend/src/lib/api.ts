@@ -611,7 +611,7 @@ export function fetchAreasComunes(condominioId?: string | null): Promise<AreaCom
 export interface HorarioOcupado { hora_inicio: string; hora_fin: string }
 
 export function fetchDisponibilidad(areaId: string, fecha: string): Promise<HorarioOcupado[]> {
-  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`);
+  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`, { cache: "no-store" });
 }
 
 export function fetchReservas(areaId?: string, fecha?: string, condominioId?: string | null): Promise<Reserva[]> {
