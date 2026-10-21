@@ -7,9 +7,9 @@ import { cn } from "@/lib/cn";
 export type ResidenteTab = "reservas" | "pagos" | "cuenta" | "avisos";
 
 const TAB_ITEMS: TabItem<ResidenteTab>[] = [
-  { id: "reservas", label: "Reservas de Áreas Comunes", icon: Calendar },
-  { id: "pagos", label: "Reportar Comprobante de Pago", icon: CreditCard },
-  { id: "cuenta", label: "Estado de Cuenta", icon: Coins },
+  { id: "cuenta", label: "Resumen", icon: Coins },
+  { id: "pagos", label: "Pagos", icon: CreditCard },
+  { id: "reservas", label: "Reservas", icon: Calendar },
   { id: "avisos", label: "Avisos", icon: Bell },
 ];
 
@@ -57,7 +57,7 @@ export function ResidenteNav({ activeTab, onChangeTab, className }: ResidenteNav
               >
                 {Icon && <Icon className={cn("h-5 w-5 shrink-0", isSelected ? "text-brand-700" : "text-muted")} aria-hidden />}
                 <span className="truncate max-w-full text-[11px] leading-tight text-center">
-                    {item.id === "reservas" ? "Reservas" : item.id === "pagos" ? "Pagos" : item.id === "avisos" ? "Avisos" : "Mi Cuenta"}
+                    {item.label}
                 </span>
               </button>
             );

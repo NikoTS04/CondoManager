@@ -44,7 +44,9 @@ si anteriormente se usaron notas internas como motivo público.
 4. Compilar Next.js con NEXT_PUBLIC_API_URL del entorno y refrescar clientes.
 
 El downgrade destructivo está deshabilitado para conservar las versiones.
-No se ejecutó ninguna migración en Supabase ni en servicios del usuario.
+En la entrega inicial no se ejecutó ninguna migración en Supabase ni en servicios
+del usuario. La reconciliación posterior del despliegue, su respaldo y verificación
+se documentan en [reconciliacion-esquema-legacy.md](reconciliacion-esquema-legacy.md).
 
 ## Verificación reproducible
 
