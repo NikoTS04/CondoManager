@@ -6,6 +6,11 @@ Los UUID de usuario proceden de la base de datos; los identificadores `usr-*` de
 ejemplos históricos no son identidades de login persistentes. El JWT v2 incorpora
 `auth_revision`, comprobada en cada petición protegida.
 
+CON-06 incorpora `usuario_roles.es_activo`. Login y `/auth/me` solo resuelven
+asignaciones activas en condominios activos; revocar o cambiar un rol invalida
+las sesiones previas de la identidad. Contrato de gestión:
+[roles-y-permisos.md](roles-y-permisos.md).
+
 Fuente de verdad: checks `ck_rol_nombre` y `ck_tipo_relacion` de
 `condomanager_schema.sql`. No se requiere migración de roles: el ORM/SQL ya usan
 `RESIDENTE`; se actualizan el directorio piloto, JWT y cliente.
@@ -41,8 +46,8 @@ El JWT transporta el mismo arreglo, el identificador de usuario como `sub` y
 
 ## Recursos autorizados
 
-- `GET /cuotas/departamentos`: padrón piloto filtrado por condominio y, para
-  residentes, por sus vínculos activos. Devuelve UUID, número, piso, coeficiente,
+- `GET /cuotas/departamentos`: padrón persistente filtrado por condominio y, para
+  residentes, por sus vínculos activos. CON-05 usa SQL real. Devuelve UUID, número, piso, coeficiente,
   saldo y estado financiero; nunca todas las unidades a un residente.
 - `GET /pagos/comprobantes` y `GET /reservas`: solo recursos de unidades autorizadas;
   `condominio_id` opcional selecciona el contexto para administrativos globales.
@@ -56,6 +61,10 @@ El JWT transporta el mismo arreglo, el identificador de usuario como `sub` y
 - Los clientes no sustituyen errores de autorización/red por éxitos o datos mock.
 
 ## Verificación
+
+Gestión administrativa de tenencia y regla de titular:
+[vinculos-departamentos.md](vinculos-departamentos.md). Cambios reales invalidan
+sesiones mediante `auth_revision`; la relación revocada conserva su UUID e historial.
 
 Probar ambos perfiles de residentes, relaciones mixtas en varias unidades, vínculos
 inactivos, unidad ajena, cruce de condominios, escritura por auditor, roles antiguos,

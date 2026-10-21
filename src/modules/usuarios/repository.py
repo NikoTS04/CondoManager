@@ -1,4 +1,4 @@
-"""Persistencia de identidad, contexto, vínculos y auditoría de CON-04."""
+"""Persistencia de identidad, roles, vínculos y auditoría de PROC-05."""
 
 from uuid import UUID
 
@@ -10,7 +10,13 @@ from src.core.database import get_db_session
 from src.core.models_audit import AuditoriaLogORM
 from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol
-from src.modules.usuarios.schemas import UsuarioDTO, VinculoDepartamentoDTO
+from src.modules.usuarios.schemas import (
+    CuentaUsuarioConRolResponse,
+    CuentaUsuarioResponse,
+    UsuarioDTO,
+    VinculoDepartamentoDTO,
+    VinculoUsuarioResponse,
+)
 
 
 class SQLAlchemyUsuariosRepository:
@@ -53,6 +59,7 @@ class SQLAlchemyUsuariosRepository:
             .join(UsuarioRol, UsuarioRol.condominio_id == Condominio.id)
             .where(
                 UsuarioRol.usuario_id == usuario_id,
+                UsuarioRol.es_activo.is_(True),
                 Condominio.activo.is_(True),
                 UsuarioRol.rol.in_(("ADMIN_JUNTA", "AUDITOR", "RESIDENTE")),
             )
@@ -125,17 +132,33 @@ class SQLAlchemyUsuariosRepository:
             .with_for_update()
         )
 
-    async def listar(self, condominio_id: UUID, limit=50, offset=0) -> list[Usuario]:
-        return list(
-            await self.session.scalars(
-                select(Usuario)
-                .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
-                .where(UsuarioRol.condominio_id == condominio_id)
-                .order_by(Usuario.creado_en.desc(), Usuario.id)
-                .limit(limit)
-                .offset(offset)
-            )
+    async def rol_usuario(self, usuario_id: UUID, condominio_id: UUID) -> UsuarioRol | None:
+        return await self.session.scalar(
+            select(UsuarioRol)
+            .where(UsuarioRol.usuario_id == usuario_id, UsuarioRol.condominio_id == condominio_id)
+            .execution_options(populate_existing=True)
         )
+
+    async def listar(
+        self, condominio_id: UUID, limit=50, offset=0
+    ) -> list[CuentaUsuarioConRolResponse]:
+        rows = await self.session.execute(
+            select(Usuario, UsuarioRol)
+            .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
+            .where(UsuarioRol.condominio_id == condominio_id)
+            .order_by(Usuario.creado_en.desc(), Usuario.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return [
+            CuentaUsuarioConRolResponse(
+                **CuentaUsuarioResponse.model_validate(usuario).model_dump(),
+                rol=asignacion.rol,
+                rol_activo=asignacion.es_activo,
+                es_superadmin=usuario.es_superadmin,
+            )
+            for usuario, asignacion in rows
+        ]
 
     async def ultimo_hash(self, condominio_id: UUID) -> str | None:
         return await self.session.scalar(
@@ -143,6 +166,66 @@ class SQLAlchemyUsuariosRepository:
             .where(AuditoriaLogORM.condominio_id == condominio_id)
             .order_by(AuditoriaLogORM.timestamp.desc(), AuditoriaLogORM.id.desc())
             .limit(1)
+        )
+
+    async def departamento(self, cid: UUID, did: UUID, *, bloquear=False):
+        query = (
+            select(Departamento, Edificio)
+            .join(Edificio, Departamento.edificio_id == Edificio.id)
+            .where(Edificio.condominio_id == cid, Departamento.id == did)
+            .execution_options(populate_existing=True)
+        )
+        if bloquear:
+            query = query.with_for_update(of=Departamento)
+        return (await self.session.execute(query)).one_or_none()
+
+    async def vinculo(self, uid: UUID, did: UUID):
+        return await self.session.scalar(
+            select(UsuarioDepartamento)
+            .where(
+                UsuarioDepartamento.usuario_id == uid, UsuarioDepartamento.departamento_id == did
+            )
+            .execution_options(populate_existing=True)
+        )
+
+    @staticmethod
+    def representar_vinculo(vinculo, departamento, edificio):
+        return VinculoUsuarioResponse(
+            id=vinculo.id,
+            usuario_id=vinculo.usuario_id,
+            departamento_id=departamento.id,
+            condominio_id=edificio.condominio_id,
+            numero=departamento.numero,
+            edificio_id=edificio.id,
+            edificio_nombre=edificio.nombre_bloque,
+            tipo_relacion=vinculo.tipo_relacion,
+            es_activo=vinculo.es_activo,
+            departamento_activo=departamento.activo,
+        )
+
+    async def vinculos_usuario(self, uid: UUID, cid: UUID):
+        rows = await self.session.execute(
+            select(UsuarioDepartamento, Departamento, Edificio)
+            .join(Departamento, UsuarioDepartamento.departamento_id == Departamento.id)
+            .join(Edificio, Departamento.edificio_id == Edificio.id)
+            .where(UsuarioDepartamento.usuario_id == uid, Edificio.condominio_id == cid)
+            .order_by(Edificio.nombre_bloque, Departamento.numero, Departamento.id)
+        )
+        return [self.representar_vinculo(*row) for row in rows]
+
+    async def hay_otro_titular(self, uid: UUID, did: UUID):
+        return (
+            await self.session.scalar(
+                select(UsuarioDepartamento.id)
+                .where(
+                    UsuarioDepartamento.departamento_id == did,
+                    UsuarioDepartamento.usuario_id != uid,
+                    UsuarioDepartamento.es_activo.is_(True),
+                    UsuarioDepartamento.tipo_relacion == "PROPIETARIO_TITULAR",
+                )
+                .limit(1)
+            )
+            is not None
         )
 
     async def agregar(self, *records):

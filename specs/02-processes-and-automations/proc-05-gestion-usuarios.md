@@ -41,6 +41,15 @@ protegidas verifican PostgreSQL y revisión de sesión. La invitación y la veri
 por correo quedan para una evolución posterior. Contrato completo y criterios:
 [alta-administrativa.md](../02-domains/05-usuarios-rbac/alta-administrativa.md).
 
+### CON-06 — Asignación y revocación de roles
+
+SuperAdmin gestiona roles contextuales; Junta solo Auditor/Residente de su
+condominio, sin modificar a otros administradores ni a sí misma. Las asignaciones
+se revocan con `es_activo=false`, conservando vínculos e historial. Cada cambio
+real incrementa la revisión global y audita atómicamente. Repetir una operación
+idéntica es un no-op. Contrato y escenarios:
+[roles-y-permisos.md](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
+
 ### 4.1 Configuración Inicial del Condominio (CON-2)
 
 - Solo `SUPERADMIN` puede ejecutar `POST /api/v1/condominios`.
@@ -59,6 +68,11 @@ por correo quedan para una evolución posterior. Contrato completo y criterios:
   con el contexto de condominio autorizado.
 
 ### 4.2 Relación Usuario - Unidad Habitacional
+Contrato ejecutable de CON-05:
+[vinculos-departamentos.md](../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+El primer vínculo activo es de titular y no se retira al último sin reemplazo.
+La administración crea/cambia/restaura/revoca vínculos por UUID en su contexto;
+un cambio real audita e invalida sesiones atómicamente, conservando el historial.
 - Cada unidad inmobiliaria (departamento) debe tener al menos un **Propietario Titular** registrado con DNI/CE, nombre completo, teléfono y correo electrónico.
 - Una unidad puede tener opcionalmente uno o más **Inquilinos** registrados.
 - Si una unidad cambia de arrendatario:

@@ -12,7 +12,11 @@ from src.core.config import settings
 from src.core.errors import APIError
 from src.core.security import decode_access_token, get_current_user, security_scheme
 from src.main import app
+from src.modules.reservas.areas.repository import get_areas_repository
+from src.modules.usuarios.departamentos import get_departamentos_portal_repository
 from src.modules.usuarios.repository import get_usuarios_repository
+from src.tests.areas import AreasCatalogoFake
+from src.tests.departamentos import CatalogoDepartamentosFake
 from src.tests.identidad import RepositorioIdentidadDemo
 
 pytest_plugins = ["src.tests.usuarios_db"]
@@ -26,8 +30,14 @@ def autorizacion_aislada():
         return decode_access_token(auth.credentials)
 
     app.dependency_overrides[get_current_user] = actor
-    yield
+    catalogo = CatalogoDepartamentosFake()
+    app.dependency_overrides[get_departamentos_portal_repository] = lambda: catalogo
+    areas = AreasCatalogoFake()
+    app.dependency_overrides[get_areas_repository] = lambda: areas
+    yield catalogo
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_departamentos_portal_repository, None)
+    app.dependency_overrides.pop(get_areas_repository, None)
 
 
 @pytest.fixture

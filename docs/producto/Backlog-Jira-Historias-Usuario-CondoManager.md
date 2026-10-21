@@ -115,6 +115,10 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 - Un propietario puede estar vinculado con uno o varios departamentos.
 - Un inquilino solo accede a los departamentos cuyo vínculo se encuentre vigente.
 - Cada departamento debe tener al menos un propietario titular registrado.
+- El primer vínculo activo es de titular; no se retira al último sin reemplazo.
+- Los vínculos se revocan sin eliminar su historial; los cambios reales invalidan
+  sesiones y quedan auditados. El portal utiliza departamentos SQL por UUID.
+- Contrato CON-05: [vínculos](../../specs/02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## USR-05 — Asignar roles y permisos
 
@@ -122,7 +126,12 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 
 **Criterios de aceptación:**
 
-- Se admiten los roles SuperAdmin, Admin/Junta, Auditor, Propietario e Inquilino.
+- Roles canónicos: `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`. Propietario,
+  copropietario e inquilino son relaciones por departamento.
+- SuperAdmin administra roles contextuales; Junta solo Auditor/Residente de su
+  condominio, sin autoasignación ni elevación. La concesión global es independiente.
+- Revocar conserva la asignación y sus vínculos, invalida sesiones y queda auditado.
+- Contrato CON-06: [roles y permisos](../../specs/02-domains/05-usuarios-rbac/roles-y-permisos.md).
 - Cada operación protegida valida el rol y el condominio del usuario.
 - Un residente solo puede consultar y modificar información de sus departamentos vinculados.
 
@@ -452,6 +461,10 @@ Resultado general: COMPLETADO CON OBSERVACIONES
 **Objetivo de la épica:** administrar espacios compartidos, disponibilidad, solvencia y concurrencia de reservas.
 
 ## RES-01 — Administrar el catálogo de áreas comunes
+
+Contrato CON-39: [catálogo persistente](../../specs/02-domains/04-reservas/catalogo-areas.md).
+Incluye administración contextual, edificio exclusivo, horario diario de Lima,
+duración máxima, tarifa decimal en la moneda del condominio y desactivación auditada.
 
 **Historia:** Como administrador, quiero configurar las áreas comunes, para publicar sus condiciones de uso y reserva.
 

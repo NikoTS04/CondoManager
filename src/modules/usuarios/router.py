@@ -9,13 +9,18 @@ from src.core.errors import APIError
 from src.core.security import get_current_user
 from src.modules.usuarios.repository import get_usuarios_repository
 from src.modules.usuarios.schemas import (
+    AsignacionRolResponse,
+    AsignarRolRequest,
+    AsignarVinculoRequest,
     CambiarEstadoUsuarioRequest,
     CrearUsuarioRequest,
+    CuentaUsuarioConRolResponse,
     CuentaUsuarioResponse,
     LoginRequest,
     TokenResponse,
     UserContextResponse,
     UsuarioDTO,
+    VinculoUsuarioResponse,
 )
 from src.modules.usuarios.service import UsuariosService
 
@@ -67,7 +72,9 @@ async def crear_usuario(
     return await UsuariosService(repository).crear(condominio_id, request, actor)
 
 
-@router.get("/condominios/{condominio_id}/usuarios", response_model=list[CuentaUsuarioResponse])
+@router.get(
+    "/condominios/{condominio_id}/usuarios", response_model=list[CuentaUsuarioConRolResponse]
+)
 async def listar_usuarios(
     condominio_id: UUID,
     limit: int = Query(50, ge=1, le=100),
@@ -76,6 +83,45 @@ async def listar_usuarios(
     repository=Depends(get_usuarios_repository),
 ):
     return await UsuariosService(repository).listar(condominio_id, actor, limit, offset)
+
+
+@router.get(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def consultar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).consultar_rol(condominio_id, usuario_id, actor)
+
+
+@router.put(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def asignar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    request: AsignarRolRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_rol(
+        condominio_id, usuario_id, request.rol, actor
+    )
+
+
+@router.delete(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/rol", response_model=AsignacionRolResponse
+)
+async def revocar_rol_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_rol(condominio_id, usuario_id, None, actor)
 
 
 @router.patch("/usuarios/{usuario_id}/estado", response_model=CuentaUsuarioResponse)
@@ -88,4 +134,58 @@ async def cambiar_estado_usuario(
 ):
     return await UsuariosService(repository).cambiar_estado(
         condominio_id, usuario_id, request.esta_activo, actor
+    )
+
+
+@router.get(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/departamentos",
+    response_model=list[VinculoUsuarioResponse],
+)
+async def listar_vinculos_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).listar_vinculos(condominio_id, usuario_id, actor)
+
+
+@router.put(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/departamentos/{departamento_id}",
+    response_model=VinculoUsuarioResponse,
+)
+async def asignar_vinculo_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    departamento_id: UUID,
+    request: AsignarVinculoRequest,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_vinculo(
+        condominio_id,
+        usuario_id,
+        departamento_id,
+        request.tipo_relacion,
+        actor,
+    )
+
+
+@router.delete(
+    "/condominios/{condominio_id}/usuarios/{usuario_id}/departamentos/{departamento_id}",
+    response_model=VinculoUsuarioResponse,
+)
+async def revocar_vinculo_usuario(
+    condominio_id: UUID,
+    usuario_id: UUID,
+    departamento_id: UUID,
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await UsuariosService(repository).gestionar_vinculo(
+        condominio_id,
+        usuario_id,
+        departamento_id,
+        None,
+        actor,
     )

@@ -111,6 +111,7 @@ CREATE TABLE usuario_roles (
     usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
     rol VARCHAR(30) NOT NULL DEFAULT 'RESIDENTE',
+    es_activo BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT uq_usuario_condo_rol UNIQUE (usuario_id, condominio_id),
     CONSTRAINT ck_rol_nombre CHECK (rol IN ('SUPERADMIN', 'ADMIN_JUNTA', 'AUDITOR', 'RESIDENTE'))
 );
@@ -123,6 +124,9 @@ CREATE TABLE usuario_departamentos (
     CONSTRAINT uq_usuario_depto UNIQUE (usuario_id, departamento_id),
     CONSTRAINT ck_tipo_relacion CHECK (tipo_relacion IN ('PROPIETARIO_TITULAR', 'COPROPIETARIO', 'INQUILINO'))
 );
+
+CREATE INDEX idx_vinculos_titulares_activos
+    ON usuario_departamentos (departamento_id, tipo_relacion) WHERE es_activo IS TRUE;
 
 -- 4. Tabla de Cuotas de Mantenimiento (Anderson - PROC-01)
 CREATE TABLE cuotas_mantenimiento (
@@ -210,12 +214,21 @@ CREATE TABLE comprobantes_pago (
 CREATE TABLE areas_comunes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
+    edificio_id UUID REFERENCES edificios(id) ON DELETE SET NULL,
     nombre VARCHAR(100) NOT NULL,
     descripcion TEXT,
     aforo_maximo INT NOT NULL CHECK (aforo_maximo > 0),
     costo_reserva NUMERIC(12,2) NOT NULL DEFAULT 0.00 CHECK (costo_reserva >= 0.00),
-    esta_activa BOOLEAN NOT NULL DEFAULT TRUE
+    esta_activa BOOLEAN NOT NULL DEFAULT TRUE,
+    tiempo_maximo_horas INTEGER NOT NULL DEFAULT 4 CHECK (tiempo_maximo_horas >= 1),
+    hora_apertura TIME NOT NULL DEFAULT '00:00',
+    hora_cierre TIME NOT NULL DEFAULT '23:59',
+    CONSTRAINT ck_area_horario_catalogo CHECK (
+        hora_cierre > hora_apertura AND EXTRACT(SECOND FROM hora_apertura) = 0
+        AND EXTRACT(SECOND FROM hora_cierre) = 0
+    )
 );
+CREATE INDEX idx_areas_catalogo_contexto ON areas_comunes (condominio_id, esta_activa, nombre);
 
 -- 7. Tabla de Reservas (Brandon - PROC-04)
 CREATE TABLE reservas (

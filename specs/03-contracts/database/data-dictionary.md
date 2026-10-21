@@ -13,7 +13,7 @@ Contrato: [alta administrativa](../../02-domains/05-usuarios-rbac/alta-administr
 | Columna | Tipo | Nulo | Default | Regla |
 |---|---|---|---|---|
 | `esta_activo` | BOOLEAN | NO | `false` | Solo SuperAdmin cambia su estado mediante API. |
-| `auth_revision` | INTEGER | NO | `1` | Positivo; cambia atómicamente con el estado e invalida JWT previos. |
+| `auth_revision` | INTEGER | NO | `1` | Positivo; cambia atómicamente con el estado o los permisos e invalida JWT previos. |
 | `es_superadmin` | BOOLEAN | NO | `false` | Concesión global provisionada por CLI, no por API. |
 
 `email` usa índice único `lower(btrim(email))`; `documento_identidad` usa índice
@@ -22,6 +22,29 @@ las tablas. `password_hash` guarda PBKDF2-SHA256 y nunca se expone.
 `usuario_roles` mantiene una asignación por `(usuario_id, condominio_id)` y
 `usuario_departamentos` un vínculo por `(usuario_id, departamento_id)`, ambos
 con claves foráneas y checks de los catálogos canónicos.
+
+## Asignaciones revocables — CON-06
+
+`usuario_roles.es_activo BOOLEAN NOT NULL DEFAULT true` distingue asignación
+vigente y revocada sin eliminar filas ni vínculos. La migración `20261020_0008`
+conserva las asignaciones existentes como activas. La unicidad del par y el check
+de cuatro roles SQL se mantienen; la API solo concede ADMIN_JUNTA/AUDITOR/RESIDENTE.
+Cambios reales actualizan `usuarios.auth_revision` y registran auditoría en la
+misma transacción. El downgrade elimina únicamente la columna de actividad y
+rechaza bajar si existen asignaciones revocadas, ya que la revisión anterior no
+representa esa revocación. Las filas y auditorías se conservan. Contrato:
+[roles y permisos](../../02-domains/05-usuarios-rbac/roles-y-permisos.md).
+
+## Vínculos de tenencia — CON-05
+
+Se reutiliza `usuario_departamentos`: UUID estable, FK de usuario y departamento,
+relación canónica y `es_activo`. PUT conserva la unicidad del par; la revocación no
+borra filas. Cada cambio real incrementa revisión y audita en la misma transacción.
+La regla del último titular se comprueba bajo bloqueo del usuario/contexto/unidad,
+incluidas carreras entre usuarios. La migración `20261020_0009` añade
+`idx_vinculos_titulares_activos` sobre `(departamento_id, tipo_relacion)` donde
+`es_activo IS TRUE`; no reescribe datos históricos. Contrato:
+[vínculos](../../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## 1. Tabla: `condominios`
 Almacena las comunidades inmobiliarias o edificios matrices.
@@ -205,6 +228,31 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 | `conciliado_en` | `TIMESTAMP TZ` | SÍ | `NULL` | - | Fecha y hora UTC de la conciliación. |
 
 ---
+
+## Catálogo `areas_comunes` — CON-39
+
+Contrato: [catálogo persistente](../../02-domains/04-reservas/catalogo-areas.md).
+La migración `20261020_0010` crea/adopta la tabla y valida sus atributos base.
+
+| Columna | Tipo | Nulo | Default | Regla |
+|---|---|---|---|---|
+| `id` | UUID | NO | gen_random_uuid() | PK estable |
+| `condominio_id` | UUID | NO | — | FK CASCADE a condominios |
+| `edificio_id` | UUID | SÍ | NULL | FK SET NULL a edificios; mismo condominio |
+| `nombre` | VARCHAR(100) | NO | — | Nombre del área |
+| `descripcion` | TEXT | SÍ | NULL | Condiciones descriptivas |
+| `aforo_maximo` | INTEGER | NO | — | >0 |
+| `costo_reserva` | NUMERIC(12,2) | NO | 0.00 | >=0; por turno, moneda del condominio |
+| `tiempo_maximo_horas` | INTEGER | NO | 4 | >=1; nuevas configuraciones 1–24 |
+| `esta_activa` | BOOLEAN | NO | true | Desactivación lógica |
+| `hora_apertura` | TIME | NO | 00:00 | Hora local de Lima; precisión de minuto |
+| `hora_cierre` | TIME | NO | 23:59 | Posterior a apertura; mismo día |
+
+Check `ck_area_horario_catalogo`: cierre > apertura y segundos cero en ambas horas.
+Índice contextual `idx_areas_catalogo_contexto` sobre condominio, estado y nombre.
+No se eliminan reservas ni se alteran costos históricos al editar el catálogo.
+Auditoría de altas/cambios/estado atómica; no-op sin nueva entrada. El downgrade
+retira horas e índice, conservando tablas adoptadas o con datos/referencias.
 
 ## 6. Tabla: `reservas`
 Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlusCircle, ShieldAlert, ArrowRight } from "lucide-react";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +16,15 @@ function getTodayLima(): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+function minutos(hora: string): number {
+  const [h, m] = hora.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function horaLocal(valor: number): string {
+  return `${String(Math.floor(valor / 60)).padStart(2, "0")}:${String(valor % 60).padStart(2, "0")}`;
 }
 
 export interface ReservarAreaFormProps {
@@ -53,7 +62,21 @@ export function ReservarAreaForm({
   const [revisionCalendario, setRevisionCalendario] = useState(0);
 
   // Asegura área por defecto si la lista se carga después
-  const effectiveAreaId = selectedAreaId || areas[0]?.id || "";
+  const effectiveAreaId = areas.some((area) => area.id === selectedAreaId) ? selectedAreaId : areas[0]?.id || "";
+  const seleccionada = areas.find((area) => area.id === effectiveAreaId);
+  const apertura = seleccionada?.hora_apertura ?? "00:00";
+  const cierre = seleccionada?.hora_cierre ?? "23:59";
+  const duracionMaxima = seleccionada?.tiempo_maximo_horas ?? 24;
+  const horarioActual = useRef({ inicio: horaInicio, fin: horaFin });
+  horarioActual.current = { inicio: horaInicio, fin: horaFin };
+
+  useEffect(() => {
+    if (!effectiveAreaId) return;
+    const { inicio, fin } = horarioActual.current;
+    if (inicio >= apertura && fin <= cierre && fin > inicio && minutos(fin) - minutos(inicio) <= duracionMaxima * 60) return;
+    setHoraInicio(apertura);
+    setHoraFin(horaLocal(Math.min(minutos(cierre), minutos(apertura) + Math.min(120, duracionMaxima * 60))));
+  }, [effectiveAreaId, apertura, cierre, duracionMaxima]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +108,10 @@ export function ReservarAreaForm({
       setReservaError("Selecciona un espacio común.");
       return;
     }
+    if (horaInicio < apertura || horaFin > cierre || horaFin <= horaInicio || minutos(horaFin) - minutos(horaInicio) > duracionMaxima * 60) {
+      setReservaError("Elige un turno dentro del horario y de la duración máxima del área.");
+      return;
+    }
 
     setIsSubmitting(true);
     const res = await crearReserva({
@@ -100,7 +127,7 @@ export function ReservarAreaForm({
 
     if (res.ok) {
       setRevisionCalendario((value) => value + 1);
-      setReservaSuccess("¡Reserva confirmada con éxito! Se ha notificado a tu correo con las normas del espacio.");
+      setReservaSuccess("Reserva confirmada. Puedes consultar su horario y tarifa en Mis reservas.");
       if (onSuccess) onSuccess();
     } else {
       setReservaError(res.error || "No se pudo registrar la reserva. Inténtalo de nuevo.");
@@ -156,12 +183,20 @@ export function ReservarAreaForm({
               ) : (
                 areas.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.nombre} ({formatMoney(a.costo_reserva, "PEN")})
+                    {a.nombre} ({formatMoney(a.costo_reserva, a.moneda)})
                   </option>
                 ))
               )}
             </Select>
           </Field>
+
+          {seleccionada && <div className="rounded-lg border border-line bg-canvas p-3 text-sm" aria-label="Condiciones del área seleccionada">
+            <p>{seleccionada.descripcion}</p>
+            <p>Horario diario: {apertura}–{cierre} · Hora de Lima</p>
+            <p>Máximo {duracionMaxima} horas por reserva · Aforo {seleccionada.aforo_maximo} personas</p>
+            <p>Tarifa por turno: {formatMoney(seleccionada.costo_reserva, seleccionada.moneda)}</p>
+            {seleccionada.edificio_nombre && <p>Uso exclusivo: {seleccionada.edificio_nombre}</p>}
+          </div>}
 
           <Field label="Fecha de Reserva" required>
             <Input
@@ -187,6 +222,9 @@ export function ReservarAreaForm({
             <Field label="Hora Inicio" required>
               <Input
                 type="time"
+                min={apertura}
+                max={cierre}
+                step={60}
                 value={horaInicio}
                 onChange={(e) => setHoraInicio(e.target.value)}
                 disabled={estaEnMora}
@@ -196,6 +234,9 @@ export function ReservarAreaForm({
             <Field label="Hora Fin" required>
               <Input
                 type="time"
+                min={apertura}
+                max={cierre}
+                step={60}
                 value={horaFin}
                 onChange={(e) => setHoraFin(e.target.value)}
                 disabled={estaEnMora}

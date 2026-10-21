@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
@@ -60,6 +60,30 @@ class CuentaUsuarioResponse(BaseModel):
     creado_en: datetime
 
 
+RolContextual = Literal["ADMIN_JUNTA", "AUDITOR", "RESIDENTE"]
+
+
+class AsignarRolRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rol: RolContextual
+
+
+class AsignacionRolResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    usuario_id: UUID
+    condominio_id: UUID
+    rol: RolUsuario
+    es_activo: bool
+
+
+class CuentaUsuarioConRolResponse(CuentaUsuarioResponse):
+    rol: RolUsuario
+    rol_activo: bool
+    es_superadmin: bool
+
+
 class VinculoDepartamentoDTO(BaseModel):
     """La tenencia se resuelve por UUID de unidad, no por rol ni número."""
 
@@ -74,6 +98,8 @@ class VinculoDepartamentoDTO(BaseModel):
 class DepartamentoPortalDTO(BaseModel):
     id: UUID
     condominio_id: UUID
+    edificio_id: UUID
+    edificio_nombre: str
     numero: str
     piso: int
     coeficiente: Decimal
@@ -81,6 +107,25 @@ class DepartamentoPortalDTO(BaseModel):
     estado_financiero: str
     activo: bool
     deuda_vencida: Decimal
+
+
+class AsignarVinculoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tipo_relacion: TipoRelacion
+
+
+class VinculoUsuarioResponse(BaseModel):
+    id: UUID
+    usuario_id: UUID
+    condominio_id: UUID
+    departamento_id: UUID
+    numero: str
+    edificio_id: UUID
+    edificio_nombre: str
+    tipo_relacion: TipoRelacion
+    es_activo: bool
+    departamento_activo: bool
 
 
 class UsuarioDTO(BaseModel):

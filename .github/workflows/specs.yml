@@ -69,6 +69,7 @@ jobs:
         run: |
           uv run --extra dev alembic upgrade head
           uv run --extra dev python -m scripts.seed_usuarios_demo
+          uv run --extra dev python -m scripts.seed_areas_demo
       - name: Probar contrato generado contra FastAPI en modo ASGI
         # No sustituye validación de respuestas ni flujos autenticados completos.
         # El login consulta PostgreSQL; las rutas públicas siguen sin Redis.

@@ -1,20 +1,20 @@
 """Router FastAPI para el Dominio de Reservas de Áreas Comunes (Brandon - PROC-04)."""
 
 import uuid
-from datetime import date
+from datetime import date, time
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from scripts.seed_condominio_piloto import generar_datos_areas_comunes
 from src.core.authorization import (
-    autorizar_condominio,
     autorizar_departamento,
     contexto_consulta,
     puede_ver_departamento,
 )
 from src.core.roles import ROLES_ADMINISTRATIVOS
 from src.core.security import get_current_user
+from src.modules.reservas.areas.repository import get_areas_repository
+from src.modules.reservas.areas.service import AreasService
 from src.modules.reservas.schemas import (
     AreaComunDTO,
     CancelarReservaRequest,
@@ -30,7 +30,7 @@ from src.modules.reservas.service import (
     HorarioInvalidoException,
     ReservasService,
 )
-from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, DEPARTAMENTOS_PILOTO
+from src.modules.usuarios.departamentos import get_departamentos_portal_repository
 
 router = APIRouter(tags=["Reservas de Áreas Comunes"])
 
@@ -38,40 +38,13 @@ router = APIRouter(tags=["Reservas de Áreas Comunes"])
 # Almacén de Estado en Memoria (Simulación y Desarrollo)
 # ============================================================================
 
-# Inicialización de áreas comunes del piloto
-AREAS_REGISTRADAS: Dict[uuid.UUID, Dict] = {}
-_raw_areas = generar_datos_areas_comunes()
-_fixed_uuids = [
-    uuid.UUID("11111111-1111-1111-1111-111111111101"),
-    uuid.UUID("11111111-1111-1111-1111-111111111102"),
-    uuid.UUID("11111111-1111-1111-1111-111111111103"),
-    uuid.UUID("11111111-1111-1111-1111-111111111104"),
-]
-
-for idx, area_data in enumerate(_raw_areas):
-    area_uuid = _fixed_uuids[idx] if idx < len(_fixed_uuids) else uuid.uuid4()
-    AREAS_REGISTRADAS[area_uuid] = {
-        "id": area_uuid,
-        "condominio_id": CONDOMINIO_PILOTO_ID,
-        "nombre": area_data["nombre"],
-        "descripcion": area_data.get("descripcion", ""),
-        "aforo_maximo": area_data["aforo_maximo"],
-        "costo_reserva": area_data["costo_reserva"],
-        "esta_activa": True,
-    }
-
 # Almacén de reservas confirmadas / canceladas
 RESERVAS_REGISTRADAS: Dict[uuid.UUID, Dict] = {}
-
-# El contrato recibe UUID, no números: indexar por número dejaba la mora
-# inalcanzable y trataba incluso al piloto moroso como AL_DIA. UUID5 mantiene
-# identidades estables en este almacén simulado; no sustituye el catálogo de BD.
-DEPARTAMENTOS_MAP = DEPARTAMENTOS_PILOTO
-
 
 # ============================================================================
 # Endpoints de Áreas Comunes
 # ============================================================================
+
 
 @router.get(
     "/areas",
@@ -80,25 +53,22 @@ DEPARTAMENTOS_MAP = DEPARTAMENTOS_PILOTO
     summary="Catálogo de áreas comunes activas",
 )
 async def listar_areas(
-    user: dict = Depends(get_current_user), condominio_id: uuid.UUID | None = None
+    user: dict = Depends(get_current_user),
+    condominio_id: uuid.UUID | None = None,
+    areas_repository=Depends(get_areas_repository),
 ):
     """Retorna las áreas comunes disponibles para reserva en el condominio."""
-    cid = contexto_consulta(user, condominio_id)
-    return [
-        AreaComunDTO(**area)
-        for area in AREAS_REGISTRADAS.values()
-        if area.get("esta_activa", True) and area["condominio_id"] == cid
-    ]
+    return await AreasService(areas_repository).catalogo(user, condominio_id)
 
 
 @router.get("/areas/{area_id}/disponibilidad")
 async def disponibilidad_area(
-    area_id: uuid.UUID, fecha: date, user: dict = Depends(get_current_user)
+    area_id: uuid.UUID,
+    fecha: date,
+    user: dict = Depends(get_current_user),
+    areas_repository=Depends(get_areas_repository),
 ):
-    area = AREAS_REGISTRADAS.get(area_id)
-    if not area:
-        raise HTTPException(404, detail={"error_code": "AREA_NO_ENCONTRADA"})
-    autorizar_condominio(user, area["condominio_id"])
+    await AreasService(areas_repository).publica(area_id, user)
     return [
         {"hora_inicio": r["hora_inicio"], "hora_fin": r["hora_fin"]}
         for r in RESERVAS_REGISTRADAS.values()
@@ -109,6 +79,7 @@ async def disponibilidad_area(
 # ============================================================================
 # Endpoints de Reservas
 # ============================================================================
+
 
 @router.get(
     "/reservas",
@@ -121,17 +92,12 @@ async def listar_reservas(
     fecha: Optional[date] = Query(None, description="Fecha específica para filtrar reservas"),
     condominio_id: uuid.UUID | None = None,
     user: dict = Depends(get_current_user),
+    areas_repository=Depends(get_areas_repository),
 ):
     """Permite a los residentes ver los horarios ocupados de un área común."""
     cid = contexto_consulta(user, condominio_id)
-    if area_id is not None and area_id not in AREAS_REGISTRADAS:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "AREA_NO_ENCONTRADA", "mensaje": "Área común no encontrada."},
-        )
-
     if area_id is not None:
-        autorizar_condominio(user, AREAS_REGISTRADAS[area_id]["condominio_id"])
+        await AreasService(areas_repository).verificar_historial(area_id, user)
     resultados = []
     for r in RESERVAS_REGISTRADAS.values():
         if (
@@ -150,29 +116,40 @@ async def listar_reservas(
     status_code=status.HTTP_201_CREATED,
     summary="Solicitud de reserva de área común (con filtro de solvencia)",
 )
-async def crear_reserva(request: CrearReservaRequest, user: dict = Depends(get_current_user)):
+async def crear_reserva(
+    request: CrearReservaRequest,
+    user: dict = Depends(get_current_user),
+    repository=Depends(get_departamentos_portal_repository),
+    areas_repository=Depends(get_areas_repository),
+):
     """Crea una reserva validando la solvencia financiera del departamento y la disponibilidad de horario."""
-    autorizar_departamento(
-        user, request.departamento_id, request.condominio_id, escritura=True
-    )
+    autorizar_departamento(user, request.departamento_id, request.condominio_id, escritura=True)
     # 1. Comprobar existencia del área
-    area = AREAS_REGISTRADAS.get(request.area_id)
-    if not area:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "AREA_NO_ENCONTRADA", "mensaje": f"Área común '{request.area_id}' no encontrada."},
+    area = (
+        await AreasService(areas_repository).publica(
+            request.area_id,
+            user,
+            bloquear=True,
+            condominio_id=request.condominio_id,
         )
-
-    if area["condominio_id"] != request.condominio_id:
-        raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO", "mensaje": "Área de otro condominio."})
+    ).model_dump()
+    area["hora_apertura"] = time.fromisoformat(area["hora_apertura"])
+    area["hora_cierre"] = time.fromisoformat(area["hora_cierre"])
 
     # 2. Consultar estado financiero de una unidad conocida y autorizada.
-    depto_id_str = str(request.departamento_id)
-    depto = DEPARTAMENTOS_MAP.get(depto_id_str)
+    depto = await repository.obtener(request.departamento_id)
     if not depto:
         raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
     if depto["condominio_id"] != request.condominio_id or not depto["activo"]:
         raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO"})
+    if area["edificio_id"] is not None and area["edificio_id"] != depto["edificio_id"]:
+        raise HTTPException(
+            403,
+            detail={
+                "error_code": "ACCESO_DENEGADO",
+                "mensaje": "La unidad no pertenece al edificio del área.",
+            },
+        )
     estado_financiero = depto["estado_financiero"]
     saldo_mora = depto["deuda_vencida"]
 
@@ -185,7 +162,10 @@ async def crear_reserva(request: CrearReservaRequest, user: dict = Depends(get_c
             reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
         )
         # Guardar en memoria
-        RESERVAS_REGISTRADAS[reserva_dto.id] = reserva_dto.model_dump()
+        RESERVAS_REGISTRADAS[reserva_dto.id] = {
+            **reserva_dto.model_dump(),
+            "zona_horaria": area["zona_horaria"],
+        }
         return reserva_dto
 
     except DeudaMoraActivaException as exc:
@@ -194,7 +174,10 @@ async def crear_reserva(request: CrearReservaRequest, user: dict = Depends(get_c
             detail={
                 "error_code": exc.error_code,
                 "mensaje": exc.mensaje,
-                "detalles": {"departamento_id": exc.departamento_id, "saldo_vencido": str(exc.saldo_vencido)},
+                "detalles": {
+                    "departamento_id": exc.departamento_id,
+                    "saldo_vencido": str(exc.saldo_vencido),
+                },
             },
         )
     except ConflictoHorarioException as exc:
@@ -213,7 +196,7 @@ async def crear_reserva(request: CrearReservaRequest, user: dict = Depends(get_c
         )
     except AreaInactivaException as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail={"error_code": exc.error_code, "mensaje": exc.mensaje},
         )
 

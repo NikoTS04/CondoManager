@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -23,9 +24,7 @@ from src.core.roles import RolUsuario, TipoRelacion
 class Usuario(Base):
     __tablename__ = "usuarios"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     nombre: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -53,9 +52,7 @@ class Usuario(Base):
 class UsuarioDepartamento(Base):
     __tablename__ = "usuario_departamentos"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     usuario_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("usuarios.id", ondelete="CASCADE"),
@@ -73,6 +70,12 @@ class UsuarioDepartamento(Base):
 
     __table_args__ = (
         UniqueConstraint("usuario_id", "departamento_id", name="uq_usuario_depto"),
+        Index(
+            "idx_vinculos_titulares_activos",
+            "departamento_id",
+            "tipo_relacion",
+            postgresql_where=text("es_activo IS TRUE"),
+        ),
         CheckConstraint(
             "tipo_relacion IN ('PROPIETARIO_TITULAR', 'INQUILINO', 'COPROPIETARIO')",
             name="ck_tipo_relacion",
@@ -83,9 +86,7 @@ class UsuarioDepartamento(Base):
 class UsuarioRol(Base):
     __tablename__ = "usuario_roles"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     usuario_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("usuarios.id", ondelete="CASCADE"),
@@ -96,8 +97,9 @@ class UsuarioRol(Base):
         ForeignKey("condominios.id", ondelete="CASCADE"),
         nullable=False,
     )
-    rol: Mapped[str] = mapped_column(
-        String(30), nullable=False, default=RolUsuario.RESIDENTE.value
+    rol: Mapped[str] = mapped_column(String(30), nullable=False, default=RolUsuario.RESIDENTE.value)
+    es_activo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
     )
 
     __table_args__ = (

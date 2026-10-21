@@ -23,6 +23,7 @@ import { PresupuestoMensual, type PresupuestoAprobado } from "@/features/junta/P
 import { ResumenSection } from "@/features/junta/ResumenSection";
 import ConfiguracionCondominio from "@/features/junta/ConfiguracionCondominio";
 import { UsuariosSection } from "@/features/junta/UsuariosSection";
+import { AreasSection } from "@/features/junta/AreasSection";
 import {
   conciliarComprobante,
   emitirLoteCuotas,
@@ -343,7 +344,10 @@ export default function JuntaPortal() {
             />
           )}
           {section === "usuarios" && !isAuditor && (
-            <UsuariosSection key={condominioActivoId ?? "sin-condominio"} condominioId={condominioActivoId} esSuperAdmin={isSuperAdmin} />
+            <UsuariosSection key={condominioActivoId ?? "sin-condominio"} condominioId={condominioActivoId} esSuperAdmin={isSuperAdmin} usuarioActualId={user?.id ?? ""} />
+          )}
+          {section === "areas" && (
+            <AreasSection key={condominioActivoId ?? "sin-condominio"} condominioId={condominioActivoId} soloLectura={isAuditor} />
           )}
           {section === "presupuesto" && (
             <>
