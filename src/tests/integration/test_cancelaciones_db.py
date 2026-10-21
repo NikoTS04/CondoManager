@@ -187,8 +187,15 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
         params={"fecha": datos["fecha_reserva"].isoformat()},
     )
     assert calendario.status_code == 200 and calendario.json() == []
-    nueva = await client.post("/api/v1/reservas", headers=residente, json=turno(base, AREA))
-    assert nueva.status_code == 201, nueva.text
+    intentos = await asyncio.wait_for(
+        asyncio.gather(
+            client.post("/api/v1/reservas", headers=residente, json=turno(base, AREA)),
+            client.post("/api/v1/reservas", headers=residente, json=turno(base, AREA)),
+        ),
+        timeout=15,
+    )
+    assert sorted(r.status_code for r in intentos) == [201, 409], [r.text for r in intentos]
+    nueva = next(r for r in intentos if r.status_code == 201)
     assert nueva.json()["id"] != str(rid)
     monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {})
     assert (await client.post(ruta, headers=residente)).json() == original

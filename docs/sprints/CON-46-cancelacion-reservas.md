@@ -117,7 +117,21 @@ base de producción. Configura `CON46_TEST_DATABASE_URL` con PostgreSQL de prueb
 .venv/Scripts/python.exe -m pytest src/tests/unit/test_cancelaciones.py src/tests/integration/test_cancelaciones_db.py -q -rs
 ```
 
-Verificación local del 21/10/2026: 28 comprobaciones aprobadas (10 unitarias nuevas,
-12 unitarias existentes, 3 contratos HTTP existentes de reservas/permisos y 3 BDD).
-Las 2 integraciones PostgreSQL se omitieron por falta de URL de pruebas.
-Ruff y TypeScript sin errores. La comprobación manual queda a cargo de Gerardo.
+Verificación del 21/10/2026 tras integrar `develop` hasta `f104e56`:
+
+- 27 comprobaciones dirigidas aprobadas, incluidas las 10 unitarias nuevas,
+  las 2 integraciones PostgreSQL y regresiones de concurrencia, catálogo,
+  solvencia y grafo Alembic.
+- PostgreSQL 17 temporal: migración completa desde cero hasta `20261021_0012`,
+  creación SQL con creador/zona, cancelación y nueva reserva concurrentes,
+  persistencia entre sesiones, outbox y rollback. No se modificó Supabase.
+- Ruff, TypeScript y lint de los dos archivos frontend modificados correctos.
+- Regresión del backend en dos tandas: **437 casos aprobados de 439**. Quedan
+  dos fallos previos en `test_vinculos_db.py`: el reporte de pago de
+  `test_relaciones_mixtas_portal_real_y_operaciones_autorizadas` devuelve 500
+  en lugar de 202, y `test_portal_calcula_deuda_solo_de_cuotas_sql_vencidas`
+  obtiene 0.00 en lugar de 60.15. Ambos se reprodujeron ejecutando esos casos
+  desde una copia limpia de `origin/develop` (`f104e56`), sin CON-46.
+
+La revisión manual del portal se mantiene a cargo de Gerardo. Publicar el evento
+en Redis no acredita que el proveedor haya entregado una notificación.
