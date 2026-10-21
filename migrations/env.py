@@ -17,6 +17,12 @@ from src.modules.cuotas.distribucion.models import ConfiguracionDistribucion  # 
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, LoteCuotas  # noqa: F401
 from src.modules.cuotas.presupuestos.models import PresupuestoMensual  # noqa: F401
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor  # noqa: F401
+from src.modules.notificaciones.models import (  # noqa: F401
+    AlertaAdministrativa,
+    EventoConsumido,
+    Notificacion,
+    NotificacionIntento,
+)
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol  # noqa: F401
 
 config = context.config
