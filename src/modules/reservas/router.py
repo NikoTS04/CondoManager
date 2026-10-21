@@ -175,7 +175,9 @@ async def listar_reservas(
 
 def get_areas_reserva_repository(solvencia=Depends(get_solvencia_service)):
     # Catalogo y solvencia comparten los locks de una sola transaccion financiera.
-    return AreasRepository(solvencia.session)
+    if hasattr(solvencia, "session"):
+        return AreasRepository(solvencia.session)
+    return AreasRepository(None)
 
 
 @router.post(

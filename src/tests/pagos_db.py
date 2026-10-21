@@ -53,7 +53,17 @@ async def preparar(base):
 
 @pytest.fixture
 def db_pagos(db_usuarios, monkeypatch, tmp_path):
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
     asyncio.run(preparar(db_usuarios))
+    new_engine = create_async_engine(
+        db_usuarios.url,
+        poolclass=NullPool,
+        connect_args={"server_settings": {"search_path": db_usuarios.esquema}},
+    )
+    db_usuarios.engine = new_engine
+    db_usuarios.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
     monkeypatch.setattr(settings, "VOUCHERS_DIR", str(tmp_path / "vouchers"))
     monkeypatch.setattr(reservas, "RESERVAS_REGISTRADAS", {})
     return db_usuarios

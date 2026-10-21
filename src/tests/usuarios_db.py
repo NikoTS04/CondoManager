@@ -91,6 +91,11 @@ def db_usuarios(monkeypatch):
     if not url:
         pytest.skip("Defina CON04_TEST_DATABASE_URL con una base PostgreSQL de pruebas.")
     base = asyncio.run(crear_base(url))
+    new_engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": base.esquema}}
+    )
+    base.engine = new_engine
+    base.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
     monkeypatch.setattr(settings, "DEMO_MODE", True)
 
     async def session():
