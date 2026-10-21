@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PagoRevisadoEvent",
+  "type": "object",
+  "required": ["event_id", "event_type", "producer", "occurred_at", "data"],
+  "properties": {
+    "event_id": {"type": "string", "format": "uuid"},
+    "event_type": {"const": "PagoRevisadoEvent"},
+    "producer": {"type": "string", "minLength": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "data": {
+      "type": "object",
+      "required": [
+        "comprobante_id",
+        "condominio_id",
+        "departamento_id",
+        "resultado"
+      ],
+      "properties": {
+        "comprobante_id": {"type": "string", "format": "uuid"},
+        "condominio_id": {"type": "string", "format": "uuid"},
+        "departamento_id": {"type": "string", "format": "uuid"},
+        "resultado": {"enum": ["APROBADO", "OBSERVADO", "RECHAZADO"]},
+        "monto_aplicado": {"type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]{2}$"},
+        "saldo_resultante": {"type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]{2}$"},
+        "motivo": {"type": ["string", "null"], "minLength": 1},
+        "instrucciones": {"type": ["string", "null"], "minLength": 1},
+        "recibo_url": {"type": ["string", "null"]},
+        "revisado_en": {"type": ["string", "null"], "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"resultado": {"const": "APROBADO"}}},
+          "then": {
+            "required": ["monto_aplicado", "saldo_resultante"],
+            "properties": {
+              "monto_aplicado": {"type": "string", "pattern": "^[0-9]+\\.[0-9]{2}$"},
+              "saldo_resultante": {"type": "string", "pattern": "^[0-9]+\\.[0-9]{2}$"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"resultado": {"enum": ["OBSERVADO", "RECHAZADO"]}}},
+          "then": {
+            "required": ["motivo", "instrucciones"],
+            "properties": {
+              "motivo": {"type": "string", "minLength": 1},
+              "instrucciones": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      ],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

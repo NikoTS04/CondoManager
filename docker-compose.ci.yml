@@ -35,6 +35,13 @@ services:
       DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
       DEBUG: "false"
 
+  notificaciones-worker:
+    image: condomanager-api:ci
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
+      NOTIFICACIONES_TRANSPORTE: SIMULADO
+      DEBUG: "false"
+
   frontend:
     image: condomanager-web:ci
     depends_on:

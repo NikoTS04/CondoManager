@@ -3,99 +3,77 @@
 ## 1. Ficha del Proceso
 - **Identificador:** PROC-03
 - **Responsable del Módulo:** **Alejandro**
-- **Estado:** En Especificación
-- **Versión:** 1.0
-- **Módulos Vinculados:** PROC-01 (Cuotas), PROC-02 (Pagos y Moras), PROC-04 (Reservas)
+- **Estado:** Implementado (Sprint 2 — CON-32, CON-34, CON-36, CON-37)
+- **Versión:** 2.0
+- **Módulos Vinculados:** PROC-01 (Cuotas), PROC-02 (Pagos y Moras), PROC-04 (Reservas), PROC-05 (Usuarios)
 
 ---
 
 ## 2. Propósito y Alcance del Proceso
-Orquestar la entrega oportuna, automática y trazable de todas las notificaciones operativas y financieras dirigidas a residentes, propietarios y miembros de la Junta Directiva. 
+Orquestar la generación idempotente, persistente y trazable de todas las notificaciones operativas y financieras dirigidas a residentes con vínculo activo, propietarios, copropietarios e inquilinos, así como comunicados institucionales emitidos por la Junta Directiva.
 
-El módulo gestiona plantillas dinámicas, políticas de reintentos ante fallos en proveedores de transporte (Email SMTP / API WhatsApp) y mantiene una bitácora auditable de cada mensaje despachado.
+El módulo separa estrictamente:
+1. **Registro transaccional (`EN_COLA`)** al consumir eventos confirmados desde `condomanager:domain-events`.
+2. **Despacho asíncrono (`ACEPTADO` / `ENTREGADO` / `REINTENTANDO` / `FALLIDO_PERMANENTE`)** gobernado por el motor de entrega de CON-37 con arrendamiento en PostgreSQL (`FOR UPDATE SKIP LOCKED`).
+
+> **Alcance diferido (CON-04):** La invitación y verificación por correo electrónico de nuevos usuarios queda diferida para una evolución posterior; en el Sprint 2 el alta de cuentas utiliza habilitación manual por `SUPERADMIN`.
 
 ---
 
-## 3. Disparadores y Catálogo de Notificaciones
+## 3. Disparadores, Eventos y Catálogo de Plantillas
 
-| Código de Evento | Disparador / Momento | Canal Principal | Destinatario | Contenido Resumido |
+| Plantilla | Evento de Dominio | Origen (`origen_tipo`) | Variables Requeridas (sin defaults financieros) | Clave de Deduplicación Lógica |
 | :--- | :--- | :--- | :--- | :--- |
-| `NOTIF_EMISION_CUOTA` | Emisión mensual el día 1 | Email / App | Propietario / Inquilino | Recibo del mes, desglose de conceptos, fecha límite y cuentas bancarias. |
-| `NOTIF_RECORDATORIO_PREVIO` | 3 días antes del vencimiento | Email / WhatsApp | Residente | Recordatorio amistoso de vencimiento próximo para evitar moras. |
-| `NOTIF_CORTE_HOY` | Día del vencimiento (día 20) | Email / WhatsApp | Residente con saldo pendiente | Aviso de última fecha de pago oportuno. |
-| `NOTIF_MORA_APLICADA` | Vencimiento de gracia (día 23) | Email | Residente deudor | Liquidación con recargo de mora y aviso de restricción de áreas comunes. |
-| `NOTIF_PAGO_RECIBIDO` | Residente sube voucher | Email | Residente | Confirmación de recepción de comprobante en proceso de conciliación. |
-| `NOTIF_PAGO_CONCILIADO` | Junta aprueba comprobante | Email / WhatsApp | Residente | Confirmación de pago exitoso, estado de cuenta actualizado y recibo en PDF. |
-| `NOTIF_PAGO_RECHAZADO` | Junta rechaza comprobante | Email | Residente | Motivo del rechazo y enlace para adjuntar nuevo comprobante legible. |
-| `NOTIF_RESTRICCION_LEVAN` | Liquidación total de deuda | Email / WhatsApp | Residente | Aviso de solvencia restablecida y rehabilitación de reservas de áreas comunes. |
-| `NOTIF_RESERVA_CONFIRM` | Aprobación de área común | Email / WhatsApp | Residente solicitante | Confirmación de reserva, horario, aforo y normas de uso. |
+| `NOTIF_EMISION_CUOTA` | `CuotasEmitidasEvent` | `CUOTA` | `dpto`, `periodo`, `monto`, `vencimiento` (+ `monto_pendiente`, `cci_banco`) | `CUOTA:{cuota_id}:NOTIF_EMISION_CUOTA:{canal}:{usuario_id}` |
+| `NOTIF_PAGO_RECIBIDO` | `PagoReportadoEvent` | `COMPROBANTE` | `dpto`, `monto`, `numero_operacion`, `banco` | `COMPROBANTE:{id}:NOTIF_PAGO_RECIBIDO:{canal}:{usuario_id}` |
+| `NOTIF_PAGO_CONCILIADO` | `PagoRevisadoEvent` (`APROBADO`) / `PagoConciliadoEvent` | `COMPROBANTE` | `dpto`, `monto_abonado` (`monto_aplicado`), `saldo_restante` (`saldo_resultante`) | `COMPROBANTE:{id}:NOTIF_PAGO_CONCILIADO:{canal}:{usuario_id}` |
+| `NOTIF_PAGO_OBSERVADO` | `PagoRevisadoEvent` (`OBSERVADO`) | `COMPROBANTE` | `dpto`, `motivo`, `instrucciones` | `COMPROBANTE:{id}:NOTIF_PAGO_OBSERVADO:{canal}:{usuario_id}` |
+| `NOTIF_PAGO_RECHAZADO` | `PagoRevisadoEvent` (`RECHAZADO`) | `COMPROBANTE` | `dpto`, `motivo_rechazo` (`motivo`), `instrucciones` | `COMPROBANTE:{id}:NOTIF_PAGO_RECHAZADO:{canal}:{usuario_id}` |
+| `NOTIF_RESERVA_CONFIRMADA` | `ReservaConfirmadaEvent` | `RESERVA` | `dpto`, `area`, `fecha`, `horario`, `costo`, `normas_convivencia` | `RESERVA:{id}:NOTIF_RESERVA_CONFIRMADA:{canal}:{usuario_id}` |
+| `NOTIF_RESERVA_CANCELADA` | `ReservaCanceladaEvent` | `RESERVA` | `dpto`, `area`, `fecha`, `horario`, `motivo` (+ `ajuste_economico`) | `RESERVA:{id}:NOTIF_RESERVA_CANCELADA:{canal}:{usuario_id}` |
+| `NOTIF_MORA_APLICADA` | `MoraAplicadaEvent` | `CUOTA` | `dpto`, `monto_mora`, `nuevo_saldo` | `CUOTA:{id}:NOTIF_MORA_APLICADA:{canal}:{usuario_id}` |
+| `NOTIF_RECORDATORIO_PREVIO` | `RecordatorioPrevioEvent` | `CUOTA` | `dpto`, `fecha_corte`, `monto_pendiente` | `CUOTA:{id}:NOTIF_RECORDATORIO_PREVIO:{canal}:{usuario_id}` |
+| `NOTIF_COMUNICADO_GENERAL` | Comunicado administrativo | `COMUNICADO` | `titulo`, `mensaje` | `COMUNICADO:{id}:{canal}:{usuario_id}` |
 
 ---
 
-## 4. Reglas de Negocio y Políticas de Entrega
+## 4. Reglas de Negocio y Garantías de Integridad
 
-### 4.1 Selección de Destinatarios
-- Si el departamento está habitado por un inquilino:
-  - Notificaciones operativas del día a día (cuotas, recordatorios, reservas, incidencias) se envían tanto al **Inquilino** como al **Propietario** (en copia informativa).
-  - Notificaciones legales o de morosidad prolongada se dirigen con prioridad al **Propietario** como responsable legal de la unidad ante la junta.
+### 4.1 Resolución de Destinatarios y Aislamiento por Unidad
+- Se consultan únicamente vínculos activos (`usuario_departamentos.es_activo IS TRUE`) asociados a cuentas habilitadas (`usuarios.esta_activo IS TRUE`) del `departamento_id` y `condominio_id` del evento.
+- Tanto titulares (`PROPIETARIO_TITULAR`, `COPROPIETARIO`) como residentes (`INQUILINO`) con vínculo activo reciben los avisos operativos de su departamento.
+- Si una unidad no posee destinatarios activos, el consumidor no crea notificaciones y deja constancia en el log operativo sin abortar el lote.
+- Nunca se envían datos de una unidad a usuarios de otro departamento ni de otro condominio.
 
-### 4.2 Resiliencia y Reintentos
-- Todo envío despachado por el worker asíncrono se registra inicialmente como `EN_COLA`.
-- Si el proveedor de mensajería responde con error (ej. rebote de correo o API de mensajería ocupada):
-  - Se activa la cola de reintentos exponenciales: 2 min, 10 min, 30 min.
-  - Si el 3er reintento falla, pasa a `ESTADO_FALLIDO` y genera una alerta en el panel del Administrador para verificación manual del contacto.
+### 4.2 Lectura de Datos Persistidos y Prohibición de Saldos Inventados
+- **CON-32 (`CuotasEmitidasEvent`):** el consumidor lee las filas de `cuotas_mantenimiento` del `periodo` y `condominio_id` emitidos, junto con el número de departamento y el bloque (`edificios.nombre_bloque`). Nunca modifica los importes emitidos. Los medios de pago se toman del payload/configuración (`NOTIFICACIONES_MEDIOS_PAGO` o cuenta recaudadora configurada).
+- **CON-34 (`PagoReportadoEvent` / `PagoRevisadoEvent`):** el consumidor verifica si existe `comprobantes_pago` mediante `to_regclass('comprobantes_pago')` sin romper la transacción activa; si existe la fila, contrasta y completa los datos desde la base de datos. En `APROBADO` exige `monto_aplicado` y `saldo_resultante` explícitos (jamás usa `0.00` por defecto). En `OBSERVADO` y `RECHAZADO` exige `motivo` e `instrucciones` de subsanación.
+- **CON-36 (`ReservaConfirmadaEvent` / `ReservaCanceladaEvent`):** valida el departamento de la reserva en el condominio y renderiza área, fecha, horario, costo/ajuste económico y normas o motivo de cancelación.
+
+### 4.3 Consumo Transaccional y Worker de Eventos
+- El worker `python -m src.modules.notificaciones.worker` consume el stream `condomanager:domain-events` mediante grupo de consumidores (`XREADGROUP`), recupera mensajes pendientes tras reinicios (`XAUTOCLAIM` y lectura de `0`) y confirma (`XACK`) **únicamente después del commit** en PostgreSQL.
+- En paralelo ejecuta periódicamente `entrega.despachar_pendientes(...)` para enviar las notificaciones en estado `EN_COLA` o `REINTENTANDO`.
 
 ---
 
 ## 5. Ciclo de Automatización
 
-```
- [ Evento en Dominio ] ──▶ [ Despacho a Worker ] ──▶ [ Render Plantilla ] ──▶ [ Enviar por Proveedor ]
-   (Ej. PagoConciliado)       (Asíncrono Celery)        (Datos dinámicos)             │
-                                                                                      ▼
- [ Registro en Bitácora ] ◀────── [ Verificación ] ◀──────────────────── [ Respuesta del Proveedor ]
-   (Estado, ID mensaje)            (¿Status 200 OK?)
-```
-
----
-
-## 6. Esquema del Registro de Notificación (`notificaciones_logs`)
-
-```json
-{
-  "id": "c1f2e3d4-b5a6-4789-8012-3456789abcde",
-  "condominio_id": "villa-bonita-3",
-  "departamento_id": "dpto-204",
-  "tipo_evento": "NOTIF_PAGO_CONCILIADO",
-  "canal": "EMAIL",
-  "destinatario": "propietario204@gmail.com",
-  "asunto": "CondoManager: Su pago de mantenimiento ha sido validado con éxito",
-  "payload_resumen": {
-    "monto_pagado": 150.00,
-    "recibo_nro": "REC-2026-09-0204",
-    "saldo_actual": 0.00
-  },
-  "intentos": 1,
-  "estado": "ENTREGADO",
-  "fecha_envio": "2026-09-16T18:02:11Z",
-  "proveedor_message_id": "smtp-msg-99882312"
-}
+```text
+ [ Evento Confirmado ] ──▶ [ Redis Stream ] ──▶ [ Consumidor Transaccional ]
+   (Outbox / Dominio)      (XREADGROUP)         1. marcar_evento_consumido
+                                                2. resolver_destinatarios_departamento
+                                                3. registrar_notificacion (EN_COLA)
+                                                4. cerrar_evento_consumido + COMMIT
+                                                5. XACK en Redis
+                                                           │
+                                                           ▼
+ [ Alerta Admin / Bitácora ] ◀── [ Motor Entrega CON-37 ] ◀┘
+   (ACEPTADO / ENTREGADO /        (FOR UPDATE SKIP LOCKED,
+    FALLIDO_PERMANENTE)            1 intento + 3 reintentos: 2m, 10m, 30m)
 ```
 
 ---
 
-## 7. Intervención Humana y Excepciones
-- **Actualización de Datos de Contacto:** Si un correo rebota como inválido, el Administrador puede editar el correo en la ficha del residente y hacer clic en `Reenviar Notificación Pendiente`.
-- **Comunicaciones Generales Masivas:** Permite al Administrador redactar un comunicado extraordinario (ej. corte programado de agua por Sedapal) y despacharlo a toda la comunidad con seguimiento de tasa de entrega.
-
----
-
-## 8. Escenarios de Aceptación (BDD)
-```gherkin
-Escenario: Despacho automático de alerta preventiva 3 días antes de vencimiento
-  Dado que la cuota del departamento 102 vence el día 20 del mes
-  Y el departamento mantiene un saldo pendiente de S/ 160.00
-  Cuando el reloj del sistema llega a las 08:00 del día 17 del mes
-  Entonces el sistema genera y despacha una notificación de recordatorio preventivo al residente
-  Y registra el envío con estado "ENTREGADO" en la bitácora de notificaciones.
-```
+## 6. Intervención Humana y Excepciones
+- **Actualización de Datos de Contacto y Reenvío Manual:** cuando una notificación alcanza `FALLIDO_PERMANENTE`, se genera una alerta administrativa en `alertas_administrativas` y la Junta Directiva puede reprogramar el envío corrigiendo el destinatario.
+- **Comunicaciones Generales Masivas:** permite a la Junta Directiva registrar un comunicado oficial para todos los destinatarios con vínculo activo del condominio (`EN_COLA`), cuyo despacho ejecuta el worker.
