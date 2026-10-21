@@ -802,6 +802,34 @@ export function fetchNotificaciones(condominioId?: string | null): Promise<Notif
   return recursoRequest(`/notificaciones/logs${contextoQuery(condominioId)}`);
 }
 
+export type TipoAlertaNotificacion =
+  | "ERROR_DEFINITIVO" | "INTENTOS_AGOTADOS" | "ACEPTACION_INCIERTA"
+  | "DESTINATARIO_INVALIDO" | "PROVEEDOR_NO_CONFIGURADO";
+
+export interface AlertaNotificacion {
+  id: string;
+  notificacion_id: string;
+  condominio_id: string;
+  departamento_id: string;
+  departamento_numero: string;
+  tipo_evento: string;
+  ciclo: number;
+  tipo: TipoAlertaNotificacion;
+  mensaje: string;
+  estado: "ABIERTA" | "ATENDIDA";
+  creada_en: string;
+  atendida_en: string | null;
+  atendida_por: string | null;
+}
+
+export function listarAlertasNotificacion(condominioId?: string | null): Promise<AlertaNotificacion[]> {
+  return recursoRequest(`/notificaciones/alertas${contextoQuery(condominioId)}`);
+}
+
+export function atenderAlertaNotificacion(id: string): Promise<AlertaNotificacion> {
+  return recursoRequest(`/notificaciones/alertas/${encodeURIComponent(id)}/atender`, { method: "POST" });
+}
+
 export function reenviarNotificacion(id: string, nuevo_destinatario: string): Promise<NotificacionLog> {
   return recursoRequest(`/notificaciones/reenviar/${encodeURIComponent(id)}`, {
     method: "POST", body: JSON.stringify({ nuevo_destinatario }),
