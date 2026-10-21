@@ -93,6 +93,10 @@ problemas de ramas integradas que no pertenecen a notificaciones:
 | `8e93182` fix(migraciones): unir las cabezas de reservas CON-46 y convergencia CON-72 | `20261021_0012` (CON-46) y `20261020_0012` (CON-73) partían de 0011 y ambas creaban `reservas` y `eventos_reserva_outbox`. CON-46 pasa a apoyarse en `20261020_0012` y adopta las columnas extendidas por CON-73 en lugar de recrearlas; `20261021_0014` une esa rama con `20261021_0013` en una sola cabeza, sin DDL propio. |
 | `a616f92` fix(ci): adaptar el reporte en memoria de pagos al contrato sin url_voucher | CON-72 retiró `url_voucher` de la solicitud; el servicio en memoria y sus pruebas seguían usándolo. La URL la genera el servidor. |
 | `9805b8c` fix(ci): alinear reservas y fixtures de pruebas con la cabeza de migraciones | El fixture `db_usuarios` migraba una lista parcial de revisiones y anulaba el repositorio real de reservas; ahora usa la cabeza única. Se ajustan modelos y repositorio de reservas a la tabla unificada y se aísla el estado piloto global entre pruebas. |
+| `8c49366` fix(ci): aislar y migrar el esquema de la prueba de persistencia de condominios | `test_api_condominio_persistencia_postgres` usaba el esquema público y asumía que ya estaba migrado; en Backend / Pruebas la base está limpia y fallaba con `relation "condominios" does not exist`. Ahora crea un esquema aislado migrado con Alembic y lo elimina al terminar. |
+| `54c8f81` fix(ci): alinear la reconciliación de esquema legacy con la cabeza 20261021_0015 | Llegó con develop (PR #26) sellando en `20261021_0013` y retirando la unicidad `uq_evento_reserva_tipo`, que el modelo vigente exige; su prueba no quitaba `notificaciones_alertas` y fallaba por la FK. Ahora aplica también la migración de alertas, conserva la unicidad y sella en la cabeza actual. |
+| `63ef543` test(CON-72): completar el contexto del despacho manual con remitente | Efecto de este cambio: `NOTIF_COMUNICADO_GENERAL` exige `remitente`, que antes inventaba la plantilla; la prueba de convergencia recibía `422 CONTEXTO_PLANTILLA_INCOMPLETO`. |
+| `a013aff` fix(CON-36): completar el contexto de la notificación del recorrido piloto | Efecto de este cambio: `scripts/verify_pilot_e2e.py` (Docker / Smoke) despachaba `NOTIF_RESERVA_CONFIRMADA` sin costo, moneda ni normas. Usa la tarifa de la reserva aprobada del escenario y el texto de normas del consumidor. |
 
 ## Pruebas automatizadas
 
@@ -111,14 +115,17 @@ reintentos deterministas, idempotencia entre workers),
 
 ## Resultados de las pruebas
 
+Verificación local del 21/10/2026 sobre `ff77e08`, reproduciendo cada job de `.github/workflows/`.
+Suite específica de notificaciones (alertas, emisión, pagos, BDD, unitarias y reservas de CON-73): `65 passed`.
+
 | Job | Resultado |
 | :--- | :--- |
-| Lint | PENDIENTE_RESULTADO |
-| Pruebas + cobertura | PENDIENTE_RESULTADO |
-| Migraciones | PENDIENTE_RESULTADO |
-| Contrato API | PENDIENTE_RESULTADO |
-| SDD | PENDIENTE_RESULTADO |
-| Spectral | PENDIENTE_RESULTADO |
-| Frontend | PENDIENTE_RESULTADO |
-| Docker build/smoke | PENDIENTE_RESULTADO |
-| Gitleaks | PENDIENTE_RESULTADO |
+| Lint | Verde. 41 archivos Python modificados respecto de `develop`; 0 avisos Ruff nuevos; `ruff format --check` sin fallos nuevos (formato previo pendiente en 4 archivos heredados, no bloqueante). |
+| Pruebas + cobertura | Verde. `533 passed, 10 warnings` (JUnit: 533 tests, 0 failures, 0 errors, 0 skipped); cobertura **91,40 %** (mínimo 80 %). Base PostgreSQL 16 limpia sin migrar y sin Redis. En develop: 98 failed, 393 passed, 2 errors. |
+| Migraciones | Verde. Base limpia: `upgrade head` → `downgrade base` → `upgrade head` correctos (cabeza única `20261021_0015`); `pytest -q src/tests/integration`: `276 passed, 9 warnings`. |
+| Contrato API | Verde. `alembic upgrade head`, `seed_usuarios_demo` y `seed_areas_demo`; schemathesis `56 passed` con y sin `-k 'not reporte_pago'`; convergencia CON-72 con el entorno de `specs.yml`: `1 passed, 23 skipped` (ese job solo define `CON73_TEST_DATABASE_URL`, igual que en develop); con base de pruebas, `24 passed`. |
+| SDD | Verde. `verify_sdd_compliance.py`: todas las reglas satisfechas. |
+| Spectral | Verde. Spectral 6.15.0, `--fail-severity error`: exit 0. |
+| Frontend | Verde. `node --test`: 22 tests, 22 pass, 0 fail; ESLint sin avisos; `tsc --noEmit` sin errores; `next build` compilado (7/7 páginas). |
+| Docker build/smoke | Verde. Imágenes `condomanager-api:ci` y `condomanager-web:ci` construidas; compose `up --wait` sano; `alembic upgrade head` en `20261021_0015 (head)`; seed piloto 139 unidades; `verify_pilot_e2e.py` 100 % de etapas; `/health` `ok`; web HTTP 200; `down -v`. |
+| Gitleaks | Verde. Gitleaks 8.24.3 con `.gitleaks.toml`, `--log-opts=--all`: 106 commits, ~14,25 MB, `no leaks found`. |
