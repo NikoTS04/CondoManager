@@ -38,16 +38,25 @@ export function MisReservasList({
   const [reservaACancelar, setReservaACancelar] = useState<Reserva | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
+  const [cancelNotice, setCancelNotice] = useState<string | null>(null);
 
   async function handleConfirmCancelar() {
-    if (!reservaACancelar) return;
+    if (!reservaACancelar || isCancelling) return;
     setIsCancelling(true);
     setCancelError(null);
+    setCancelNotice(null);
 
-    const res = await cancelarReserva(reservaACancelar.id);
+    const res = await cancelarReserva(
+      reservaACancelar.id, motivoCancelacion.trim() || "Cancelación voluntaria",
+    );
     setIsCancelling(false);
 
     if (res.ok) {
+      const ajuste = res.data?.ajuste_economico;
+      setCancelNotice(ajuste?.estado === "PENDIENTE"
+        ? `Reserva cancelada. La compensación de ${ajuste.monto} ${reservaACancelar.moneda ?? "PEN"} está pendiente de revisión; aún no se ha aplicado una devolución.`
+        : "Reserva cancelada. El horario vuelve a estar disponible.");
       setReservaACancelar(null);
       if (onReservaCancelled) onReservaCancelled();
     } else {
@@ -122,13 +131,13 @@ export function MisReservasList({
           icon={<Calendar className="h-5 w-5 text-brand-600" aria-hidden />}
         />
         <CardBody className="space-y-4">
-          {cancelError && (
+          {cancelNotice && (
             <Alert
-              tone="danger"
-              title="Error al cancelar"
-              onDismiss={() => setCancelError(null)}
+              tone="success"
+              title="Cancelación confirmada"
+              onDismiss={() => setCancelNotice(null)}
             >
-              {cancelError}
+              {cancelNotice}
             </Alert>
           )}
 
@@ -188,7 +197,11 @@ export function MisReservasList({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setReservaACancelar(r)}
+                          onClick={() => {
+                            setCancelError(null);
+                            setMotivoCancelacion("");
+                            setReservaACancelar(r);
+                          }}
                           className="text-danger-600 hover:text-danger-700 hover:bg-danger-50"
                           icon={<Trash2 className="h-4 w-4" aria-hidden />}
                         >
@@ -212,8 +225,9 @@ export function MisReservasList({
         tone="danger"
         loading={isCancelling}
         onConfirm={handleConfirmCancelar}
-        onCancel={() => setReservaACancelar(null)}
+        onCancel={() => { if (!isCancelling) setReservaACancelar(null); }}
       >
+        {cancelError && <Alert tone="danger" title="No se pudo cancelar">{cancelError}</Alert>}
         <p>
           ¿Deseas cancelar la reserva de{" "}
           <strong>{reservaACancelar?.area_nombre || "el área común"}</strong> programada
@@ -225,8 +239,19 @@ export function MisReservasList({
           ?
         </p>
         <p className="text-xs text-muted mt-2">
-          Esta acción liberará el espacio inmediatamente para que otros residentes puedan reservarlo.
+          Puedes cancelar con al menos 24 horas de anticipación. Al confirmarse, el horario quedará libre.
         </p>
+        <label className="block text-sm font-medium">
+          Motivo (opcional)
+          <textarea
+            value={motivoCancelacion}
+            onChange={(event) => setMotivoCancelacion(event.target.value)}
+            maxLength={500}
+            disabled={isCancelling}
+            rows={2}
+            className="mt-1 block w-full rounded-lg border border-line bg-surface p-2 font-normal"
+          />
+        </label>
       </ConfirmDialog>
     </div>
   );

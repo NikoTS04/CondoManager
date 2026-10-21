@@ -1,15 +1,16 @@
 """Repositorio de persistencia SQL para Reservas de Áreas Comunes (Brandon - CON-41 / CON-43 / CON-73)."""
 
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import Depends
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
 from src.modules.reservas.areas.models import AreaComun
+from src.modules.reservas.disponibilidad import ZONA_LIMA
 from src.modules.reservas.models import Reserva
 
 
@@ -34,12 +35,15 @@ class ReservasRepository:
         bloquear: bool = False,
     ) -> List[Reserva]:
         """Consulta intervalos solapados para el área y fecha indicadas [hora_inicio, hora_fin)."""
+        # Compara instantes para conservar los históricos UTC y las nuevas
+        # reservas locales; pueden pertenecer a días calendario distintos.
+        inicio = func.timezone(Reserva.zona_horaria, Reserva.fecha_reserva + Reserva.hora_inicio)
+        fin = func.timezone(Reserva.zona_horaria, Reserva.fecha_reserva + Reserva.hora_fin)
         condiciones = [
             Reserva.area_id == area_id,
-            Reserva.fecha_reserva == fecha,
             Reserva.estado == "CONFIRMADA",
-            Reserva.hora_inicio < hora_fin,
-            Reserva.hora_fin > hora_inicio,
+            inicio < datetime.combine(fecha, hora_fin, ZONA_LIMA),
+            fin > datetime.combine(fecha, hora_inicio, ZONA_LIMA),
         ]
         if excluir_reserva_id is not None:
             condiciones.append(Reserva.id != excluir_reserva_id)
@@ -88,9 +92,10 @@ class ReservasRepository:
         return list(result.all())
 
     async def guardar(self, reserva: Reserva) -> Reserva:
+        # El contexto de solvencia del router mantiene los locks de contexto y
+        # área hasta confirmar juntos consulta de deuda, exclusión y creación.
         self.session.add(reserva)
-        await self.session.commit()
-        await self.session.refresh(reserva)
+        await self.session.flush()
         return reserva
 
     async def actualizar_estado(self, reserva: Reserva, nuevo_estado: str) -> Reserva:

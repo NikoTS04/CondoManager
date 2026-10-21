@@ -30,25 +30,27 @@ Contrato: [disponibilidad del Sprint 2](../../specs/05-api/sprint-2-contratos.md
 
 ## Compatibilidad y dependencias de cierre
 
-La creación y cancelación actuales siguen utilizando `RESERVAS_REGISTRADAS`, en
-memoria. Esta entrega conserva esas operaciones y combina sus ocupaciones con
-la lectura SQL. Si un UUID aparece en ambas fuentes, prevalece el estado del flujo
-piloto para reflejar sus cancelaciones. Si la tabla SQL no existe aún, consulta el
-almacén piloto. Los errores SQL no se sustituyen por una respuesta vacía: la consulta
-responde `503 DISPONIBILIDAD_NO_DISPONIBLE`.
+La integración de CON-41/43 procedente de `develop` persiste las nuevas reservas;
+`RESERVAS_REGISTRADAS` conserva una copia de compatibilidad. CON-46 persiste
+las cancelaciones y puede adoptar una reserva piloto anterior. Si un UUID
+aparece en ambas fuentes, prevalece SQL, incluidos los estados que liberan el
+horario. Si la tabla SQL no existe aún, la consulta de disponibilidad utiliza el
+almacén piloto. Los errores SQL no se sustituyen por una respuesta vacía:
+la consulta responde `503 DISPONIBILIDAD_NO_DISPONIBLE`.
 
 La lectura SQL utiliza las columnas existentes de `reservas` y detecta su zona
 mediante `to_jsonb`, para admitir la columna adicional de CON-73 sin exigirla a
 las tablas históricas. La consulta no crea tablas ni índices.
 
-**Pendiente de CON-73:** persistir las nuevas reservas/cancelaciones y definir la
-lectura SQL de bloqueos operativos activos. El normalizador acepta ocupaciones
+**Pendiente de CON-73:** definir la lectura SQL de bloqueos operativos activos.
+El normalizador acepta ocupaciones
 con fecha, inicio, fin y zona; el repositorio deberá sumar esos bloqueos al
 integrarse su modelo. No se implementa una gestión pública de bloqueos.
 
-Hasta esa integración, las operaciones piloto se pierden al reiniciar y no se
-comparten entre procesos; leer reservas SQL no vuelve persistente al productor.
-La exclusión concurrente corresponde a CON-41/43. El cierre de CON-40 requiere
+La creación SQL de CON-41 y las cancelaciones de CON-46 conservan sus resultados
+tras reiniciar. Solo las copias piloto anteriores sin registro SQL siguen
+dependiendo de la memoria. La exclusión concurrente corresponde a CON-41/43.
+El cierre de CON-40 requiere
 comprobar el calendario integrado con esas operaciones y los bloqueos reales.
 
 ### Arranque con la base compartida

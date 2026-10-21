@@ -1,11 +1,11 @@
-"""Router FastAPI para el Dominio de Reservas de Áreas Comunes (Brandon - PROC-04 / CON-41 / CON-43)."""
+"""Router FastAPI para el Dominio de Reservas de Áreas Comunes (Brandon - PROC-04)."""
 
 import uuid
 from datetime import date, time
-from decimal import Decimal
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.authorization import (
@@ -14,13 +14,14 @@ from src.core.authorization import (
     puede_ver_departamento,
 )
 from src.core.database import get_db_session
-from src.core.roles import ROLES_ADMINISTRATIVOS
+from src.core.errors import APIError
 from src.core.security import get_current_user
 from src.modules.pagos.solvencia import get_solvencia_service
 from src.modules.reservas.areas.repository import AreasRepository, get_areas_repository
 from src.modules.reservas.areas.service import AreasService
+from src.modules.reservas.cancelaciones import get_cancelaciones_service
 from src.modules.reservas.disponibilidad import DisponibilidadRepository, DisponibilidadService
-from src.modules.reservas.repository import ReservasRepository, get_reservas_repository
+from src.modules.reservas.repository import ReservasRepository
 from src.modules.reservas.schemas import (
     AreaComunDTO,
     CancelarReservaRequest,
@@ -31,7 +32,6 @@ from src.modules.reservas.schemas import (
 )
 from src.modules.reservas.service import (
     AreaInactivaException,
-    CancelacionInvalidaException,
     ConflictoHorarioException,
     DeudaMoraActivaException,
     HorarioInvalidoException,
@@ -42,8 +42,10 @@ from src.modules.usuarios.departamentos import get_departamentos_portal_reposito
 router = APIRouter(tags=["Reservas de Áreas Comunes"])
 
 # ============================================================================
-# Almacén de Estado en Memoria (Fallback y Pruebas Unitarias Rápidas)
+# Almacén de Estado en Memoria (Simulación y Desarrollo)
 # ============================================================================
+
+# Almacén de reservas confirmadas / canceladas
 RESERVAS_REGISTRADAS: Dict[uuid.UUID, Dict] = {}
 
 # ============================================================================
@@ -78,22 +80,20 @@ async def disponibilidad_area(
     user: dict = Depends(get_current_user),
     areas_repository=Depends(get_areas_repository),
     session: AsyncSession = Depends(get_db_session),
-    reservas_repository: Optional[ReservasRepository] = Depends(get_reservas_repository),
 ):
     DisponibilidadService.validar_fecha(fecha)
     area = await AreasService(areas_repository).publica(area_id, user)
     persistidas = await DisponibilidadRepository(session).reservas_confirmadas(
         area_id, area.condominio_id, fecha
     )
-    # Mantiene visibles las operaciones piloto hasta integrar CON-41/46/73.
+    # SQL es canónico: una cancelación confirmada en otro proceso no puede
+    # quedar oculta por una copia piloto todavía marcada CONFIRMADA.
     piloto = [
         dict(r)
         for r in RESERVAS_REGISTRADAS.values()
         if r["area_id"] == area_id and r["condominio_id"] == area.condominio_id
     ]
-    ids_piloto = {str(r["id"]) for r in piloto}
-    ocupaciones = [r for r in persistidas if str(r["id"]) not in ids_piloto]
-    ocupaciones.extend(r for r in piloto if r["estado"] == "CONFIRMADA")
+    ocupaciones = DisponibilidadService.combinar_fuentes(persistidas, piloto)
     response.headers["Cache-Control"] = "no-store"
     return DisponibilidadService.horarios_ocupados(
         fecha, ocupaciones, area.hora_apertura, area.hora_cierre
@@ -117,50 +117,12 @@ async def listar_reservas(
     condominio_id: uuid.UUID | None = None,
     user: dict = Depends(get_current_user),
     areas_repository=Depends(get_areas_repository),
-    reservas_repository: ReservasRepository = Depends(get_reservas_repository),
+    cancelaciones=Depends(get_cancelaciones_service),
 ):
     """Permite a los residentes ver los horarios ocupados de un área común."""
     cid = contexto_consulta(user, condominio_id)
     if area_id is not None:
         await AreasService(areas_repository).verificar_historial(area_id, user)
-
-    if isinstance(reservas_repository, ReservasRepository):
-        try:
-            deptos_usuario = None
-            if user.get("rol") == "RESIDENTE":
-                deptos_usuario = [
-                    uuid.UUID(d["id"])
-                    for d in user.get("departamentos", [])
-                    if d.get("activo", True)
-                ]
-            reservas_db = await reservas_repository.listar_reservas(
-                condominio_id=uuid.UUID(str(cid)),
-                area_id=area_id,
-                fecha=fecha,
-                departamento_ids=deptos_usuario,
-            )
-            if reservas_db:
-                return [
-                    ReservaResponseDTO(
-                        id=r.id,
-                        condominio_id=uuid.UUID(str(cid)),
-                        area_id=r.area_id,
-                        area_nombre=area_nombre,
-                        departamento_id=r.departamento_id,
-                        fecha_reserva=r.fecha_reserva,
-                        hora_inicio=r.hora_inicio,
-                        hora_fin=r.hora_fin,
-                        costo_reserva=r.costo_reserva,
-                        moneda="PEN",
-                        estado=r.estado,
-                        creado_en=r.creado_en,
-                    )
-                    for r, area_nombre in reservas_db
-                    if puede_ver_departamento(user, r.departamento_id)
-                ]
-        except Exception:
-            pass
-
     resultados = []
     for r in RESERVAS_REGISTRADAS.values():
         if (
@@ -170,7 +132,9 @@ async def listar_reservas(
         ):
             if fecha is None or r["fecha_reserva"] == fecha:
                 resultados.append(ReservaResponseDTO(**r))
-    return resultados
+    persistidas = await cancelaciones.historial(cid, user, area_id, fecha)
+    ids_sql = {r.id for r in persistidas}
+    return [r for r in resultados if r.id not in ids_sql] + persistidas
 
 
 def get_areas_reserva_repository(solvencia=Depends(get_solvencia_service)):
@@ -178,6 +142,11 @@ def get_areas_reserva_repository(solvencia=Depends(get_solvencia_service)):
     if hasattr(solvencia, "session"):
         return AreasRepository(solvencia.session)
     return AreasRepository(None)
+
+
+def get_creacion_reservas_repository(solvencia=Depends(get_solvencia_service)):
+    # CON-41/43 y CON-46 comparten transacción y orden de locks.
+    return ReservasRepository(solvencia.session)
 
 
 @router.post(
@@ -192,71 +161,13 @@ async def crear_reserva(
     solvencia=Depends(get_solvencia_service),
     repository=Depends(get_departamentos_portal_repository),
     areas_repository=Depends(get_areas_reserva_repository),
-    reservas_repository: Optional[ReservasRepository] = Depends(get_reservas_repository),
+    reservas_repository=Depends(get_creacion_reservas_repository),
 ):
-    """Crea una reserva validando la solvencia financiera del departamento y la disponibilidad de horario (CON-41/CON-43)."""
+    """Crea una reserva validando la solvencia financiera del departamento y la disponibilidad de horario."""
     autorizar_departamento(user, request.departamento_id, request.condominio_id, escritura=True)
     try:
-        if solvencia is not None and hasattr(solvencia, "para_reserva"):
-            async with solvencia.para_reserva(request, user) as evaluacion:
-                # 1. Comprobar existencia del área
-                area = (
-                    await AreasService(areas_repository).publica(
-                        request.area_id,
-                        user,
-                        bloquear=True,
-                        condominio_id=request.condominio_id,
-                    )
-                ).model_dump()
-                area["hora_apertura"] = time.fromisoformat(area["hora_apertura"])
-                area["hora_cierre"] = time.fromisoformat(area["hora_cierre"])
-
-                # 2. Validar la unidad activa y su edificio
-                depto = await repository.obtener(request.departamento_id)
-                if not depto:
-                    raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
-                if depto["condominio_id"] != request.condominio_id or not depto["activo"]:
-                    raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO"})
-                if area["edificio_id"] is not None and area["edificio_id"] != depto["edificio_id"]:
-                    raise HTTPException(
-                        403,
-                        detail={
-                            "error_code": "ACCESO_DENEGADO",
-                            "mensaje": "La unidad no pertenece al edificio del área.",
-                        },
-                    )
-
-                if isinstance(reservas_repository, ReservasRepository):
-                    try:
-                        reserva_dto = await ReservasService.procesar_reserva_persistente(
-                            request=request,
-                            area=area,
-                            estado_financiero_depto="AL_DIA",
-                            saldo_mora_depto=evaluacion.saldo_vencido,
-                            repository=reservas_repository,
-                        )
-                        RESERVAS_REGISTRADAS[reserva_dto.id] = {
-                            **reserva_dto.model_dump(),
-                            "zona_horaria": area.get("zona_horaria", "America/Lima"),
-                        }
-                        return reserva_dto
-                    except (ConnectionRefusedError, OSError):
-                        pass
-
-                reserva_dto, _ = ReservasService.procesar_reserva(
-                    request=request,
-                    area=area,
-                    estado_financiero_depto="AL_DIA",
-                    saldo_mora_depto=evaluacion.saldo_vencido,
-                    reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
-                )
-                RESERVAS_REGISTRADAS[reserva_dto.id] = {
-                    **reserva_dto.model_dump(),
-                    "zona_horaria": area["zona_horaria"],
-                }
-                return reserva_dto
-        else:
-            # Flujo alternativo sin solvencia contextual
+        async with solvencia.para_reserva(request, user) as evaluacion:
+            # 1. Comprobar existencia del área
             area = (
                 await AreasService(areas_repository).publica(
                     request.area_id,
@@ -268,6 +179,7 @@ async def crear_reserva(
             area["hora_apertura"] = time.fromisoformat(area["hora_apertura"])
             area["hora_cierre"] = time.fromisoformat(area["hora_cierre"])
 
+            # 2. Validar la unidad activa y su edificio; la solvencia usa deuda real.
             depto = await repository.obtener(request.departamento_id)
             if not depto:
                 raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
@@ -281,38 +193,58 @@ async def crear_reserva(
                         "mensaje": "La unidad no pertenece al edificio del área.",
                     },
                 )
-            estado_financiero = depto.get("estado_financiero", "AL_DIA")
-            saldo_mora = depto.get("deuda_vencida", Decimal("0.00"))
-
-            if isinstance(reservas_repository, ReservasRepository):
-                try:
-                    reserva_dto = await ReservasService.procesar_reserva_persistente(
-                        request=request,
-                        area=area,
-                        estado_financiero_depto=estado_financiero,
-                        saldo_mora_depto=saldo_mora,
-                        repository=reservas_repository,
-                    )
-                    RESERVAS_REGISTRADAS[reserva_dto.id] = {
-                        **reserva_dto.model_dump(),
-                        "zona_horaria": area.get("zona_horaria", "America/Lima"),
-                    }
-                    return reserva_dto
-                except (ConnectionRefusedError, OSError):
-                    pass
-
-            reserva_dto, _ = ReservasService.procesar_reserva(
-                request=request,
-                area=area,
-                estado_financiero_depto=estado_financiero,
-                saldo_mora_depto=saldo_mora,
-                reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
+            # Una cancelación SQL debe liberar el turno también al volver a
+            # reservar desde un proceso con una copia piloto todavía antigua.
+            persistidas = await areas_repository.ocupaciones(
+                request.area_id, request.condominio_id, request.fecha_reserva
             )
-            RESERVAS_REGISTRADAS[reserva_dto.id] = {
-                **reserva_dto.model_dump(),
-                "zona_horaria": area.get("zona_horaria", "America/Lima"),
-            }
-            return reserva_dto
+            piloto = [
+                r
+                for r in RESERVAS_REGISTRADAS.values()
+                if r["area_id"] == request.area_id and r["condominio_id"] == request.condominio_id
+            ]
+            ocupados = DisponibilidadService.horarios_ocupados(
+                request.fecha_reserva,
+                DisponibilidadService.combinar_fuentes(persistidas, piloto),
+                area["hora_apertura"].isoformat(),
+                area["hora_cierre"].isoformat(),
+            )
+            existentes = [
+                {
+                    "area_id": request.area_id,
+                    "fecha_reserva": request.fecha_reserva,
+                    "estado": "CONFIRMADA",
+                    "hora_inicio": time.fromisoformat(h.hora_inicio),
+                    "hora_fin": time.fromisoformat(h.hora_fin),
+                }
+                for h in ocupados
+            ]
+            if isinstance(reservas_repository, ReservasRepository):
+                reserva_dto = await ReservasService.procesar_reserva_persistente(
+                    request=request,
+                    area=area,
+                    estado_financiero_depto="AL_DIA",
+                    saldo_mora_depto=evaluacion.saldo_vencido,
+                    repository=reservas_repository,
+                    usuario_id=uuid.UUID(user["sub"]),
+                    reservas_existentes=existentes,
+                )
+            else:
+                # Adaptador explícito de pruebas históricas, sin fallback ante
+                # fallos SQL del productor de CON-41.
+                reserva_dto, _ = ReservasService.procesar_reserva(
+                    request=request,
+                    area=area,
+                    estado_financiero_depto="AL_DIA",
+                    saldo_mora_depto=evaluacion.saldo_vencido,
+                    reservas_existentes=existentes,
+                )
+        # La copia de compatibilidad se actualiza únicamente tras el commit.
+        RESERVAS_REGISTRADAS[reserva_dto.id] = {
+            **reserva_dto.model_dump(),
+            "zona_horaria": area["zona_horaria"],
+            "usuario_id": user["sub"],
+        }
         return reserva_dto
 
     except DeudaMoraActivaException as exc:
@@ -346,6 +278,12 @@ async def crear_reserva(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error_code": exc.error_code, "mensaje": exc.mensaje},
         )
+    except SQLAlchemyError as exc:
+        raise APIError(
+            503,
+            "RESERVA_NO_DISPONIBLE",
+            "No se pudo confirmar la reserva. Intente nuevamente más tarde.",
+        ) from exc
 
 
 @router.post(
@@ -358,56 +296,18 @@ async def cancelar_reserva(
     reserva_id: uuid.UUID,
     request: Optional[CancelarReservaRequest] = None,
     user: dict = Depends(get_current_user),
-    reservas_repository: ReservasRepository = Depends(get_reservas_repository),
+    cancelaciones=Depends(get_cancelaciones_service),
 ):
     """Permite al residente o administrador cancelar una reserva con al menos 24h de anticipación."""
-    reserva_db = None
-    if isinstance(reservas_repository, ReservasRepository):
-        try:
-            reserva_db = await reservas_repository.obtener_por_id(reserva_id, bloquear=True)
-        except Exception:
-            pass
-
-    reserva_dict = None
-    if reserva_db:
-        reserva_dict = {
-            "id": reserva_db.id,
-            "condominio_id": user.get("condominio_id"),
-            "departamento_id": reserva_db.departamento_id,
-            "fecha_reserva": reserva_db.fecha_reserva,
-            "hora_inicio": reserva_db.hora_inicio,
-            "hora_fin": reserva_db.hora_fin,
-            "estado": reserva_db.estado,
-            "zona_horaria": "America/Lima",
-        }
-    elif reserva_id in RESERVAS_REGISTRADAS:
-        reserva_dict = RESERVAS_REGISTRADAS[reserva_id]
-
-    if not reserva_dict:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "RESERVA_NO_ENCONTRADA", "mensaje": "Reserva no encontrada."},
+    reserva = RESERVAS_REGISTRADAS.get(reserva_id)
+    if reserva is not None:
+        autorizar_departamento(
+            user, reserva["departamento_id"], reserva["condominio_id"], escritura=True
         )
-
-    autorizar_departamento(
-        user, reserva_dict["departamento_id"], reserva_dict.get("condominio_id"), escritura=True
+    resultado = await cancelaciones.cancelar(
+        reserva_id, request or CancelarReservaRequest(), user, piloto=reserva
     )
-    req = (request or CancelarReservaRequest()).model_copy(
-        update={"es_admin": user["rol"] in ROLES_ADMINISTRATIVOS}
-    )
-
-    try:
-        cancelar_dto, _ = ReservasService.procesar_cancelacion(
-            reserva=reserva_dict,
-            request=req,
-        )
-        if reserva_db:
-            await reservas_repository.actualizar_estado(reserva_db, "CANCELADA")
-        if reserva_id in RESERVAS_REGISTRADAS:
-            RESERVAS_REGISTRADAS[reserva_id]["estado"] = "CANCELADA"
-        return cancelar_dto
-    except CancelacionInvalidaException as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"error_code": exc.error_code, "mensaje": exc.mensaje},
-        )
+    # El servicio ha completado el commit. Nunca adelantar este cambio al SQL.
+    if reserva is not None:
+        reserva["estado"] = "CANCELADA"
+    return resultado

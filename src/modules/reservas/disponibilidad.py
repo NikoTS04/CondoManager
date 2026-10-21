@@ -18,6 +18,8 @@ class DisponibilidadRepository:
         self.session = session
 
     async def reservas_confirmadas(self, area_id: UUID, condominio_id: UUID, fecha: date):
+        # Incluye estados históricos para descartar copias piloto obsoletas.
+        # El servicio selecciona únicamente CONFIRMADA para ocupar el calendario.
         try:
             return await self._leer_reservas(area_id, condominio_id, fecha)
         except SQLAlchemyError as exc:
@@ -37,12 +39,11 @@ class DisponibilidadRepository:
         resultado = await self.session.execute(
             text(
                 """
-                SELECT r.id, r.fecha_reserva, r.hora_inicio, r.hora_fin,
+                SELECT r.id, r.fecha_reserva, r.hora_inicio, r.hora_fin, r.estado,
                        COALESCE(to_jsonb(r)->>'zona_horaria', 'UTC') AS zona_horaria
                 FROM reservas r
                 JOIN areas_comunes a ON a.id = r.area_id
                 WHERE a.id = :area_id AND a.condominio_id = :condominio_id
-                  AND r.estado = 'CONFIRMADA'
                   AND r.fecha_reserva BETWEEN :fecha AND :fecha_hasta
                 """
             ),
@@ -58,6 +59,13 @@ class DisponibilidadRepository:
 
 
 class DisponibilidadService:
+    @staticmethod
+    def combinar_fuentes(persistidas, piloto):
+        ids_sql = {str(r["id"]) for r in persistidas}
+        return [r for r in persistidas if r.get("estado", "CONFIRMADA") == "CONFIRMADA"] + [
+            r for r in piloto if r["estado"] == "CONFIRMADA" and str(r["id"]) not in ids_sql
+        ]
+
     @staticmethod
     def validar_fecha(fecha: date) -> None:
         if fecha < datetime.now(ZONA_LIMA).date():

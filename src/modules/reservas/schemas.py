@@ -8,7 +8,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.modules.reservas.areas.schemas import AreaComunDTO as AreaComunDTO
 
@@ -47,14 +47,32 @@ class ReservaResponseDTO(BaseModel):
 
 
 class CancelarReservaRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     motivo: str = Field(
         default="Cancelación voluntaria por residente",
+        min_length=1,
+        max_length=500,
         description="Motivo explicativo de la cancelación",
     )
     es_admin: bool = Field(
         default=False,
-        description="Indica si la cancelación es forzada por un administrador de la Junta",
+        description="Compatibilidad histórica: se ignora; el permiso procede de la sesión.",
     )
+
+    @field_validator("motivo")
+    @classmethod
+    def normalizar_motivo(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Indique un motivo de cancelación.")
+        return value
+
+
+class AjusteCancelacion(BaseModel):
+    estado: Literal["NO_APLICA", "PENDIENTE", "APLICADO"] = "NO_APLICA"
+    monto: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=12, decimal_places=2)
+    referencia: uuid.UUID | None = None
 
 
 class CancelarReservaResponse(BaseModel):
@@ -62,6 +80,7 @@ class CancelarReservaResponse(BaseModel):
     estado: str = "CANCELADA"
     mensaje: str
     fecha_cancelacion: datetime
+    ajuste_economico: AjusteCancelacion = Field(default_factory=AjusteCancelacion)
 
 
 class ErrorResponse(BaseModel):

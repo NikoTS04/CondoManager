@@ -19,6 +19,7 @@ from src.core.audit import AuditoriaPayload
 from src.modules.reservas.models import Reserva
 from src.modules.reservas.repository import ReservasRepository
 from src.modules.reservas.schemas import (
+    AjusteCancelacion,
     CancelarReservaRequest,
     CancelarReservaResponse,
     CrearReservaRequest,
@@ -73,9 +74,9 @@ class AreaInactivaException(Exception):
 
 
 class CancelacionInvalidaException(Exception):
-    def __init__(self, motivo: str):
+    def __init__(self, motivo: str, error_code: str = "CANCELACION_NO_PERMITIDA"):
         super().__init__(motivo)
-        self.error_code = "CANCELACION_NO_PERMITIDA"
+        self.error_code = error_code
         self.mensaje = motivo
 
 
@@ -312,6 +313,8 @@ class ReservasService:
         estado_financiero_depto: str,
         saldo_mora_depto: Decimal,
         repository: ReservasRepository,
+        usuario_id: uuid.UUID,
+        reservas_existentes: Optional[List[Dict[str, Any]]] = None,
     ) -> ReservaResponseDTO:
         """Crea una reserva en PostgreSQL con bloqueo pesimista y verificación atómica de solvencia y horario."""
         cls._validar_reglas_horario_y_area(request, area)
@@ -347,7 +350,14 @@ class ReservasService:
             bloquear=True,
         )
 
-        if solapadas:
+        disponible = cls.validar_disponibilidad(
+            request.area_id,
+            request.fecha_reserva,
+            request.hora_inicio,
+            request.hora_fin,
+            reservas_existentes or [],
+        )
+        if solapadas or not disponible:
             AuditoriaPayload(
                 condominio_id=str(request.condominio_id),
                 departamento_id=str(request.departamento_id),
@@ -374,11 +384,13 @@ class ReservasService:
             id=uuid.uuid4(),
             area_id=request.area_id,
             departamento_id=request.departamento_id,
+            usuario_id=usuario_id,
             fecha_reserva=request.fecha_reserva,
             hora_inicio=request.hora_inicio,
             hora_fin=request.hora_fin,
             costo_reserva=costo_reserva,
             estado="CONFIRMADA",
+            zona_horaria=area.get("zona_horaria", "America/Lima"),
             creado_en=ahora,
         )
         guardada = await repository.guardar(nueva_reserva)
@@ -423,20 +435,23 @@ class ReservasService:
         reserva: Dict[str, Any],
         request: CancelarReservaRequest,
         momento_actual: Optional[datetime] = None,
+        *,
+        actor: Optional[dict] = None,
     ) -> Tuple[CancelarReservaResponse, AuditoriaPayload]:
         """Procesa la cancelación liberando el cupo en el calendario."""
-        if reserva.get("estado") == "CANCELADA":
-            raise CancelacionInvalidaException("La reserva ya ha sido cancelada previamente.")
-
         if reserva.get("estado") != "CONFIRMADA":
             raise CancelacionInvalidaException(
-                f"No se puede cancelar una reserva en estado '{reserva.get('estado')}'."
+                f"No se puede cancelar una reserva en estado '{reserva.get('estado')}'.",
+                "ESTADO_RESERVA_INVALIDO",
             )
 
         momento_actual = momento_actual or datetime.now(timezone.utc)
 
         # Regla de 24 horas de anticipación para cancelaciones voluntarias de residentes
-        if not request.es_admin:
+        # El servicio HTTP siempre proporciona el actor validado. El parámetro
+        # histórico se conserva solo para consumidores internos anteriores.
+        es_admin = actor["rol"] in {"SUPERADMIN", "ADMIN_JUNTA"} if actor else request.es_admin
+        if not es_admin:
             fecha_res = reserva["fecha_reserva"]
             hora_ini = reserva["hora_inicio"]
             zona = (
@@ -458,6 +473,9 @@ class ReservasService:
             accion_ejecutada="RESERVA_CANCELADA",
             motivo=request.motivo,
             resultado="EXITOSO",
+            actor_tipo=actor["rol"] if actor else "SISTEMA_AUTOMATICO",
+            actor_id=str(actor["sub"]) if actor else "SYSTEM_WORKER",
+            timestamp=momento_actual,
             estado_anterior={"reserva_id": str(reserva["id"]), "estado": "CONFIRMADA"},
             estado_posterior={"reserva_id": str(reserva["id"]), "estado": "CANCELADA"},
         )
@@ -470,3 +488,13 @@ class ReservasService:
         )
 
         return respuesta, audit_cancelacion
+
+    @staticmethod
+    def ajuste_cancelacion(cobro: Optional[dict]) -> AjusteCancelacion:
+        """El costo del turno no acredita un pago: exige un cobro efectivo vinculado."""
+        if not cobro or not cobro["reembolsable"]:
+            return AjusteCancelacion()
+        pendiente = cobro["monto"] - cobro["monto_compensado"]
+        if pendiente <= Decimal("0.00"):
+            return AjusteCancelacion()
+        return AjusteCancelacion(estado="PENDIENTE", monto=pendiente, referencia=None)

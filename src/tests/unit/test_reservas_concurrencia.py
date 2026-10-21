@@ -215,6 +215,7 @@ async def test_concurrencia_diez_solicitudes_simultaneas(area_comun_fixture):
                 estado_financiero_depto="AL_DIA",
                 saldo_mora_depto=Decimal("0.00"),
                 repository=repo,
+                usuario_id=uuid.uuid4(),
             )
 
     exitos = 0
