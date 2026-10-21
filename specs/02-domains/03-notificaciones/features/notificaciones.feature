@@ -1,8 +1,8 @@
 # language: es
 Característica: Orquestación y despacho de notificaciones multicanal
-  Como residente del condominio
-  Quiero recibir avisos oportunos sobre mis cuotas, pagos y estados
-  Para estar siempre al día y evitar penalidades de mora
+  Como residente y administrador del condominio
+  Quiero recibir avisos oportunos sobre cuotas, pagos y reservas con reintentos automáticos ante fallos temporales
+  Para contar con trazabilidad persistente y alertas ante contactos inválidos
 
   Escenario: Envío automático de confirmación de pago validado
     Dado que el residente del departamento "105" tiene registrado el correo "residente105@gmail.com"
@@ -17,3 +17,11 @@ Característica: Orquestación y despacho de notificaciones multicanal
     Entonces el estado de la notificación cambia a "REINTENTANDO"
     Y se programa un segundo intento para dentro de 2 minutos
     Y el contador de intentos se incrementa a 2
+
+  Escenario: Rebote definitivo inmediato ante buzón inexistente
+    Dado que el sistema intenta despachar un aviso de mora al departamento "402"
+    Y el servidor SMTP responde con error definitivo 550 "User unknown"
+    Cuando el worker de tareas asíncronas detecta el fallo
+    Entonces el estado de la notificación cambia a "FALLIDO_PERMANENTE"
+    Y no se programa ningún próximo reintento
+    Y el contador de intentos queda en 1

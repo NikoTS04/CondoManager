@@ -31,6 +31,23 @@ class Settings(BaseSettings):
     CONDOMINIO_PILOTO_ID: str = ""
     DEMO_MODE: bool = False
 
+    # Notificaciones y Transporte (CON-32 / CON-37)
+    NOTIFICACIONES_TRANSPORTE: str = "SIMULADO"
+    NOTIFICACIONES_LEASE_SEGUNDOS: int = Field(default=60, ge=5, le=3600)
+    NOTIFICACIONES_LOTE_LIMITE: int = Field(default=50, ge=1, le=500)
+    NOTIFICACIONES_INTERVALO_DESPACHO_SEGUNDOS: int = Field(default=5, ge=1, le=300)
+    # Cuentas reales de recaudación del condominio; sin ellas el aviso remite a la plataforma.
+    NOTIFICACIONES_MEDIOS_PAGO: str = (
+        "Consulte las cuentas de recaudación vigentes en CondoManager > Pagos."
+    )
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "notificaciones@condomanager.pe"
+    SMTP_USE_TLS: bool = False
+    SMTP_TIMEOUT_SEGUNDOS: int = 10
+
     # Servidor
     HOST: str = "0.0.0.0"
     PORT: int = 8000

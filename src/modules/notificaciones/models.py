@@ -68,6 +68,8 @@ class Notificacion(Base):
     contexto: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="EN_COLA")
     intentos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Un reenvío manual abre un ciclo nuevo de hasta 4 intentos sin borrar el historial.
+    ciclo: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     proximo_intento_en: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -99,6 +101,7 @@ class Notificacion(Base):
             name="ck_notificacion_origen",
         ),
         CheckConstraint("intentos BETWEEN 0 AND 4", name="ck_notificacion_intentos"),
+        CheckConstraint("ciclo >= 1", name="ck_notificacion_ciclo"),
         Index(
             "idx_notificaciones_pendientes",
             "proximo_intento_en",
@@ -117,6 +120,7 @@ class NotificacionIntento(Base):
     notificacion_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"), nullable=False
     )
+    ciclo: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     numero: Mapped[int] = mapped_column(Integer, nullable=False)
     worker_id: Mapped[str] = mapped_column(String(80), nullable=False)
     transporte: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -129,7 +133,7 @@ class NotificacionIntento(Base):
     finalizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("notificacion_id", "numero", name="uq_intento_numero"),
+        UniqueConstraint("notificacion_id", "ciclo", "numero", name="uq_intento_numero"),
         CheckConstraint("numero BETWEEN 1 AND 4", name="ck_intento_numero"),
         CheckConstraint(
             "resultado IN ('ACEPTADO', 'FALLO_TEMPORAL', 'FALLO_DEFINITIVO')",

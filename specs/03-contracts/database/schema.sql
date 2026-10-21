@@ -258,3 +258,102 @@ CREATE INDEX idx_cuotas_depto_estado ON cuotas_mantenimiento(departamento_id, es
 CREATE INDEX idx_comprobantes_hash ON comprobantes_pago(idempotency_hash);
 CREATE INDEX idx_reservas_bloqueo ON reservas(area_id, fecha_reserva, hora_inicio, hora_fin) WHERE estado = 'CONFIRMADA';
 CREATE INDEX idx_auditoria_depto_fecha ON auditoria_logs(departamento_id, timestamp DESC);
+
+-- 9. Tablas Persistentes de Notificaciones, Intentos, Consumo Idempotente y Alertas (CON-32/34/36/37/73 - Migración 20261020_0010)
+CREATE TABLE notificaciones (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
+    departamento_id UUID REFERENCES departamentos(id) ON DELETE RESTRICT,
+    usuario_id UUID REFERENCES usuarios(id) ON DELETE RESTRICT,
+    evento_id UUID NOT NULL,
+    tipo_evento VARCHAR(60) NOT NULL,
+    plantilla VARCHAR(50) NOT NULL,
+    origen_tipo VARCHAR(20) NOT NULL,
+    origen_id UUID NOT NULL,
+    clave_deduplicacion VARCHAR(255) NOT NULL,
+    canal VARCHAR(10) NOT NULL DEFAULT 'EMAIL',
+    destinatario VARCHAR(150) NOT NULL,
+    asunto VARCHAR(200),
+    cuerpo TEXT NOT NULL,
+    contexto JSONB NOT NULL DEFAULT '{}'::jsonb,
+    estado VARCHAR(20) NOT NULL DEFAULT 'EN_COLA',
+    intentos INTEGER NOT NULL DEFAULT 0,
+    ciclo INTEGER NOT NULL DEFAULT 1,
+    proximo_intento_en TIMESTAMPTZ,
+    bloqueado_hasta TIMESTAMPTZ,
+    bloqueado_por VARCHAR(80),
+    transporte VARCHAR(40),
+    transporte_simulado BOOLEAN,
+    proveedor_message_id VARCHAR(150),
+    error_codigo VARCHAR(40),
+    error_mensaje TEXT,
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    aceptado_en TIMESTAMPTZ,
+    entregado_en TIMESTAMPTZ,
+    CONSTRAINT uq_notificacion_entrega_logica UNIQUE (clave_deduplicacion),
+    CONSTRAINT ck_notificacion_estado CHECK (
+        estado IN ('EN_COLA', 'REINTENTANDO', 'ACEPTADO', 'ENTREGADO', 'FALLIDO_PERMANENTE')
+    ),
+    CONSTRAINT ck_notificacion_canal CHECK (canal IN ('EMAIL', 'WHATSAPP', 'SMS', 'PUSH')),
+    CONSTRAINT ck_notificacion_origen CHECK (
+        origen_tipo IN ('CUOTA', 'COMPROBANTE', 'RESERVA', 'COMUNICADO', 'USUARIO')
+    ),
+    CONSTRAINT ck_notificacion_intentos CHECK (intentos BETWEEN 0 AND 4),
+    CONSTRAINT ck_notificacion_ciclo CHECK (ciclo >= 1)
+);
+
+CREATE INDEX idx_notificaciones_pendientes
+    ON notificaciones (proximo_intento_en)
+    WHERE estado IN ('EN_COLA', 'REINTENTANDO');
+CREATE INDEX idx_notificaciones_condominio ON notificaciones (condominio_id, creado_en);
+CREATE INDEX idx_notificaciones_departamento ON notificaciones (departamento_id, creado_en);
+CREATE INDEX idx_notificaciones_origen ON notificaciones (origen_tipo, origen_id);
+
+CREATE TABLE notificacion_intentos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    notificacion_id UUID NOT NULL REFERENCES notificaciones(id) ON DELETE CASCADE,
+    ciclo INTEGER NOT NULL DEFAULT 1,
+    numero INTEGER NOT NULL,
+    worker_id VARCHAR(80) NOT NULL,
+    transporte VARCHAR(40) NOT NULL,
+    transporte_simulado BOOLEAN NOT NULL,
+    resultado VARCHAR(20) NOT NULL,
+    codigo VARCHAR(40),
+    detalle TEXT,
+    proveedor_message_id VARCHAR(150),
+    iniciado_en TIMESTAMPTZ NOT NULL,
+    finalizado_en TIMESTAMPTZ NOT NULL,
+    CONSTRAINT uq_intento_numero UNIQUE (notificacion_id, ciclo, numero),
+    CONSTRAINT ck_intento_numero CHECK (numero BETWEEN 1 AND 4),
+    CONSTRAINT ck_intento_resultado CHECK (
+        resultado IN ('ACEPTADO', 'FALLO_TEMPORAL', 'FALLO_DEFINITIVO')
+    )
+);
+
+CREATE TABLE eventos_consumidos (
+    consumidor VARCHAR(60) NOT NULL,
+    event_id UUID NOT NULL,
+    event_type VARCHAR(60) NOT NULL,
+    notificaciones_creadas INTEGER NOT NULL DEFAULT 0,
+    procesado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT pk_eventos_consumidos PRIMARY KEY (consumidor, event_id)
+);
+
+CREATE TABLE alertas_administrativas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
+    notificacion_id UUID NOT NULL REFERENCES notificaciones(id) ON DELETE CASCADE,
+    tipo VARCHAR(40) NOT NULL DEFAULT 'NOTIFICACION_FALLIDA',
+    severidad VARCHAR(10) NOT NULL DEFAULT 'BAJA',
+    mensaje TEXT NOT NULL,
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atendida_en TIMESTAMPTZ,
+    atendida_por UUID,
+    CONSTRAINT uq_alerta_notificacion_tipo UNIQUE (notificacion_id, tipo),
+    CONSTRAINT ck_alerta_severidad CHECK (severidad IN ('BAJA', 'MEDIA', 'ALTA'))
+);
+
+CREATE INDEX idx_alertas_abiertas
+    ON alertas_administrativas (condominio_id, creado_en)
+    WHERE atendida_en IS NULL;

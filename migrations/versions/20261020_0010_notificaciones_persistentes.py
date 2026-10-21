@@ -49,6 +49,7 @@ def upgrade():
         sa.Column("contexto", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
         sa.Column("estado", sa.String(20), nullable=False, server_default="EN_COLA"),
         sa.Column("intentos", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("ciclo", sa.Integer(), nullable=False, server_default="1"),
         _ts("proximo_intento_en"),
         _ts("bloqueado_hasta"),
         sa.Column("bloqueado_por", sa.String(80)),
@@ -74,6 +75,7 @@ def upgrade():
             name="ck_notificacion_origen",
         ),
         sa.CheckConstraint("intentos BETWEEN 0 AND 4", name="ck_notificacion_intentos"),
+        sa.CheckConstraint("ciclo >= 1", name="ck_notificacion_ciclo"),
         comment=MARCA,
     )
     op.create_index(
@@ -99,6 +101,7 @@ def upgrade():
             sa.ForeignKey("notificaciones.id", ondelete="CASCADE"),
             nullable=False,
         ),
+        sa.Column("ciclo", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("numero", sa.Integer(), nullable=False),
         sa.Column("worker_id", sa.String(80), nullable=False),
         sa.Column("transporte", sa.String(40), nullable=False),
@@ -109,7 +112,7 @@ def upgrade():
         sa.Column("proveedor_message_id", sa.String(150)),
         _ts("iniciado_en", nullable=False),
         _ts("finalizado_en", nullable=False),
-        sa.UniqueConstraint("notificacion_id", "numero", name="uq_intento_numero"),
+        sa.UniqueConstraint("notificacion_id", "ciclo", "numero", name="uq_intento_numero"),
         sa.CheckConstraint("numero BETWEEN 1 AND 4", name="ck_intento_numero"),
         sa.CheckConstraint(
             "resultado IN ('ACEPTADO', 'FALLO_TEMPORAL', 'FALLO_DEFINITIVO')",

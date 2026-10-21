@@ -277,3 +277,92 @@ Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 - CON-11 crea `cuotas_mantenimiento` y completa `fk_aplicacion_saldo_cuota` con
   `ON DELETE RESTRICT`; `monto_total_exigible` conserva el bruto y `monto_pagado`
   incluye el crédito aplicado por CON-13. Migración `20261019_0006`.
+
+---
+
+## Extensión CON-32 / CON-34 / CON-36 / CON-37 / CON-73 — Notificaciones Persistentes (Migración `20261020_0010`)
+
+### 8. Tabla: `notificaciones`
+Almacena cada entrega lógica de notificación por destinatario, canal y operación de origen.
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador único de la notificación. |
+| `condominio_id` | `UUID` | NO | - | `REFERENCES condominios(id) ON DELETE RESTRICT` | Condominio propietario del aviso. |
+| `departamento_id` | `UUID` | SÍ | `NULL` | `REFERENCES departamentos(id) ON DELETE RESTRICT` | Unidad inmobiliaria vinculada (si aplica). |
+| `usuario_id` | `UUID` | SÍ | `NULL` | `REFERENCES usuarios(id) ON DELETE RESTRICT` | Usuario destinatario autorizado (si aplica). |
+| `evento_id` | `UUID` | NO | - | - | Identificador del evento de dominio u operación que originó el aviso. |
+| `tipo_evento` | `VARCHAR(60)` | NO | - | - | Nombre canónico del evento de origen (ej. `CuotasEmitidasEvent`). |
+| `plantilla` | `VARCHAR(50)` | NO | - | - | Código de plantilla renderizada (ej. `NOTIF_EMISION_CUOTA`). |
+| `origen_tipo` | `VARCHAR(20)` | NO | - | `CHECK (origen_tipo IN ('CUOTA', 'COMPROBANTE', 'RESERVA', 'COMUNICADO', 'USUARIO'))` | Tipo de entidad de origen. |
+| `origen_id` | `UUID` | NO | - | - | UUID del recurso de origen (cuota, comprobante, reserva, comunicado). |
+| `clave_deduplicacion` | `VARCHAR(255)` | NO | - | `UNIQUE (uq_notificacion_entrega_logica)` | Clave determinista de idempotencia lógica por entrega. |
+| `canal` | `VARCHAR(10)` | NO | `'EMAIL'` | `CHECK (canal IN ('EMAIL', 'WHATSAPP', 'SMS', 'PUSH'))` | Canal de comunicación. |
+| `destinatario` | `VARCHAR(150)` | NO | - | - | Correo electrónico o número de contacto. |
+| `asunto` | `VARCHAR(200)` | SÍ | `NULL` | - | Asunto renderizado del mensaje. |
+| `cuerpo` | `TEXT` | NO | - | - | Contenido renderizado del mensaje. |
+| `contexto` | `JSONB` | NO | `'{}'::jsonb` | - | Variables utilizadas en el renderizado de la plantilla. |
+| `estado` | `VARCHAR(20)` | NO | `'EN_COLA'` | `CHECK (estado IN ('EN_COLA', 'REINTENTANDO', 'ACEPTADO', 'ENTREGADO', 'FALLIDO_PERMANENTE'))` | Estado actual del ciclo de entrega. |
+| `intentos` | `INTEGER` | NO | `0` | `CHECK (intentos BETWEEN 0 AND 4)` | Cantidad de intentos de despacho ya ejecutados en el ciclo vigente. |
+| `ciclo` | `INTEGER` | NO | `1` | `CHECK (ciclo >= 1)` (`ck_notificacion_ciclo`) | Ciclo de entrega vigente; se incrementa en cada reenvío manual conservando el historial de intentos previos. |
+| `proximo_intento_en` | `TIMESTAMPTZ` | SÍ | `NULL` | - | Marca temporal UTC en que la notificación es elegible para despacho. |
+| `bloqueado_hasta` | `TIMESTAMPTZ` | SÍ | `NULL` | - | Expiración del arrendamiento tomado con `FOR UPDATE SKIP LOCKED`. |
+| `bloqueado_por` | `VARCHAR(80)` | SÍ | `NULL` | - | Identificador del worker que posee el arrendamiento activo. |
+| `transporte` | `VARCHAR(40)` | SÍ | `NULL` | - | Nombre del adaptador de transporte empleado (`SIMULADO`, `SMTP`). |
+| `transporte_simulado` | `BOOLEAN` | SÍ | `NULL` | - | `TRUE` si el envío se realizó con transporte simulado (evidencia explícita). |
+| `proveedor_message_id` | `VARCHAR(150)` | SÍ | `NULL` | - | Identificador devuelto por el proveedor externo o simulado. |
+| `error_codigo` | `VARCHAR(40)` | SÍ | `NULL` | - | Último código de fallo registrado (`503`, `550`, `131026`, etc.). |
+| `error_mensaje` | `TEXT` | SÍ | `NULL` | - | Detalle sanitizado del último error. |
+| `creado_en` | `TIMESTAMPTZ` | NO | `NOW()` | - | Fecha UTC de registro. |
+| `actualizado_en` | `TIMESTAMPTZ` | NO | `NOW()` | - | Fecha UTC de última actualización. |
+| `aceptado_en` | `TIMESTAMPTZ` | SÍ | `NULL` | - | Fecha UTC en que el proveedor aceptó el envío. |
+| `entregado_en` | `TIMESTAMPTZ` | SÍ | `NULL` | - | Fecha UTC de confirmación de entrega. |
+
+Índices: `idx_notificaciones_pendientes` parcial sobre `(proximo_intento_en)` donde `estado IN ('EN_COLA', 'REINTENTANDO')`; `idx_notificaciones_condominio` `(condominio_id, creado_en)`; `idx_notificaciones_departamento` `(departamento_id, creado_en)`; `idx_notificaciones_origen` `(origen_tipo, origen_id)`.
+
+### 9. Tabla: `notificacion_intentos`
+Bitácora de intentos de envío por notificación (CON-37).
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador del intento. |
+| `notificacion_id` | `UUID` | NO | - | `REFERENCES notificaciones(id) ON DELETE CASCADE` | Notificación a la que pertenece el intento. |
+| `ciclo` | `INTEGER` | NO | `1` | `UNIQUE (notificacion_id, ciclo, numero)` (`uq_intento_numero`) | Ciclo de entrega al que pertenece el intento (se incrementa con `reprogramar_manual`). |
+| `numero` | `INTEGER` | NO | - | `CHECK (numero BETWEEN 1 AND 4)`; `UNIQUE (notificacion_id, ciclo, numero)` (`uq_intento_numero`) | Número correlativo del intento dentro del ciclo (1..4). |
+| `worker_id` | `VARCHAR(80)` | NO | - | - | Identificador del worker que ejecutó el intento. |
+| `transporte` | `VARCHAR(40)` | NO | - | - | Adaptador utilizado (`SIMULADO`, `SMTP`). |
+| `transporte_simulado` | `BOOLEAN` | NO | - | - | Indica si el intento fue simulado. |
+| `resultado` | `VARCHAR(20)` | NO | - | `CHECK (resultado IN ('ACEPTADO', 'FALLO_TEMPORAL', 'FALLO_DEFINITIVO'))` | Clasificación del resultado del intento. |
+| `codigo` | `VARCHAR(40)` | SÍ | `NULL` | - | Código devuelto por el transporte en caso de fallo. |
+| `detalle` | `TEXT` | SÍ | `NULL` | - | Detalle sanitizado del error. |
+| `proveedor_message_id` | `VARCHAR(150)` | SÍ | `NULL` | - | Message-ID si fue aceptado. |
+| `iniciado_en` | `TIMESTAMPTZ` | NO | - | - | Inicio UTC de la llamada al transporte. |
+| `finalizado_en` | `TIMESTAMPTZ` | NO | - | - | Fin UTC de la llamada al transporte. |
+
+### 10. Tabla: `eventos_consumidos`
+Control de idempotencia de consumo de eventos de dominio por consumidor.
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `consumidor` | `VARCHAR(60)` | NO | - | `PRIMARY KEY (consumidor, event_id)` (`pk_eventos_consumidos`) | Nombre del consumidor lógico. |
+| `event_id` | `UUID` | NO | - | `PRIMARY KEY (consumidor, event_id)` | UUID del evento consumido. |
+| `event_type` | `VARCHAR(60)` | NO | - | - | Tipo de evento procesado. |
+| `notificaciones_creadas` | `INTEGER` | NO | `0` | - | Cantidad de notificaciones generadas en la transacción. |
+| `procesado_en` | `TIMESTAMPTZ` | NO | `NOW()` | - | Fecha UTC de procesamiento. |
+
+### 11. Tabla: `alertas_administrativas`
+Alertas operativas para la administración cuando una notificación alcanza `FALLIDO_PERMANENTE` (CON-37).
+
+| Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador de la alerta. |
+| `condominio_id` | `UUID` | NO | - | `REFERENCES condominios(id) ON DELETE RESTRICT` | Condominio de la alerta. |
+| `notificacion_id` | `UUID` | NO | - | `REFERENCES notificaciones(id) ON DELETE CASCADE` | Notificación fallida origen de la alerta. |
+| `tipo` | `VARCHAR(40)` | NO | `'NOTIFICACION_FALLIDA'` | `UNIQUE (notificacion_id, tipo)` (`uq_alerta_notificacion_tipo`) | Categoría de la alerta. |
+| `severidad` | `VARCHAR(10)` | NO | `'BAJA'` | `CHECK (severidad IN ('BAJA', 'MEDIA', 'ALTA'))` | Nivel de severidad. |
+| `mensaje` | `TEXT` | NO | - | - | Mensaje operativo sin datos sensibles. |
+| `creado_en` | `TIMESTAMPTZ` | NO | `NOW()` | - | Fecha UTC de creación. |
+| `atendida_en` | `TIMESTAMPTZ` | SÍ | `NULL` | - | Fecha UTC de atención o reprogramación manual. |
+| `atendida_por` | `UUID` | SÍ | `NULL` | - | Usuario administrador que atendió la alerta. |
+
+Índice parcial `idx_alertas_abiertas` sobre `(condominio_id, creado_en)` donde `atendida_en IS NULL`.
