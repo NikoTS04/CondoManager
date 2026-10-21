@@ -40,3 +40,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  notificaciones-worker:
+    image: condomanager-api:ci
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ci:${CI_DB_PASSWORD:?Generar CI_DB_PASSWORD}@postgres:5432/condomanager_ci
+      DEBUG: "false"

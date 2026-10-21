@@ -28,6 +28,7 @@ function horaLocal(valor: number): string {
 }
 
 export interface ReservarAreaFormProps {
+  revisionExterna?: number;
   areas: AreaComun[];
   condominioId?: string | null;
   departamentoId: string;
@@ -41,6 +42,7 @@ export interface ReservarAreaFormProps {
 }
 
 export function ReservarAreaForm({
+  revisionExterna = 0,
   areas,
   condominioId,
   departamentoId,
@@ -112,7 +114,7 @@ export function ReservarAreaForm({
         .catch(() => { if (!cancelled) setErrorDisponibilidad("No pudimos consultar los horarios ocupados."); });
     }
     return () => { cancelled = true; };
-  }, [effectiveAreaId, fechaReserva, revisionCalendario]);
+  }, [effectiveAreaId, fechaReserva, revisionCalendario, revisionExterna]);
 
   async function handleCrearReserva(e: React.FormEvent) {
     e.preventDefault();
@@ -158,6 +160,7 @@ export function ReservarAreaForm({
       setReservaSuccess("Reserva confirmada. Puedes consultar su horario y tarifa en Mis reservas.");
       if (onSuccess) onSuccess();
     } else {
+      if (res.errorCode === "HORARIO_NO_DISPONIBLE") setRevisionCalendario((v) => v + 1);
       setReservaError(res.error || "No se pudo registrar la reserva. Inténtalo de nuevo.");
       setRevisionSolvencia((valor) => valor + 1);
     }

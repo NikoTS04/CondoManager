@@ -15,9 +15,9 @@ from sqlalchemy import inspect, select, text
 from scripts.seed_areas_demo import cargar_areas_demo
 from src.core.models_audit import AuditoriaLogORM
 from src.modules.condominios.models import Departamento, Edificio
-from src.modules.reservas import router as reservas
 from src.modules.reservas.areas.models import AreaComun
 from src.modules.reservas.areas.repository import AreasRepository
+from src.modules.reservas.models import Reserva
 from src.modules.reservas.schemas import CancelarReservaRequest
 from src.modules.reservas.service import CancelacionInvalidaException, ReservasService
 from src.modules.usuarios.demo import id_demo
@@ -62,7 +62,6 @@ def turno(base, aid, inicio="14:00", fin="16:00", did=None):
 @pytest_asyncio.fixture
 async def caso_areas(api_usuarios, monkeypatch):
     client, base = api_usuarios
-    monkeypatch.setattr(reservas, "RESERVAS_REGISTRADAS", {})
     return client, base, await login(client)
 
 
@@ -202,9 +201,10 @@ async def test_horario_y_duracion_rechazados_sin_reserva(caso_areas, inicio, fin
     )
     assert (
         response.status_code == 400
-        and response.json()["detail"]["error_code"] == "HORARIO_INVALIDO"
+        and response.json()["error_code"] == "HORARIO_INVALIDO"
     )
-    assert reservas.RESERVAS_REGISTRADAS == {}
+    async with base.sessions() as db:
+        assert await db.scalar(select(Reserva.id)) is None
 
 
 async def test_fronteras_exactas_y_precio_desde_sql(caso_areas):
@@ -212,7 +212,7 @@ async def test_fronteras_exactas_y_precio_desde_sql(caso_areas):
     area = await crear(client, base, admin, costo_reserva="0.15")
     residente = await login(client, "residente102@villabonita3.pe", "Residente123!")
     for inicio, fin in (("08:00", "12:00"), ("18:00", "22:00")):
-        body = {**turno(base, area["id"], inicio, fin), "costo_reserva": "0.00"}
+        body = turno(base, area["id"], inicio, fin)
         response = await client.post("/api/v1/reservas", headers=residente, json=body)
         assert response.status_code == 201 and response.json()["costo_reserva"] == "0.15"
 
@@ -226,7 +226,11 @@ async def test_cancelacion_de_turno_local_respetando_frontera_24_horas(caso_area
         "/api/v1/reservas", headers=residente, json=turno(base, area["id"], "10:00", "11:00")
     )
     assert response.status_code == 201 and response.json()["moneda"] == "PEN"
-    registro = reservas.RESERVAS_REGISTRADAS[UUID(response.json()["id"])]
+    async with base.sessions() as db:
+        reserva = await db.get(Reserva, UUID(response.json()["id"]))
+        registro = {k: getattr(reserva, k) for k in (
+            "id", "condominio_id", "departamento_id", "fecha_reserva", "hora_inicio", "estado", "zona_horaria",
+        )}
     # 10:00 Lima equivale a 15:00 UTC; el límite es el día anterior a esa hora.
     limite = datetime.combine(
         registro["fecha_reserva"] - timedelta(days=1), datetime.min.time(), tzinfo=UTC
@@ -427,7 +431,8 @@ async def test_reserva_y_desactivacion_se_serializan(caso_areas, monkeypatch, re
             await db.rollback()
         responses = await asyncio.wait_for(asyncio.gather(primera, segunda), timeout=10)
     assert [r.status_code for r in responses] == ([201, 200] if reserva_primero else [200, 409])
-    assert len(reservas.RESERVAS_REGISTRADAS) == (1 if reserva_primero else 0)
+    async with base.sessions() as db:
+        assert len(list(await db.scalars(select(Reserva)))) == (1 if reserva_primero else 0)
 
 
 async def test_revalida_actor_que_esperaba_el_contexto(caso_areas, monkeypatch):

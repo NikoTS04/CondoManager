@@ -444,3 +444,11 @@ Importación devuelve `total_filas`, `nuevas`, `creadas`, `ya_existentes`, `rech
 y `filas`, cada una con `fila`, `numero`, `piso`, `edificio`, `coeficiente`,
 `total_pisos`, `estado` y `errores`. Máximo 2 MiB / 5000 filas. Errores de estructura
 usan el sobre `error_code`, `mensaje`, `detalles` opcional; estados 401/403/404/409/422.
+# Integración CON-73/74
+
+Reservas y notificaciones adoptan los contratos de CON-72 mediante PostgreSQL;
+véase [persistencia integrada](../02-domains/04-reservas/persistencia-sprint-2.md).
+`POST /notificaciones/despachar` confirma cola con 202; `GET /notificaciones/logs`
+admite residentes solo para sus destinatarios/unidades vigentes. Reintentar un
+aviso aceptado no vuelve a enviarlo. La interfaz usa el upload real de CON-70
+en dos pasos mientras su migración al multipart único de CON-72 esté pendiente.

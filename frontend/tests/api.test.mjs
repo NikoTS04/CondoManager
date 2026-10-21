@@ -46,12 +46,26 @@ test("las consultas y los comunicados usan el condominio seleccionado", async (t
   const solicitudes = [];
   t.mock.method(globalThis, "fetch", async (url, init) => {
     solicitudes.push({ url, init });
-    return new Response(JSON.stringify({ notificaciones_generadas: 2 }));
+    return new Response(JSON.stringify({ generadas: 2 }));
   });
   await api.fetchComprobantes(cid);
   assert.equal(new URL(solicitudes[0].url).searchParams.get("condominio_id"), cid);
   await api.enviarComunicadoMasivo("Aviso", "Mensaje de prueba", cid);
   assert.equal(JSON.parse(solicitudes[1].init.body).condominio_id, cid);
+});
+
+test("el cliente conserva códigos y detalles de un conflicto de horario", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    error_code: "HORARIO_NO_DISPONIBLE", mensaje: "El turno acaba de ocuparse.", detalles: { area_id: "area" },
+  }), { status: 409 }));
+  await assert.rejects(api.fetchDisponibilidad("area", "2026-12-01"),
+    (error) => error.status === 409 && error.errorCode === "HORARIO_NO_DISPONIBLE" && error.detalles.area_id === "area");
+  assert.equal((await api.crearReserva({})).errorCode, "HORARIO_NO_DISPONIBLE");
+});
+
+test("el comunicado confirma cola y conserva el número de avisos persistidos", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ generadas: 3, estado_general: "EN_COLA" }), { status: 202 }));
+  assert.deepEqual(await api.enviarComunicadoMasivo("Aviso", "Mensaje", "cid"), { ok: true, generadas: 3 });
 });
 
 test("alta, listado y estado de usuarios respetan el contexto y los métodos del contrato", async (t) => {

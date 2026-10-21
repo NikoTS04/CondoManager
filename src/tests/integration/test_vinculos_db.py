@@ -12,10 +12,10 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import func, inspect, select, text
 
+from src.core.config import settings
 from src.core.models_audit import AuditoriaLogORM
 from src.modules.cuotas.models import CuotaMantenimiento
-from src.modules.pagos import router as pagos
-from src.modules.reservas import router as reservas
+from src.modules.reservas.models import Reserva
 from src.modules.usuarios.demo import id_demo
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
@@ -47,10 +47,9 @@ async def estructura(client, cid, headers, nombre="Bloque CON-05"):
 
 
 @pytest_asyncio.fixture
-async def caso(api_usuarios, monkeypatch):
+async def caso(api_usuarios, monkeypatch, tmp_path):
     client, base = api_usuarios
-    monkeypatch.setattr(pagos, "COMPROBANTES_REGISTRADOS", {})
-    monkeypatch.setattr(reservas, "RESERVAS_REGISTRADAS", {})
+    monkeypatch.setattr(settings, "VOUCHERS_DIR", str(tmp_path / "vouchers"))
     admin = await login(client)
     unidades = await estructura(client, base.cid, admin)
     return {"client": client, "base": base, "admin": admin, "unidades": unidades}
@@ -122,8 +121,21 @@ async def test_relaciones_mixtas_portal_real_y_operaciones_autorizadas(caso):
         d["edificio_nombre"] == "Bloque CON-05" for d in catalogo if d["id"] in caso["unidades"]
     )
     did = caso["unidades"][1]
+    from src.tests.integration.test_pagos_db import imagen
+
+    upload = await client.post(
+        "/api/v1/pagos/vouchers",
+        headers=nuevo,
+        data={"departamento_id": did},
+        files={"voucher_file": ("voucher.png", imagen(), "image/png")},
+    )
+    assert upload.status_code == 201
     assert (
-        await client.post("/api/v1/pagos/reportar", headers=nuevo, json=solicitud_pago(did))
+        await client.post(
+            "/api/v1/pagos/reportar",
+            headers=nuevo,
+            json={**solicitud_pago(did), "url_voucher": upload.json()["url_voucher"]},
+        )
     ).status_code == 202
     reserva = await client.post(
         "/api/v1/reservas", headers=nuevo, json=solicitud_reserva(base, did)
@@ -152,7 +164,8 @@ async def test_relaciones_mixtas_portal_real_y_operaciones_autorizadas(caso):
         )
         == 1
     )
-    assert len(reservas.RESERVAS_REGISTRADAS) == 1
+    async with base.sessions() as db:
+        assert len(list(await db.scalars(select(Reserva)))) == 1
 
 
 @pytest.mark.parametrize("relacion", ["INQUILINO", "COPROPIETARIO"])
@@ -479,7 +492,7 @@ async def test_portal_calcula_deuda_solo_de_cuotas_sql_vencidas(caso):
     hoy = datetime.now(UTC).date()
     async with base.sessions() as db, db.begin():
         for periodo, total, pagado, vence in [
-            ("2026-01", "100.25", "40.10", hoy - timedelta(days=1)),
+            ("2026-01", "100.25", "40.10", hoy - timedelta(days=3)),
             ("2026-02", "50.00", "50.00", hoy - timedelta(days=1)),
             ("2026-03", "100.00", "0.00", hoy + timedelta(days=1)),
         ]:

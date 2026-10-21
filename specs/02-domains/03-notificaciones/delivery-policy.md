@@ -1,5 +1,13 @@
 # Política de Entrega y Reintentos de Notificaciones (Delivery Policy)
 
+CON-73 persiste la cola antes de enviar. `intentos=0` significa que todavía no
+se ejecutó el transporte; programar un reintento no incrementa este contador.
+Cada intento efectivo conserva su ciclo, inicio, fin, error sanitizado y referencia.
+El transporte SIMULADO solo acredita aceptación (ENVIADO), nunca ENTREGADO.
+Un intento interrumpido con aceptación incierta se conserva para revisión sin
+reenviarlo automáticamente. Véase
+[persistencia integrada](../04-reservas/persistencia-sprint-2.md).
+
 ## 1. Esquema de Reintentos Exponenciales (Exponential Backoff)
 
 Cuando un proveedor de transporte externo (ej. SendGrid o Meta WhatsApp API) devuelve un código de error temporal (`429 Too Many Requests`, `500 Internal Server Error`, `503 Service Unavailable`, o timeout de conexión TCP):

@@ -10,21 +10,21 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
-from src.modules.reservas.router import get_areas_reserva_repository
+from src.modules.reservas.persistencia import get_reservas_service
 from src.modules.usuarios.departamentos import DepartamentosPortalRepository
 
 
 def test_catalogo_y_solvencia_comparten_sesion_para_no_bloquearse():
     session = object()
-    assert get_areas_reserva_repository(SimpleNamespace(session=session)).session is session
+    assert get_reservas_service(SimpleNamespace(session=session)).session is session
 
 
 def test_grafo_alembic_conserva_ambas_ramas_con_una_cabeza():
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert scripts.get_heads() == ["20261020_0011"]
+    assert scripts.get_heads() == ["20261020_0012"]
     revisiones = {r.revision for r in scripts.walk_revisions()}
     assert {"20261020_0009", "20261020_0009_pagos", "20261020_0010"} <= revisiones
-    assert len(revisiones) == 12
+    assert len(revisiones) == 13
 
 
 @pytest.mark.asyncio

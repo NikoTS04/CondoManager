@@ -39,6 +39,27 @@ async def api_error_handler(_request: Request, exc: APIError) -> JSONResponse:
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Adapta validaciones de FastAPI al recurso correspondiente sin exponer entradas."""
 
+    codigo = None
+    if request.url.path.startswith("/api/v1/reservas"):
+        codigo = "DATOS_RESERVA_INVALIDOS"
+    elif request.url.path.startswith("/api/v1/notificaciones"):
+        codigo = "DATOS_NOTIFICACION_INVALIDOS"
+    elif request.url.path.startswith("/api/v1/areas/") and request.url.path.endswith(
+        "/disponibilidad"
+    ):
+        codigo = "DATOS_DISPONIBILIDAD_INVALIDOS"
+    if codigo:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error_code": codigo,
+                "mensaje": "Revise los campos y el formato de la solicitud.",
+                "detalles": {
+                    "errores": [{"campo": list(e["loc"]), "tipo": e["type"]} for e in exc.errors()]
+                },
+            },
+        )
+
     if (
         request.url.path == "/api/v1/areas"
         or request.url.path.startswith("/api/v1/areas/")

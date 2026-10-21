@@ -112,7 +112,7 @@ def horario(areas):
 @then("la API rechaza el turno sin ocupar el calendario")
 def libre(areas):
     assert areas["resultado"].status_code == 400
-    assert areas["resultado"].json()["detail"]["error_code"] == "HORARIO_INVALIDO"
+    assert areas["resultado"].json()["error_code"] == "HORARIO_INVALIDO"
     fecha = turno(areas["base"], areas["area"]["id"])["fecha_reserva"]
     assert (
         areas["client"]

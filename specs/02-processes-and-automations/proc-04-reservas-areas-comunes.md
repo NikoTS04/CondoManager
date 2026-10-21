@@ -111,3 +111,8 @@ Escenario: Rechazo automático de reserva por cuota en mora
   Y muestra el mensaje "No es posible reservar: Su departamento mantiene cuotas vencidas pendientes"
   Y no altera el calendario de disponibilidad del área común.
 ```
+# Persistencia CON-73
+
+La transacción y adopción de históricos se rigen por
+[persistencia Sprint 2](../02-domains/04-reservas/persistencia-sprint-2.md).
+Crear/cancelar conservan auditoría y outbox atómicos con la solvencia de CON-42.

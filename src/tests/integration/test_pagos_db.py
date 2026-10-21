@@ -25,7 +25,7 @@ from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutb
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.pagos.storage import VoucherStorage
 from src.modules.pagos.worker import limpiar_pendientes, publicar_pendientes
-from src.modules.reservas import router as reservas
+from src.modules.reservas.models import Reserva
 from src.modules.usuarios.demo import id_demo
 from src.modules.usuarios.models import UsuarioDepartamento
 from src.tests.pagos_db import did
@@ -107,7 +107,8 @@ async def test_recorrido_persistente_reporte_revision_y_solvencia(api_pagos):
     assert (
         rechazo.status_code == 403 and rechazo.json()["detail"]["error_code"] == "DEUDA_MORA_ACTIVA"
     )
-    assert not reservas.RESERVAS_REGISTRADAS
+    async with base.sessions() as db:
+        assert await db.scalar(select(Reserva.id)) is None
     nombre = await subir(client, residente)
     creado = await reportar(client, residente, nombre)
     assert creado.status_code == 202, creado.text

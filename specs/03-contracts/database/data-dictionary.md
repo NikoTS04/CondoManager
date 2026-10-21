@@ -257,6 +257,52 @@ retira horas e índice, conservando tablas adoptadas o con datos/referencias.
 ## 6. Tabla: `reservas`
 Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 
+CON-73 completa esta tabla mediante Alembic `20261020_0012`, posterior a la
+convergencia `0011`. Reutiliza el catálogo de CON-39. La adopción valida tipos,
+PK, FK y coherencia de condominio antes de completar columnas, sin borrar datos.
+
+| Columna añadida | Tipo | Regla |
+|---|---|---|
+| `condominio_id` | UUID NOT NULL FK RESTRICT | Contexto del área y unidad; validado dentro de la transacción. |
+| `usuario_id` | UUID FK RESTRICT | Actor de creación; NULL solo para históricos sin actor verificable. |
+| `area_nombre` | TEXT NOT NULL | Instantánea al confirmar; el catálogo puede cambiar de nombre después. |
+| `moneda` | VARCHAR(3) NOT NULL | PEN/USD, instantánea del contexto al confirmar. |
+| `zona_horaria` | VARCHAR(40) NOT NULL | America/Lima para nuevas; UTC para históricos sin marca. |
+| `fecha_cancelacion` | TIMESTAMPTZ NULL | Resultado original conservado al repetir cancelación. |
+| `cancelado_por` | UUID FK RESTRICT NULL | Actor de cancelación. |
+| `motivo_cancelacion` | TEXT NULL | Motivo conservado junto al evento. |
+
+Índices `(condominio_id, departamento_id)` y `(area_id, fecha_reserva, estado)`.
+La exclusión concurrente utiliza lock SQL estable sobre el área, no solo un índice.
+
+### Tablas de comunicaciones y recuperación CON-73
+
+- `bloqueos_area`: UUID PK, área FK RESTRICT, inicio/fin TIMESTAMPTZ, activo;
+  check fin > inicio. Índice de área. Escrituras operativas deben bloquear área
+  bajo el mismo protocolo de reservas; no se añade API pública de gestión.
+- `eventos_reserva_outbox`: UUID PK/event_id, reserva FK RESTRICT, payload JSONB,
+  creado_en y publicado_en TIMESTAMPTZ nullable. Índices de reserva y pendientes.
+- `notificaciones_logs`: UUID PK; condominio, departamento y usuario destinatario
+  FK RESTRICT NOT NULL; evento_id/operacion_id UUID; tipo_evento, canal, contacto,
+  asunto/cuerpo, estado, transporte, ciclo, intentos y próximo reintento;
+  lease interno `bloqueado_hasta` UTC (cinco minutos, no expuesto en la API);
+  referencia del proveedor, error sanitizado y fechas UTC. Unicidad lógica
+  `(evento_id, operacion_id, usuario_destinatario_id, canal)`; hasta cuatro intentos
+  por ciclo. Índices de contexto/destinatario y estado/próximo reintento.
+- `notificaciones_intentos`: UUID PK, aviso FK RESTRICT, ciclo/número únicos por
+  aviso, inicio/fin UTC, error sanitizado y referencia del proveedor. Un intento
+  sin terminar impide adquirir el aviso otra vez. Tras cinco minutos pasa a
+  revisión de aceptación incierta, sin reenvío automático.
+- `notificaciones_eventos`: PK `(consumidor, event_id)`, procesado_en UTC. Insertar
+  el marcador y los avisos en la misma transacción evita duplicar el consumo.
+- `notificaciones_incidencias`: hash SHA256 del mensaje como PK, motivo sanitizado
+  y fecha UTC; no conserva el contenido potencialmente sensible del mensaje.
+
+Las tablas tienen RLS habilitado sin políticas públicas: el acceso del prototipo
+se realiza exclusivamente por la API con conexión privilegiada y autorización
+contextual. Una tabla previa incompatible hace fallar la migración de forma
+transaccional; no se inventan identidades para adoptar bitácoras incompletas.
+
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |
 | :--- | :--- | :---: | :---: | :--- | :--- |
 | `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador de la reserva. |

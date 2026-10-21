@@ -15,6 +15,22 @@ Base acordada el 20/10/2026. Los contratos HTTP y las reglas asociadas están en
 
 Alejandro implementa consumo, plantillas y reintentos. Nicolás implementa persistencia de notificaciones y eventos pendientes en CON-73 y coordina la integración. No hay evento de invitación requerido para cerrar CON-04: la habilitación es administrativa y manual.
 
+### Adaptador integrado CON-73
+
+`src.modules.notificaciones.worker` publica el outbox de reservas y consume el
+Stream mediante el grupo `notificaciones-v1`. Adopta los productores reales de
+cuotas y pagos conservando sus formatos históricos; reservas usa los esquemas
+`.v1`. Verifica cada payload contra su outbox SQL confirmado antes de generar
+avisos. Confirma Redis solo después del commit de consumo o de una incidencia.
+`XAUTOCLAIM` recupera mensajes pendientes de consumidores caídos; duplicados se
+resuelven con unicidad SQL, no con memoria del worker. El transporte actual es
+SIMULADO y solo genera ENVIADO. No acredita un proveedor real ni ENTREGADO.
+
+La recuperación también recorre outboxes SQL sin marcador de consumo: perder
+el Stream o interrumpir Redis no pierde una operación confirmada. Una copia SQL
+inválida conserva su incidencia y un marcador `notificaciones-descartado-v1`,
+distinto del consumo exitoso, para no bloquear la cola indefinidamente.
+
 ## Envelope objetivo propio, versión 1
 
 El contrato objetivo para mensajes nuevos utiliza [event-envelope.v1.schema.json](schemas/event-envelope.v1.schema.json). Es un formato propio de CondoManager; no se declara conformidad con CloudEvents.

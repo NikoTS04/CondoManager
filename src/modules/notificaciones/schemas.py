@@ -3,10 +3,11 @@
 Define los contratos DTO, enums de canales y estados, y modelos de bitácora de envíos.
 """
 
+import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
-import uuid
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -19,6 +20,7 @@ class CanalNotificacionEnum(str, Enum):
 
 class EstadoNotificacionEnum(str, Enum):
     EN_COLA = "EN_COLA"
+    ENVIADO = "ENVIADO"
     ENTREGADO = "ENTREGADO"
     REINTENTANDO = "REINTENTANDO"
     FALLIDO_PERMANENTE = "FALLIDO_PERMANENTE"
@@ -35,8 +37,12 @@ class NotificacionLogDTO(BaseModel):
     destinatario: str
     asunto: Optional[str] = None
     cuerpo: str
+    usuario_destinatario_id: Optional[uuid.UUID] = None
+    evento_id: Optional[uuid.UUID] = None
+    ciclo: int = Field(default=1, ge=1)
+    transporte: str = "SIMULADO"
     estado: EstadoNotificacionEnum = EstadoNotificacionEnum.EN_COLA
-    intentos: int = Field(default=1, ge=1, le=4)
+    intentos: int = Field(default=0, ge=0, le=4)
     proximo_reintento: Optional[datetime] = None
     proveedor_message_id: Optional[str] = None
     error_mensaje: Optional[str] = None
@@ -45,6 +51,7 @@ class NotificacionLogDTO(BaseModel):
 
 
 class DespacharNotificacionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     condominio_id: str
     departamento_id: str
     tipo_evento: str
@@ -54,6 +61,7 @@ class DespacharNotificacionRequest(BaseModel):
 
 
 class EnviarComunicadoMasivoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     condominio_id: str
     titulo: str = Field(..., min_length=5, max_length=150)
     mensaje: str = Field(..., min_length=10)
@@ -69,6 +77,7 @@ class EnviarComunicadoMasivoResponse(BaseModel):
 
 
 class ReenviarNotificacionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     nuevo_destinatario: Optional[str] = Field(
         None, description="Nuevo correo o teléfono si el anterior era erróneo o rebotó"
     )

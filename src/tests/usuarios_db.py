@@ -34,6 +34,8 @@ REVISIONES = (
     "20261020_0008_roles_revocables",
     "20261020_0009_vinculos_departamentos",
     "20261020_0010_catalogo_areas",
+    "20261020_0009_pagos_persistentes",
+    "20261020_0012_reservas_notificaciones",
 )
 
 
@@ -81,7 +83,8 @@ async def borrar_base(base):
 @pytest.fixture
 def db_usuarios(monkeypatch):
     url = (
-        os.getenv("CON39_TEST_DATABASE_URL")
+        os.getenv("CON73_TEST_DATABASE_URL")
+        or os.getenv("CON39_TEST_DATABASE_URL")
         or os.getenv("CON05_TEST_DATABASE_URL")
         or os.getenv("CON06_TEST_DATABASE_URL")
         or os.getenv("CON04_TEST_DATABASE_URL")

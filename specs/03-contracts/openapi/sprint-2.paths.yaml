@@ -88,7 +88,7 @@ paths:
     post:
       operationId: cancelarReserva
       summary: Cancelación persistente con al menos 24 horas de anticipación
-      description: Administración autorizada puede exceptuar el plazo. Repetir una cancelación devuelve el resultado persistido original sin otro evento ni compensación.
+      description: Administración autorizada puede exceptuar el plazo. Repetir una cancelación devuelve el resultado persistido original sin otro evento ni compensación. Un histórico cancelado sin fecha verificable responde 409 CANCELACION_HISTORICA_SIN_FECHA.
       x-historias: [CON-46]
       x-implementation-status: parcial
       requestBody:
@@ -105,6 +105,7 @@ paths:
         '401': {$ref: '#/responses/Error'}
         '403': {$ref: '#/responses/Error'}
         '404': {$ref: '#/responses/Error'}
+        '409': {$ref: '#/responses/Error'}
         '422': {$ref: '#/responses/Error'}
   /pagos/reportar:
     post:

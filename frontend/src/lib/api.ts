@@ -119,6 +119,7 @@ export interface Reserva {
   hora_fin: string;
   costo_reserva: string;
   moneda?: Moneda;
+  zona_horaria?: "America/Lima" | "UTC";
   estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA";
   creado_en: string;
 }
@@ -144,8 +145,13 @@ export interface NotificacionLog {
   destinatario: string;
   asunto?: string;
   cuerpo?: string;
-  estado: "ENTREGADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
+  estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
   intentos: number;
+  ciclo: number;
+  transporte: "SIMULADO" | "PROVEEDOR";
+  proximo_reintento: string | null;
+  error_mensaje: string | null;
+  proveedor_message_id: string | null;
   fecha_creacion: string;
 }
 
@@ -368,8 +374,19 @@ async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response
 async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   const response = await fetchProtegido(ruta, { ...init, headers: getAuthHeaders() });
   const data = await response.json();
-  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo completar la operación."));
+  if (!response.ok) {
+    const payload = data.detail && typeof data.detail === "object" ? data.detail : data;
+    throw new ApiError(obtenerMensajeError(data, "No se pudo completar la operación."),
+      response.status, obtenerCodigoError(data), payload.detalles);
+  }
   return data as T;
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public errorCode?: string,
+    public detalles?: Record<string, unknown>) {
+    super(message);
+  }
 }
 
 function contextoQuery(condominioId?: string | null): string {
@@ -629,7 +646,7 @@ export async function crearReserva(payload: {
   fecha_reserva: string;
   hora_inicio: string;
   hora_fin: string;
-}): Promise<{ ok: boolean; data?: Reserva; error?: string }> {
+}): Promise<{ ok: boolean; data?: Reserva; error?: string; errorCode?: string }> {
   try {
     const data = await recursoRequest<Reserva>("/reservas", {
       method: "POST",
@@ -637,7 +654,8 @@ export async function crearReserva(payload: {
     });
     return { ok: true, data };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "No se pudo crear la reserva." };
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo crear la reserva.",
+      errorCode: error instanceof ApiError ? error.errorCode : undefined };
   }
 }
 
@@ -762,9 +780,15 @@ export function fetchNotificaciones(condominioId?: string | null): Promise<Notif
   return recursoRequest(`/notificaciones/logs${contextoQuery(condominioId)}`);
 }
 
+export function reenviarNotificacion(id: string, nuevo_destinatario: string): Promise<NotificacionLog> {
+  return recursoRequest(`/notificaciones/reenviar/${encodeURIComponent(id)}`, {
+    method: "POST", body: JSON.stringify({ nuevo_destinatario }),
+  });
+}
+
 export async function enviarComunicadoMasivo(titulo: string, mensaje: string, condominioId: string): Promise<{ ok: boolean; generadas?: number }> {
   try {
-    const data = await recursoRequest<{ notificaciones_generadas: number }>("/notificaciones/comunicado-masivo", {
+    const data = await recursoRequest<{ generadas: number }>("/notificaciones/comunicado-masivo", {
       method: "POST",
       body: JSON.stringify({
         condominio_id: condominioId,
@@ -773,7 +797,7 @@ export async function enviarComunicadoMasivo(titulo: string, mensaje: string, co
         canal: "EMAIL",
       }),
     });
-    return { ok: true, generadas: data.notificaciones_generadas };
+    return { ok: true, generadas: data.generadas };
   } catch {
     return { ok: false };
   }

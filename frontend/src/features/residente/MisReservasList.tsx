@@ -176,7 +176,7 @@ export function MisReservasList({
                       </div>
                       <p className="text-xs text-muted">
                         {formatDate(r.fecha_reserva)} · {formatHora(r.hora_inicio)} a{" "}
-                        {formatHora(r.hora_fin)} · Tarifa:{" "}
+                        {formatHora(r.hora_fin)} ({r.zona_horaria === "UTC" ? "UTC, registro histórico" : "hora de Lima"}) · Tarifa:{" "}
                         <MoneyAmount value={r.costo_reserva} moneda={r.moneda ?? "PEN"} className="font-medium" />
                       </p>
                     </div>
@@ -219,8 +219,9 @@ export function MisReservasList({
           <strong>{reservaACancelar?.area_nombre || "el área común"}</strong> programada
           para el <strong>{formatDate(reservaACancelar?.fecha_reserva)}</strong> de{" "}
           <strong>
-            {formatHora(reservaACancelar?.hora_inicio)} a{" "}
-            {formatHora(reservaACancelar?.hora_fin)}
+             {formatHora(reservaACancelar?.hora_inicio)} a{" "}
+             {formatHora(reservaACancelar?.hora_fin)}
+             {reservaACancelar?.zona_horaria === "UTC" ? " UTC" : " (hora de Lima)"}
           </strong>
           ?
         </p>

@@ -434,6 +434,9 @@ CON-72 conserva las interfaces de CON-05/06/39 integradas en `develop`: vínculo
 
 ## CON-73 — Persistir áreas, reservas y notificaciones
 
+Avance de Nicolás: [persistencia e integración funcional](CON-73-CON-74-integracion.md).
+Implementación y verificación local; revisión de pares y esquema desplegado pendientes.
+
 **Objetivo técnico:** sustituir el almacenamiento temporal de estos módulos por repositorios persistentes que sostengan las reglas del sprint.
 
 **Debe incluir:**
@@ -451,6 +454,10 @@ CON-72 conserva las interfaces de CON-05/06/39 integradas en `develop`: vínculo
 **Trazabilidad:** [dominio de reservas](../../specs/02-domains/04-reservas/spec.md), [dominio de notificaciones](../../specs/02-domains/03-notificaciones/spec.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [concurrencia](../../specs/01-architecture/concurrency-and-locking.md), [política de entrega](../../specs/02-domains/03-notificaciones/delivery-policy.md), [operación y recuperación](../../specs/05-operations/deployment-and-runbooks.md).
 
 ## CON-74 — Integrar frontend y backend del prototipo
+
+Avance y límites: [integración funcional CON-73/74](CON-73-CON-74-integracion.md).
+Se conserva la interfaz actual; rediseño visual diferido y adopción final de los
+contratos de cada historia sujeta a sus implementaciones reales.
 
 **Objetivo técnico:** permitir que los recorridos de usuarios, pagos, reservas y comunicaciones funcionen desde la interfaz sobre las API acordadas y los datos persistidos.
 
