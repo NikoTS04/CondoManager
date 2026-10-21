@@ -95,6 +95,11 @@ def db_usuarios(monkeypatch):
             "Defina CON46_TEST_DATABASE_URL o CON04_TEST_DATABASE_URL con PostgreSQL de pruebas."
         )
     base = asyncio.run(crear_base(url))
+    new_engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": base.esquema}}
+    )
+    base.engine = new_engine
+    base.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
     monkeypatch.setattr(settings, "DEMO_MODE", True)
     # Estas fixtures migran identidad/catálogo, no el productor de reservas.
     # CON-46 elimina este adaptador y aplica su migración para probar SQL real.
