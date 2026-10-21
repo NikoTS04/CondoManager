@@ -299,6 +299,7 @@ class ReservasService:
             hora_fin=request.hora_fin,
             costo_reserva=costo_reserva,
             moneda=area.get("moneda", "PEN"),
+            zona_horaria=area.get("zona_horaria", "America/Lima"),
             estado="CONFIRMADA",
             creado_en=creado_en,
         )
@@ -315,6 +316,7 @@ class ReservasService:
         repository: ReservasRepository,
         usuario_id: uuid.UUID,
         reservas_existentes: Optional[List[Dict[str, Any]]] = None,
+        auditor=None,
     ) -> ReservaResponseDTO:
         """Crea una reserva en PostgreSQL con bloqueo pesimista y verificación atómica de solvencia y horario."""
         cls._validar_reglas_horario_y_area(request, area)
@@ -384,7 +386,10 @@ class ReservasService:
             id=uuid.uuid4(),
             area_id=request.area_id,
             departamento_id=request.departamento_id,
+            condominio_id=request.condominio_id,
             usuario_id=usuario_id,
+            moneda=area.get("moneda", "PEN"),
+            area_nombre=area.get("nombre", "Área Común"),
             fecha_reserva=request.fecha_reserva,
             hora_inicio=request.hora_inicio,
             hora_fin=request.hora_fin,
@@ -396,7 +401,7 @@ class ReservasService:
         guardada = await repository.guardar(nueva_reserva)
 
         # Auditoría inmutable
-        AuditoriaPayload(
+        auditoria = AuditoriaPayload(
             condominio_id=str(request.condominio_id),
             departamento_id=str(request.departamento_id),
             accion_ejecutada="RESERVA_CONFIRMADA",
@@ -414,6 +419,9 @@ class ReservasService:
             },
         )
 
+        if auditor is not None:
+            await auditor(auditoria)
+
         return ReservaResponseDTO(
             id=guardada.id,
             condominio_id=request.condominio_id,
@@ -425,6 +433,7 @@ class ReservasService:
             hora_fin=guardada.hora_fin,
             costo_reserva=guardada.costo_reserva,
             moneda=area.get("moneda", "PEN"),
+            zona_horaria=guardada.zona_horaria,
             estado=guardada.estado,
             creado_en=guardada.creado_en or ahora,
         )

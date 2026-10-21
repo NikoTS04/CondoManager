@@ -21,7 +21,6 @@ from scripts.seed_usuarios_demo import cargar_demo
 from src.core.config import settings
 from src.core.database import get_db_session
 from src.main import app
-from src.modules.reservas.router import get_creacion_reservas_repository
 from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
 
 REVISIONES = (
@@ -35,10 +34,22 @@ REVISIONES = (
     "20261020_0008_roles_revocables",
     "20261020_0009_vinculos_departamentos",
     "20261020_0010_catalogo_areas",
+    "20261020_0009_pagos_persistentes",
+    "20261020_0012_reservas_notificaciones",
+    "20261021_0013_convergencia_con72",
+)
+# Esquema completo (cabeza de Alembic) para la API: añade cancelaciones y alertas, que
+# las pruebas de migración aplican por separado sobre REVISIONES.
+REVISIONES_API = (
+    *REVISIONES,
+    "20261021_0012_cancelaciones_reserva",
+    "20261021_0014_unir_reservas_y_convergencia",
+    "20261021_0015_alertas_notificaciones",
 )
 
 
-def migrar(connection, revisiones=REVISIONES):
+def migrar(connection, revisiones=None):
+    revisiones = REVISIONES_API if revisiones is None else revisiones
     with Operations.context(MigrationContext.configure(connection)):
         for nombre in revisiones:
             import_module("migrations.versions." + nombre).upgrade()
@@ -101,9 +112,8 @@ def db_usuarios(monkeypatch):
     base.engine = new_engine
     base.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
     monkeypatch.setattr(settings, "DEMO_MODE", True)
-    # Estas fixtures migran identidad/catálogo, no el productor de reservas.
-    # CON-46 elimina este adaptador y aplica su migración para probar SQL real.
-    monkeypatch.setitem(app.dependency_overrides, get_creacion_reservas_repository, lambda: None)
+    # La copia piloto es global al proceso: no debe filtrar reservas entre pruebas.
+    monkeypatch.setattr("src.modules.reservas.router.RESERVAS_REGISTRADAS", {})
 
     async def session():
         async with base.sessions() as db:

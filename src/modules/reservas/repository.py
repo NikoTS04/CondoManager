@@ -1,8 +1,9 @@
 """Repositorio de persistencia SQL para Reservas de Áreas Comunes (Brandon - CON-41 / CON-43 / CON-73)."""
 
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from typing import List, Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends
 from sqlalchemy import and_, func, select
@@ -12,6 +13,15 @@ from src.core.database import get_db_session
 from src.modules.reservas.areas.models import AreaComun
 from src.modules.reservas.disponibilidad import ZONA_LIMA
 from src.modules.reservas.models import Reserva
+
+
+def instantes(reserva):
+    """Intervalo UTC de la reserva según su zona; los históricos sin marca son UTC."""
+    zona = ZoneInfo(reserva.zona_horaria)
+    return (
+        datetime.combine(reserva.fecha_reserva, reserva.hora_inicio, zona).astimezone(UTC),
+        datetime.combine(reserva.fecha_reserva, reserva.hora_fin, zona).astimezone(UTC),
+    )
 
 
 class ReservasRepository:

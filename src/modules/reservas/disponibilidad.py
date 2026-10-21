@@ -55,7 +55,50 @@ class DisponibilidadRepository:
                 "fecha_hasta": fecha + timedelta(days=1) if fecha < date.max else fecha,
             },
         )
-        return [dict(fila) for fila in resultado.mappings()]
+        ocupaciones = [dict(fila) for fila in resultado.mappings()]
+        return ocupaciones + await self._leer_bloqueos(area_id, fecha)
+
+    async def _leer_bloqueos(self, area_id: UUID, fecha: date):
+        """Los bloqueos operativos ocupan el calendario con el mismo formato que las reservas."""
+        if not await self.session.scalar(text("SELECT to_regclass('bloqueos_area') IS NOT NULL")):
+            return []
+        desde = datetime.combine(fecha - timedelta(days=1), time(), timezone.utc)
+        hasta = desde + timedelta(days=3)
+        filas = await self.session.execute(
+            text(
+                """
+                SELECT id, inicio, fin FROM bloqueos_area
+                WHERE area_id = :area_id AND activo AND inicio < :hasta AND fin > :desde
+                """
+            ),
+            {"area_id": area_id, "desde": desde, "hasta": hasta},
+        )
+        ocupaciones = []
+        for fila in filas.mappings():
+            inicio, fin = (
+                fila["inicio"].astimezone(timezone.utc),
+                fila["fin"].astimezone(timezone.utc),
+            )
+            # Un bloqueo puede cruzar la medianoche UTC; se parte por día.
+            while inicio < fin:
+                medianoche = datetime.combine(
+                    inicio.date() + timedelta(days=1), time(), timezone.utc
+                )
+                tramo_fin = min(fin, medianoche)
+                ocupaciones.append(
+                    {
+                        "id": fila["id"],
+                        "fecha_reserva": inicio.date(),
+                        "hora_inicio": inicio.time(),
+                        "hora_fin": time(23, 59, 59)
+                        if tramo_fin == medianoche
+                        else tramo_fin.time(),
+                        "estado": "CONFIRMADA",
+                        "zona_horaria": "UTC",
+                    }
+                )
+                inicio = tramo_fin
+        return ocupaciones
 
 
 class DisponibilidadService:

@@ -1,5 +1,6 @@
 """Router FastAPI para el Dominio de Reservas de Áreas Comunes (Brandon - PROC-04)."""
 
+import logging
 import uuid
 from datetime import date, time
 from typing import Dict, List, Optional
@@ -21,12 +22,14 @@ from src.modules.reservas.areas.repository import AreasRepository, get_areas_rep
 from src.modules.reservas.areas.service import AreasService
 from src.modules.reservas.cancelaciones import get_cancelaciones_service
 from src.modules.reservas.disponibilidad import DisponibilidadRepository, DisponibilidadService
+from src.modules.reservas.persistencia import ReservasPersistentesService
 from src.modules.reservas.repository import ReservasRepository
 from src.modules.reservas.schemas import (
     AreaComunDTO,
     CancelarReservaRequest,
     CancelarReservaResponse,
     CrearReservaRequest,
+    ErrorResponse,
     HorarioOcupado,
     ReservaResponseDTO,
 )
@@ -39,6 +42,7 @@ from src.modules.reservas.service import (
 )
 from src.modules.usuarios.departamentos import get_departamentos_portal_repository
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Reservas de Áreas Comunes"])
 
 # ============================================================================
@@ -72,6 +76,7 @@ async def listar_areas(
     "/areas/{area_id}/disponibilidad",
     response_model=List[HorarioOcupado],
     summary="Horarios ocupados del área sin datos de otros residentes",
+    responses={503: {"model": ErrorResponse, "description": "Calendario no disponible."}},
 )
 async def disponibilidad_area(
     area_id: uuid.UUID,
@@ -220,6 +225,18 @@ async def crear_reserva(
                 for h in ocupados
             ]
             if isinstance(reservas_repository, ReservasRepository):
+
+                async def auditor(a):
+                    await solvencia.repo.auditar(
+                        user,
+                        request.condominio_id,
+                        request.departamento_id,
+                        a.accion_ejecutada,
+                        a.motivo,
+                        a.estado_anterior,
+                        a.estado_posterior,
+                    )
+
                 reserva_dto = await ReservasService.procesar_reserva_persistente(
                     request=request,
                     area=area,
@@ -228,7 +245,14 @@ async def crear_reserva(
                     repository=reservas_repository,
                     usuario_id=uuid.UUID(user["sub"]),
                     reservas_existentes=existentes,
+                    auditor=auditor,
                 )
+                # Evento durable en la misma transacción que la reserva y su auditoría.
+                guardada = await reservas_repository.obtener_por_id(reserva_dto.id)
+                ReservasPersistentesService(solvencia).evento(
+                    guardada, "ReservaConfirmadaEvent", reserva_dto.area_nombre
+                )
+                await solvencia.session.flush()
             else:
                 # Adaptador explícito de pruebas históricas, sin fallback ante
                 # fallos SQL del productor de CON-41.
@@ -279,6 +303,7 @@ async def crear_reserva(
             detail={"error_code": exc.error_code, "mensaje": exc.mensaje},
         )
     except SQLAlchemyError as exc:
+        logger.exception("Fallo SQL al confirmar la reserva")
         raise APIError(
             503,
             "RESERVA_NO_DISPONIBLE",
@@ -291,6 +316,7 @@ async def crear_reserva(
     response_model=CancelarReservaResponse,
     status_code=status.HTTP_200_OK,
     summary="Cancelar una reserva confirmada",
+    responses={503: {"model": ErrorResponse, "description": "Cancelación no disponible."}},
 )
 async def cancelar_reserva(
     reserva_id: uuid.UUID,

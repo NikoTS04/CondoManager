@@ -21,6 +21,8 @@ class HorarioOcupado(BaseModel):
 
 
 class CrearReservaRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     condominio_id: uuid.UUID
     area_id: uuid.UUID
     departamento_id: uuid.UUID
@@ -42,6 +44,7 @@ class ReservaResponseDTO(BaseModel):
     hora_fin: time
     costo_reserva: Decimal
     moneda: Literal["PEN", "USD"] = "PEN"
+    zona_horaria: Literal["America/Lima", "UTC"] = "America/Lima"
     estado: str  # SOLICITADA, CONFIRMADA, RECHAZADA, CANCELADA, COMPLETADA
     creado_en: datetime
 

@@ -21,7 +21,6 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.models_audit import AuditoriaLogORM
-from src.main import app
 from src.modules.pagos.models import ComprobantePago
 from src.modules.reservas import router
 from src.modules.reservas.cancelaciones import CancelacionesService
@@ -40,12 +39,15 @@ AREA = "11111111-1111-1111-1111-111111111101"
 
 
 def migrar(connection):
+    base = import_module("migrations.versions.20261020_0012_reservas_notificaciones")
     revision = import_module("migrations.versions.20261021_0012_cancelaciones_reserva")
+    alertas = import_module("migrations.versions.20261021_0015_alertas_notificaciones")
     with Operations.context(MigrationContext.configure(connection)):
-        revision.upgrade()
+        # Retrocede hasta el esquema vacío de CON-73 para reproducir la tabla histórica de
+        # Supabase: creador obligatorio, campo histórico opcional y ausencia de zona_horaria.
+        alertas.downgrade()
         revision.downgrade()
-        # Reproduce el esquema observado en Supabase: creador obligatorio,
-        # campo histórico opcional y ausencia de zona_horaria.
+        base.downgrade()
         op.create_table(
             "reservas",
             sa.Column(
@@ -84,6 +86,7 @@ def migrar(connection):
             comment="Baseline histórico de Supabase para CON-46",
         )
         op.execute("ALTER TABLE reservas ENABLE ROW LEVEL SECURITY")
+        base.upgrade()
         revision.upgrade()
         columnas = {c["name"]: c for c in sa.inspect(connection).get_columns("reservas")}
         assert not columnas["usuario_id"]["nullable"]
@@ -92,6 +95,10 @@ def migrar(connection):
             sa.inspect(connection).get_table_comment("reservas")["text"]
             == "Baseline histórico de Supabase para CON-46"
         )
+        # El retroceso conserva el baseline y la reaplicación es idempotente.
+        revision.downgrade()
+        revision.upgrade()
+        alertas.upgrade()
 
 
 @pytest_asyncio.fixture
@@ -99,7 +106,6 @@ async def caso_cancelacion(api_pagos, monkeypatch):
     client, base = api_pagos
     async with base.engine.begin() as conn:
         await conn.run_sync(migrar)
-    monkeypatch.delitem(app.dependency_overrides, router.get_creacion_reservas_repository)
     residente = await login(client, "residente102@villabonita3.pe", "Residente123!")
     creada = await client.post("/api/v1/reservas", headers=residente, json=turno(base, AREA))
     assert creada.status_code == 201, creada.text
@@ -206,7 +212,14 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
         assert (await db.get(Reserva, rid)).estado == "CANCELADA"
         assert (await db.get(Reserva, rid)).usuario_id == UUID(datos["usuario_id"])
         assert await db.scalar(select(func.count()).select_from(CancelacionReserva)) == 1
-        assert await db.scalar(select(func.count()).select_from(EventoReservaOutbox)) == 1
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(EventoReservaOutbox)
+                .where(EventoReservaOutbox.tipo == "ReservaCanceladaEvent")
+            )
+            == 1
+        )
         logs = list(
             await db.scalars(
                 select(AuditoriaLogORM).where(
@@ -215,7 +228,9 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
             )
         )
         assert len(logs) == 1 and logs[0].actor_tipo == "RESIDENTE"
-        evento = await db.scalar(select(EventoReservaOutbox))
+        evento = await db.scalar(
+            select(EventoReservaOutbox).where(EventoReservaOutbox.tipo == "ReservaCanceladaEvent")
+        )
         assert evento.publicado_en is None
         validar_evento(evento.payload)
 
@@ -229,9 +244,13 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
     transporte = Transporte()
     await publicar_pendientes(transporte, base.sessions)
     await publicar_pendientes(transporte, base.sessions)
-    assert len(transporte.eventos) == 1
+    # Las confirmaciones de las reservas creadas también salen por el mismo outbox.
+    assert [e["event_type"] for e in transporte.eventos].count("ReservaCanceladaEvent") == 1
     async with base.sessions() as db:
-        assert (await db.scalar(select(EventoReservaOutbox))).publicado_en is not None
+        evento = await db.scalar(
+            select(EventoReservaOutbox).where(EventoReservaOutbox.tipo == "ReservaCanceladaEvent")
+        )
+        assert evento.publicado_en is not None
 
 
 async def test_fallo_transaccional_revierte_estado_auditoria_y_evento(
@@ -255,7 +274,14 @@ async def test_fallo_transaccional_revierte_estado_auditoria_y_evento(
     async with base.sessions() as db:
         assert (await db.get(Reserva, rid)).estado == "CONFIRMADA"
         assert await db.scalar(select(func.count()).select_from(CancelacionReserva)) == 0
-        assert await db.scalar(select(func.count()).select_from(EventoReservaOutbox)) == 0
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(EventoReservaOutbox)
+                .where(EventoReservaOutbox.tipo == "ReservaCanceladaEvent")
+            )
+            == 0
+        )
         assert (
             await db.scalar(
                 select(func.count())
