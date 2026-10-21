@@ -40,6 +40,7 @@ def main():
             assert any(r["id"] == args.reserva_reinicio for r in listado.value.json())
             rid = args.reserva_reinicio
         else:
+            page.get_by_role("tab", name="Reservas", exact=True).click()
             expect(page.get_by_role("button", name="Confirmar Reserva", exact=True)).to_be_enabled()
             page.get_by_label("Fecha de Reserva").fill(
                 (date.today() + timedelta(days=10)).isoformat()
@@ -74,7 +75,7 @@ def main():
             args.evidencia_dir.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(args.evidencia_dir / "avisos-persistidos.png"), full_page=True)
         if not args.reserva_reinicio:
-            page.get_by_role("tab", name="Reservas de Áreas Comunes").click()
+            page.get_by_role("tab", name="Reservas", exact=True).click()
             page.get_by_role("button", name="Cancelar", exact=True).first.click()
             with page.expect_response(
                 lambda r: r.url.endswith(f"/reservas/{rid}/cancelar")

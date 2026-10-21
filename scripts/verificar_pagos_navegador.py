@@ -56,7 +56,7 @@ def main():
                 c["id"] == args.comprobante_reinicio and c["estado"] == "APROBADO"
                 for c in historial.value.json()
             )
-            page.get_by_role("tab", name="Reportar Comprobante de Pago").click()
+            page.get_by_role("tab", name="Pagos", exact=True).click()
             expect(page.get_by_text("Aprobado", exact=True)).to_be_visible()
             with page.expect_download() as descarga:
                 page.get_by_role("button", name="Descargar voucher").first.click()
@@ -72,8 +72,8 @@ def main():
                 )
             )
             return
-        expect(page.get_by_text("Reserva bloqueada por mora", exact=True)).to_be_visible()
-        page.get_by_role("tab", name="Reportar Comprobante de Pago").click()
+        expect(page.get_by_text("Reservas bloqueadas por mora", exact=True)).to_be_visible()
+        page.get_by_role("tab", name="Pagos", exact=True).click()
         page.get_by_label("Número de Operación Bancaria").fill(operacion)
         page.get_by_label("Monto Pagado").fill("170.00")
         page.locator('input[type="file"]').set_input_files(
@@ -94,7 +94,7 @@ def main():
         with page.expect_download() as descarga:
             page.get_by_role("button", name="Descargar voucher").first.click()
         assert descarga.value.suggested_filename.endswith(".png")
-        page.get_by_role("tab", name="Reservas de Áreas Comunes").click()
+        page.get_by_role("tab", name="Reservas", exact=True).click()
         expect(page.get_by_text("Reserva bloqueada por mora", exact=True)).to_be_visible()
 
         entrar(admin, args.url, "admin@villabonita3.pe", "Admin123!")
@@ -110,7 +110,7 @@ def main():
         assert observada.value.status == 200
         expect(fila.get_by_role("button", name="Aprobar", exact=True)).to_have_count(0)
         page.reload()
-        page.get_by_role("tab", name="Reportar Comprobante de Pago").click()
+        page.get_by_role("tab", name="Pagos", exact=True).click()
         page.get_by_role("button", name="Subsanar voucher", exact=True).click()
         page.get_by_label("Nuevo voucher para subsanar").set_input_files(
             {
@@ -136,14 +136,14 @@ def main():
             ).click()
         assert aprobado.value.status == 200, aprobado.value.text()
         assert aprobado.value.json()["departamento_habilitado_reservas"] is True
-        page.get_by_role("tab", name="Reservas de Áreas Comunes").click()
+        page.get_by_role("tab", name="Reservas", exact=True).click()
         page.get_by_role("button", name="Actualizar solvencia").click()
         expect(page.get_by_role("button", name="Confirmar Reserva", exact=True)).to_be_enabled()
         expect(
             page.get_by_text("Tu departamento está al día y puedes realizar reservas.", exact=True)
         ).to_be_visible()
         page.reload()
-        page.get_by_role("tab", name="Reportar Comprobante de Pago").click()
+        page.get_by_role("tab", name="Pagos", exact=True).click()
         expect(page.get_by_text("Aprobado", exact=True)).to_be_visible()
         page.get_by_role("tab", name="Avisos", exact=True).click()
         for _ in range(15):

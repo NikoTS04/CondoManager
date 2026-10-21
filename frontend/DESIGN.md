@@ -262,7 +262,31 @@ Cada fase es un PR pequeño que mantiene la app funcionando.
 | Navegación | Navbar única con selector de perfiles | AppShell por portal, modo demo opcional |
 | Móvil | Responsive básico | Mobile-first real (bottom nav, tablas → tarjetas) |
 
-## 14. Decisiones abiertas
+## 14. Rediseño de las pantallas de trabajo (octubre 2026)
+
+Esta fase reutiliza las primitivas y el cliente autenticado existentes; no incorpora librerías, endpoints ni reglas contables nuevas. Las brechas de §13 describen la propuesta original, no un inventario vigente.
+
+- Paleta: acción `#15803d`, selección `#f0fdf4`, tinta `#0f172a`, apoyo `#475569`, borde `#e2e8f0`, lienzo `#f8fafc`; superficies blancas. Se conserva Inter, alineación izquierda y cifras tabulares.
+- Residente: contexto de unidad → navegación Resumen/Pagos/Reservas/Avisos → cuenta con deuda vencida y saldo a favor reales → acciones. En móvil, navegación inferior persistente.
+- Junta: navegación lateral agrupada → título de la sección activa y actualización → bandeja de trabajo. El resumen prioriza comprobantes por revisar y unidades activas en mora, no métricas decorativas.
+- No se deduce una cuota desde la alícuota ni se inventan periodos, penalidades o resultados de evaluación. Un presupuesto no consultado invita a consultar; no se presenta como inexistente.
+- El nombre del condominio no está disponible para todos los roles en los contratos actuales: se muestra su identificador de contexto, nunca un nombre fijo. `PROPIETARIO` e `INQUILINO` son relaciones de unidad; el rol es `RESIDENTE`.
+- Las moras muestran estados registrados por el backend; se retira el botón de simulación. Las notificaciones mantienen explícito el transporte simulado cuando corresponde.
+- Movimiento: navegación instantánea, feedback de pulsación solo con puntero, transiciones de 150 ms y respeto a movimiento reducido. Sin entradas escalonadas ni animación de cifras.
+
+```
+Residente                         Junta (escritorio)
+Unidad / contexto                 Navegación | Sección · Actualizar
+Resumen  Pagos  Reservas  Avisos    Comunidad  | Pendientes de revisión
+Deuda vencida | Saldo a favor      Finanzas   | Estado de unidades
+Reportar pago / Reservar           Gestión    | Accesos al trabajo real
+```
+
+Revisión del concepto: se descarta la cuadrícula de cuatro KPIs genéricos; la jerarquía responde a conciliar pagos y consultar la cuenta de una unidad. Sin hero, gráficos sin fuente ni nombres de comunidad de ejemplo.
+
+Verificación de esta fase: 21 pruebas Node (incluyen renderizado de cuenta, resumen y moras), TypeScript, lint y build de producción correctos. Chromium con fixtures interceptadas para residente/junta/auditor en 360/768/1440 px: sin desbordamiento de página, un h1, pestañas operables con teclado, auditor sin acciones de escritura y fallo de API sin indicadores falsos. Se actualizaron los selectores de los recorridos de pagos y reservas; no se repitieron sus mutaciones contra una API/BD real en esta fase.
+
+## 15. Decisiones abiertas
 
 1. ¿Adoptar **shadcn/ui + Radix** (menos código propio, ya mencionado en `tech-stack.md`) o primitivas propias? *Recomendado: Radix para Dialog/Menu/Tabs, estilos propios.*
 2. ¿Se añade **modo oscuro** en este ciclo o se difiere?

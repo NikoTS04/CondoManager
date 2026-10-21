@@ -53,8 +53,8 @@ export function ComprobantesList({
   return (
     <Card>
       <CardHeader
-        title="Historial de Comprobantes Enviados"
-        description="Seguimiento en tiempo real de tus pagos reportados y su estado de conciliación."
+        title="Tus comprobantes"
+        description="Consulta la revisión de tus pagos y subsana los comprobantes observados."
         icon={<FileText className="h-5 w-5 text-brand-600" aria-hidden />}
       />
 
