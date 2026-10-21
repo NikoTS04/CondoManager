@@ -17,35 +17,12 @@ from src.modules.notificaciones.models import (
 from src.modules.notificaciones.worker import procesar_uno, recuperar_inciertos
 from src.modules.usuarios.demo import id_demo
 from src.modules.usuarios.models import Usuario
-from src.tests import usuarios_db
 from src.tests.integration.test_alta_usuarios_db import login, otro_condominio
 from src.tests.pagos_db import did
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 RUTA = "/api/v1/notificaciones"
 SIN_JITTER = {"jitter": lambda a, b: 0}
-HASTA_ALERTAS = (
-    "20261020_0009_pagos_persistentes",
-    "20261020_0012_reservas_notificaciones",
-    "20261021_0012_cancelaciones_reserva",
-    "20261021_0013_convergencia_con72",
-    "20261021_0014_unir_reservas_y_convergencia",
-    "20261021_0015_alertas_notificaciones",
-)
-
-
-@pytest.fixture(autouse=True)
-def esquema_con_alertas(monkeypatch):
-    """El esquema aislado debe incluir la cola de notificaciones y la tabla de alertas."""
-    original = usuarios_db.migrar
-    pendientes = tuple(r for r in HASTA_ALERTAS if r not in usuarios_db.REVISIONES)
-    monkeypatch.setattr(
-        usuarios_db,
-        "migrar",
-        lambda connection, revisiones=None: original(
-            connection, tuple(revisiones or usuarios_db.REVISIONES) + pendientes
-        ),
-    )
 
 
 async def encolar(client, base, email):
