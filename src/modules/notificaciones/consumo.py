@@ -12,6 +12,7 @@ from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox
 from src.modules.notificaciones.models import EventoConsumido, IncidenciaEvento
 from src.modules.notificaciones.repository import NotificacionesRepository
+from src.modules.notificaciones.templates import PlantillaIncompletaError
 from src.modules.pagos.models import ComprobantePago
 from src.modules.pagos.models_persistencia import EventoPagoOutbox
 from src.modules.reservas.models import EventoReservaOutbox, Reserva
@@ -26,6 +27,12 @@ TIPOS = {
     "ReservaConfirmadaEvent": (EventoReservaOutbox, "NOTIF_RESERVA_CONFIRMADA"),
     "ReservaCanceladaEvent": (EventoReservaOutbox, "NOTIF_RESERVA_CANCELADA"),
 }
+
+
+# El esquema no persiste cuentas ni CCI del condominio: se remite a la administración
+# en lugar de mostrar un dato bancario inventado.
+MEDIOS_PAGO = "Consulte los medios de pago vigentes con la administración del condominio."
+NORMAS_USO = "Consulte las normas de uso vigentes del área común con la administración."
 
 
 async def consumir(session_factory, payload):
@@ -92,7 +99,7 @@ async def consumir(session_factory, payload):
                             "periodo": c.periodo,
                             "monto": f"{c.monto_total_exigible:.2f}",
                             "vencimiento": c.fecha_vencimiento.isoformat(),
-                            "cci_banco": "Consulta los medios de pago con la administración.",
+                            "medios_pago": MEDIOS_PAGO,
                         },
                     )
                     for c in cuotas
@@ -106,26 +113,27 @@ async def consumir(session_factory, payload):
                     # El mensaje usa la instantánea de la revisión, no el saldo actual.
                     resultado = data if canonico else data.get("resultado", {})
                     contexto.update(
-                        monto_abonado=resultado.get(
-                            "monto_imputado", data.get("monto", f"{comprobante.monto:.2f}")
-                        ),
-                        saldo_restante=resultado.get("nuevo_saldo_departamento", "No disponible"),
+                        monto=data.get("monto", f"{comprobante.monto:.2f}"),
+                        monto_abonado=resultado.get("monto_imputado"),
+                        saldo_restante=resultado.get("nuevo_saldo_departamento"),
                         motivo_rechazo=data.get("motivo_rechazo" if canonico else "motivo"),
                         banco=comprobante.banco_origen,
                         numero_operacion=comprobante.numero_operacion,
-                        recibo_url=f"/residente?dpto={did}",
-                        enlace_subir_nuevo=f"/residente?dpto={did}",
                     )
                 else:
                     reserva = await db.get(Reserva, operacion)
                     contexto.update(
-                        area=data.get("area_nombre", reserva.area_nombre),
+                        area=data.get("area_nombre") or reserva.area_nombre,
                         fecha=data["fecha_reserva"],
                         horario=f"{data['hora_inicio']}–{data['hora_fin']} ({data['zona_horaria']})",
-                        normas_convivencia="Consulta las condiciones publicadas del área.",
-                        costo=data.get("costo_reserva", "No aplica"),
                     )
-                    if tipo == "ReservaCanceladaEvent":
+                    # La cancelación v1 no publica tarifa; solo la confirmación la comunica.
+                    if tipo == "ReservaConfirmadaEvent":
+                        contexto.update(
+                            normas_convivencia=data.get("normas_uso") or NORMAS_USO,
+                            costo=data["costo_reserva"],
+                        )
+                    else:
                         contexto["motivo"] = data["motivo"]
                         contexto["ajuste"] = data["ajuste_economico"]["estado"]
                 operaciones = [(operacion, did, contexto)]
@@ -152,8 +160,13 @@ async def consumir(session_factory, payload):
                     )
                     total += 1
             return total
-    except (ValueError, KeyError, TypeError, AttributeError):
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
         # No guardar payloads: podrían contener contactos o información sensible.
+        motivo = (
+            "DATOS_PLANTILLA_INCOMPLETOS"
+            if isinstance(exc, PlantillaIncompletaError)
+            else "EVENTO_INVALIDO_O_VERSION_NO_SOPORTADA"
+        )
         clave = hashlib.sha256(
             json.dumps(payload, sort_keys=True, default=str).encode()
         ).hexdigest()
@@ -162,7 +175,7 @@ async def consumir(session_factory, payload):
                 insert(IncidenciaEvento)
                 .values(
                     clave=clave,
-                    motivo="EVENTO_INVALIDO_O_VERSION_NO_SOPORTADA",
+                    motivo=motivo,
                     creado_en=datetime.now(UTC),
                 )
                 .on_conflict_do_nothing()
