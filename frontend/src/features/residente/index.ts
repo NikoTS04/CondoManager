@@ -5,3 +5,4 @@ export { ReportarPagoForm, type ReportarPagoFormProps } from "./ReportarPagoForm
 export { ComprobantesList, type ComprobantesListProps } from "./ComprobantesList";
 export { ReservarAreaForm, type ReservarAreaFormProps } from "./ReservarAreaForm";
 export { MisReservasList, type MisReservasListProps } from "./MisReservasList";
+export { MisComunicacionesList, type MisComunicacionesListProps } from "./MisComunicacionesList";

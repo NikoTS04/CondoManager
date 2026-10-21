@@ -142,56 +142,64 @@ def test_api_reservas_flujo_completo(monkeypatch, autorizacion_aislada):
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
 def test_api_notificaciones_endpoints():
-    from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
+    from src.core.security import create_access_token
+    from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
 
-    client = TestClient(app, headers=auth())
-    depto_id = vinculo_piloto("105", "PROPIETARIO_TITULAR")["departamento_id"]
-    # 1. Despacho individual
-    payload_despacho = {
-        "condominio_id": str(CONDOMINIO_PILOTO_ID),
-        "departamento_id": depto_id,
-        "tipo_evento": "NOTIF_PAGO_CONCILIADO",
-        "canal": "EMAIL",
-        "destinatario": "residente105@gmail.com",
-        "contexto": {
-            "nombre": "María Flores",
-            "dpto": "105",
-            "monto_abonado": "150.00",
-            "saldo_restante": "0.00",
+    # La bitácora, alertas, reenvíos y comunicados usan ahora PostgreSQL real
+    # (verificado en test_notificaciones_api_db.py). Aquí se comprueban las guardias HTTP.
+    assert client.get("/api/v1/notificaciones/logs").status_code == 401
+    assert client.get("/api/v1/notificaciones/mis-notificaciones").status_code == 401
+    assert client.get("/api/v1/notificaciones/alertas").status_code == 401
+
+    headers_auditor = {
+        "Authorization": "Bearer "
+        + create_access_token(
+            {
+                "sub": str(uuid.uuid4()),
+                "rol": "AUDITOR",
+                "condominio_id": str(CONDOMINIO_PILOTO_ID),
+            }
+        )
+    }
+    res_masivo = client.post(
+        "/api/v1/notificaciones/comunicado-masivo",
+        headers=headers_auditor,
+        json={
+            "condominio_id": str(CONDOMINIO_PILOTO_ID),
+            "titulo": "Asamblea General de Propietarios",
+            "mensaje": "Se convoca a la asamblea anual ordinaria para el próximo mes.",
+            "canal": "EMAIL",
+            "remitente": "Junta Directiva",
         },
-    }
-    res_despacho = client.post("/api/v1/notificaciones/despachar", json=payload_despacho)
-    assert res_despacho.status_code == 201
-    log_id = res_despacho.json()["id"]
-
-    # 2. Consulta de logs
-    res_logs = client.get("/api/v1/notificaciones/logs", params={"departamento_id": depto_id})
-    assert res_logs.status_code == 200
-    logs = res_logs.json()
-    assert len(logs) >= 1
-    assert logs[0]["id"] == log_id
-
-    # 3. Reenvío manual
-    res_reenviar = client.post(
-        f"/api/v1/notificaciones/reenviar/{log_id}",
-        json={"nuevo_destinatario": "nuevo_residente105@gmail.com"},
     )
-    assert res_reenviar.status_code == 200
-    assert res_reenviar.json()["destinatario"] == "nuevo_residente105@gmail.com"
+    assert res_masivo.status_code == 403
+    assert (
+        client.post(
+            f"/api/v1/notificaciones/reenviar/{uuid.uuid4()}",
+            headers=headers_auditor,
+        ).status_code
+        == 403
+    )
 
-    # 4. Comunicado masivo
-    payload_masivo = {
-        "condominio_id": str(CONDOMINIO_PILOTO_ID),
-        "titulo": "Asamblea General de Propietarios",
-        "mensaje": "Se convoca a la asamblea anual ordinaria para el próximo mes.",
-        "canal": "EMAIL",
-        "remitente": "Junta Directiva",
+    headers_residente = {
+        "Authorization": "Bearer "
+        + create_access_token(
+            {
+                "sub": str(uuid.uuid4()),
+                "rol": "RESIDENTE",
+                "condominio_id": str(CONDOMINIO_PILOTO_ID),
+            }
+        )
     }
-    res_masivo = client.post("/api/v1/notificaciones/comunicado-masivo", json=payload_masivo)
-    assert res_masivo.status_code == 202
-    data_masivo = res_masivo.json()
-    assert data_masivo["total_destinatarios"] == 139
-    assert data_masivo["notificaciones_generadas"] == 139
+    assert client.get("/api/v1/notificaciones/logs", headers=headers_residente).status_code == 403
+    assert (
+        client.get(
+            "/api/v1/notificaciones/logs",
+            headers=auth(),
+            params={"condominio_id": str(uuid.uuid4())},
+        ).status_code
+        == 403
+    )
 
 
 @pytest.mark.postgres

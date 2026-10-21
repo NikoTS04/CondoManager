@@ -95,17 +95,92 @@ export interface ComprobantePago {
   motivo_rechazo?: string;
 }
 
+export type EstadoNotificacion =
+  | "EN_COLA"
+  | "REINTENTANDO"
+  | "ACEPTADO"
+  | "ENTREGADO"
+  | "FALLIDO_PERMANENTE";
+
+export type CanalNotificacion = "EMAIL" | "WHATSAPP";
+
+export type OrigenNotificacion =
+  | "CUOTA"
+  | "COMPROBANTE"
+  | "RESERVA"
+  | "COMUNICADO"
+  | "USUARIO";
+
 export interface NotificacionLog {
   id: string;
-  departamento_id?: string;
+  condominio_id?: string;
+  departamento_id?: string | null;
+  usuario_id?: string | null;
+  evento_id?: string | null;
+  plantilla?: string | null;
+  origen_tipo?: OrigenNotificacion | string | null;
+  origen_id?: string | null;
   tipo_evento: string;
-  canal: string;
+  canal: CanalNotificacion | string;
   destinatario: string;
-  asunto?: string;
+  asunto?: string | null;
   cuerpo?: string;
-  estado: "ENTREGADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
+  estado: EstadoNotificacion;
   intentos: number;
-  fecha_creacion: string;
+  ciclo?: number;
+  max_intentos?: number;
+  transporte?: string | null;
+  transporte_simulado?: boolean | null;
+  proveedor_message_id?: string | null;
+  error_codigo?: string | null;
+  error_mensaje?: string | null;
+  proximo_intento_en?: string | null;
+  aceptado_en?: string | null;
+  entregado_en?: string | null;
+  creado_en: string;
+  actualizado_en?: string;
+}
+
+export interface NotificacionIntento {
+  id: string;
+  notificacion_id: string;
+  ciclo: number;
+  numero: number;
+  worker_id: string;
+  transporte: string;
+  transporte_simulado: boolean;
+  resultado: "ACEPTADO" | "FALLO_TEMPORAL" | "FALLO_DEFINITIVO" | string;
+  codigo?: string | null;
+  detalle?: string | null;
+  proveedor_message_id?: string | null;
+  iniciado_en: string;
+  finalizado_en: string;
+}
+
+export interface NotificacionDetalle extends NotificacionLog {
+  historial_intentos: NotificacionIntento[];
+}
+
+export interface AlertaAdministrativa {
+  id: string;
+  condominio_id: string;
+  notificacion_id?: string | null;
+  tipo: string;
+  severidad: "BAJA" | "MEDIA" | "ALTA" | string;
+  mensaje: string;
+  atendida_por?: string | null;
+  atendida_en?: string | null;
+  creado_en: string;
+}
+
+export interface FiltrosNotificaciones {
+  departamento_id?: string | null;
+  estado?: EstadoNotificacion | string | null;
+  canal?: CanalNotificacion | string | null;
+  origen_tipo?: OrigenNotificacion | string | null;
+  tipo_evento?: string | null;
+  limit?: number;
+  offset?: number;
 }
 
 export type Moneda = "PEN" | "USD";
@@ -672,23 +747,130 @@ export async function emitirLoteCuotas(periodo: string, condominioId: string): P
   }
 }
 
-export function fetchNotificaciones(condominioId?: string | null): Promise<NotificacionLog[]> {
-  return recursoRequest(`/notificaciones/logs${contextoQuery(condominioId)}`);
+export function fetchNotificaciones(
+  condominioId?: string | null,
+  filtros?: FiltrosNotificaciones
+): Promise<NotificacionLog[]> {
+  const params = new URLSearchParams();
+  if (condominioId) params.set("condominio_id", condominioId);
+  if (filtros?.departamento_id) params.set("departamento_id", filtros.departamento_id);
+  if (filtros?.estado) params.set("estado", filtros.estado);
+  if (filtros?.canal) params.set("canal", filtros.canal);
+  if (filtros?.origen_tipo) params.set("origen_tipo", filtros.origen_tipo);
+  if (filtros?.tipo_evento) params.set("tipo_evento", filtros.tipo_evento);
+  if (typeof filtros?.limit === "number") params.set("limit", String(filtros.limit));
+  if (typeof filtros?.offset === "number") params.set("offset", String(filtros.offset));
+  const query = params.toString();
+  return recursoRequest(`/notificaciones/logs${query ? `?${query}` : ""}`);
 }
 
-export async function enviarComunicadoMasivo(titulo: string, mensaje: string, condominioId: string): Promise<{ ok: boolean; generadas?: number }> {
+export function fetchNotificacionDetalle(notificacionId: string): Promise<NotificacionDetalle> {
+  return recursoRequest(`/notificaciones/logs/${encodeURIComponent(notificacionId)}`);
+}
+
+export function fetchMisNotificaciones(
+  departamentoId?: string | null,
+  limit?: number,
+  offset?: number
+): Promise<NotificacionLog[]> {
+  const params = new URLSearchParams();
+  if (departamentoId) params.set("departamento_id", departamentoId);
+  if (typeof limit === "number") params.set("limit", String(limit));
+  if (typeof offset === "number") params.set("offset", String(offset));
+  const query = params.toString();
+  return recursoRequest(`/notificaciones/mis-notificaciones${query ? `?${query}` : ""}`);
+}
+
+export function fetchAlertasNotificaciones(
+  condominioId?: string | null,
+  soloAbiertas = true
+): Promise<AlertaAdministrativa[]> {
+  const params = new URLSearchParams();
+  if (condominioId) params.set("condominio_id", condominioId);
+  params.set("solo_abiertas", String(soloAbiertas));
+  const query = params.toString();
+  return recursoRequest(`/notificaciones/alertas${query ? `?${query}` : ""}`);
+}
+
+export async function atenderAlertaNotificacion(
+  alertaId: string
+): Promise<{ ok: boolean; data?: AlertaAdministrativa; error?: string }> {
   try {
-    const data = await recursoRequest<{ notificaciones_generadas: number }>("/notificaciones/comunicado-masivo", {
+    const data = await recursoRequest<AlertaAdministrativa>(
+      `/notificaciones/alertas/${encodeURIComponent(alertaId)}/atender`,
+      { method: "POST" }
+    );
+    return { ok: true, data };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo atender la alerta.",
+    };
+  }
+}
+
+export async function reenviarNotificacion(
+  notificacionId: string,
+  nuevoDestinatario?: string | null
+): Promise<{ ok: boolean; data?: NotificacionLog; error?: string }> {
+  try {
+    const body =
+      nuevoDestinatario && nuevoDestinatario.trim()
+        ? JSON.stringify({ nuevo_destinatario: nuevoDestinatario.trim() })
+        : JSON.stringify({});
+    const data = await recursoRequest<NotificacionLog>(
+      `/notificaciones/reenviar/${encodeURIComponent(notificacionId)}`,
+      {
+        method: "POST",
+        body,
+      }
+    );
+    return { ok: true, data };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo reprogramar la notificación.",
+    };
+  }
+}
+
+export async function enviarComunicadoMasivo(
+  titulo: string,
+  mensaje: string,
+  condominioId: string,
+  opciones?: {
+    canal?: CanalNotificacion;
+    id?: string;
+    comunicado_id?: string;
+    departamento_id?: string;
+  }
+): Promise<{ ok: boolean; generadas?: number; comunicado_id?: string; error?: string }> {
+  try {
+    const payload: Record<string, unknown> = {
+      condominio_id: condominioId,
+      titulo,
+      mensaje,
+      canal: opciones?.canal ?? "EMAIL",
+    };
+    if (opciones?.id) payload.id = opciones.id;
+    if (opciones?.comunicado_id) payload.comunicado_id = opciones.comunicado_id;
+    if (opciones?.departamento_id) payload.departamento_id = opciones.departamento_id;
+    const data = await recursoRequest<{
+      notificaciones_generadas: number;
+      comunicado_id?: string;
+    }>("/notificaciones/comunicado-masivo", {
       method: "POST",
-      body: JSON.stringify({
-        condominio_id: condominioId,
-        titulo,
-        mensaje,
-        canal: "EMAIL",
-      }),
+      body: JSON.stringify(payload),
     });
-    return { ok: true, generadas: data.notificaciones_generadas };
-  } catch {
-    return { ok: false };
+    return {
+      ok: true,
+      generadas: data.notificaciones_generadas,
+      comunicado_id: data.comunicado_id,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo enviar el comunicado.",
+    };
   }
 }

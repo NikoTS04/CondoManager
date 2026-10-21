@@ -359,9 +359,52 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
     }
     ```
 
-### 2.6 Módulo de Notificaciones (Alejandro)
-- **`POST /api/v1/notificaciones/despachar`**
-  - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
+### 2.6 Módulo de Notificaciones (Alejandro — CON-32, CON-34, CON-36, CON-37)
+
+Todos los endpoints del módulo operan sobre PostgreSQL (`notificaciones`, `notificacion_intentos`, `alertas_administrativas`) y exigen `Authorization: Bearer <token>`. El rol `AUDITOR` tiene acceso exclusivamente de lectura (`403 ACCESO_DENEGADO` en escrituras).
+
+- **`GET /api/v1/notificaciones/logs`**
+  - *Roles autorizados:* `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`.
+  - *Descripción:* Consulta paginada y filtrada de la bitácora de notificaciones dentro del condominio resuelto por `contexto_consulta`.
+  - *Query Params opcionales:* `condominio_id` (UUID), `departamento_id` (UUID), `estado` (`EN_COLA`, `REINTENTANDO`, `ACEPTADO`, `ENTREGADO`, `FALLIDO_PERMANENTE`), `canal` (`EMAIL`, `WHATSAPP`, `SMS`, `PUSH`), `origen_tipo` (`CUOTA`, `COMPROBANTE`, `RESERVA`, `COMUNICADO`, `USUARIO`), `tipo_evento`, `tipo`, `limit` (`1..200`, default `50`), `offset` (`>=0`, default `0`).
+  - *Response (200 OK):* Lista de `NotificacionLogDTO` incluyendo `estado`, `intentos`, `ciclo` (`>=1`), `proximo_intento_en`, `transporte`, `transporte_simulado`, `error_codigo`, `error_mensaje` (sanitizado sin secretos), `aceptado_en`, `entregado_en`, `creado_en` y `actualizado_en`.
+
+- **`GET /api/v1/notificaciones/logs/{log_id}`**
+  - *Roles autorizados:* `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`.
+  - *Descripción:* Devuelve el detalle completo de una notificación del condominio autorizado junto con su `historial_intentos` ordenado por `(ciclo, numero)` (`ciclo >= 1`, `numero 1..4`).
+  - *Response (200 OK):* `NotificacionDetalleDTO`. `404 NOTIFICACION_NO_HALLADA` si no existe; `403 ACCESO_DENEGADO` si pertenece a otro condominio.
+
+- **`GET /api/v1/notificaciones/mis-notificaciones`**
+  - *Roles autorizados:* `RESIDENTE`.
+  - *Descripción:* Devuelve exclusivamente las notificaciones dirigidas al usuario autenticado (`usuario_id == sub`) y asociadas a departamentos donde mantiene un vínculo activo (`usuario_departamentos.es_activo IS TRUE`). Nunca expone comunicaciones de otros residentes ni de vínculos inactivos.
+  - *Query Params opcionales:* `condominio_id` (UUID), `departamento_id` (UUID de unidad vinculada activa; `403` si es ajena o inactiva), `estado`, `canal`, `limit`, `offset`.
+
+- **`GET /api/v1/notificaciones/alertas`**
+  - *Roles autorizados:* `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`.
+  - *Descripción:* Lista las alertas administrativas del condominio (por defecto `solo_abiertas=true`, donde `atendida_en IS NULL`).
+
+- **`POST /api/v1/notificaciones/alertas/{alerta_id}/atender`**
+  - *Roles autorizados:* `SUPERADMIN`, `ADMIN_JUNTA` (`AUDITOR` recibe `403`).
+  - *Descripción:* Marca una alerta administrativa como atendida registrando `atendida_en` (UTC) y `atendida_por`.
+
+- **`POST /api/v1/notificaciones/reenviar/{log_id}`**
+  - *Roles autorizados:* `SUPERADMIN`, `ADMIN_JUNTA` (`AUDITOR` recibe `403`).
+  - *Descripción:* Reprograma manualmente una notificación en estado `FALLIDO_PERMANENTE` delegando en `entrega.reprogramar_manual` (incrementa `ciclo += 1`, reinicia `intentos=0`, conserva en `notificacion_intentos` los intentos de ciclos anteriores, pasa a `EN_COLA`, actualiza opcionalmente `nuevo_destinatario` y atiende la alerta abierta).
+  - *Respuestas:* `200 OK` con `NotificacionLogDTO` en `EN_COLA` y nuevo `ciclo`; `409 REENVIO_NO_PERMITIDO` si la notificación no está en `FALLIDO_PERMANENTE`; `422 DESTINATARIO_INVALIDO` si el nuevo contacto es inválido.
+
+- **`POST /api/v1/notificaciones/comunicado-masivo`**
+  - *Roles autorizados:* `SUPERADMIN`, `ADMIN_JUNTA` (`AUDITOR` recibe `403`).
+  - *Descripción:* Persiste en `EN_COLA` vía `registrar_notificacion` un comunicado general (`origen_tipo="COMUNICADO"`, clave `COMUNICADO:{id}:{canal}:{usuario_id}`) para cada usuario activo con vínculo activo en el condominio. Es idempotente por `comunicado_id` / `id`. El despacho físico lo realiza el worker.
+  - *Response (202 Accepted):*
+    ```json
+    {
+      "comunicado_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "total_destinatarios": 4,
+      "notificaciones_generadas": 4,
+      "estado_general": "EN_COLA"
+    }
+    ```
 
 ### 2.7 Módulo de Autenticación y RBAC (PROC-05)
 

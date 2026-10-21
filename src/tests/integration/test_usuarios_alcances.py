@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 from src.core.security import create_access_token, decode_access_token
 from src.main import app
-from src.modules.notificaciones import router as notificaciones
 from src.modules.pagos import router as pagos
 from src.modules.reservas import router as reservas
 from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
@@ -53,7 +52,6 @@ def solicitud_pago(numero="102"):
 def aislar_recursos(monkeypatch):
     monkeypatch.setattr(reservas, "RESERVAS_REGISTRADAS", {})
     monkeypatch.setattr(pagos, "COMPROBANTES_REGISTRADOS", {})
-    monkeypatch.setattr(notificaciones, "NOTIFICACIONES_REGISTRADAS", {})
 
 
 def test_login_me_y_demo_comparten_perfil_y_nombres_completos():
@@ -156,7 +154,6 @@ def test_roles_no_administrativos_no_mutan_recursos(rol):
         assert client.post("/api/v1" + ruta, headers=headers, json=body).status_code == 403
     if rol == "AUDITOR":
         assert client.get("/api/v1/pagos/comprobantes", headers=headers).status_code == 200
-        assert client.get("/api/v1/notificaciones/logs", headers=headers).status_code == 200
         assert client.post("/api/v1/pagos/reportar", headers=headers, json=solicitud_pago()).status_code == 403
         assert client.post("/api/v1/reservas", headers=headers, json=solicitud_reserva()).status_code == 403
 

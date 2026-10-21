@@ -363,42 +363,179 @@ paths:
   /notificaciones/logs:
     get:
       operationId: listarNotificaciones
-      summary: Bitácora del contexto para administración y auditoría
+      summary: Bitácora persistente del contexto para administración y auditoría
       parameters:
         - $ref: '#/components/parameters/ContextoConsulta'
         - { name: departamento_id, in: query, schema: { type: string, format: uuid } }
-        - { name: estado, in: query, schema: { type: string, enum: [EN_COLA, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE] } }
+        - { name: estado, in: query, schema: { type: string, enum: [EN_COLA, REINTENTANDO, ACEPTADO, ENTREGADO, FALLIDO_PERMANENTE] } }
         - { name: canal, in: query, schema: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] } }
+        - { name: origen_tipo, in: query, schema: { type: string, enum: [CUOTA, COMPROBANTE, RESERVA, COMUNICADO, USUARIO] } }
+        - { name: tipo_evento, in: query, schema: { type: string } }
+        - { name: tipo, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
-        '200': { description: Notificaciones exclusivamente del contexto autorizado }
+        '200':
+          description: Notificaciones persistidas exclusivamente del contexto autorizado
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, condominio_id, tipo_evento, canal, destinatario, cuerpo, estado, intentos, ciclo, creado_en]
+                  properties:
+                    id: { type: string, format: uuid }
+                    condominio_id: { type: string, format: uuid }
+                    departamento_id: { type: [string, 'null'], format: uuid }
+                    usuario_id: { type: [string, 'null'], format: uuid }
+                    evento_id: { type: [string, 'null'], format: uuid }
+                    tipo_evento: { type: string }
+                    plantilla: { type: [string, 'null'] }
+                    origen_tipo: { type: [string, 'null'], enum: [CUOTA, COMPROBANTE, RESERVA, COMUNICADO, USUARIO, null] }
+                    origen_id: { type: [string, 'null'], format: uuid }
+                    canal: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] }
+                    destinatario: { type: string }
+                    asunto: { type: [string, 'null'] }
+                    cuerpo: { type: string }
+                    estado: { type: string, enum: [EN_COLA, REINTENTANDO, ACEPTADO, ENTREGADO, FALLIDO_PERMANENTE] }
+                    intentos: { type: integer, minimum: 0, maximum: 4 }
+                    ciclo: { type: integer, minimum: 1 }
+                    proximo_intento_en: { type: [string, 'null'], format: date-time }
+                    transporte: { type: [string, 'null'] }
+                    transporte_simulado: { type: [boolean, 'null'] }
+                    proveedor_message_id: { type: [string, 'null'] }
+                    error_codigo: { type: [string, 'null'] }
+                    error_mensaje: { type: [string, 'null'] }
+                    aceptado_en: { type: [string, 'null'], format: date-time }
+                    entregado_en: { type: [string, 'null'], format: date-time }
+                    creado_en: { type: string, format: date-time }
+                    actualizado_en: { type: string, format: date-time }
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
-  /notificaciones/despachar:
+  /notificaciones/logs/{log_id}:
+    get:
+      operationId: obtenerNotificacionDetalle
+      summary: Detalle de notificación con historial de intentos de envío ordenados por ciclo y número
+      parameters:
+        - { name: log_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Detalle de la notificación e historial de intentos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, condominio_id, tipo_evento, canal, destinatario, cuerpo, estado, intentos, ciclo, creado_en, historial_intentos]
+                properties:
+                  id: { type: string, format: uuid }
+                  condominio_id: { type: string, format: uuid }
+                  departamento_id: { type: [string, 'null'], format: uuid }
+                  usuario_id: { type: [string, 'null'], format: uuid }
+                  tipo_evento: { type: string }
+                  plantilla: { type: [string, 'null'] }
+                  origen_tipo: { type: [string, 'null'] }
+                  origen_id: { type: [string, 'null'], format: uuid }
+                  canal: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] }
+                  destinatario: { type: string }
+                  asunto: { type: [string, 'null'] }
+                  cuerpo: { type: string }
+                  estado: { type: string, enum: [EN_COLA, REINTENTANDO, ACEPTADO, ENTREGADO, FALLIDO_PERMANENTE] }
+                  intentos: { type: integer, minimum: 0, maximum: 4 }
+                  ciclo: { type: integer, minimum: 1 }
+                  proximo_intento_en: { type: [string, 'null'], format: date-time }
+                  transporte: { type: [string, 'null'] }
+                  transporte_simulado: { type: [boolean, 'null'] }
+                  proveedor_message_id: { type: [string, 'null'] }
+                  error_codigo: { type: [string, 'null'] }
+                  error_mensaje: { type: [string, 'null'] }
+                  aceptado_en: { type: [string, 'null'], format: date-time }
+                  entregado_en: { type: [string, 'null'], format: date-time }
+                  creado_en: { type: string, format: date-time }
+                  actualizado_en: { type: string, format: date-time }
+                  historial_intentos:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, notificacion_id, ciclo, numero, worker_id, transporte, transporte_simulado, resultado, iniciado_en, finalizado_en]
+                      properties:
+                        id: { type: string, format: uuid }
+                        notificacion_id: { type: string, format: uuid }
+                        ciclo: { type: integer, minimum: 1 }
+                        numero: { type: integer, minimum: 1, maximum: 4 }
+                        worker_id: { type: string }
+                        transporte: { type: string }
+                        transporte_simulado: { type: boolean }
+                        resultado: { type: string, enum: [ACEPTADO, FALLO_TEMPORAL, FALLO_DEFINITIVO] }
+                        codigo: { type: [string, 'null'] }
+                        detalle: { type: [string, 'null'] }
+                        proveedor_message_id: { type: [string, 'null'] }
+                        iniciado_en: { type: string, format: date-time }
+                        finalizado_en: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Notificación no encontrada }
+  /notificaciones/mis-notificaciones:
+    get:
+      operationId: listarMisNotificaciones
+      summary: Comunicaciones propias del residente autenticado en unidades con vínculo activo
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+        - { name: departamento_id, in: query, schema: { type: string, format: uuid } }
+        - { name: estado, in: query, schema: { type: string, enum: [EN_COLA, REINTENTANDO, ACEPTADO, ENTREGADO, FALLIDO_PERMANENTE] } }
+        - { name: canal, in: query, schema: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Comunicaciones propias del residente; nunca de otros residentes ni vínculos inactivos }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /notificaciones/alertas:
+    get:
+      operationId: listarAlertasNotificaciones
+      summary: Listar alertas administrativas abiertas por fallos definitivos de entrega
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+        - { name: solo_abiertas, in: query, schema: { type: boolean, default: true } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Alertas administrativas del contexto autorizado
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, condominio_id, notificacion_id, tipo, severidad, mensaje, creado_en]
+                  properties:
+                    id: { type: string, format: uuid }
+                    condominio_id: { type: string, format: uuid }
+                    notificacion_id: { type: string, format: uuid }
+                    tipo: { type: string }
+                    severidad: { type: string, enum: [BAJA, MEDIA, ALTA] }
+                    mensaje: { type: string }
+                    creado_en: { type: string, format: date-time }
+                    atendida_en: { type: [string, 'null'], format: date-time }
+                    atendida_por: { type: [string, 'null'], format: uuid }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /notificaciones/alertas/{alerta_id}/atender:
     post:
-      operationId: despacharNotificacion
-      summary: Despacho manual exclusivo de administración del contexto
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [condominio_id, departamento_id, tipo_evento, destinatario, contexto]
-              properties:
-                condominio_id: { type: string, format: uuid }
-                departamento_id: { type: string, format: uuid }
-                tipo_evento: { type: string }
-                destinatario: { type: string }
-                canal: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] }
-                contexto: { type: object }
+      operationId: atenderAlertaNotificacion
+      summary: Marcar alerta administrativa como atendida (solo administración con escritura)
+      parameters:
+        - { name: alerta_id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
-        '201': { description: Notificación despachada }
+        '200': { description: Alerta marcada como atendida }
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Alerta no encontrada }
   /notificaciones/reenviar/{log_id}:
     post:
       operationId: reenviarNotificacion
-      summary: Reenvío manual exclusivo de administración del recurso
+      summary: Reprogramación manual exclusiva para notificaciones en FALLIDO_PERMANENTE
       parameters:
         - { name: log_id, in: path, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -409,13 +546,16 @@ paths:
               properties:
                 nuevo_destinatario: { type: [string, 'null'] }
       responses:
-        '200': { description: Notificación reenviada }
+        '200': { description: Notificación reprogramada en estado EN_COLA }
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Notificación no encontrada }
+        '409': { description: REENVIO_NO_PERMITIDO si el estado no es FALLIDO_PERMANENTE }
+        '422': { description: DESTINATARIO_INVALIDO }
   /notificaciones/comunicado-masivo:
     post:
       operationId: enviarComunicadoMasivo
-      summary: Comunicado a unidades activas del contexto autorizado
+      summary: Encolar comunicado persistente a residentes con vínculo activo del condominio
       requestBody:
         required: true
         content:
@@ -424,15 +564,30 @@ paths:
               type: object
               required: [condominio_id, titulo, mensaje]
               properties:
+                id: { type: [string, 'null'], format: uuid }
+                comunicado_id: { type: [string, 'null'], format: uuid }
                 condominio_id: { type: string, format: uuid }
                 titulo: { type: string, minLength: 5, maxLength: 150 }
                 mensaje: { type: string, minLength: 10 }
                 canal: { type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH] }
                 remitente: { type: string }
       responses:
-        '202': { description: Comunicado generado en el catálogo piloto }
+        '202':
+          description: Comunicado registrado en cola para despacho por worker
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [condominio_id, total_destinatarios, notificaciones_generadas, estado_general]
+                properties:
+                  comunicado_id: { type: [string, 'null'], format: uuid }
+                  condominio_id: { type: string, format: uuid }
+                  total_destinatarios: { type: integer }
+                  notificaciones_generadas: { type: integer }
+                  estado_general: { type: string, enum: [EN_COLA] }
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio no encontrado }
   /condominios/{condominio_id}/edificios:
     parameters:
       - $ref: '#/components/parameters/ContextoEstructura'

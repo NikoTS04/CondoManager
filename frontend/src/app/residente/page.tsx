@@ -10,10 +10,12 @@ import {
   type Departamento,
   type Reserva,
   type ComprobantePago,
+  type NotificacionLog,
   fetchAreasComunes,
   fetchDepartamentos,
   fetchReservas,
   fetchComprobantes,
+  fetchMisNotificaciones,
 } from "@/lib/api";
 import { SolvenciaBanner } from "@/components/domain/SolvenciaBanner";
 import { Spinner } from "@/components/ui/Feedback";
@@ -28,6 +30,7 @@ import {
   ComprobantesList,
   ReservarAreaForm,
   MisReservasList,
+  MisComunicacionesList,
 } from "@/features/residente";
 
 function ResidenteContent() {
@@ -48,17 +51,20 @@ function ResidenteContent() {
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
+  const [comunicaciones, setComunicaciones] = useState<NotificacionLog[]>([]);
 
   // Estados de carga y error por recurso independiente
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingReservas, setLoadingReservas] = useState(false);
   const [loadingComprobantes, setLoadingComprobantes] = useState(false);
   const [loadingAreas, setLoadingAreas] = useState(false);
+  const [loadingComunicaciones, setLoadingComunicaciones] = useState(false);
 
   const [errorDeptos, setErrorDeptos] = useState<string | null>(null);
   const [errorAreas, setErrorAreas] = useState<string | null>(null);
   const [errorReservas, setErrorReservas] = useState<string | null>(null);
   const [errorComprobantes, setErrorComprobantes] = useState<string | null>(null);
+  const [errorComunicaciones, setErrorComunicaciones] = useState<string | null>(null);
 
   const loadData = useCallback(async (isCancelled?: () => boolean) => {
     setLoadingInitial(true);
@@ -66,21 +72,24 @@ function ResidenteContent() {
     setErrorAreas(null);
     setErrorReservas(null);
     setErrorComprobantes(null);
+    setErrorComunicaciones(null);
     setDepartamentos([]);
     setAreas([]);
     setReservas([]);
     setComprobantes([]);
+    setComunicaciones([]);
     if (!contextoId) {
       setErrorDeptos("Selecciona primero un condominio en el portal de Junta.");
       setLoadingInitial(false);
       return;
     }
 
-    const [deptosRes, areasRes, reservasRes, compsRes] = await Promise.allSettled([
+    const [deptosRes, areasRes, reservasRes, compsRes, comsRes] = await Promise.allSettled([
       fetchDepartamentos(contextoId),
       fetchAreasComunes(contextoId),
       fetchReservas(undefined, undefined, contextoId),
       fetchComprobantes(contextoId),
+      fetchMisNotificaciones(),
     ]);
 
     if (isCancelled && isCancelled()) return;
@@ -107,6 +116,12 @@ function ResidenteContent() {
       setComprobantes(compsRes.value);
     } else {
       setErrorComprobantes("No pudimos cargar los comprobantes.");
+    }
+
+    if (comsRes.status === "fulfilled") {
+      setComunicaciones(comsRes.value);
+    } else {
+      setErrorComunicaciones("No pudimos cargar tus comunicaciones.");
     }
 
     setLoadingInitial(false);
@@ -150,6 +165,19 @@ function ResidenteContent() {
       setLoadingAreas(false);
     }
   }, [contextoId]);
+
+  const reloadComunicaciones = useCallback(async () => {
+    setLoadingComunicaciones(true);
+    setErrorComunicaciones(null);
+    try {
+      const data = await fetchMisNotificaciones();
+      setComunicaciones(data);
+    } catch {
+      setErrorComunicaciones("No pudimos actualizar tus comunicaciones.");
+    } finally {
+      setLoadingComunicaciones(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,6 +332,16 @@ function ResidenteContent() {
             </Alert>
           )}
         </>
+      )}
+
+      {activeTab === "comunicaciones" && (
+        <MisComunicacionesList
+          notificaciones={comunicaciones}
+          departamentoId={departamentoId}
+          loading={loadingInitial || loadingComunicaciones}
+          error={errorComunicaciones}
+          onRetry={reloadComunicaciones}
+        />
       )}
     </div>
   );

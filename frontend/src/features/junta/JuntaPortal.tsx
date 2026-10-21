@@ -32,6 +32,7 @@ import {
   departamentoParaPortal,
   fetchNotificaciones,
   listarCondominios,
+  type CanalNotificacion,
   type ComprobantePago,
   type DepartamentoRegistrado,
   type NotificacionLog,
@@ -61,6 +62,7 @@ export default function JuntaPortal() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [titulo, setTitulo] = useState("");
   const [mensaje, setMensaje] = useState("");
+  const [canalComunicado, setCanalComunicado] = useState<CanalNotificacion>("EMAIL");
   const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const [motivo, setMotivo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -217,7 +219,9 @@ export default function JuntaPortal() {
           setFeedback(resultado.error || "No se pudo procesar el comprobante.");
         }
       } else if (confirmacion.kind === "comunicado" && condominioActivoId) {
-        const resultado = await enviarComunicadoMasivo(titulo, mensaje, condominioActivoId);
+        const resultado = await enviarComunicadoMasivo(titulo, mensaje, condominioActivoId, {
+          canal: canalComunicado,
+        });
         if (resultado.ok) {
           const alcance = resultado.generadas ?? 0;
           setFeedback(
@@ -229,7 +233,7 @@ export default function JuntaPortal() {
           setMensaje("");
           await loadData();
         } else {
-          setFeedback("No se pudo enviar el comunicado.");
+          setFeedback(resultado.error || "No se pudo enviar el comunicado.");
         }
       }
     } catch (error) {
@@ -401,9 +405,16 @@ export default function JuntaPortal() {
               isAuditor={isAuditor}
               titulo={titulo}
               mensaje={mensaje}
+              canal={canalComunicado}
+              condominioId={condominioActivoId}
+              departamentos={departamentos}
+              error={loadError}
               onTituloChange={setTitulo}
               onMensajeChange={setMensaje}
+              onCanalChange={setCanalComunicado}
               onSubmit={solicitarComunicado}
+              onRetry={() => void loadData()}
+              onRefresh={() => loadData()}
             />
           )}
         </div>
