@@ -1,10 +1,11 @@
 """Pruebas unitarias de deduplicación de comprobantes de pago (CON-23 / Brandon)."""
 
+import uuid
 from datetime import date
 from decimal import Decimal
-import uuid
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.exc import IntegrityError
 
 from src.modules.pagos.models import ComprobantePago

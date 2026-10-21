@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date, time
+from decimal import Decimal
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -128,7 +129,9 @@ async def listar_reservas(
             deptos_usuario = None
             if user.get("rol") == "RESIDENTE":
                 deptos_usuario = [
-                    uuid.UUID(d["id"]) for d in user.get("departamentos", []) if d.get("activo", True)
+                    uuid.UUID(d["id"])
+                    for d in user.get("departamentos", [])
+                    if d.get("activo", True)
                 ]
             reservas_db = await reservas_repository.listar_reservas(
                 condominio_id=uuid.UUID(str(cid)),

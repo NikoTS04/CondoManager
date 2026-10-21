@@ -67,6 +67,7 @@ async def crear_base(url):
     async with sessions() as session, session.begin():
         await cargar_demo(session)
         await cargar_areas_demo(session)
+    await engine.dispose()
     return BaseUsuarios(engine, sessions, esquema, url)
 
 

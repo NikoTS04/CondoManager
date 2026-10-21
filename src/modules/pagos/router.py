@@ -3,10 +3,8 @@
 Soporta CON-23 (Deduplicación - Brandon) y CON-22/70 (Persistencia, Vouchers y Auditoría - Anderson).
 """
 
-from datetime import date
-from decimal import Decimal
 from typing import Dict, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -15,12 +13,10 @@ from src.core.authorization import (
     autorizar_condominio,
     autorizar_departamento,
     contexto_consulta,
-    denegar,
     puede_ver_departamento,
 )
 from src.core.errors import APIError
 from src.core.security import get_current_user, require_role
-from src.modules.pagos.models import ComprobantePago
 from src.modules.pagos.moras_service import MotorMorasService
 from src.modules.pagos.persistencia import get_pagos_service
 from src.modules.pagos.repository import PagosRepository, get_pagos_repository

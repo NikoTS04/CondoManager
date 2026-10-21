@@ -48,6 +48,7 @@ async def preparar(base):
                 estado="EN_MORA",
             )
         )
+    await base.engine.dispose()
 
 
 @pytest.fixture

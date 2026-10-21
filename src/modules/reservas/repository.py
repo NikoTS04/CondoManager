@@ -9,7 +9,6 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.condominios.models import Departamento, Edificio
 from src.modules.reservas.areas.models import AreaComun
 from src.modules.reservas.models import Reserva
 

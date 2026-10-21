@@ -172,7 +172,9 @@ class ReservasService:
         return True
 
     @classmethod
-    def _validar_reglas_horario_y_area(cls, request: CrearReservaRequest, area: Dict[str, Any]) -> None:
+    def _validar_reglas_horario_y_area(
+        cls, request: CrearReservaRequest, area: Dict[str, Any]
+    ) -> None:
         """Valida que los horarios estén bien formados y respeten las políticas del área."""
         if any(
             h.tzinfo is not None or h.second != 0 or h.microsecond != 0

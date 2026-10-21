@@ -1,23 +1,18 @@
 """Pruebas unitarias de control de solvencia y concurrencia de reservas (CON-41 / CON-43 / Brandon)."""
 
 import asyncio
-from datetime import date, datetime, time, timedelta, timezone
-from decimal import Decimal
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from datetime import date, time
+from decimal import Decimal
+
 import pytest
 
-from src.modules.reservas.models import Reserva
 from src.modules.reservas.schemas import (
-    CancelarReservaRequest,
     CrearReservaRequest,
 )
 from src.modules.reservas.service import (
-    AreaInactivaException,
-    CancelacionInvalidaException,
     ConflictoHorarioException,
     DeudaMoraActivaException,
-    HorarioInvalidoException,
     ReservasService,
 )
 
@@ -189,7 +184,8 @@ async def test_concurrencia_diez_solicitudes_simultaneas(area_comun_fixture):
         async def buscar_solapamientos(self, area_id, fecha, hora_inicio, hora_fin, bloquear=False):
             # En base de datos real SELECT ... FOR UPDATE serializa la verificación
             return [
-                r for r in reservas_db
+                r
+                for r in reservas_db
                 if r.area_id == area_id
                 and r.fecha_reserva == fecha
                 and r.estado == "CONFIRMADA"
