@@ -1,0 +1,326 @@
+# Fragmentos referenciados desde condomanager.openapi.yaml.
+# Contrato objetivo: las HU de origen implementan rutas, persistencia y permisos.
+# CON-05/06/39 conservan sus rutas ya integradas en el documento principal.
+parameters:
+  AreaPath: {name: area_id, in: path, required: true, schema: {type: string, format: uuid}}
+  ReservaPath: {name: reserva_id, in: path, required: true, schema: {type: string, format: uuid}}
+  ComprobantePath: {name: comprobante_id, in: path, required: true, schema: {type: string, format: uuid}}
+  Contexto:
+    name: condominio_id
+    in: query
+    description: Obligatorio para SuperAdmin en contexto global; otros perfiles usan su contexto y no pueden cambiarlo arbitrariamente.
+    schema: {type: string, format: uuid}
+responses:
+  Error:
+    description: Error controlado según los códigos y permisos de la operación; formato en raíz.
+    content:
+      application/json:
+        schema: {$ref: './sprint-2.schemas.yaml#/schemas/Error'}
+paths:
+  /areas/{area_id}/disponibilidad:
+    parameters:
+      - {$ref: '#/parameters/AreaPath'}
+    get:
+      operationId: disponibilidadArea
+      summary: Horarios ocupados de todas las unidades sin información privada
+      description: Fecha y horas de America/Lima; intervalos [inicio, fin). Usa apertura/cierre diarios y acceso por edificio del catálogo CON-39. Área inactiva responde 409 AREA_INACTIVA. La consulta no garantiza una reserva futura.
+      x-historias: [CON-40]
+      x-implementation-status: parcial
+      parameters:
+        - {name: fecha, in: query, required: true, schema: {type: string, format: date}}
+      responses:
+        '200':
+          description: Intervalos confirmados o bloqueados, ordenados y fusionados si se solapan; sin identificadores de terceros.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: './sprint-2.schemas.yaml#/schemas/HorarioOcupado'}}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '409': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /reservas:
+    get:
+      operationId: listarReservas
+      summary: Reservas de las unidades autorizadas, incluidas las canceladas
+      x-historias: [CON-41, CON-46]
+      x-implementation-status: parcial
+      parameters:
+        - {$ref: '#/parameters/Contexto'}
+        - {name: area_id, in: query, schema: {type: string, format: uuid}}
+        - {name: fecha, in: query, schema: {type: string, format: date}}
+      responses:
+        '200':
+          description: Administración y auditor del contexto; residente solo sus unidades activamente vinculadas.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: './sprint-2.schemas.yaml#/schemas/Reserva'}}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+    post:
+      operationId: crearReserva
+      summary: Confirmar una reserva con solvencia y exclusión de horarios en PostgreSQL
+      description: Conserva validaciones de CON-39; unidad del edificio autorizado, apertura/cierre y duración máxima. Horario o duración inválidos responden 400 HORARIO_INVALIDO; área inactiva responde 409 AREA_INACTIVA. Costo y moneda proceden del catálogo SQL.
+      x-historias: [CON-41, CON-42, CON-43]
+      x-implementation-status: parcial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './sprint-2.schemas.yaml#/schemas/CrearReserva'}
+      responses:
+        '201':
+          description: Única reserva CONFIRMADA después del commit; costo calculado por servidor.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/ReservaConfirmada'}
+        '400': {$ref: '#/responses/Error'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '409': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /reservas/{reserva_id}/cancelar:
+    parameters:
+      - {$ref: '#/parameters/ReservaPath'}
+    post:
+      operationId: cancelarReserva
+      summary: Cancelación persistente con al menos 24 horas de anticipación
+      description: Administración autorizada puede exceptuar el plazo. Repetir una cancelación devuelve el resultado persistido original sin otro evento ni compensación.
+      x-historias: [CON-46]
+      x-implementation-status: parcial
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: './sprint-2.schemas.yaml#/schemas/CancelarReserva'}
+      responses:
+        '200':
+          description: Reserva cancelada después del commit; ajuste pendiente o aplicado identificado explícitamente.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/ReservaCancelada'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /pagos/reportar:
+    post:
+      operationId: reportarPago
+      summary: Reportar un voucher real sin alterar la deuda por su recepción
+      description: Multipart único; archivo de hasta 5 MiB. Reintentos equivalentes propios en revisión reutilizan el comprobante. No se acepta url_voucher proporcionada por el cliente.
+      x-historias: [CON-22, CON-23]
+      x-implementation-status: parcial
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: {$ref: './sprint-2.schemas.yaml#/schemas/ReportarPago'}
+            encoding:
+              archivo_voucher:
+                contentType: image/png, image/jpeg, application/pdf
+      responses:
+        '202':
+          description: Comprobante nuevo persistido; codigo COMPROBANTE_RECIBIDO.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/ComprobanteRecibido'}
+        '200':
+          description: Reintento propio EN_REVISION; codigo VOUCHER_EN_EVALUACION y mismo UUID.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/ComprobanteRecibido'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '409': {$ref: '#/responses/Error'}
+        '413': {$ref: '#/responses/Error'}
+        '415': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /pagos/comprobantes:
+    get:
+      operationId: listarComprobantes
+      summary: Comprobantes persistidos y autorizados; estado público APROBADO
+      x-historias: [CON-22, CON-23]
+      x-implementation-status: parcial
+      parameters:
+        - {$ref: '#/parameters/Contexto'}
+      responses:
+        '200':
+          description: Lista con enlaces autenticados a voucher; el residente solo ve sus unidades.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: './sprint-2.schemas.yaml#/schemas/Comprobante'}}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /pagos/{comprobante_id}/voucher:
+    parameters:
+      - {$ref: '#/parameters/ComprobantePath'}
+    get:
+      operationId: descargarVoucher
+      summary: Recuperar la última versión autorizada del archivo privado
+      x-historias: [CON-22]
+      x-implementation-status: pendiente
+      responses:
+        '200':
+          description: Bytes del objeto privado tras comprobar rol, condominio y vínculo; Cache-Control no-store.
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/pdf: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+            image/jpeg: {schema: {type: string, format: binary}}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+    put:
+      operationId: subsanarVoucherObservado
+      summary: Adjuntar una nueva versión de un voucher OBSERVADO
+      description: Conserva UUID, metadatos bancarios y hash; historial privado de archivos. Pasa a EN_REVISION atómicamente y publica un nuevo evento de recepción.
+      x-historias: [CON-22, CON-23]
+      x-implementation-status: pendiente
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [archivo_voucher]
+              properties:
+                archivo_voucher: {type: string, format: binary, x-max-bytes: 5242880}
+            encoding:
+              archivo_voucher: {contentType: 'image/png, image/jpeg, application/pdf'}
+      responses:
+        '202':
+          description: Subsanación persistida en revisión; codigo COMPROBANTE_RECIBIDO.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/ComprobanteRecibido'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '409': {$ref: '#/responses/Error'}
+        '413': {$ref: '#/responses/Error'}
+        '415': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /pagos/{comprobante_id}/conciliar:
+    parameters:
+      - {$ref: '#/parameters/ComprobantePath'}
+    post:
+      operationId: conciliarPago
+      summary: Aprobar, observar o rechazar con resultado financiero persistido
+      description: Solo administración del contexto. Repetir el mismo resultado final devuelve la respuesta original sin otra imputación; una decisión distinta exige estado EN_REVISION.
+      x-historias: [CON-34, CON-70]
+      x-implementation-status: parcial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './sprint-2.schemas.yaml#/schemas/ConciliarPago'}
+      responses:
+        '200':
+          description: Resultado real después del commit; observación o rechazo no aplica el pago.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/ResultadoRevision'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '409': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /notificaciones/logs:
+    get:
+      operationId: listarNotificaciones
+      summary: Consultar comunicaciones del contexto y destinatario autorizados
+      description: Administración y auditor del contexto; residentes solo avisos destinados a su usuario y a sus vínculos activos. Filtros no amplían permisos.
+      x-historias: [CON-32, CON-34, CON-36, CON-37]
+      x-implementation-status: parcial
+      parameters:
+        - {$ref: '#/parameters/Contexto'}
+        - {name: departamento_id, in: query, schema: {type: string, format: uuid}}
+        - {name: estado, in: query, schema: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE]}}
+        - {name: canal, in: query, schema: {type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH]}}
+      responses:
+        '200':
+          description: Logs persistidos; ENVIADO significa aceptación del proveedor, ENTREGADO requiere confirmación.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: './sprint-2.schemas.yaml#/schemas/Notificacion'}}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /notificaciones/despachar:
+    post:
+      operationId: despacharNotificacion
+      summary: Registrar un envío manual para procesamiento asíncrono
+      x-historias: [CON-36, CON-73]
+      x-implementation-status: parcial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './sprint-2.schemas.yaml#/schemas/DespacharNotificacion'}
+      responses:
+        '202':
+          description: Registro EN_COLA confirmado; no implica entrega al destinatario.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/Notificacion'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /notificaciones/reenviar/{log_id}:
+    parameters:
+      - {name: log_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: reenviarNotificacion
+      summary: Solicitar un reenvío administrativo conservando el historial
+      description: Un registro ENTREGADO o ENVIADO no se envía otra vez. Si ya hay un intento en cola o programado, se reutiliza. Máximo cuatro intentos por ciclo; nuevo destinatario válido inicia un ciclo manual trazado.
+      x-historias: [CON-37]
+      x-implementation-status: parcial
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                nuevo_destinatario: {type: string, minLength: 1}
+      responses:
+        '200':
+          description: Registro existente o reencolado; sin envío síncrono.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/Notificacion'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '409': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
+  /notificaciones/comunicado-masivo:
+    post:
+      operationId: enviarComunicadoMasivo
+      summary: Registrar avisos por unidad y destinatario autorizado del condominio
+      x-historias: [CON-36]
+      x-implementation-status: parcial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './sprint-2.schemas.yaml#/schemas/ComunicadoMasivo'}
+      responses:
+        '202':
+          description: Registros persistidos en cola; generadas indica avisos lógicos, no entregas.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/ComunicadoAceptado'}
+        '401': {$ref: '#/responses/Error'}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
+        '422': {$ref: '#/responses/Error'}
