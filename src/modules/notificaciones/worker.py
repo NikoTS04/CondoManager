@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -15,6 +16,7 @@ from sqlalchemy.dialects.postgresql import insert
 from src.core.config import settings
 from src.core.database import AsyncSessionLocal
 from src.modules.cuotas.models import EventoLoteOutbox
+from src.modules.notificaciones.alertas import crear_alerta
 from src.modules.notificaciones.consumo import consumir
 from src.modules.notificaciones.models import EventoConsumido, IntentoNotificacion, Notificacion
 from src.modules.notificaciones.repository import NotificacionesRepository
@@ -100,8 +102,22 @@ async def consumir_stream(redis, nombre, session_factory=AsyncSessionLocal):
         await redis.xack(STREAM, GRUPO, mid)
 
 
+FALLA_N = re.compile(r"^[^@+]+\+falla(\d+)@", re.IGNORECASE)
+REBOTE = re.compile(r"^[^@+]+\+rebote@", re.IGNORECASE)
+
+
 def transporte_simulado(log, clave):
-    """Clave estable: repetir una aceptación local no produce una entrega externa."""
+    """Clave estable: repetir una aceptación local no produce una entrega externa.
+
+    Direcciones `x+fallaN@dominio` fallan (503) mientras `log.intentos <= N`; `x+rebote@dominio`
+    responde 550. El contador `intentos` persiste, así que sobrevive a un reinicio del worker.
+    """
+    destino = log.destinatario or ""
+    if REBOTE.match(destino):
+        return {"status": 550, "error": "550"}
+    falla = FALLA_N.match(destino)
+    if falla and log.intentos <= int(falla.group(1)):
+        return {"status": 503, "error": "FALLO_TEMPORAL"}
     return {"status": 200, "message_id": f"simulado-{clave}"}
 
 
@@ -147,11 +163,13 @@ async def procesar_uno(
             log.estado = "FALLIDO_PERMANENTE"
             log.error_mensaje = "DESTINATARIO_REVOCADO_O_CONTACTO_MODIFICADO"
             log.proximo_reintento = None
+            await crear_alerta(db, log, "DESTINATARIO_INVALIDO", ahora)
             return True
         # El prototipo no configura un proveedor sin reconciliación idempotente.
         if log.transporte != "SIMULADO":
             log.estado = "FALLIDO_PERMANENTE"
             log.error_mensaje = "PROVEEDOR_NO_CONFIGURADO"
+            await crear_alerta(db, log, "PROVEEDOR_NO_CONFIGURADO", ahora)
             return True
         log.intentos += 1
         # Cambiar la fila impide adquirirla desde una instantánea anterior al commit.
@@ -203,6 +221,9 @@ async def procesar_uno(
             if definitivo or log.intentos >= 4:
                 log.estado = "FALLIDO_PERMANENTE"
                 log.proximo_reintento = None
+                await crear_alerta(
+                    db, log, "ERROR_DEFINITIVO" if definitivo else "INTENTOS_AGOTADOS", ahora
+                )
             else:
                 segundos = INTERVALOS_REINTENTO_SEGUNDOS[log.intentos]
                 if log.intentos == 1:
@@ -242,6 +263,7 @@ async def recuperar_inciertos(session_factory=AsyncSessionLocal, ahora=None):
             log.bloqueado_hasta = None
             log.proximo_reintento = None
             log.fecha_actualizacion = ahora
+            await crear_alerta(db, log, "ACEPTACION_INCIERTA", ahora)
 
 
 async def main():
