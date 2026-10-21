@@ -1,6 +1,6 @@
 # CON-72 — Contratos base de implementación del Sprint 2
 
-**Responsable:** Gerardo. **Base:** 20/10/2026. **Estado:** implementación integrada y verificación local por CON-73/74; revisión de pares y esquema desplegado pendientes. Evidencia en [convergencia CON-72](../../docs/sprints/CON-72-convergencia.md). Los contratos pueden evolucionar mediante el procedimiento de cambios de la sección 9.
+**Responsable:** Gerardo. **Base:** 20/10/2026. **Estado al 21/10/2026:** implementación integrada en `develop`, con verificación previa reportada por el equipo y reconciliación del esquema desplegado documentada. Evidencia en [convergencia CON-72](../../docs/sprints/CON-72-convergencia.md) y [entrega consolidada CON-75](../../docs/sprints/CON-75-entrega-sprint-2.md). La aprobación final se registra en el PR de entrega. Los contratos pueden evolucionar mediante el procedimiento de cambios de la sección 9.
 
 ## 1. Fuentes y alcance
 
@@ -11,7 +11,7 @@
 | [sprint-2.schemas.yaml](../03-contracts/openapi/sprint-2.schemas.yaml) | Formas de entrada/salida y tipos compartidos. |
 | [Catálogo de eventos](../03-contracts/events/domain-events-catalog.md) | Productores, consumidores, versiones, esquemas y recuperación. |
 
-CON-72 entrega interfaces para que cada responsable implemente sus historias. Definir un endpoint en OpenAPI no lo incorpora a FastAPI. Los routers, DTO Python, tipos TypeScript, repositorios y migraciones actuales deben adoptar estos contratos en las HU indicadas; los almacenes piloto en memoria no satisfacen la integración persistente.
+CON-72 define las interfaces compartidas del sprint. La convergencia integrada incorpora su adopción en routers, DTO Python, tipos TypeScript, repositorios y migraciones, con la evidencia enlazada arriba. La mera definición de un endpoint en OpenAPI o un almacén piloto en memoria no acredita una integración persistente; las futuras modificaciones conservan esta exigencia.
 
 CON-04/05/06/39 conservan las interfaces ya integradas en `develop`: alta administrativa, vínculos persistentes, una asignación de rol por usuario y condominio y catálogo SQL de áreas. Sus rutas y esquemas permanecen en el OpenAPI principal; los fragmentos del sprint no los duplican.
 

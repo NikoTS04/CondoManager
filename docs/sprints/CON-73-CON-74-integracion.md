@@ -1,12 +1,15 @@
 # CON-73 / CON-74 — Persistencia e integración funcional
 
 Responsable: Nicolás. Rama: `feat/CORE-con73-con74-integracion`.
-Estado: implementación y verificación local; pendiente revisión de pares y
-validación del esquema real del equipo. El rediseño visual queda diferido.
+Estado consolidado al 21/10/2026: integrada en `develop`, con evidencia previa
+del equipo y reconciliación del esquema desplegado documentada. La aprobación
+final se registra en el PR de entrega. El rediseño visual queda diferido.
 
 Actualización: la posterior [convergencia CON-72](CON-72-convergencia.md) sustituye
 las limitaciones de multipart, subsanación y alias CONCILIADO descritas aquí.
 Los resultados de este documento son evidencia histórica de la entrega inicial.
+El [cierre CON-75](CON-75-entrega-sprint-2.md) reúne la evidencia posterior de
+notificaciones y la [reconciliación legacy](reconciliacion-esquema-legacy.md).
 
 ## Entrega
 
@@ -58,7 +61,8 @@ python -m src.modules.notificaciones.worker
 
 Los fixtures crean esquemas aislados y los eliminan al finalizar. Configurar
 `CON73_TEST_DATABASE_URL` y `CON13_TEST_DATABASE_URL` con PostgreSQL de pruebas.
-La prueba histórica de condominios espera además el esquema público migrado.
+El fixture de la prueba de condominios ya crea un esquema aislado migrado, según
+la corrección integrada en el cierre de notificaciones.
 
 ```bash
 pytest -q
@@ -116,10 +120,11 @@ Verificación del 21/10/2026:
 - Ruff de los archivos de la entrega pasa. Ruff global mantiene 49 hallazgos en
   archivos no modificados; no se amplió el cambio con limpieza ajena al alcance.
 - **SIMULADO no es entregado:** el proveedor externo y su confirmación
-  autenticada siguen pendientes con Alejandro. No hay evidencia de envío real.
-- La UI usa el upload en dos pasos y el estado público `CONCILIADO` del productor
-  actual. Multipart único, subsanación y convergencia completa a CON-72 siguen
-  pendientes en las historias de origen; no se declara cerrado todo CON-74.
-- No se ha migrado el esquema real del equipo. Se debe revisar una copia de sus
-  tablas/dependencias antes del despliegue. El downgrade destructivo está
-  deshabilitado deliberadamente.
+  autenticada quedan diferidos. La entrega de Alejandro incorpora reintentos y
+  alertas administrativas persistentes, sin acreditar envío real.
+- La convergencia posterior CON-72 reemplaza el upload en dos pasos por multipart
+  único, incorpora subsanación y utiliza `APROBADO` como estado público. La
+  limitación inicial de adopción de contratos ya no describe el corte integrado.
+- El esquema real documentado se reconcilió a `20261021_0015`, con respaldo y
+  comparación de datos. El procedimiento no inició workers ni reprodujo eventos
+  históricos. El detalle operativo está en la reconciliación enlazada arriba.
