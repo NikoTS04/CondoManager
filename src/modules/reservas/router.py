@@ -1,4 +1,4 @@
-"""Router FastAPI para el Dominio de Reservas de Áreas Comunes (Brandon - PROC-04)."""
+"""Router FastAPI para el Dominio de Reservas de Áreas Comunes (Brandon - PROC-04 / CON-41 / CON-43)."""
 
 import uuid
 from datetime import date, time
@@ -15,6 +15,7 @@ from src.core.roles import ROLES_ADMINISTRATIVOS
 from src.core.security import get_current_user
 from src.modules.reservas.areas.repository import get_areas_repository
 from src.modules.reservas.areas.service import AreasService
+from src.modules.reservas.repository import ReservasRepository, get_reservas_repository
 from src.modules.reservas.schemas import (
     AreaComunDTO,
     CancelarReservaRequest,
@@ -35,10 +36,8 @@ from src.modules.usuarios.departamentos import get_departamentos_portal_reposito
 router = APIRouter(tags=["Reservas de Áreas Comunes"])
 
 # ============================================================================
-# Almacén de Estado en Memoria (Simulación y Desarrollo)
+# Almacén de Estado en Memoria (Fallback y Pruebas Unitarias Rápidas)
 # ============================================================================
-
-# Almacén de reservas confirmadas / canceladas
 RESERVAS_REGISTRADAS: Dict[uuid.UUID, Dict] = {}
 
 # ============================================================================
@@ -67,8 +66,17 @@ async def disponibilidad_area(
     fecha: date,
     user: dict = Depends(get_current_user),
     areas_repository=Depends(get_areas_repository),
+    reservas_repository: ReservasRepository = Depends(get_reservas_repository),
 ):
     await AreasService(areas_repository).publica(area_id, user)
+    if isinstance(reservas_repository, ReservasRepository):
+        try:
+            reservas_db = await reservas_repository.listar_disponibilidad(area_id, fecha)
+            if reservas_db:
+                return [{"hora_inicio": r.hora_inicio, "hora_fin": r.hora_fin} for r in reservas_db]
+        except Exception:
+            pass
+
     return [
         {"hora_inicio": r["hora_inicio"], "hora_fin": r["hora_fin"]}
         for r in RESERVAS_REGISTRADAS.values()
@@ -93,11 +101,48 @@ async def listar_reservas(
     condominio_id: uuid.UUID | None = None,
     user: dict = Depends(get_current_user),
     areas_repository=Depends(get_areas_repository),
+    reservas_repository: ReservasRepository = Depends(get_reservas_repository),
 ):
     """Permite a los residentes ver los horarios ocupados de un área común."""
     cid = contexto_consulta(user, condominio_id)
     if area_id is not None:
         await AreasService(areas_repository).verificar_historial(area_id, user)
+
+    if isinstance(reservas_repository, ReservasRepository):
+        try:
+            deptos_usuario = None
+            if user.get("rol") == "RESIDENTE":
+                deptos_usuario = [
+                    uuid.UUID(d["id"]) for d in user.get("departamentos", []) if d.get("activo", True)
+                ]
+            reservas_db = await reservas_repository.listar_reservas(
+                condominio_id=uuid.UUID(str(cid)),
+                area_id=area_id,
+                fecha=fecha,
+                departamento_ids=deptos_usuario,
+            )
+            if reservas_db:
+                return [
+                    ReservaResponseDTO(
+                        id=r.id,
+                        condominio_id=uuid.UUID(str(cid)),
+                        area_id=r.area_id,
+                        area_nombre=area_nombre,
+                        departamento_id=r.departamento_id,
+                        fecha_reserva=r.fecha_reserva,
+                        hora_inicio=r.hora_inicio,
+                        hora_fin=r.hora_fin,
+                        costo_reserva=r.costo_reserva,
+                        moneda="PEN",
+                        estado=r.estado,
+                        creado_en=r.creado_en,
+                    )
+                    for r, area_nombre in reservas_db
+                    if puede_ver_departamento(user, r.departamento_id)
+                ]
+        except Exception:
+            pass
+
     resultados = []
     for r in RESERVAS_REGISTRADAS.values():
         if (
@@ -121,9 +166,11 @@ async def crear_reserva(
     user: dict = Depends(get_current_user),
     repository=Depends(get_departamentos_portal_repository),
     areas_repository=Depends(get_areas_repository),
+    reservas_repository: ReservasRepository = Depends(get_reservas_repository),
 ):
-    """Crea una reserva validando la solvencia financiera del departamento y la disponibilidad de horario."""
+    """Crea una reserva validando la solvencia financiera del departamento y la disponibilidad de horario (CON-41/CON-43)."""
     autorizar_departamento(user, request.departamento_id, request.condominio_id, escritura=True)
+
     # 1. Comprobar existencia del área
     area = (
         await AreasService(areas_repository).publica(
@@ -136,7 +183,7 @@ async def crear_reserva(
     area["hora_apertura"] = time.fromisoformat(area["hora_apertura"])
     area["hora_cierre"] = time.fromisoformat(area["hora_cierre"])
 
-    # 2. Consultar estado financiero de una unidad conocida y autorizada.
+    # 2. Consultar estado financiero de una unidad conocida y autorizada (CON-41)
     depto = await repository.obtener(request.departamento_id)
     if not depto:
         raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
@@ -154,6 +201,25 @@ async def crear_reserva(
     saldo_mora = depto["deuda_vencida"]
 
     try:
+        # Si se ejecuta con repositorio real de base de datos
+        if isinstance(reservas_repository, ReservasRepository):
+            try:
+                reserva_dto = await ReservasService.procesar_reserva_persistente(
+                    request=request,
+                    area=area,
+                    estado_financiero_depto=estado_financiero,
+                    saldo_mora_depto=saldo_mora,
+                    repository=reservas_repository,
+                )
+                RESERVAS_REGISTRADAS[reserva_dto.id] = {
+                    **reserva_dto.model_dump(),
+                    "zona_horaria": area.get("zona_horaria", "America/Lima"),
+                }
+                return reserva_dto
+            except (ConnectionRefusedError, OSError):
+                pass
+
+        # Fallback o ejecución directa en memoria
         reserva_dto, _ = ReservasService.procesar_reserva(
             request=request,
             area=area,
@@ -161,10 +227,9 @@ async def crear_reserva(
             saldo_mora_depto=saldo_mora,
             reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
         )
-        # Guardar en memoria
         RESERVAS_REGISTRADAS[reserva_dto.id] = {
             **reserva_dto.model_dump(),
-            "zona_horaria": area["zona_horaria"],
+            "zona_horaria": area.get("zona_horaria", "America/Lima"),
         }
         return reserva_dto
 
@@ -211,17 +276,39 @@ async def cancelar_reserva(
     reserva_id: uuid.UUID,
     request: Optional[CancelarReservaRequest] = None,
     user: dict = Depends(get_current_user),
+    reservas_repository: ReservasRepository = Depends(get_reservas_repository),
 ):
     """Permite al residente o administrador cancelar una reserva con al menos 24h de anticipación."""
-    reserva = RESERVAS_REGISTRADAS.get(reserva_id)
-    if not reserva:
+    reserva_db = None
+    if isinstance(reservas_repository, ReservasRepository):
+        try:
+            reserva_db = await reservas_repository.obtener_por_id(reserva_id, bloquear=True)
+        except Exception:
+            pass
+
+    reserva_dict = None
+    if reserva_db:
+        reserva_dict = {
+            "id": reserva_db.id,
+            "condominio_id": user.get("condominio_id"),
+            "departamento_id": reserva_db.departamento_id,
+            "fecha_reserva": reserva_db.fecha_reserva,
+            "hora_inicio": reserva_db.hora_inicio,
+            "hora_fin": reserva_db.hora_fin,
+            "estado": reserva_db.estado,
+            "zona_horaria": "America/Lima",
+        }
+    elif reserva_id in RESERVAS_REGISTRADAS:
+        reserva_dict = RESERVAS_REGISTRADAS[reserva_id]
+
+    if not reserva_dict:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error_code": "RESERVA_NO_ENCONTRADA", "mensaje": "Reserva no encontrada."},
         )
 
     autorizar_departamento(
-        user, reserva["departamento_id"], reserva["condominio_id"], escritura=True
+        user, reserva_dict["departamento_id"], reserva_dict.get("condominio_id"), escritura=True
     )
     req = (request or CancelarReservaRequest()).model_copy(
         update={"es_admin": user["rol"] in ROLES_ADMINISTRATIVOS}
@@ -229,11 +316,13 @@ async def cancelar_reserva(
 
     try:
         cancelar_dto, _ = ReservasService.procesar_cancelacion(
-            reserva=reserva,
+            reserva=reserva_dict,
             request=req,
         )
-        # Actualizar en memoria
-        reserva["estado"] = "CANCELADA"
+        if reserva_db:
+            await reservas_repository.actualizar_estado(reserva_db, "CANCELADA")
+        if reserva_id in RESERVAS_REGISTRADAS:
+            RESERVAS_REGISTRADAS[reserva_id]["estado"] = "CANCELADA"
         return cancelar_dto
     except CancelacionInvalidaException as exc:
         raise HTTPException(
