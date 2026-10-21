@@ -2,6 +2,12 @@
 
 ## Característica: Reserva de Áreas Comunes y Control de Solvencia
 
+CON-39: [catálogo persistente](../02-domains/04-reservas/catalogo-areas.md) y
+[BDD ejecutable](../02-domains/04-reservas/features/catalogo_areas.feature).
+Verificar CRUD contextual, Auditor de solo lectura, edificio exclusivo, costo
+Decimal y moneda, horario/duración, no-op, rollback, adopción y reinicio. Desactivar
+excluye del catálogo activo y rechaza nuevas reservas sin borrar las anteriores.
+
 ### Escenario 1: Bloqueo de reserva para departamento con deuda en mora
 ```gherkin
 Dado que el departamento 501 tiene una deuda vencida en estado "EN_MORA"
@@ -36,3 +42,9 @@ Cuando el residente del dpto 201 y el residente del dpto 304 envían la solicitu
 Entonces el sistema otorga la reserva a la primera solicitud procesada por la transacción de base de datos
 Y la segunda solicitud es rechazada de manera controlada con el mensaje "El horario seleccionado acaba de ser reservado por otro residente".
 ```
+# Integración Sprint 2 — CON-42
+
+Comprobar deuda SQL por departamento: EN_REVISION no desbloquea; aprobación que
+extingue la mora habilita; cuotas futuras y otras unidades no bloquean. El rechazo
+403 DEUDA_MORA_ACTIVA deja el horario libre y no emite confirmación. El contrato
+está en `specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md`.

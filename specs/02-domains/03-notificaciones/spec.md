@@ -38,7 +38,7 @@ El dominio de Notificaciones es responsable de:
 
 ---
 
-## 4. Modelo Persistente de Datos (CON-73 / Migración `20261020_0010`)
+## 4. Modelo Persistente de Datos (CON-73 / Migración `20261021_0012`)
 
 ### 4.1 Tabla `notificaciones`
 Representa cada entrega lógica única por destinatario y operación:

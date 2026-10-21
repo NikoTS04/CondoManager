@@ -25,6 +25,8 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Asignar/revocar ADMIN_JUNTA | Sí, excepto propia asignación o identidad global | No | No | No |
 | Asignar/revocar AUDITOR y RESIDENTE | Sí | Su condominio, sin modificar Junta ni su propia asignación | No | No |
 | Crear/cambiar/revocar vínculos de departamentos | Contexto seleccionado | Su condominio | No | No |
+| Crear/editar/activar/desactivar áreas comunes | Contexto seleccionado | Su condominio | No | No |
+| Consultar catálogo administrativo de áreas | Contexto seleccionado | Su condominio | Su condominio | No |
 
 Todas las rutas de negocio requieren Bearer JWT. Ausencia de token: `401`;
 rol/contexto/unidad no autorizados: `403`. No existe un modo anónimo de desarrollo.
@@ -67,6 +69,11 @@ residente requiere al menos 24 horas de anticipación; el servidor deriva el per
 administrativo del rol e ignora cualquier intento de elevarlo mediante `es_admin`.
 
 ## 5. Piloto y persistencia
+
+CON-39 utiliza catálogo de áreas en PostgreSQL y filtra las áreas exclusivas de
+edificio según vínculos activos para residentes. Las condiciones al reservar se
+leen bajo el mismo bloqueo contextual utilizado para editar/desactivar. Contrato:
+[catálogo de áreas](../02-domains/04-reservas/catalogo-areas.md).
 
 CON-05 administra vínculos persistentes, invalida sesiones en cada cambio real y
 resuelve unidades del portal y de operaciones de pagos/reservas desde PostgreSQL.

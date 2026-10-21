@@ -41,12 +41,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379/0
       - S3_ENDPOINT_URL=http://minio:9000
+      - VOUCHERS_DIR=/app/uploads/vouchers
       - CONDOMINIO_PILOTO_ID=${CONDOMINIO_PILOTO_ID:-}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - DEMO_MODE=${DEMO_MODE:-false}
     ports:
       - "8000:8000"
+    volumes:
+      - ./uploads/vouchers:/app/uploads/vouchers
     depends_on:
       redis:
         condition: service_healthy
@@ -63,6 +66,27 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379/0
       - CUOTAS_DIA_EMISION=${CUOTAS_DIA_EMISION:-1}
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # CON-70: relay propio, sin alterar el worker de cuotas de otro integrante.
+  pagos-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "src.modules.pagos.worker"]
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - VOUCHERS_DIR=/app/uploads/vouchers
+    volumes:
+      - ./uploads/vouchers:/app/uploads/vouchers
     depends_on:
       backend:
         condition: service_healthy

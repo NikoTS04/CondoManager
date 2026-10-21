@@ -7,7 +7,7 @@ integrados. Contratos: [dominio](../../specs/02-domains/03-notificaciones/spec.m
 
 ## Qué se entrega
 
-- **Persistencia** (migración `20261020_0010`): `notificaciones`, `notificacion_intentos`,
+- **Persistencia** (migración `20261021_0012`): `notificaciones`, `notificacion_intentos`,
   `eventos_consumidos` y `alertas_administrativas`. Se distingue registro persistido
   (`EN_COLA`), envío aceptado por el proveedor (`ACEPTADO`) y entrega confirmada
   (`ENTREGADO`); `transporte_simulado` identifica los envíos del transporte simulado.

@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlusCircle, ShieldAlert, ArrowRight } from "lucide-react";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
+import { Spinner } from "@/components/ui/Feedback";
 import { formatMoney } from "@/lib/money";
-import { crearReserva, fetchDisponibilidad, type AreaComun, type HorarioOcupado } from "@/lib/api";
+import { crearReserva, fetchDisponibilidad, fetchSolvencia, type AreaComun, type HorarioOcupado, type Solvencia } from "@/lib/api";
 
 function getTodayLima(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -18,6 +19,19 @@ function getTodayLima(): string {
   }).format(new Date());
 }
 
+function minutos(hora: string): number {
+  const [h, m] = hora.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function horaLocal(valor: number): string {
+  return `${String(Math.floor(valor / 60)).padStart(2, "0")}:${String(valor % 60).padStart(2, "0")}`;
+}
+
+function inicioEnFuturo(fecha: string, hora: string): boolean {
+  return new Date(`${fecha}T${hora}:00-05:00`).getTime() > Date.now();
+}
+
 export interface ReservarAreaFormProps {
   areas: AreaComun[];
   condominioId?: string | null;
@@ -26,20 +40,24 @@ export interface ReservarAreaFormProps {
   deudaVencida?: string;
   errorAreas?: string | null;
   onRetryAreas?: () => void;
+  revisionDisponibilidad?: number;
   onSuccess?: () => void;
   onGoToPagos?: () => void;
+  onSolvenciaActualizada?: (solvencia: Solvencia) => void;
 }
 
 export function ReservarAreaForm({
   areas,
   condominioId,
   departamentoId,
-  estaEnMora,
-  deudaVencida,
+  estaEnMora: moraIndicada,
+  deudaVencida: deudaIndicada,
   errorAreas,
   onRetryAreas,
+  revisionDisponibilidad = 0,
   onSuccess,
   onGoToPagos,
+  onSolvenciaActualizada,
 }: ReservarAreaFormProps) {
   const [selectedAreaId, setSelectedAreaId] = useState<string>(areas[0]?.id || "");
   const [fechaReserva, setFechaReserva] = useState<string>(getTodayLima());
@@ -48,24 +66,85 @@ export function ReservarAreaForm({
   const [reservaError, setReservaError] = useState<string | null>(null);
   const [reservaSuccess, setReservaSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [ocupados, setOcupados] = useState<HorarioOcupado[]>([]);
-  const [errorDisponibilidad, setErrorDisponibilidad] = useState<string | null>(null);
+  const [consultaDisponibilidad, setConsultaDisponibilidad] = useState<{
+    clave: string;
+    ocupados: HorarioOcupado[];
+    error: string | null;
+    cargando: boolean;
+  }>({ clave: "", ocupados: [], error: null, cargando: false });
   const [revisionCalendario, setRevisionCalendario] = useState(0);
+  const [solvencia, setSolvencia] = useState<Solvencia | null>(null);
+  const [errorSolvencia, setErrorSolvencia] = useState<string | null>(null);
+  const [revisionSolvencia, setRevisionSolvencia] = useState(0);
+  const estaEnMora = solvencia ? !solvencia.habilitado_reservas : moraIndicada;
+  const deudaVencida = solvencia?.saldo_vencido ?? deudaIndicada;
+
+  useEffect(() => {
+    let cancelado = false;
+    setSolvencia(null);
+    setErrorSolvencia(null);
+    if (departamentoId) {
+      void fetchSolvencia(departamentoId)
+        .then((data) => {
+          if (!cancelado) {
+            setSolvencia(data);
+            onSolvenciaActualizada?.(data);
+          }
+        })
+        .catch(() => { if (!cancelado) setErrorSolvencia("No pudimos verificar la deuda del departamento."); });
+    }
+    return () => { cancelado = true; };
+  }, [departamentoId, revisionSolvencia, moraIndicada, deudaIndicada, onSolvenciaActualizada]);
 
   // Asegura área por defecto si la lista se carga después
-  const effectiveAreaId = selectedAreaId || areas[0]?.id || "";
+  const effectiveAreaId = areas.some((area) => area.id === selectedAreaId) ? selectedAreaId : areas[0]?.id || "";
+  const seleccionada = areas.find((area) => area.id === effectiveAreaId);
+  const apertura = seleccionada?.hora_apertura ?? "00:00";
+  const cierre = seleccionada?.hora_cierre ?? "23:59";
+  const duracionMaxima = seleccionada?.tiempo_maximo_horas ?? 24;
+  const claveConsulta = `${effectiveAreaId}:${fechaReserva}:${apertura}:${cierre}:${revisionCalendario}:${revisionDisponibilidad}`;
+  const consultaVigente = consultaDisponibilidad.clave === claveConsulta && !consultaDisponibilidad.cargando;
+  const cargandoDisponibilidad = Boolean(effectiveAreaId && fechaReserva && !consultaVigente);
+  const ocupados = consultaVigente ? consultaDisponibilidad.ocupados : [];
+  const errorDisponibilidad = consultaVigente ? consultaDisponibilidad.error : null;
+  const turnoOcupado = ocupados.some((h) =>
+    minutos(horaInicio) < minutos(h.hora_fin) && minutos(horaFin) > minutos(h.hora_inicio));
+  const horarioActual = useRef({ inicio: horaInicio, fin: horaFin });
+  horarioActual.current = { inicio: horaInicio, fin: horaFin };
+
+  useEffect(() => {
+    if (!effectiveAreaId) return;
+    const { inicio, fin } = horarioActual.current;
+    if (inicio >= apertura && fin <= cierre && fin > inicio && minutos(fin) - minutos(inicio) <= duracionMaxima * 60) return;
+    setHoraInicio(apertura);
+    setHoraFin(horaLocal(Math.min(minutos(cierre), minutos(apertura) + Math.min(120, duracionMaxima * 60))));
+  }, [effectiveAreaId, apertura, cierre, duracionMaxima]);
 
   useEffect(() => {
     let cancelled = false;
-    setOcupados([]);
-    setErrorDisponibilidad(null);
     if (effectiveAreaId && fechaReserva) {
+      setConsultaDisponibilidad({ clave: claveConsulta, ocupados: [], error: null, cargando: true });
       void fetchDisponibilidad(effectiveAreaId, fechaReserva)
-        .then((data) => { if (!cancelled) setOcupados(data); })
-        .catch(() => { if (!cancelled) setErrorDisponibilidad("No pudimos consultar los horarios ocupados."); });
+        .then((data) => {
+          if (!cancelled) setConsultaDisponibilidad({ clave: claveConsulta, ocupados: data, error: null, cargando: false });
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) setConsultaDisponibilidad({
+            clave: claveConsulta,
+            ocupados: [],
+            error: error instanceof Error ? error.message : "No pudimos consultar los horarios ocupados.",
+            cargando: false,
+          });
+        });
     }
     return () => { cancelled = true; };
-  }, [effectiveAreaId, fechaReserva, revisionCalendario]);
+  }, [effectiveAreaId, fechaReserva, claveConsulta]);
+
+  useEffect(() => {
+    const actualizar = () => setRevisionCalendario((value) => value + 1);
+    window.addEventListener("focus", actualizar);
+    return () => window.removeEventListener("focus", actualizar);
+  }, []);
 
   async function handleCrearReserva(e: React.FormEvent) {
     e.preventDefault();
@@ -80,9 +159,29 @@ export function ReservarAreaForm({
       setReservaError("No puedes reservar áreas comunes mientras mantengas cuotas vencidas.");
       return;
     }
+    if (!solvencia || solvencia.departamento_id !== departamentoId) {
+      setReservaError("Actualiza la solvencia antes de solicitar la reserva.");
+      return;
+    }
 
     if (!effectiveAreaId) {
       setReservaError("Selecciona un espacio común.");
+      return;
+    }
+    if (!fechaReserva || !inicioEnFuturo(fechaReserva, horaInicio)) {
+      setReservaError("Elige una fecha y una hora de inicio futuras en hora de Lima.");
+      return;
+    }
+    if (cargandoDisponibilidad || !consultaVigente || errorDisponibilidad) {
+      setReservaError("Consulta los horarios de esta fecha antes de confirmar la reserva.");
+      return;
+    }
+    if (horaInicio < apertura || horaFin > cierre || horaFin <= horaInicio || minutos(horaFin) - minutos(horaInicio) > duracionMaxima * 60) {
+      setReservaError("Elige un turno dentro del horario y de la duración máxima del área.");
+      return;
+    }
+    if (turnoOcupado) {
+      setReservaError("El turno coincide con un horario ocupado. Elige otra franja.");
       return;
     }
 
@@ -100,10 +199,12 @@ export function ReservarAreaForm({
 
     if (res.ok) {
       setRevisionCalendario((value) => value + 1);
-      setReservaSuccess("¡Reserva confirmada con éxito! Se ha notificado a tu correo con las normas del espacio.");
+      setReservaSuccess("Reserva confirmada. Puedes consultar su horario y tarifa en Mis reservas.");
       if (onSuccess) onSuccess();
     } else {
+      setRevisionCalendario((value) => value + 1);
       setReservaError(res.error || "No se pudo registrar la reserva. Inténtalo de nuevo.");
+      setRevisionSolvencia((valor) => valor + 1);
     }
   }
 
@@ -116,6 +217,13 @@ export function ReservarAreaForm({
       />
 
       <CardBody className="space-y-4">
+        <div className="space-y-2">
+          <Button type="button" size="sm" variant="secondary" onClick={() => setRevisionSolvencia((valor) => valor + 1)}>
+            Actualizar solvencia
+          </Button>
+          {errorSolvencia && <Alert tone="danger">{errorSolvencia}</Alert>}
+          {!solvencia && !errorSolvencia && <p role="status" className="text-sm text-muted">Verificando deuda persistida…</p>}
+        </div>
         {errorAreas && (
           <Alert
             tone="danger"
@@ -148,45 +256,80 @@ export function ReservarAreaForm({
           <Field label="Espacio Común" required>
             <Select
               value={effectiveAreaId}
-              onChange={(e) => setSelectedAreaId(e.target.value)}
-              disabled={estaEnMora || areas.length === 0}
+              onChange={(e) => {
+                setSelectedAreaId(e.target.value);
+                setRevisionCalendario((value) => value + 1);
+              }}
+              disabled={isSubmitting || areas.length === 0}
             >
               {areas.length === 0 ? (
                 <option value="">No hay espacios disponibles</option>
               ) : (
                 areas.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.nombre} ({formatMoney(a.costo_reserva, "PEN")})
+                    {a.nombre} ({formatMoney(a.costo_reserva, a.moneda)})
                   </option>
                 ))
               )}
             </Select>
           </Field>
 
+          {seleccionada && <div className="rounded-lg border border-line bg-canvas p-3 text-sm" aria-label="Condiciones del área seleccionada">
+            <p>{seleccionada.descripcion}</p>
+            <p>Horario diario: {apertura}–{cierre} · Hora de Lima</p>
+            <p>Máximo {duracionMaxima} horas por reserva · Aforo {seleccionada.aforo_maximo} personas</p>
+            <p>Tarifa por turno: {formatMoney(seleccionada.costo_reserva, seleccionada.moneda)}</p>
+            {seleccionada.edificio_nombre && <p>Uso exclusivo: {seleccionada.edificio_nombre}</p>}
+          </div>}
+
           <Field label="Fecha de Reserva" required>
             <Input
               type="date"
+              min={getTodayLima()}
+              required
               value={fechaReserva}
-              onChange={(e) => setFechaReserva(e.target.value)}
-              disabled={estaEnMora}
+              onChange={(e) => {
+                setFechaReserva(e.target.value);
+                setRevisionCalendario((value) => value + 1);
+              }}
+              disabled={isSubmitting}
             />
           </Field>
 
-          {errorDisponibilidad ? (
-            <Alert tone="warning">{errorDisponibilidad}</Alert>
-          ) : ocupados.length > 0 ? (
-            <div className="rounded-lg bg-canvas p-3 text-sm" aria-live="polite">
-              <p className="font-medium">Horarios ocupados para esta fecha</p>
-              <ul>{ocupados.map((h) => <li key={`${h.hora_inicio}-${h.hora_fin}`}>
-                {h.hora_inicio.slice(0, 5)} – {h.hora_fin.slice(0, 5)}
-              </li>)}</ul>
+          {effectiveAreaId && fechaReserva && (
+            <div className="space-y-2 rounded-lg border border-line bg-canvas p-3 text-sm" aria-live="polite" aria-busy={cargandoDisponibilidad}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium">Ocupación del área · Hora de Lima</p>
+                <Button variant="ghost" size="sm" disabled={cargandoDisponibilidad || isSubmitting}
+                  onClick={() => setRevisionCalendario((value) => value + 1)}>
+                  {errorDisponibilidad ? "Reintentar" : "Actualizar"}
+                </Button>
+              </div>
+              {cargandoDisponibilidad ? (
+                <Spinner label="Consultando horarios…" />
+              ) : errorDisponibilidad ? (
+                <Alert tone="warning">{errorDisponibilidad}</Alert>
+              ) : ocupados.length > 0 ? (
+                <ul>{ocupados.map((h) => <li key={`${h.hora_inicio}-${h.hora_fin}`}>
+                  {h.hora_inicio.slice(0, 5)} – {h.hora_fin.slice(0, 5)}
+                </li>)}</ul>
+              ) : (
+                <p>No hay horarios ocupados dentro del horario de uso para esta fecha.</p>
+              )}
+              <p className="text-xs text-muted">El turno debe respetar la apertura, el cierre y la duración máxima. Para hoy, el inicio debe ser futuro. La disponibilidad se confirma al reservar.</p>
             </div>
-          ) : null}
+          )}
+
+          {turnoOcupado && <Alert tone="warning">El turno seleccionado coincide con un horario ocupado. Elige otra franja.</Alert>}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Hora Inicio" required>
               <Input
                 type="time"
+                required
+                min={apertura}
+                max={cierre}
+                step={60}
                 value={horaInicio}
                 onChange={(e) => setHoraInicio(e.target.value)}
                 disabled={estaEnMora}
@@ -196,6 +339,10 @@ export function ReservarAreaForm({
             <Field label="Hora Fin" required>
               <Input
                 type="time"
+                required
+                min={apertura}
+                max={cierre}
+                step={60}
                 value={horaFin}
                 onChange={(e) => setHoraFin(e.target.value)}
                 disabled={estaEnMora}
@@ -214,7 +361,7 @@ export function ReservarAreaForm({
                     </p>
                     <p className="text-xs text-danger-700 leading-relaxed">
                       Tu departamento registra cuotas pendientes
-                      {deudaVencida ? ` por ${formatMoney(deudaVencida, "PEN")}` : ""}. Regulariza tu saldo para habilitar las reservas.
+                       {deudaVencida ? ` por ${formatMoney(deudaVencida, "PEN")}` : ""}. Un reporte en revisión no cancela esta deuda; debe aplicarse el pago aprobado.
                     </p>
                   </div>
                 </div>
@@ -237,7 +384,7 @@ export function ReservarAreaForm({
                 type="submit"
                 variant="primary"
                 fullWidth
-                disabled={areas.length === 0}
+                disabled={areas.length === 0 || !fechaReserva || cargandoDisponibilidad || !consultaVigente || Boolean(errorDisponibilidad) || turnoOcupado || !solvencia || solvencia.departamento_id !== departamentoId}
                 loading={isSubmitting}
                 loadingText="Verificando disponibilidad…"
               >

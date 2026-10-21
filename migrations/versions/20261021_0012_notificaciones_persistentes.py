@@ -4,11 +4,11 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-revision = "20261020_0010"
-down_revision = "20261020_0009"
+revision = "20261021_0012"
+down_revision = "20261020_0011"
 branch_labels = None
 depends_on = None
-MARCA = "Creado por CON-32/37 / Alembic 20261020_0010"
+MARCA = "Creado por CON-32/37 / Alembic 20261021_0012"
 
 
 def _id():
@@ -66,7 +66,7 @@ def upgrade():
         _ts("entregado_en"),
         sa.UniqueConstraint("clave_deduplicacion", name="uq_notificacion_entrega_logica"),
         sa.CheckConstraint(
-            "estado IN ('EN_COLA', 'REINTENTANDO', 'ACEPTADO', 'ENTREGADO', 'FALLIDO_PERMANENTE')",
+            "estado IN ('EN_COLA', 'REINTENTANDO', 'ENVIADO', 'ENTREGADO', 'FALLIDO_PERMANENTE')",
             name="ck_notificacion_estado",
         ),
         sa.CheckConstraint(

@@ -11,6 +11,7 @@ import {
   type Reserva,
   type ComprobantePago,
   type NotificacionLog,
+  type Solvencia,
   fetchAreasComunes,
   fetchDepartamentos,
   fetchReservas,
@@ -50,6 +51,7 @@ function ResidenteContent() {
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [revisionDisponibilidad, setRevisionDisponibilidad] = useState(0);
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
   const [comunicaciones, setComunicaciones] = useState<NotificacionLog[]>([]);
 
@@ -128,6 +130,7 @@ function ResidenteContent() {
   }, [contextoId]);
 
   const reloadReservas = useCallback(async () => {
+    setRevisionDisponibilidad((value) => value + 1);
     setLoadingReservas(true);
     setErrorReservas(null);
     try {
@@ -203,6 +206,11 @@ function ResidenteContent() {
     departamentos.find((d) => d.id === departamentoId) ?? null;
 
   const estaEnMora = deptoActual?.estado_financiero === "EN_MORA";
+  const actualizarSolvencia = useCallback((solvencia: Solvencia) => {
+    setDepartamentos((actuales) => actuales.map((depto) => depto.id === solvencia.departamento_id
+      ? { ...depto, deuda_vencida: solvencia.saldo_vencido, estado_financiero: solvencia.habilitado_reservas ? "AL_DIA" : "EN_MORA" }
+      : depto));
+  }, []);
 
   return (
     <div className="space-y-6 pb-24 sm:pb-8">
@@ -263,8 +271,10 @@ function ResidenteContent() {
               deudaVencida={deptoActual?.deuda_vencida}
               errorAreas={errorAreas}
               onRetryAreas={reloadAreas}
+              revisionDisponibilidad={revisionDisponibilidad}
               onSuccess={reloadReservas}
               onGoToPagos={() => setActiveTab("pagos")}
+              onSolvenciaActualizada={actualizarSolvencia}
             />
           </div>
           <div className="lg:col-span-2">

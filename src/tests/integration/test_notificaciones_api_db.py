@@ -45,7 +45,7 @@ def db_notificaciones_api(monkeypatch):
             reg = await conn.scalar(text("SELECT to_regclass('notificaciones')"))
             if reg is None:
                 await conn.run_sync(
-                    lambda c: migrar(c, ("20261020_0010_notificaciones_persistentes",))
+                    lambda c: migrar(c, ("20261021_0012_notificaciones_persistentes",))
                 )
         return base
 

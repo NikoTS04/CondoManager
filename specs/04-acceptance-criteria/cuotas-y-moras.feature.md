@@ -50,3 +50,8 @@ Los escenarios ejecutables del lote persistente se encuentran en
 `src/tests/bdd/test_emision_bdd.py`. Cubren presupuesto aprobado, cuotas activas,
 amortización de crédito, cierre contable, idempotencia y reversión completa.
 Las pruebas de integración añaden concurrencia API/worker, autorización y outbox.
+# Integración Sprint 2 — CON-22 y CON-70
+
+Los escenarios ejecutables de reporte local, revisión e idempotencia están en
+`specs/02-domains/02-pagos-y-moras/features/sprint_2_anderson.feature`.
+Se verifican con PostgreSQL, archivos temporales reales y nuevas sesiones.

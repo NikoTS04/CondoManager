@@ -9,10 +9,12 @@ import uuid
 from datetime import date, time
 from decimal import Decimal
 from pathlib import Path
+
 import pytest
 
 try:
     from pytest_bdd import given, parsers, scenarios, then, when
+
     HAS_PYTEST_BDD = True
 except ImportError:
     HAS_PYTEST_BDD = False
@@ -35,7 +37,11 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
     def context():
         return {}
 
-    @given(parsers.parse('que el departamento "{depto}" mantiene una cuota vencida en estado "EN_MORA"'))
+    @given(
+        parsers.parse(
+            'que el departamento "{depto}" mantiene una cuota vencida en estado "EN_MORA"'
+        )
+    )
     def depto_en_mora(context, depto):
         context["depto"] = depto
         context["deuda_mora"] = Decimal("170.00")
@@ -47,7 +53,11 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
         context["deuda_mora"] = Decimal("0.00")
         context["disponible"] = True
 
-    @given(parsers.parse('la "{area}" se encuentra disponible para el "{fecha}" de "{hora_inicio}" a "{hora_fin}"'))
+    @given(
+        parsers.parse(
+            'la "{area}" se encuentra disponible para el "{fecha}" de "{hora_inicio}" a "{hora_fin}"'
+        )
+    )
     @given(
         parsers.parse(
             'que la "{area}" está disponible para el "{fecha}" de "{hora_inicio}" a "{hora_fin}"'
@@ -61,7 +71,11 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
         context["hora_inicio"] = time(h_ini, m_ini)
         context["hora_fin"] = time(h_fin, m_fin)
 
-    @when(parsers.parse('el residente del departamento "{depto}" intenta reservar la "{area}" para el "{fecha}" de "{hora_inicio}" a "{hora_fin}"'))
+    @when(
+        parsers.parse(
+            'el residente del departamento "{depto}" intenta reservar la "{area}" para el "{fecha}" de "{hora_inicio}" a "{hora_fin}"'
+        )
+    )
     def intentar_reservar_mora(context, depto, area, fecha, hora_inicio, hora_fin):
         h_ini, m_ini = map(int, hora_inicio.split(":"))
         h_fin, m_fin = map(int, hora_fin.split(":"))
@@ -80,7 +94,11 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
             esta_horario_disponible=context["disponible"],
         )
 
-    @when(parsers.parse('el residente del departamento "{depto}" solicita la reserva de dicho espacio'))
+    @when(
+        parsers.parse(
+            'el residente del departamento "{depto}" solicita la reserva de dicho espacio'
+        )
+    )
     def solicitar_reserva_solvente(context, depto):
         solicitud = SolicitudReservaDTO(
             condominio_id="vb3-condo",
@@ -102,7 +120,11 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
         assert context["resultado"].es_exitosa is False
         assert context["resultado"].bloqueado_por_mora is True
 
-    @then(parsers.parse('el calendario de disponibilidad del área permanece inalterado para otros residentes'))
+    @then(
+        parsers.parse(
+            "el calendario de disponibilidad del área permanece inalterado para otros residentes"
+        )
+    )
     def calendario_inalterado(context):
         assert context["resultado"].reserva_id is None
 
@@ -111,32 +133,31 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
         assert context["resultado"].es_exitosa is True
         assert context["resultado"].reserva_id is not None
 
-    @then(parsers.parse('se envía un correo de confirmación con las normas de uso del espacio'))
+    @then(parsers.parse("se envía un correo de confirmación con las normas de uso del espacio"))
     def confirmacion_notificacion(context):
         pass
 
     @when(
         "dos residentes solventes envían solicitudes de reserva concurrentes sobre el mismo espacio y horario"
     )
-    def reservas_concurrentes(context, monkeypatch):
+    def reservas_concurrentes(context, monkeypatch, finanzas_contrato):
         from fastapi import HTTPException
 
         from src.modules.reservas import router
         from src.modules.reservas.schemas import CrearReservaRequest
-        from src.modules.usuarios.piloto import vinculo_piloto
+        from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
+        from src.tests.areas import AreasCatalogoFake
         from src.tests.departamentos import CatalogoDepartamentosFake
 
         catalogo = CatalogoDepartamentosFake()
         area_id = uuid.uuid4()
-        condominio_id = router.CONDOMINIO_PILOTO_ID
+        condominio_id = CONDOMINIO_PILOTO_ID
         monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {})
-        monkeypatch.setattr(
-            router,
-            "AREAS_REGISTRADAS",
-            {
-                area_id: {"nombre": context["area"], "esta_activa": True, "condominio_id": condominio_id},
-            },
-        )
+        areas = AreasCatalogoFake()
+        area = next(iter(areas.datos.values()))
+        area.id = area_id
+        area.nombre = context["area"]
+        areas.datos = {area_id: area}
 
         async def solicitar(numero):
             vinculo = vinculo_piloto(numero, "PROPIETARIO_TITULAR")
@@ -149,10 +170,18 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
                 hora_fin=context["hora_fin"],
             )
             try:
-                return await router.crear_reserva(request, user={
-                    "sub": "residente-" + numero, "rol": "RESIDENTE",
-                    "condominio_id": str(condominio_id), "departamentos": [vinculo],
-                }, repository=catalogo)
+                return await router.crear_reserva(
+                    request,
+                    user={
+                        "sub": "residente-" + numero,
+                        "rol": "RESIDENTE",
+                        "condominio_id": str(condominio_id),
+                        "departamentos": [vinculo],
+                    },
+                    solvencia=finanzas_contrato,
+                    repository=catalogo,
+                    areas_repository=areas,
+                )
             except HTTPException as exc:
                 return exc
 
@@ -184,7 +213,10 @@ if HAS_PYTEST_BDD and FEATURE_FILE.exists():
         assert segunda.status_code == 409
         assert segunda.detail["error_code"] == error_code
 else:
+
     def test_bdd_skipped_if_no_pytest_bdd():
         """Aviso informativo si pytest-bdd no está instalado en el entorno actual."""
         if not HAS_PYTEST_BDD:
-            pytest.skip("pytest-bdd no está instalado aún en el entorno global. Ejecute 'pip install pytest-bdd'.")
+            pytest.skip(
+                "pytest-bdd no está instalado aún en el entorno global. Ejecute 'pip install pytest-bdd'."
+            )

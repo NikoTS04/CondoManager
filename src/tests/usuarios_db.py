@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from scripts.seed_areas_demo import cargar_areas_demo
 from scripts.seed_usuarios_demo import cargar_demo
 from src.core.config import settings
 from src.core.database import get_db_session
@@ -32,6 +33,7 @@ REVISIONES = (
     "20261020_0007_alta_usuarios",
     "20261020_0008_roles_revocables",
     "20261020_0009_vinculos_departamentos",
+    "20261020_0010_catalogo_areas",
 )
 
 
@@ -64,6 +66,8 @@ async def crear_base(url):
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     async with sessions() as session, session.begin():
         await cargar_demo(session)
+        await cargar_areas_demo(session)
+    await engine.dispose()
     return BaseUsuarios(engine, sessions, esquema, url)
 
 
@@ -78,7 +82,8 @@ async def borrar_base(base):
 @pytest.fixture
 def db_usuarios(monkeypatch):
     url = (
-        os.getenv("CON05_TEST_DATABASE_URL")
+        os.getenv("CON39_TEST_DATABASE_URL")
+        or os.getenv("CON05_TEST_DATABASE_URL")
         or os.getenv("CON06_TEST_DATABASE_URL")
         or os.getenv("CON04_TEST_DATABASE_URL")
         or os.getenv("CON13_TEST_DATABASE_URL")

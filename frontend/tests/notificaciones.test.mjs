@@ -27,7 +27,7 @@ test("fetchNotificaciones envía condominio_id y filtros de departamento, estado
           destinatario: "residente@ejemplo.test",
           asunto: "Corte de agua",
           cuerpo: "Mantenimiento programado.",
-          estado: "ACEPTADO",
+          estado: "ENVIADO",
           intentos: 1,
           ciclo: 1,
           transporte_simulado: true,
@@ -43,21 +43,21 @@ test("fetchNotificaciones envía condominio_id y filtros de departamento, estado
   try {
     const resultado = await api.fetchNotificaciones(cid, {
       departamento_id: did,
-      estado: "ACEPTADO",
+      estado: "ENVIADO",
       canal: "EMAIL",
       origen_tipo: "COMUNICADO",
       limit: 20,
       offset: 0,
     });
     assert.equal(resultado.length, 1);
-    assert.equal(resultado[0].estado, "ACEPTADO");
+    assert.equal(resultado[0].estado, "ENVIADO");
     assert.equal(resultado[0].ciclo, 1);
     assert.equal(resultado[0].transporte_simulado, true);
     const parsed = new URL(solicitudes[0].url);
     assert.equal(parsed.pathname, "/api/v1/notificaciones/logs");
     assert.equal(parsed.searchParams.get("condominio_id"), cid);
     assert.equal(parsed.searchParams.get("departamento_id"), did);
-    assert.equal(parsed.searchParams.get("estado"), "ACEPTADO");
+    assert.equal(parsed.searchParams.get("estado"), "ENVIADO");
     assert.equal(parsed.searchParams.get("canal"), "EMAIL");
     assert.equal(parsed.searchParams.get("origen_tipo"), "COMUNICADO");
     assert.equal(parsed.searchParams.get("limit"), "20");

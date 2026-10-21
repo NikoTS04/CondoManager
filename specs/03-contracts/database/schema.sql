@@ -211,15 +211,65 @@ CREATE TABLE comprobantes_pago (
 );
 
 -- 6. Tabla de Áreas Comunes
+-- CON-70: extensiones aditivas. Las migraciones Alembic son la fuente ejecutable.
+CREATE TABLE imputaciones_pago (
+    id UUID PRIMARY KEY,
+    comprobante_id UUID NOT NULL REFERENCES comprobantes_pago(id) ON DELETE RESTRICT,
+    cuota_id UUID NOT NULL REFERENCES cuotas_mantenimiento(id) ON DELETE RESTRICT,
+    monto_aplicado NUMERIC(12,2) NOT NULL CHECK (monto_aplicado > 0.00),
+    fecha_imputacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE archivos_voucher (
+    nombre TEXT PRIMARY KEY,
+    departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,
+    usuario_id UUID NOT NULL,
+    content_type VARCHAR(30) NOT NULL CHECK (content_type IN ('image/png', 'image/jpeg', 'application/pdf')),
+    size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 5242880),
+    creado_en TIMESTAMPTZ NOT NULL,
+    comprobante_id UUID UNIQUE REFERENCES comprobantes_pago(id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_voucher_pendientes ON archivos_voucher(comprobante_id, creado_en);
+
+CREATE TABLE revisiones_pago (
+    id UUID PRIMARY KEY,
+    comprobante_id UUID NOT NULL REFERENCES comprobantes_pago(id) ON DELETE RESTRICT,
+    decision VARCHAR(20) NOT NULL CHECK (decision IN ('APROBADO', 'OBSERVADO', 'RECHAZADO')),
+    motivo TEXT,
+    actor_id UUID NOT NULL,
+    creado_en TIMESTAMPTZ NOT NULL,
+    resultado JSONB NOT NULL
+);
+CREATE INDEX idx_revision_comprobante_fecha ON revisiones_pago(comprobante_id, creado_en);
+
+CREATE TABLE eventos_pago_outbox (
+    id UUID PRIMARY KEY,
+    comprobante_id UUID NOT NULL REFERENCES comprobantes_pago(id) ON DELETE RESTRICT,
+    payload JSONB NOT NULL,
+    creado_en TIMESTAMPTZ NOT NULL,
+    publicado_en TIMESTAMPTZ
+);
+CREATE INDEX idx_evento_pago_pendiente ON eventos_pago_outbox(publicado_en, creado_en);
+
+-- 6. Tabla de Áreas Comunes
 CREATE TABLE areas_comunes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
+    edificio_id UUID REFERENCES edificios(id) ON DELETE SET NULL,
     nombre VARCHAR(100) NOT NULL,
     descripcion TEXT,
     aforo_maximo INT NOT NULL CHECK (aforo_maximo > 0),
     costo_reserva NUMERIC(12,2) NOT NULL DEFAULT 0.00 CHECK (costo_reserva >= 0.00),
-    esta_activa BOOLEAN NOT NULL DEFAULT TRUE
+    esta_activa BOOLEAN NOT NULL DEFAULT TRUE,
+    tiempo_maximo_horas INTEGER NOT NULL DEFAULT 4 CHECK (tiempo_maximo_horas >= 1),
+    hora_apertura TIME NOT NULL DEFAULT '00:00',
+    hora_cierre TIME NOT NULL DEFAULT '23:59',
+    CONSTRAINT ck_area_horario_catalogo CHECK (
+        hora_cierre > hora_apertura AND EXTRACT(SECOND FROM hora_apertura) = 0
+        AND EXTRACT(SECOND FROM hora_cierre) = 0
+    )
 );
+CREATE INDEX idx_areas_catalogo_contexto ON areas_comunes (condominio_id, esta_activa, nombre);
 
 -- 7. Tabla de Reservas (Brandon - PROC-04)
 CREATE TABLE reservas (
@@ -259,7 +309,7 @@ CREATE INDEX idx_comprobantes_hash ON comprobantes_pago(idempotency_hash);
 CREATE INDEX idx_reservas_bloqueo ON reservas(area_id, fecha_reserva, hora_inicio, hora_fin) WHERE estado = 'CONFIRMADA';
 CREATE INDEX idx_auditoria_depto_fecha ON auditoria_logs(departamento_id, timestamp DESC);
 
--- 9. Tablas Persistentes de Notificaciones, Intentos, Consumo Idempotente y Alertas (CON-32/34/36/37/73 - Migración 20261020_0010)
+-- 9. Tablas Persistentes de Notificaciones, Intentos, Consumo Idempotente y Alertas (CON-32/34/36/37/73 - Migración 20261021_0012)
 CREATE TABLE notificaciones (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,

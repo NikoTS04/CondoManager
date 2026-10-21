@@ -36,7 +36,7 @@ class CanalNotificacionEnum(str, Enum):
 class EstadoNotificacionEnum(str, Enum):
     EN_COLA = "EN_COLA"
     REINTENTANDO = "REINTENTANDO"
-    ACEPTADO = "ACEPTADO"
+    ENVIADO = "ENVIADO"
     ENTREGADO = "ENTREGADO"
     FALLIDO_PERMANENTE = "FALLIDO_PERMANENTE"
 

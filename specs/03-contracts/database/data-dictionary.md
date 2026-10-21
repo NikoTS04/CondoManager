@@ -229,6 +229,31 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 
 ---
 
+## Catálogo `areas_comunes` — CON-39
+
+Contrato: [catálogo persistente](../../02-domains/04-reservas/catalogo-areas.md).
+La migración `20261020_0010` crea/adopta la tabla y valida sus atributos base.
+
+| Columna | Tipo | Nulo | Default | Regla |
+|---|---|---|---|---|
+| `id` | UUID | NO | gen_random_uuid() | PK estable |
+| `condominio_id` | UUID | NO | — | FK CASCADE a condominios |
+| `edificio_id` | UUID | SÍ | NULL | FK SET NULL a edificios; mismo condominio |
+| `nombre` | VARCHAR(100) | NO | — | Nombre del área |
+| `descripcion` | TEXT | SÍ | NULL | Condiciones descriptivas |
+| `aforo_maximo` | INTEGER | NO | — | >0 |
+| `costo_reserva` | NUMERIC(12,2) | NO | 0.00 | >=0; por turno, moneda del condominio |
+| `tiempo_maximo_horas` | INTEGER | NO | 4 | >=1; nuevas configuraciones 1–24 |
+| `esta_activa` | BOOLEAN | NO | true | Desactivación lógica |
+| `hora_apertura` | TIME | NO | 00:00 | Hora local de Lima; precisión de minuto |
+| `hora_cierre` | TIME | NO | 23:59 | Posterior a apertura; mismo día |
+
+Check `ck_area_horario_catalogo`: cierre > apertura y segundos cero en ambas horas.
+Índice contextual `idx_areas_catalogo_contexto` sobre condominio, estado y nombre.
+No se eliminan reservas ni se alteran costos históricos al editar el catálogo.
+Auditoría de altas/cambios/estado atómica; no-op sin nueva entrada. El downgrade
+retira horas e índice, conservando tablas adoptadas o con datos/referencias.
+
 ## 6. Tabla: `reservas`
 Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 
@@ -277,10 +302,30 @@ Almacena la bitácora inmutable de eventos (7 campos obligatorios).
 - CON-11 crea `cuotas_mantenimiento` y completa `fk_aplicacion_saldo_cuota` con
   `ON DELETE RESTRICT`; `monto_total_exigible` conserva el bruto y `monto_pagado`
   incluye el crédito aplicado por CON-13. Migración `20261019_0006`.
+# Extensión financiera Sprint 2 (CON-22 / CON-70)
+
+Contrato: `specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md`.
+`comprobantes_pago.url_voucher` conserva TEXT; las nuevas filas almacenan solamente
+un nombre local UUID con extensión. El condominio se obtiene por departamento →
+edificio, sin añadir campos incompatibles al modelo existente.
+
+- `imputaciones_pago`: UUID PK, comprobante_id y cuota_id FK RESTRICT,
+  monto_aplicado NUMERIC(12,2) positivo, fecha_imputacion TIMESTAMPTZ.
+- `archivos_voucher`: nombre TEXT PK, departamento_id FK RESTRICT, usuario_id UUID,
+  content_type, size_bytes (1..5242880), creado_en TIMESTAMPTZ,
+  comprobante_id UUID único nullable FK RESTRICT. NULL representa una subida pendiente.
+- `revisiones_pago`: UUID PK, comprobante_id FK RESTRICT, decision, motivo nullable,
+  actor_id UUID, creado_en TIMESTAMPTZ y resultado JSONB con importes como strings.
+- `eventos_pago_outbox`: UUID PK, comprobante_id FK RESTRICT, payload JSONB,
+  creado_en TIMESTAMPTZ, publicado_en TIMESTAMPTZ nullable. No contiene el archivo.
+
+La revisión Alembic nueva crea o valida/adopta comprobantes e imputaciones sin
+borrar filas. El downgrade no elimina tablas adoptadas. No se alteran revisiones
+ya aplicadas ni tablas de reservas/notificaciones.
 
 ---
 
-## Extensión CON-32 / CON-34 / CON-36 / CON-37 / CON-73 — Notificaciones Persistentes (Migración `20261020_0010`)
+## Extensión CON-32 / CON-34 / CON-36 / CON-37 / CON-73 — Notificaciones Persistentes (Migración `20261021_0012`)
 
 ### 8. Tabla: `notificaciones`
 Almacena cada entrega lógica de notificación por destinatario, canal y operación de origen.

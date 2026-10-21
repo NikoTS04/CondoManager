@@ -22,7 +22,7 @@ const ESTADOS_RESIDENTE: Record<
   { label: string; tone: Tone }
 > = {
   ENTREGADO: { label: "Entregado", tone: "success" },
-  ACEPTADO: { label: "Enviado", tone: "info" },
+  ENVIADO: { label: "Enviado", tone: "info" },
   REINTENTANDO: { label: "En envío", tone: "warning" },
   FALLIDO_PERMANENTE: { label: "No entregado", tone: "danger" },
   EN_COLA: { label: "En cola", tone: "neutral" },

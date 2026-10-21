@@ -23,6 +23,9 @@ from src.modules.notificaciones.models import (  # noqa: F401
     Notificacion,
     NotificacionIntento,
 )
+from src.modules.pagos.models import ComprobantePago, ImputacionPago  # noqa: F401
+from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutbox, RevisionPago  # noqa: F401
+from src.modules.reservas.areas.models import AreaComun  # noqa: F401
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol  # noqa: F401
 
 config = context.config

@@ -1,13 +1,15 @@
-from decimal import Decimal
-import uuid
-import pytest
 import os
+import uuid
 
-pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
+import pytest
+
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada", "finanzas_contrato")
 
 try:
     from fastapi.testclient import TestClient
+
     from src.main import app
+
     client = TestClient(app)
     HAS_FASTAPI = True
 except ImportError:
@@ -19,19 +21,30 @@ def auth():
     from src.core.security import create_access_token
     from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
 
-    return {"Authorization": "Bearer " + create_access_token({
-        "sub": "prueba-api", "rol": "ADMIN_JUNTA", "condominio_id": str(CONDOMINIO_PILOTO_ID),
-    })}
+    return {
+        "Authorization": "Bearer "
+        + create_access_token(
+            {
+                "sub": "prueba-api",
+                "rol": "ADMIN_JUNTA",
+                "condominio_id": str(CONDOMINIO_PILOTO_ID),
+            }
+        )
+    }
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
 def test_health_check_endpoint():
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
 def test_api_emitir_lote_cuotas():
     payload = {
         "condominio_id": str(uuid.uuid4()),
@@ -45,7 +58,9 @@ def test_api_emitir_lote_cuotas():
     assert response.status_code == 401
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
 def test_api_reportar_pago_e_idempotencia():
     from src.modules.usuarios.piloto import vinculo_piloto
 
@@ -67,7 +82,7 @@ def test_api_reportar_pago_e_idempotencia():
 
     # 2. Reporte duplicado en revisión -> retorna el mismo comprobante sin duplicar
     res2 = client.post("/api/v1/pagos/reportar", json=payload)
-    assert res2.status_code == 202
+    assert res2.status_code == 200
     assert res2.json()["comprobante_id"] == data1["comprobante_id"]
 
 
@@ -81,7 +96,7 @@ def test_api_reservas_flujo_completo(monkeypatch, autorizacion_aislada):
     # tal como exige OpenAPI; "402" era rechazado por Pydantic antes del servicio.
     monkeypatch.setattr(reservas_router, "RESERVAS_REGISTRADAS", {})
     departamentos = {d["numero"]: str(d["id"]) for d in autorizacion_aislada.datos.values()}
-    condominio_id = str(reservas_router.CONDOMINIO_PILOTO_ID)
+    condominio_id = str(next(iter(autorizacion_aislada.datos.values()))["condominio_id"])
     # 1. Catálogo de áreas comunes
     res_areas = client.get("/api/v1/areas")
     assert res_areas.status_code == 200
@@ -140,7 +155,9 @@ def test_api_reservas_flujo_completo(monkeypatch, autorizacion_aislada):
     assert res_cancelar.json()["estado"] == "CANCELADA"
 
 
-@pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual")
+@pytest.mark.skipif(
+    not HAS_FASTAPI, reason="fastapi no está instalado en el entorno de pruebas actual"
+)
 def test_api_notificaciones_endpoints():
     from src.core.security import create_access_token
     from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID

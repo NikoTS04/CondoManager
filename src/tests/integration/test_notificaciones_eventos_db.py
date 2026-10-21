@@ -72,7 +72,7 @@ REVISIONES = (
     "20261020_0007_alta_usuarios",
     "20261020_0008_roles_revocables",
     "20261020_0009_vinculos_departamentos",
-    "20261020_0010_notificaciones_persistentes",
+    "20261021_0012_notificaciones_persistentes",
 )
 
 

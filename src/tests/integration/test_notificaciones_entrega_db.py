@@ -7,7 +7,7 @@ Verifica en esquemas aislados de PostgreSQL real:
 3. Error definitivo inmediato (550, 131026, 4xx != 429, destinatario inválido).
 4. Dos workers concurrentes (`FOR UPDATE SKIP LOCKED`) no envían dos veces la misma notificación.
 5. Recuperación de arrendamiento vencido tras caída/reinicio de un worker y protección de lease.
-6. Notificación en estado ACEPTADO o ENTREGADO nunca se reenvía.
+6. Notificación en estado ENVIADO o ENTREGADO nunca se reenvía.
 7. Reprogramación manual (`reprogramar_manual`) exclusiva para FALLIDO_PERMANENTE.
 8. Evidencia persistida (`transporte_simulado`, `proveedor_message_id`, intentos, alertas)
    consultable desde una nueva sesión independiente.
@@ -48,7 +48,7 @@ from src.modules.notificaciones.transportes import (
 from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, DEPARTAMENTOS_PILOTO
 from src.tests.usuarios_db import REVISIONES, BaseUsuarios, borrar_base, migrar
 
-REVISIONES_NOTIFICACIONES = (*REVISIONES, "20261020_0010_notificaciones_persistentes")
+REVISIONES_NOTIFICACIONES = (*REVISIONES, "20261021_0012_notificaciones_persistentes")
 
 
 async def _crear_base_notificaciones(url: str) -> BaseUsuarios:
@@ -437,7 +437,7 @@ async def test_dos_workers_concurrentes_no_envian_dos_veces(db_notificaciones: B
     async with db_notificaciones.sessions() as session:
         for nid in ids:
             notif = await session.get(Notificacion, nid)
-            assert notif.estado == "ACEPTADO"
+            assert notif.estado == "ENVIADO"
             assert notif.intentos == 1
 
 
@@ -490,7 +490,7 @@ async def test_arrendamiento_vencido_recuperado_tras_reinicio_y_proteccion_lease
     assert res_recuperado.aceptadas == 1
     assert transporte.llamadas_para(notif_id) == 1
 
-    # 4. Si el worker caído intenta tardíamente registrar un fallo, es omitido y no pisa ACEPTADO
+    # 4. Si el worker caído intenta tardíamente registrar un fallo, es omitido y no pisa ENVIADO
     estado_tardio = await registrar_resultado_intento(
         session_factory=db_notificaciones.sessions,
         notificacion_id=notif_id,
@@ -504,7 +504,7 @@ async def test_arrendamiento_vencido_recuperado_tras_reinicio_y_proteccion_lease
 
     async with db_notificaciones.sessions() as session:
         notif = await session.get(Notificacion, notif_id)
-        assert notif.estado == "ACEPTADO"
+        assert notif.estado == "ENVIADO"
         assert notif.intentos == 1
         assert notif.error_codigo is None
 
@@ -647,7 +647,7 @@ async def test_transporte_por_defecto_fallos_de_demostracion_persisten_entre_rei
         temporal = await session.get(Notificacion, id_temporal)
         rebote = await session.get(Notificacion, id_rebote)
         assert (temporal.estado, temporal.intentos, temporal.transporte_simulado) == (
-            "ACEPTADO",
+            "ENVIADO",
             2,
             True,
         )

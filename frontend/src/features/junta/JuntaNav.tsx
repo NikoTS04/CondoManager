@@ -10,6 +10,7 @@ import {
   Settings2,
   Clock3,
   Users,
+  CalendarDays,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
@@ -19,6 +20,7 @@ export type JuntaSection =
   | "configuracion"
   | "estructura"
   | "usuarios"
+  | "areas"
   | "presupuesto"
   | "cuotas"
   | "conciliacion"
@@ -30,6 +32,7 @@ const NAV_ITEMS = [
   { id: "configuracion", label: "Configuración", Icon: Settings2, superAdmin: true },
   { id: "estructura", label: "Estructura", Icon: Building2 },
   { id: "usuarios", label: "Usuarios", Icon: Users, administracion: true },
+  { id: "areas", label: "Áreas comunes", Icon: CalendarDays },
   { id: "presupuesto", label: "Presupuesto", Icon: ClipboardCheck },
   { id: "cuotas", label: "Distribución y emisión", Icon: Coins },
   { id: "conciliacion", label: "Conciliación", Icon: FileCheck2 },

@@ -234,7 +234,7 @@ async def registrar_resultado_intento(
             return "OMITIDA"
 
         # Nunca reenviar ni pisar una notificación ya aceptada o entregada.
-        if actual.estado in ("ACEPTADO", "ENTREGADO"):
+        if actual.estado in ("ENVIADO", "ENTREGADO"):
             return "OMITIDA"
 
         # Si el worker perdió el arrendamiento frente a otro worker, no pisa el estado.
@@ -297,7 +297,7 @@ async def registrar_resultado_intento(
                 actual.estado = "ENTREGADO"
                 actual.entregado_en = finalizado_en
             else:
-                actual.estado = "ACEPTADO"
+                actual.estado = "ENVIADO"
             return actual.estado
 
         actual.error_codigo = codigo_guardar
@@ -366,7 +366,7 @@ async def despachar_pendientes(
             finalizado_en=finalizado_en,
             jitter_fn=jitter_fn,
         )
-        if estado_final == "ACEPTADO":
+        if estado_final == "ENVIADO":
             resumen.aceptadas += 1
         elif estado_final == "ENTREGADO":
             resumen.entregadas += 1

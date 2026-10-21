@@ -62,10 +62,50 @@ export interface AreaComun {
   id: string;
   condominio_id: string;
   nombre: string;
-  descripcion: string;
+  descripcion: string | null;
   aforo_maximo: number;
   costo_reserva: string;
   esta_activa: boolean;
+  edificio_id: string | null;
+  edificio_nombre: string | null;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+  moneda: Moneda;
+  zona_horaria: "America/Lima";
+}
+
+export interface ConfigurarAreaPayload {
+  nombre: string;
+  descripcion: string | null;
+  edificio_id: string | null;
+  aforo_maximo: number;
+  costo_reserva: string;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+}
+
+function rutaAreas(condominioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/areas`;
+}
+
+export function listarCatalogoAreas(condominioId: string, activa?: boolean, limit = 50, offset = 0): Promise<AreaComun[]> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (activa !== undefined) params.set("esta_activa", String(activa));
+  return recursoRequest(`${rutaAreas(condominioId)}?${params}`);
+}
+
+export function registrarArea(condominioId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(rutaAreas(condominioId), { method: "POST", body: JSON.stringify(datos) });
+}
+
+export function configurarArea(condominioId: string, areaId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
+export function cambiarEstadoArea(condominioId: string, areaId: string, esta_activa: boolean): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}/estado`, { method: "PATCH", body: JSON.stringify({ esta_activa }) });
 }
 
 export interface Reserva {
@@ -78,6 +118,7 @@ export interface Reserva {
   hora_inicio: string;
   hora_fin: string;
   costo_reserva: string;
+  moneda?: Moneda;
   estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA";
   creado_en: string;
 }
@@ -89,7 +130,7 @@ export interface ComprobantePago {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  estado: "EN_REVISION" | "CONCILIADO" | "RECHAZADO";
+  estado: "EN_REVISION" | "CONCILIADO" | "RECHAZADO" | "OBSERVADO";
   idempotency_hash: string;
   url_voucher?: string;
   motivo_rechazo?: string;
@@ -98,7 +139,7 @@ export interface ComprobantePago {
 export type EstadoNotificacion =
   | "EN_COLA"
   | "REINTENTANDO"
-  | "ACEPTADO"
+  | "ENVIADO"
   | "ENTREGADO"
   | "FALLIDO_PERMANENTE";
 
@@ -645,7 +686,7 @@ export function fetchAreasComunes(condominioId?: string | null): Promise<AreaCom
 export interface HorarioOcupado { hora_inicio: string; hora_fin: string }
 
 export function fetchDisponibilidad(areaId: string, fecha: string): Promise<HorarioOcupado[]> {
-  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`);
+  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`, { cache: "no-store" });
 }
 
 export function fetchReservas(areaId?: string, fecha?: string, condominioId?: string | null): Promise<Reserva[]> {
@@ -694,16 +735,61 @@ export async function reportarPago(payload: {
   fecha_operacion: string;
   monto: string;
   url_voucher?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; errorCode?: string; duplicado?: boolean }> {
   try {
-    await recursoRequest("/pagos/reportar", {
+    const response = await fetchProtegido("/pagos/reportar", {
       method: "POST",
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
-    return { ok: true };
+    const data = await response.json();
+    const errorCode = obtenerCodigoError(data);
+    if (!response.ok) return { ok: false, error: obtenerMensajeError(data, "No se pudo reportar el pago."), errorCode };
+    return { ok: true, duplicado: response.status === 200, errorCode };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
+}
+
+export async function subirVoucher(departamentoId: string, archivo: File): Promise<string> {
+  const form = new FormData();
+  form.append("departamento_id", departamentoId);
+  form.append("voucher_file", archivo);
+  const headers = getAuthHeaders();
+  delete headers["Content-Type"];
+  const response = await fetchProtegido("/pagos/vouchers", { method: "POST", headers, body: form });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo subir el voucher."));
+  return data.url_voucher as string;
+}
+
+export async function descargarVoucher(comprobante: ComprobantePago): Promise<void> {
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobante.id)}/voucher`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(obtenerMensajeError(data, "No se pudo recuperar el voucher."));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = comprobante.url_voucher?.match(/^[\da-f-]+\.(png|jpg|pdf)$/)?.[0] || `voucher-${comprobante.id}`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  // URL exclusiva de descarga; nunca se envía al servidor ni se persiste.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export interface Solvencia {
+  departamento_id: string;
+  saldo_vencido: string;
+  habilitado_reservas: boolean;
+}
+
+export function fetchSolvencia(departamentoId: string): Promise<Solvencia> {
+  return recursoRequest(`/pagos/solvencia/${encodeURIComponent(departamentoId)}`);
 }
 
 export function fetchComprobantes(condominioId?: string | null): Promise<ComprobantePago[]> {
@@ -712,7 +798,7 @@ export function fetchComprobantes(condominioId?: string | null): Promise<Comprob
 
 export async function conciliarComprobante(
   comprobanteId: string,
-  decision: "APROBADO" | "RECHAZADO",
+  decision: "APROBADO" | "RECHAZADO" | "OBSERVADO",
   motivo_rechazo?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {

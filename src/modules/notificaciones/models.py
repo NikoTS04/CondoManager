@@ -1,7 +1,7 @@
 """Modelos ORM persistentes de notificaciones (Alejandro - CON-32/34/36/37).
 
 Distingue registro persistido (`EN_COLA`), envío aceptado por el proveedor
-(`ACEPTADO`) y entrega confirmada (`ENTREGADO`). La deduplicación lógica se
+(`ENVIADO`) y entrega confirmada (`ENTREGADO`). La deduplicación lógica se
 apoya en `clave_deduplicacion`; la coordinación entre workers en el arrendamiento
 `bloqueado_hasta`/`bloqueado_por` tomado con `FOR UPDATE SKIP LOCKED`.
 """
@@ -31,7 +31,7 @@ from src.core.database import Base
 ESTADOS_NOTIFICACION = (
     "EN_COLA",
     "REINTENTANDO",
-    "ACEPTADO",
+    "ENVIADO",
     "ENTREGADO",
     "FALLIDO_PERMANENTE",
 )
@@ -92,7 +92,7 @@ class Notificacion(Base):
     __table_args__ = (
         UniqueConstraint("clave_deduplicacion", name="uq_notificacion_entrega_logica"),
         CheckConstraint(
-            "estado IN ('EN_COLA', 'REINTENTANDO', 'ACEPTADO', 'ENTREGADO', 'FALLIDO_PERMANENTE')",
+            "estado IN ('EN_COLA', 'REINTENTANDO', 'ENVIADO', 'ENTREGADO', 'FALLIDO_PERMANENTE')",
             name="ck_notificacion_estado",
         ),
         CheckConstraint(

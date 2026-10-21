@@ -47,7 +47,7 @@ export const ESTADOS_NOTIFICACION: Record<
   { label: string; tone: Tone }
 > = {
   ENTREGADO: { label: "Entregado", tone: "success" },
-  ACEPTADO: { label: "Aceptado", tone: "info" },
+  ENVIADO: { label: "Enviado", tone: "info" },
   REINTENTANDO: { label: "Reintentando", tone: "warning" },
   FALLIDO_PERMANENTE: { label: "Fallido permanente", tone: "danger" },
   EN_COLA: { label: "En cola", tone: "neutral" },
@@ -350,7 +350,7 @@ export function ComunicadosSection({
                   <option value="">Todos</option>
                   <option value="EN_COLA">En cola</option>
                   <option value="REINTENTANDO">Reintentando</option>
-                  <option value="ACEPTADO">Aceptado</option>
+                  <option value="ENVIADO">Enviado</option>
                   <option value="ENTREGADO">Entregado</option>
                   <option value="FALLIDO_PERMANENTE">Fallido permanente</option>
                 </Select>
