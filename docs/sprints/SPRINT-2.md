@@ -409,6 +409,10 @@ Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
 
 ## CON-72 — Consolidar contratos API y reglas de eventos
 
+Convergencia implementada y evidencia local: [CON-72-convergencia.md](CON-72-convergencia.md).
+Pendientes revisión de pares y verificación del esquema desplegado; no se acredita
+entrega física de notificaciones con el transporte simulado.
+
 **Objetivo técnico:** establecer un contrato único entre módulos, interfaz, persistencia y comunicaciones para integrar el prototipo sin interpretaciones incompatibles.
 
 **Base de implementación:** [contratos del Sprint 2 / CON-72](../../specs/05-api/sprint-2-contratos.md), para que cada responsable implemente su HU. La entrega se limita a OpenAPI, esquemas de eventos, catálogo y guía de contratos. Los ajustes de dominio, proceso y persistencia se incorporan junto con la implementación de cada HU.

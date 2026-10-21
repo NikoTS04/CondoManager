@@ -68,6 +68,27 @@ test("el comunicado confirma cola y conserva el número de avisos persistidos", 
   assert.deepEqual(await api.enviarComunicadoMasivo("Aviso", "Mensaje", "cid"), { ok: true, generadas: 3 });
 });
 
+test("reporte y subsanación usan multipart sin enviar claves privadas ni Content-Type manual", async (t) => {
+  const archivo = new File(["voucher"], "pago.png", { type: "image/png" });
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    return new Response(JSON.stringify({ codigo: "VOUCHER_EN_EVALUACION" }), { status: 200 });
+  });
+  const res = await api.reportarPago({ departamento_id: "unidad", banco: "BCP", numero_operacion: "1",
+    fecha_operacion: "2026-10-15", monto: "10.00", archivo_voucher: archivo });
+  assert.equal(res.duplicado, true);
+  await api.subsanarVoucher("comprobante", archivo);
+  assert.equal(solicitudes[0].init.method, "POST");
+  assert.equal(solicitudes[1].init.method, "PUT");
+  for (const { init } of solicitudes) {
+    assert.equal(init.headers["Content-Type"], undefined);
+    assert.equal(init.body.get("archivo_voucher").name, "pago.png");
+    assert.equal(init.body.has("url_voucher"), false);
+  }
+  assert.deepEqual([...solicitudes[1].init.body.keys()], ["archivo_voucher"]);
+});
+
 test("alta, listado y estado de usuarios respetan el contexto y los métodos del contrato", async (t) => {
   const cid = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
   const uid = "8d3f2f64-1111-4222-8333-444455556666";

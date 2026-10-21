@@ -31,7 +31,11 @@ async def test_adopta_sin_perder_instantes_o_revierte_sin_perder_datos(db_usuari
             esquema = "con73_legacy_" + uuid4().hex
             await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
             await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
-            await conn.run_sync(lambda c: migrar(c, REVISIONES[:-1]))
+            await conn.run_sync(
+                lambda c: migrar(
+                    c, REVISIONES[: REVISIONES.index("20261020_0012_reservas_notificaciones")]
+                )
+            )
             async with AsyncSession(bind=conn, expire_on_commit=False) as db:
                 await cargar_demo(db)
                 await cargar_areas_demo(db)

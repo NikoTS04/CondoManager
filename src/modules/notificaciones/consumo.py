@@ -22,6 +22,7 @@ TIPOS = {
     "PagoConciliadoEvent": (EventoPagoOutbox, "NOTIF_PAGO_CONCILIADO"),
     "PagoObservadoEvent": (EventoPagoOutbox, "NOTIF_PAGO_OBSERVADO"),
     "PagoRechazadoEvent": (EventoPagoOutbox, "NOTIF_PAGO_RECHAZADO"),
+    "PagoRevisadoEvent": (EventoPagoOutbox, "NOTIF_PAGO_OBSERVADO"),
     "ReservaConfirmadaEvent": (EventoReservaOutbox, "NOTIF_RESERVA_CONFIRMADA"),
     "ReservaCanceladaEvent": (EventoReservaOutbox, "NOTIF_RESERVA_CANCELADA"),
 }
@@ -35,8 +36,17 @@ async def consumir(session_factory, payload):
         tipo = payload["event_type"]
         modelo, plantilla = TIPOS[tipo]
         eid = UUID(payload["event_id"])
-        if modelo is EventoPagoOutbox and payload.get("version") != 1:
-            raise ValueError("VERSION_PAGO_NO_SOPORTADA")
+        if modelo is EventoPagoOutbox:
+            canonico = "schema_version" in payload
+            if payload.get("schema_version" if canonico else "version") != 1:
+                raise ValueError("VERSION_PAGO_NO_SOPORTADA")
+            if tipo == "PagoRevisadoEvent":
+                estado = payload["data"]["estado_final"]
+                if estado not in {"OBSERVADO", "RECHAZADO"} or not canonico:
+                    raise ValueError("ESTADO_PAGO_INVALIDO")
+                plantilla = (
+                    "NOTIF_PAGO_OBSERVADO" if estado == "OBSERVADO" else "NOTIF_PAGO_RECHAZADO"
+                )
         if modelo is EventoReservaOutbox and payload.get("schema_version") != 1:
             raise ValueError("VERSION_RESERVA_NO_SOPORTADA")
         async with session_factory() as db, db.begin():
@@ -94,11 +104,13 @@ async def consumir(session_factory, payload):
                 if tipo.startswith("Pago"):
                     comprobante = await db.get(ComprobantePago, operacion)
                     # El mensaje usa la instantánea de la revisión, no el saldo actual.
-                    resultado = data.get("resultado", {})
+                    resultado = data if canonico else data.get("resultado", {})
                     contexto.update(
-                        monto_abonado=resultado.get("monto_imputado", data["monto"]),
+                        monto_abonado=resultado.get(
+                            "monto_imputado", data.get("monto", f"{comprobante.monto:.2f}")
+                        ),
                         saldo_restante=resultado.get("nuevo_saldo_departamento", "No disponible"),
-                        motivo_rechazo=data.get("motivo"),
+                        motivo_rechazo=data.get("motivo_rechazo" if canonico else "motivo"),
                         banco=comprobante.banco_origen,
                         numero_operacion=comprobante.numero_operacion,
                         recibo_url=f"/residente?dpto={did}",

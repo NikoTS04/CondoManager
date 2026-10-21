@@ -51,34 +51,25 @@ async def login(client, cuenta="moroso402", password="Moroso123!"):
     return {"Authorization": "Bearer " + response.json()["access_token"]}
 
 
-async def subir(client, headers, numero="402", contenido=None):
-    response = await client.post(
-        "/api/v1/pagos/vouchers",
-        headers=headers,
-        data={"departamento_id": str(did(numero))},
-        files={
-            "voucher_file": (
-                "../../original.png",
-                contenido if contenido is not None else imagen(),
-                "image/png",
-            )
-        },
-    )
-    assert response.status_code == 201, response.text
-    return response.json()["url_voucher"]
-
-
-async def reportar(client, headers, nombre, *, numero="402", monto="170.00", operacion=None):
+async def reportar(
+    client, headers, contenido=None, *, numero="402", monto="170.00", operacion=None
+):
     return await client.post(
         "/api/v1/pagos/reportar",
         headers=headers,
-        json={
+        data={
             "departamento_id": str(did(numero)),
             "banco": "BCP",
             "numero_operacion": operacion or uuid4().hex,
             "fecha_operacion": "2026-10-15",
             "monto": monto,
-            "url_voucher": nombre,
+        },
+        files={
+            "archivo_voucher": (
+                "../../original.png",
+                contenido if contenido is not None else imagen(),
+                "image/png",
+            )
         },
     )
 
@@ -104,18 +95,15 @@ async def test_recorrido_persistente_reporte_revision_y_solvencia(api_pagos):
     assert unidades.status_code == 200
     assert len(unidades.json()) == 1 and unidades.json()[0]["estado_financiero"] == "EN_MORA"
     rechazo = await client.post("/api/v1/reservas", headers=residente, json=solicitud(base))
-    assert (
-        rechazo.status_code == 403 and rechazo.json()["detail"]["error_code"] == "DEUDA_MORA_ACTIVA"
-    )
+    assert rechazo.status_code == 403 and rechazo.json()["error_code"] == "DEUDA_MORA_ACTIVA"
     async with base.sessions() as db:
         assert await db.scalar(select(Reserva.id)) is None
-    nombre = await subir(client, residente)
-    creado = await reportar(client, residente, nombre)
+    creado = await reportar(client, residente)
     assert creado.status_code == 202, creado.text
     id = creado.json()["comprobante_id"]
     async with base.sessions() as db:
         comprobante = await db.get(ComprobantePago, UUID(id))
-        assert comprobante.url_voucher == nombre and "/" not in nombre
+        assert "/" not in comprobante.url_voucher
         cuota = await db.scalar(
             select(CuotaMantenimiento).where(CuotaMantenimiento.departamento_id == did())
         )
@@ -145,7 +133,8 @@ async def test_recorrido_persistente_reporte_revision_y_solvencia(api_pagos):
         await client.post("/api/v1/reservas", headers=residente, json=solicitud(base))
     ).status_code == 201
     listado = await client.get("/api/v1/pagos/comprobantes", headers=residente)
-    assert listado.json()[0]["estado"] == "CONCILIADO"
+    assert listado.json()[0]["estado"] == "APROBADO"
+    assert listado.json()[0]["url_voucher"] == f"/api/v1/pagos/{id}/voucher"
     async with base.sessions() as db:
         assert await db.scalar(select(func.count()).select_from(ImputacionPago)) == 1
         eventos = list(await db.scalars(select(EventoPagoOutbox)))
@@ -155,14 +144,23 @@ async def test_recorrido_persistente_reporte_revision_y_solvencia(api_pagos):
             "PagoConciliadoEvent",
         }
         schemas = Path(__file__).resolve().parents[3] / "specs/03-contracts/events/schemas"
-        contrato = json.loads((schemas / "pago-sprint-2.schema.json").read_text())
-        historico = json.loads((schemas / "pago-conciliado.schema.json").read_text())
+        from referencing import Registry, Resource
+
+        registry = Registry().with_resources(
+            (p.resolve().as_uri(), Resource.from_contents(json.loads(p.read_text())))
+            for p in schemas.glob("*.json")
+        )
         for evento in eventos:
-            Draft202012Validator(contrato, format_checker=FormatChecker()).validate(evento.payload)
-            if evento.payload["event_type"] == "PagoConciliadoEvent":
-                Draft202012Validator(historico, format_checker=FormatChecker()).validate(
-                    evento.payload
-                )
+            archivo = (
+                "pago-conciliado.v1.schema.json"
+                if evento.payload["event_type"] == "PagoConciliadoEvent"
+                else "pago-reportado.v1.schema.json"
+            )
+            Draft202012Validator(
+                {"$ref": (schemas / archivo).resolve().as_uri()},
+                registry=registry,
+                format_checker=FormatChecker(),
+            ).validate(evento.payload)
         logs = list(
             await db.scalars(
                 select(AuditoriaLogORM).order_by(AuditoriaLogORM.timestamp, AuditoriaLogORM.id)
@@ -176,25 +174,26 @@ async def test_recorrido_persistente_reporte_revision_y_solvencia(api_pagos):
 async def test_reintentos_concurrentes_y_datos_equivalentes(api_pagos):
     client, base = api_pagos
     usuario = await login(client)
-    nombre = await subir(client, usuario)
     respuestas = await asyncio.gather(
-        reportar(client, usuario, nombre, operacion="00012345"),
-        reportar(client, usuario, nombre, operacion=" 12345 "),
+        reportar(client, usuario, operacion="00012345"),
+        reportar(client, usuario, operacion=" 12345 "),
     )
     assert sorted(r.status_code for r in respuestas) == [200, 202]
     assert len({r.json()["comprobante_id"] for r in respuestas}) == 1
-    repetido = await reportar(client, usuario, nombre, operacion="00012345")
-    assert repetido.status_code == 200 and repetido.json()["error_code"] == "VOUCHER_EN_EVALUACION"
+    repetido = await reportar(client, usuario, operacion="00012345")
+    assert repetido.status_code == 200 and repetido.json()["codigo"] == "VOUCHER_EN_EVALUACION"
     async with base.sessions() as db:
         assert await db.scalar(select(func.count()).select_from(ComprobantePago)) == 1
         assert await db.scalar(select(func.count()).select_from(EventoPagoOutbox)) == 1
+        assert await db.scalar(select(func.count()).select_from(ArchivoVoucher)) == 1
+    assert len(list(VoucherStorage().directorio.iterdir())) == 1
 
 
 async def test_aprobaciones_concurrentes_no_duplican_fondos(api_pagos):
     client, base = api_pagos
     usuario = await login(client)
     junta = await login(client, "admin", "Admin123!")
-    nuevo = await reportar(client, usuario, await subir(client, usuario), monto="200.00")
+    nuevo = await reportar(client, usuario, monto="200.00")
     id = nuevo.json()["comprobante_id"]
     respuestas = await asyncio.gather(
         *[
@@ -204,7 +203,8 @@ async def test_aprobaciones_concurrentes_no_duplican_fondos(api_pagos):
             for _ in range(2)
         ]
     )
-    assert sorted(r.status_code for r in respuestas) == [200, 409]
+    assert sorted(r.status_code for r in respuestas) == [200, 200]
+    assert respuestas[0].json() == respuestas[1].json()
     async with base.sessions() as db:
         assert (await db.get(Departamento, did())).saldo_a_favor == Decimal("30.00")
         assert await db.scalar(select(func.count()).select_from(RevisionPago)) == 1
@@ -216,7 +216,7 @@ async def test_revision_sin_aplicar_y_motivo_obligatorio(api_pagos, decision):
     client, base = api_pagos
     usuario = await login(client)
     junta = await login(client, "admin", "Admin123!")
-    nuevo = await reportar(client, usuario, await subir(client, usuario))
+    nuevo = await reportar(client, usuario)
     id = nuevo.json()["comprobante_id"]
     ruta = f"/api/v1/pagos/{id}/conciliar"
     assert (await client.post(ruta, headers=junta, json={"decision": decision})).status_code == 422
@@ -233,14 +233,14 @@ async def test_revision_sin_aplicar_y_motivo_obligatorio(api_pagos, decision):
     if decision == "OBSERVADO":
         assert (
             await client.post(ruta, headers=junta, json={"decision": "APROBADO"})
-        ).status_code == 200
+        ).status_code == 409
 
 
 async def test_rollback_financiero_auditoria_y_evento(api_pagos, monkeypatch):
     client, base = api_pagos
     usuario = await login(client)
     junta = await login(client, "admin", "Admin123!")
-    nuevo = await reportar(client, usuario, await subir(client, usuario), monto="200.00")
+    nuevo = await reportar(client, usuario, monto="200.00")
     id = nuevo.json()["comprobante_id"]
 
     async def fallar(*args, **kwargs):
@@ -264,36 +264,41 @@ async def test_voucher_privado_y_proteccion_de_subida(api_pagos):
     propio = await login(client)
     ajeno = await login(client, "residente102", "Residente123!")
     auditor = await login(client, "auditor", "Auditor123!")
-    nombre = await subir(client, propio)
-    assert (await reportar(client, ajeno, nombre, numero="102")).status_code == 422
-    nuevo = await reportar(client, propio, nombre, operacion="12345")
+    nuevo = await reportar(client, propio, operacion="12345")
     id = nuevo.json()["comprobante_id"]
     assert (await client.get(f"/api/v1/pagos/{id}/voucher", headers=ajeno)).status_code == 403
     assert (await client.get(f"/api/v1/pagos/{id}/voucher", headers=auditor)).status_code == 200
     assert (await client.get(f"/api/v1/pagos/{id}/resultado", headers=ajeno)).status_code == 403
     assert (await client.get("/api/v1/pagos/comprobantes", headers=ajeno)).json() == []
-    reutilizado = await reportar(client, ajeno, nombre, numero="102", operacion="12345")
+    reutilizado = await reportar(client, ajeno, numero="102", operacion="12345")
     assert reutilizado.status_code == 409 and "comprobante_id" not in reutilizado.json()
-    assert (await reportar(client, auditor, nombre)).status_code == 403
-    assert (await reportar(client, propio, nombre, operacion="nueva-operacion")).status_code == 422
+    assert (await reportar(client, auditor)).status_code == 403
     for ref in ("../secreto.png", "https://externo/voucher.png", "blob:temporal"):
-        assert (await reportar(client, propio, ref)).status_code == 422
+        response = await client.post(
+            "/api/v1/pagos/reportar",
+            headers=propio,
+            data={
+                "departamento_id": str(did()),
+                "banco": "BCP",
+                "numero_operacion": "12345",
+                "fecha_operacion": "2026-10-15",
+                "monto": "170.00",
+                "url_voucher": ref,
+            },
+            files={"archivo_voucher": ("voucher.png", imagen(), "image/png")},
+        )
+        assert response.status_code == 422
 
 
 @pytest.mark.parametrize(
     "contenido,codigo",
-    [(b"no es png", 422), (b"x" * (5 * 1024 * 1024 + 1), 413)],
+    [(b"\x89PNG\r\ncontenido corrupto", 422), (b"x" * (5 * 1024 * 1024 + 1), 413)],
     ids=["contenido_invalido", "archivo_grande"],
 )
 async def test_subida_invalida_no_crea_registros(api_pagos, contenido, codigo):
     client, base = api_pagos
     usuario = await login(client)
-    response = await client.post(
-        "/api/v1/pagos/vouchers",
-        headers=usuario,
-        data={"departamento_id": str(did())},
-        files={"voucher_file": ("imagen.png", contenido, "image/png")},
-    )
+    response = await reportar(client, usuario, contenido)
     assert response.status_code == codigo
     async with base.sessions() as db:
         assert await db.scalar(select(func.count()).select_from(ArchivoVoucher)) == 0
@@ -309,12 +314,7 @@ async def test_fallo_disco_no_informa_exito(api_pagos, monkeypatch):
         raise PermissionError("Permiso denegado de prueba")
 
     monkeypatch.setattr(Path, "mkdir", fallar)
-    response = await client.post(
-        "/api/v1/pagos/vouchers",
-        headers=usuario,
-        data={"departamento_id": str(did())},
-        files={"voucher_file": ("imagen.png", imagen(), "image/png")},
-    )
+    response = await reportar(client, usuario)
     assert response.status_code == 503
     async with base.sessions() as db:
         assert await db.scalar(select(func.count()).select_from(ArchivoVoucher)) == 0
@@ -354,7 +354,7 @@ async def test_solvencia_por_unidad_y_revocacion_real(api_pagos):
 async def test_relay_recupera_evento_con_identificador_estable(api_pagos):
     client, base = api_pagos
     usuario = await login(client)
-    await reportar(client, usuario, await subir(client, usuario))
+    await reportar(client, usuario)
 
     class RedisConFallo:
         mensajes = []
@@ -379,14 +379,24 @@ async def test_relay_recupera_evento_con_identificador_estable(api_pagos):
 async def test_limpieza_recuperable_no_borra_adjuntos(api_pagos):
     client, base = api_pagos
     usuario = await login(client)
-    adjunto = await subir(client, usuario)
-    await reportar(client, usuario, adjunto)
-    pendiente = await subir(client, usuario)
+    nuevo = await reportar(client, usuario)
+    storage = VoucherStorage()
+    pendiente, content_type = storage.guardar(imagen())
     limite = datetime.now(UTC) - timedelta(days=2)
     async with base.sessions() as db, db.begin():
+        adjunto = (await db.get(ComprobantePago, UUID(nuevo.json()["comprobante_id"]))).url_voucher
+        db.add(
+            ArchivoVoucher(
+                nombre=pendiente,
+                departamento_id=did(),
+                usuario_id=id_demo("moroso402@villabonita3.pe"),
+                content_type=content_type,
+                size_bytes=len(imagen()),
+                creado_en=limite,
+            )
+        )
         for nombre in (adjunto, pendiente):
             (await db.get(ArchivoVoucher, nombre)).creado_en = limite
-    storage = VoucherStorage()
     huerfano, _ = storage.guardar(imagen())
     for nombre in (adjunto, pendiente, huerfano):
         os.utime(storage.ruta(nombre), (limite.timestamp(), limite.timestamp()))
@@ -402,7 +412,7 @@ async def test_limpieza_recuperable_no_borra_adjuntos(api_pagos):
 async def test_adopcion_de_tablas_conserva_registros(api_pagos):
     client, base = api_pagos
     usuario = await login(client)
-    nuevo = await reportar(client, usuario, await subir(client, usuario))
+    nuevo = await reportar(client, usuario)
     id = UUID(nuevo.json()["comprobante_id"])
     revision = import_module("migrations.versions.20261020_0009_pagos_persistentes")
 
@@ -422,10 +432,9 @@ async def test_adopcion_de_tablas_conserva_registros(api_pagos):
 async def test_nueva_conexion_recupera_reporte_y_archivo(api_pagos):
     client, base = api_pagos
     usuario = await login(client)
-    nombre = await subir(client, usuario)
-    nuevo = await reportar(client, usuario, nombre)
+    nuevo = await reportar(client, usuario)
     await base.engine.dispose()  # Simula perder todas las conexiones y el estado del pool.
     id = nuevo.json()["comprobante_id"]
     assert (await client.get(f"/api/v1/pagos/{id}/voucher", headers=usuario)).content == imagen()
     async with base.sessions() as db:
-        assert (await db.get(ComprobantePago, UUID(id))).url_voucher == nombre
+        assert VoucherStorage().ruta((await db.get(ComprobantePago, UUID(id))).url_voucher).exists()

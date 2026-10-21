@@ -4,6 +4,10 @@ Responsable: Nicolás. Rama: `feat/CORE-con73-con74-integracion`.
 Estado: implementación y verificación local; pendiente revisión de pares y
 validación del esquema real del equipo. El rediseño visual queda diferido.
 
+Actualización: la posterior [convergencia CON-72](CON-72-convergencia.md) sustituye
+las limitaciones de multipart, subsanación y alias CONCILIADO descritas aquí.
+Los resultados de este documento son evidencia histórica de la entrega inicial.
+
 ## Entrega
 
 - Conserva catálogo/usuarios/roles/vínculos existentes y el flujo real de pagos de

@@ -36,6 +36,7 @@ REVISIONES = (
     "20261020_0010_catalogo_areas",
     "20261020_0009_pagos_persistentes",
     "20261020_0012_reservas_notificaciones",
+    "20261021_0013_convergencia_con72",
 )
 
 

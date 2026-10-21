@@ -11,8 +11,6 @@ Valida:
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-import uuid
-import pytest
 
 from src.modules.notificaciones.schemas import (
     CanalNotificacionEnum,
@@ -214,6 +212,8 @@ def test_despacho_comunicado_masivo_139_departamentos():
 
     deptos = generar_datos_departamentos()
     assert len(deptos) == 139
+    for d in deptos:
+        d["email_contacto"] = f"residente{d['numero']}@ejemplo.test"
 
     req_masivo = EnviarComunicadoMasivoRequest(
         condominio_id="vb3-condo",
@@ -225,9 +225,8 @@ def test_despacho_comunicado_masivo_139_departamentos():
         request=req_masivo, departamentos=deptos
     )
 
-    assert respuesta.total_destinatarios == 139
-    assert respuesta.notificaciones_generadas == 139
-    assert respuesta.estado_general == "ENTREGADO"
+    assert respuesta.generadas == 139
+    assert respuesta.estado_general == "EN_COLA"
     assert len(logs) == 139
-    assert all(l.estado == EstadoNotificacionEnum.ENTREGADO for l in logs)
-    assert all("Corte de Luz Programado por Enel" in l.asunto for l in logs)
+    assert all(log.estado == EstadoNotificacionEnum.EN_COLA and log.intentos == 0 for log in logs)
+    assert all("Corte de Luz Programado por Enel" in log.asunto for log in logs)

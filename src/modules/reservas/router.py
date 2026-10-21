@@ -15,6 +15,8 @@ from src.modules.reservas.schemas import (
     CancelarReservaRequest,
     CancelarReservaResponse,
     CrearReservaRequest,
+    HorarioOcupado,
+    ReservaConfirmadaResponse,
     ReservaResponseDTO,
 )
 from src.modules.reservas.service import (
@@ -36,7 +38,7 @@ async def listar_areas(
     return await AreasService(areas_repository).catalogo(user, condominio_id)
 
 
-@router.get("/areas/{area_id}/disponibilidad")
+@router.get("/areas/{area_id}/disponibilidad", response_model=list[HorarioOcupado])
 async def disponibilidad_area(
     area_id: UUID,
     fecha: date,
@@ -57,7 +59,7 @@ async def listar_reservas(
     return await service.listar(user, condominio_id, area_id, fecha)
 
 
-@router.post("/reservas", response_model=ReservaResponseDTO, status_code=201)
+@router.post("/reservas", response_model=ReservaConfirmadaResponse, status_code=201)
 async def crear_reserva(
     request: CrearReservaRequest,
     user=Depends(get_current_user),

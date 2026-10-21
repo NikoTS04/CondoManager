@@ -10,6 +10,7 @@ from src.modules.notificaciones.schemas import (
     CanalNotificacionEnum,
     DespacharNotificacionRequest,
     EnviarComunicadoMasivoRequest,
+    EnviarComunicadoMasivoResponse,
     EstadoNotificacionEnum,
     NotificacionLogDTO,
     ReenviarNotificacionRequest,
@@ -50,7 +51,7 @@ async def reenviar_notificacion(
     return await service.reenviar(log_id, request, user)
 
 
-@router.post("/comunicado-masivo", status_code=202)
+@router.post("/comunicado-masivo", response_model=EnviarComunicadoMasivoResponse, status_code=202)
 async def despachar_comunicado_masivo(
     request: EnviarComunicadoMasivoRequest,
     user=Depends(admin),

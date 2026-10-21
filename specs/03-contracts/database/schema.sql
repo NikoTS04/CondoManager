@@ -227,7 +227,7 @@ CREATE TABLE archivos_voucher (
     content_type VARCHAR(30) NOT NULL CHECK (content_type IN ('image/png', 'image/jpeg', 'application/pdf')),
     size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 5242880),
     creado_en TIMESTAMPTZ NOT NULL,
-    comprobante_id UUID UNIQUE REFERENCES comprobantes_pago(id) ON DELETE RESTRICT
+    comprobante_id UUID REFERENCES comprobantes_pago(id) ON DELETE RESTRICT
 );
 CREATE INDEX idx_voucher_pendientes ON archivos_voucher(comprobante_id, creado_en);
 
@@ -238,7 +238,9 @@ CREATE TABLE revisiones_pago (
     motivo TEXT,
     actor_id UUID NOT NULL,
     creado_en TIMESTAMPTZ NOT NULL,
-    resultado JSONB NOT NULL
+    resultado JSONB NOT NULL,
+    archivo_nombre TEXT REFERENCES archivos_voucher(nombre) ON DELETE RESTRICT,
+    notas_internas TEXT
 );
 CREATE INDEX idx_revision_comprobante_fecha ON revisiones_pago(comprobante_id, creado_en);
 

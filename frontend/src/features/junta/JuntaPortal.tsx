@@ -146,7 +146,7 @@ export default function JuntaPortal() {
   }, [seleccionarCondominio, user]);
 
   const pendientes = useMemo(
-    () => comprobantes.filter((comprobante) => comprobante.estado === "EN_REVISION" || comprobante.estado === "OBSERVADO"),
+    () => comprobantes.filter((comprobante) => comprobante.estado === "EN_REVISION"),
     [comprobantes],
   );
   const presupuestoActual = presupuesto;

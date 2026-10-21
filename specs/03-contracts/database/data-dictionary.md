@@ -220,7 +220,7 @@ Almacena los reportes de vouchers subidos por los residentes (Tarqui - PROC-02).
 | `numero_operacion`| `VARCHAR(50)` | NO | - | - | Código de operación impreso en el voucher bancario. |
 | `fecha_operacion` | `DATE` | NO | - | - | Fecha en que se efectuó la transferencia. |
 | `monto` | `NUMERIC(12,2)` | NO | - | `CHECK (monto > 0.00)` | Importe total pagado según voucher. |
-| `url_voucher` | `TEXT` | NO | - | - | Ruta de almacenamiento del archivo en S3/MinIO. |
+| `url_voucher` | `TEXT` | NO | - | - | Clave privada del archivo vigente; la API publica una ruta autenticada, no esta clave. |
 | `idempotency_hash` | `VARCHAR(64)` | NO | - | `UNIQUE` | Hash SHA-256 para evitar duplicación del voucher. |
 | `estado` | `VARCHAR(20)` | NO | `'EN_REVISION'` | `CHECK (estado IN ('EN_REVISION', 'APROBADO', 'RECHAZADO', 'OBSERVADO'))` | Estado en la bandeja de conciliación. |
 | `motivo_rechazo` | `TEXT` | SÍ | `NULL` | - | Justificación obligatoria si el estado es `RECHAZADO`. |
@@ -359,12 +359,24 @@ edificio, sin añadir campos incompatibles al modelo existente.
   monto_aplicado NUMERIC(12,2) positivo, fecha_imputacion TIMESTAMPTZ.
 - `archivos_voucher`: nombre TEXT PK, departamento_id FK RESTRICT, usuario_id UUID,
   content_type, size_bytes (1..5242880), creado_en TIMESTAMPTZ,
-  comprobante_id UUID único nullable FK RESTRICT. NULL representa una subida pendiente.
+  comprobante_id UUID nullable FK RESTRICT; varias versiones por comprobante desde
+  CON-72/0013. NULL conserva subidas históricas pendientes de limpieza.
 - `revisiones_pago`: UUID PK, comprobante_id FK RESTRICT, decision, motivo nullable,
-  actor_id UUID, creado_en TIMESTAMPTZ y resultado JSONB con importes como strings.
+  actor_id UUID, creado_en TIMESTAMPTZ, resultado JSONB con importes como strings,
+  archivo_nombre FK RESTRICT y notas_internas privadas nullable.
 - `eventos_pago_outbox`: UUID PK, comprobante_id FK RESTRICT, payload JSONB,
   creado_en TIMESTAMPTZ, publicado_en TIMESTAMPTZ nullable. No contiene el archivo.
 
 La revisión Alembic nueva crea o valida/adopta comprobantes e imputaciones sin
 borrar filas. El downgrade no elimina tablas adoptadas. No se alteran revisiones
 ya aplicadas ni tablas de reservas/notificaciones.
+# Adopción CON-72 — revisión de evidencia
+
+Alembic `20261021_0013` retira únicamente la unicidad de
+`archivos_voucher.comprobante_id`: el nombre privado sigue siendo PK y el FK al
+comprobante conserva RESTRICT. Se permiten varias versiones sin eliminar la
+anterior; `comprobantes_pago.url_voucher` identifica la evidencia vigente.
+`revisiones_pago.archivo_nombre` es FK nullable RESTRICT a esa evidencia y
+`notas_internas` es TEXT privado. La migración asocia revisiones anteriores a su
+único archivo registrado; deja NULL cuando no existe evidencia verificable.
+No modifica hashes, saldos, auditorías, resultados JSON ni eventos históricos.

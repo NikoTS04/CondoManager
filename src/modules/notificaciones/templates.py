@@ -65,7 +65,7 @@ PLANTILLAS_CONFIG = {
         "cuerpo": (
             "Estimado(a) {nombre} (Dpto. {dpto}):\n"
             "Su comprobante requiere revisión. Motivo: {motivo_rechazo}\n"
-            "Contacte con la administración para subsanar la observación.\n"
+            "Adjunte un nuevo archivo desde Subsanar voucher en su historial: {enlace_subir_nuevo}\n"
             "No se han aplicado saldos por esta observación."
         ),
     },

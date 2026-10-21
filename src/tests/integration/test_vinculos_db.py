@@ -86,7 +86,6 @@ def solicitud_pago(did):
         "numero_operacion": "CON05-" + uuid4().hex,
         "fecha_operacion": datetime.now(UTC).date().isoformat(),
         "monto": "25.50",
-        "url_voucher": "https://ejemplo.test/voucher-con05.jpg",
     }
 
 
@@ -123,18 +122,12 @@ async def test_relaciones_mixtas_portal_real_y_operaciones_autorizadas(caso):
     did = caso["unidades"][1]
     from src.tests.integration.test_pagos_db import imagen
 
-    upload = await client.post(
-        "/api/v1/pagos/vouchers",
-        headers=nuevo,
-        data={"departamento_id": did},
-        files={"voucher_file": ("voucher.png", imagen(), "image/png")},
-    )
-    assert upload.status_code == 201
     assert (
         await client.post(
             "/api/v1/pagos/reportar",
             headers=nuevo,
-            json={**solicitud_pago(did), "url_voucher": upload.json()["url_voucher"]},
+            data=solicitud_pago(did),
+            files={"archivo_voucher": ("voucher.png", imagen(), "image/png")},
         )
     ).status_code == 202
     reserva = await client.post(
@@ -145,7 +138,12 @@ async def test_relaciones_mixtas_portal_real_y_operaciones_autorizadas(caso):
     assert (await client.get("/api/v1/auth/me", headers=nuevo)).status_code == 401
     renovado = await login(client, A, "Residente123!")
     assert (
-        await client.post("/api/v1/pagos/reportar", headers=renovado, json=solicitud_pago(did))
+        await client.post(
+            "/api/v1/pagos/reportar",
+            headers=renovado,
+            data=solicitud_pago(did),
+            files={"archivo_voucher": ("voucher.png", imagen(), "image/png")},
+        )
     ).status_code == 403
     assert (
         await client.post("/api/v1/reservas", headers=renovado, json=solicitud_reserva(base, did))
@@ -342,7 +340,10 @@ async def test_unidad_inactiva_no_autoriza_y_restaura_la_misma_relacion(caso):
     }
     assert (
         await client.post(
-            "/api/v1/pagos/reportar", headers=residente, json=solicitud_pago(caso["unidades"][0])
+            "/api/v1/pagos/reportar",
+            headers=residente,
+            data=solicitud_pago(caso["unidades"][0]),
+            files={"archivo_voucher": ("voucher.png", b"sin-acceso", "image/png")},
         )
     ).status_code == 403
     assert (await client.delete(ruta(caso, B), headers=admin)).status_code == 200

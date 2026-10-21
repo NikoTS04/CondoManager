@@ -2,6 +2,10 @@
 
 Base de implementación del Sprint 2: [CON-72 — contratos por historia](sprint-2-contratos.md). La guía reúne los acuerdos y enlaza OpenAPI y eventos. El OpenAPI describe el contrato objetivo y distingue operaciones pendientes/parciales; su publicación no implica que los endpoints estén implementados.
 
+La [convergencia implementada](../../docs/sprints/CON-72-convergencia.md) sustituye
+el upload en dos pasos y el alias CONCILIADO de la primera integración. El contrato
+vigente usa multipart único, APROBADO y subsanación versionada.
+
 ## 1. Filosofía de Contratos en SDD
 
 En el Desarrollo Guiado por Especificaciones (SDD), los contratos de API sirven como el **acuerdo formal desacoplado** entre el Frontend (Next.js/TypeScript) y el Backend (FastAPI/Python), así como entre los diferentes módulos desarrollados por los integrantes del equipo (Anderson, Tarqui, Alejandro, Brandon).
@@ -452,3 +456,13 @@ véase [persistencia integrada](../02-domains/04-reservas/persistencia-sprint-2.
 admite residentes solo para sus destinatarios/unidades vigentes. Reintentar un
 aviso aceptado no vuelve a enviarlo. La interfaz usa el upload real de CON-70
 en dos pasos mientras su migración al multipart único de CON-72 esté pendiente.
+# Convergencia CON-72
+
+La adopción coordinada usa [sprint-2-contratos.md](sprint-2-contratos.md): multipart
+en `/pagos/reportar`, subsanación en `PUT /pagos/{id}/voucher`, estado APROBADO,
+campo codigo en recepción, motivo_rechazo en resultados y descarga autenticada.
+Se retira `/pagos/vouchers` y el reporte JSON con url_voucher: los consumidores
+del repositorio cambian conjuntamente. Clientes externos requieren actualización
+antes del despliegue. El endpoint existente de resultado sigue disponible y
+devuelve únicamente la revisión de la evidencia vigente. No hay doble publicación:
+productores canónicos y lector compatible con eventos históricos persistidos.

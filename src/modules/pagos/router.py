@@ -1,11 +1,13 @@
 """API compatible de pagos con PostgreSQL y evidencia local privada."""
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
+from fastapi import APIRouter, Depends, Form, Response
 from fastapi.responses import FileResponse
 
 from src.core.authorization import autorizar_condominio
+from src.core.errors import ErrorResponse
 from src.core.security import get_current_user, require_role
 from src.modules.pagos.moras_service import MotorMorasService
 from src.modules.pagos.persistencia import get_pagos_service
@@ -16,9 +18,9 @@ from src.modules.pagos.schemas import (
     ConciliarPagoRequest,
     EvaluarMorasRequest,
     EvaluarMorasResponse,
-    ReportarPagoRequest,
+    ReportarPagoFormulario,
     SolvenciaResponse,
-    VoucherSubidoResponse,
+    SubsanarVoucherRequest,
 )
 from src.modules.pagos.solvencia import get_solvencia_service
 
@@ -34,19 +36,6 @@ async def listar_comprobantes(
     return await service.listar(user, condominio_id)
 
 
-@router.post("/pagos/vouchers", response_model=VoucherSubidoResponse, status_code=201)
-async def subir_voucher(
-    departamento_id: UUID = Form(...),
-    voucher_file: UploadFile = File(...),
-    user: dict = Depends(get_current_user),
-    service=Depends(get_pagos_service),
-):
-    try:
-        return await service.subir(departamento_id, voucher_file, user)
-    finally:
-        await voucher_file.close()
-
-
 @router.get("/pagos/solvencia/{departamento_id}", response_model=SolvenciaResponse)
 async def consultar_solvencia(
     departamento_id: UUID,
@@ -56,19 +45,58 @@ async def consultar_solvencia(
     return await service.consultar(departamento_id, user)
 
 
-@router.post("/pagos/reportar", response_model=ComprobanteRecibidoResponse, status_code=202)
+@router.post(
+    "/pagos/reportar",
+    response_model=ComprobanteRecibidoResponse,
+    status_code=202,
+    responses={200: {"model": ComprobanteRecibidoResponse}, 503: {"model": ErrorResponse}},
+)
 async def reportar_pago(
-    request: ReportarPagoRequest,
+    request: Annotated[ReportarPagoFormulario, Form(media_type="multipart/form-data")],
     response: Response,
     user: dict = Depends(get_current_user),
     service=Depends(get_pagos_service),
 ):
-    resultado, creado = await service.reportar(request, user)
-    response.status_code = 202 if creado else 200
-    return resultado
+    try:
+        resultado, creado = await service.reportar(request, request.archivo_voucher, user)
+        response.status_code = 202 if creado else 200
+        return resultado
+    finally:
+        await request.archivo_voucher.close()
 
 
-@router.get("/pagos/{comprobante_id}/voucher")
+@router.put(
+    "/pagos/{comprobante_id}/voucher",
+    response_model=ComprobanteRecibidoResponse,
+    status_code=202,
+    responses={503: {"model": ErrorResponse}},
+)
+async def subsanar_voucher(
+    comprobante_id: UUID,
+    request: Annotated[SubsanarVoucherRequest, Form(media_type="multipart/form-data")],
+    user: dict = Depends(get_current_user),
+    service=Depends(get_pagos_service),
+):
+    try:
+        return await service.subsanar(comprobante_id, request.archivo_voucher, user)
+    finally:
+        await request.archivo_voucher.close()
+
+
+@router.get(
+    "/pagos/{comprobante_id}/voucher",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "description": "Evidencia privada de la unidad autorizada",
+            "headers": {"Cache-Control": {"schema": {"type": "string", "const": "no-store"}}},
+            "content": {
+                mime: {"schema": {"type": "string", "format": "binary"}}
+                for mime in ("image/png", "image/jpeg", "application/pdf")
+            },
+        },
+    },
+)
 async def descargar_voucher(
     comprobante_id: UUID,
     user: dict = Depends(get_current_user),
@@ -78,7 +106,9 @@ async def descargar_voucher(
     return FileResponse(
         ruta,
         filename=nombre,
-        media_type="application/octet-stream",
+        media_type={".png": "image/png", ".jpg": "image/jpeg", ".pdf": "application/pdf"}[
+            ruta.suffix
+        ],
         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
     )
 

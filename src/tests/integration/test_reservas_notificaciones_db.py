@@ -295,12 +295,11 @@ async def test_lease_durable_excluye_otro_worker_durante_el_transporte(api_usuar
 async def test_pago_confirmado_origina_aviso_desde_outbox_real(api_pagos):
     from src.modules.pagos.models_persistencia import EventoPagoOutbox
     from src.tests.integration.test_pagos_db import login as login_pago
-    from src.tests.integration.test_pagos_db import reportar, subir
+    from src.tests.integration.test_pagos_db import reportar
 
     client, base = api_pagos
     residente = await login_pago(client)
-    nombre = await subir(client, residente)
-    response = await reportar(client, residente, nombre)
+    response = await reportar(client, residente)
     assert response.status_code == 202
     junta = await login_pago(client, "admin", "Admin123!")
     response = await client.post(

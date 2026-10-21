@@ -21,10 +21,10 @@ def test_catalogo_y_solvencia_comparten_sesion_para_no_bloquearse():
 
 def test_grafo_alembic_conserva_ambas_ramas_con_una_cabeza():
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert scripts.get_heads() == ["20261020_0012"]
+    assert scripts.get_heads() == ["20261021_0013"]
     revisiones = {r.revision for r in scripts.walk_revisions()}
     assert {"20261020_0009", "20261020_0009_pagos", "20261020_0010"} <= revisiones
-    assert len(revisiones) == 13
+    assert len(revisiones) == 14
 
 
 @pytest.mark.asyncio

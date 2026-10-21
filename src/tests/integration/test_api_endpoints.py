@@ -71,17 +71,17 @@ def test_api_reportar_pago_e_idempotencia():
         "numero_operacion": "99881122",
         "fecha_operacion": "2026-10-15",
         "monto": "150.00",
-        "url_voucher": "https://s3.local/vouchers/voucher_yape.jpg",
     }
     # 1. Primer reporte
-    res1 = client.post("/api/v1/pagos/reportar", json=payload)
+    files = {"archivo_voucher": ("voucher.png", b"doble-explicito", "image/png")}
+    res1 = client.post("/api/v1/pagos/reportar", data=payload, files=files)
     assert res1.status_code == 202
     data1 = res1.json()
     assert data1["estado"] == "EN_REVISION"
     assert "idempotency_hash" in data1
 
     # 2. Reporte duplicado en revisión -> retorna el mismo comprobante sin duplicar
-    res2 = client.post("/api/v1/pagos/reportar", json=payload)
+    res2 = client.post("/api/v1/pagos/reportar", data=payload, files=files)
     assert res2.status_code == 200
     assert res2.json()["comprobante_id"] == data1["comprobante_id"]
 
@@ -118,7 +118,7 @@ def test_api_reservas_flujo_completo(monkeypatch, autorizacion_aislada):
     }
     res_moroso = client.post("/api/v1/reservas", json=payload_moroso)
     assert res_moroso.status_code == 403
-    assert res_moroso.json()["detail"]["error_code"] == "DEUDA_MORA_ACTIVA"
+    assert res_moroso.json()["error_code"] == "DEUDA_MORA_ACTIVA"
 
     # 3. Reserva exitosa por residente solvente (102) -> 201 Created
     payload_solvente = {

@@ -112,15 +112,15 @@ export interface Reserva {
   id: string;
   condominio_id: string;
   area_id: string;
-  area_nombre?: string;
+  area_nombre?: string | null;
   departamento_id: string;
   fecha_reserva: string;
   hora_inicio: string;
   hora_fin: string;
   costo_reserva: string;
-  moneda?: Moneda;
-  zona_horaria?: "America/Lima" | "UTC";
-  estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA";
+  moneda: Moneda;
+  zona_horaria: "America/Lima" | "UTC";
+  estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA" | "RECHAZADA" | "COMPLETADA";
   creado_en: string;
 }
 
@@ -131,20 +131,23 @@ export interface ComprobantePago {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  estado: "EN_REVISION" | "CONCILIADO" | "RECHAZADO" | "OBSERVADO";
+  estado: "EN_REVISION" | "APROBADO" | "RECHAZADO" | "OBSERVADO";
   idempotency_hash: string;
-  url_voucher?: string;
-  motivo_rechazo?: string;
+  url_voucher: string;
+  motivo_rechazo: string | null;
 }
 
 export interface NotificacionLog {
   id: string;
-  departamento_id?: string;
+  condominio_id: string;
+  departamento_id: string | null;
+  usuario_destinatario_id: string | null;
+  evento_id: string | null;
   tipo_evento: string;
-  canal: string;
+  canal: "EMAIL" | "WHATSAPP" | "SMS" | "PUSH";
   destinatario: string;
-  asunto?: string;
-  cuerpo?: string;
+  asunto: string | null;
+  cuerpo: string;
   estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
   intentos: number;
   ciclo: number;
@@ -153,6 +156,7 @@ export interface NotificacionLog {
   error_mensaje: string | null;
   proveedor_message_id: string | null;
   fecha_creacion: string;
+  fecha_actualizacion: string;
 }
 
 export type Moneda = "PEN" | "USD";
@@ -677,33 +681,35 @@ export async function reportarPago(payload: {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  url_voucher?: string;
+  archivo_voucher: File;
 }): Promise<{ ok: boolean; error?: string; errorCode?: string; duplicado?: boolean }> {
   try {
+    const form = new FormData();
+    for (const [campo, valor] of Object.entries(payload)) form.append(campo, valor);
+    const headers = getAuthHeaders();
+    delete headers["Content-Type"];
     const response = await fetchProtegido("/pagos/reportar", {
       method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload),
+      headers,
+      body: form,
     });
     const data = await response.json();
     const errorCode = obtenerCodigoError(data);
     if (!response.ok) return { ok: false, error: obtenerMensajeError(data, "No se pudo reportar el pago."), errorCode };
-    return { ok: true, duplicado: response.status === 200, errorCode };
+    return { ok: true, duplicado: data.codigo === "VOUCHER_EN_EVALUACION" };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
 }
 
-export async function subirVoucher(departamentoId: string, archivo: File): Promise<string> {
+export async function subsanarVoucher(comprobanteId: string, archivo: File): Promise<void> {
   const form = new FormData();
-  form.append("departamento_id", departamentoId);
-  form.append("voucher_file", archivo);
+  form.append("archivo_voucher", archivo);
   const headers = getAuthHeaders();
   delete headers["Content-Type"];
-  const response = await fetchProtegido("/pagos/vouchers", { method: "POST", headers, body: form });
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher`, { method: "PUT", headers, body: form });
   const data = await response.json();
   if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo subir el voucher."));
-  return data.url_voucher as string;
 }
 
 export async function descargarVoucher(comprobante: ComprobantePago): Promise<void> {
@@ -717,7 +723,8 @@ export async function descargarVoucher(comprobante: ComprobantePago): Promise<vo
   const url = URL.createObjectURL(await response.blob());
   const enlace = document.createElement("a");
   enlace.href = url;
-  enlace.download = comprobante.url_voucher?.match(/^[\da-f-]+\.(png|jpg|pdf)$/)?.[0] || `voucher-${comprobante.id}`;
+  const extension = { "image/png": "png", "image/jpeg": "jpg", "application/pdf": "pdf" }[response.headers.get("Content-Type") || ""];
+  enlace.download = `voucher-${comprobante.id}${extension ? `.${extension}` : ""}`;
   document.body.appendChild(enlace);
   enlace.click();
   enlace.remove();

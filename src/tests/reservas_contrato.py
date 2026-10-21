@@ -33,7 +33,7 @@ class ReservasContrato:
     async def disponibilidad(self, aid, fecha, usuario):
         await self.areas.publica(aid, usuario)
         return [
-            {"hora_inicio": r["hora_inicio"], "hora_fin": r["hora_fin"]}
+            {"hora_inicio": r["hora_inicio"].isoformat(), "hora_fin": r["hora_fin"].isoformat()}
             for r in RESERVAS_REGISTRADAS.values()
             if r["area_id"] == aid and r["fecha_reserva"] == fecha and r["estado"] == "CONFIRMADA"
         ]

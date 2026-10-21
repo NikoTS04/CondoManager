@@ -115,3 +115,16 @@ Escenario: Aplicación automática de mora tras vencer periodo de gracia
   Y el saldo total exigible del departamento 402 pasa a ser de S/ 170.00
   Y el departamento queda bloqueado para realizar reservas de áreas comunes.
 ```
+# Adopción CON-72
+
+El reporte público es multipart único y no acepta claves de almacenamiento.
+Antes de guardar evidencia se valida el reporte y se resuelve la duplicidad
+bajo el lock financiero existente. La subsanación solo permite OBSERVADO a
+EN_REVISION, conserva archivos privados anteriores y asocia cada revisión con
+su evidencia. Repetir decisión, motivo y notas de la revisión vigente devuelve
+su resultado persistido; cambiar cualquiera sobre un estado final responde 409.
+Las notas internas se conservan separadas del motivo público obligatorio.
+Reporte/subsanación, auditoría y outbox se confirman juntos. Los errores antes
+del commit eliminan la nueva carga; un commit incierto conserva el objeto para
+la limpieza/reconciliación existente. No se reescriben hashes, saldos ni eventos
+históricos. Nuevos eventos usan los esquemas canónicos .v1 de CON-72.
