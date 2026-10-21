@@ -62,10 +62,50 @@ export interface AreaComun {
   id: string;
   condominio_id: string;
   nombre: string;
-  descripcion: string;
+  descripcion: string | null;
   aforo_maximo: number;
   costo_reserva: string;
   esta_activa: boolean;
+  edificio_id: string | null;
+  edificio_nombre: string | null;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+  moneda: Moneda;
+  zona_horaria: "America/Lima";
+}
+
+export interface ConfigurarAreaPayload {
+  nombre: string;
+  descripcion: string | null;
+  edificio_id: string | null;
+  aforo_maximo: number;
+  costo_reserva: string;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+}
+
+function rutaAreas(condominioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/areas`;
+}
+
+export function listarCatalogoAreas(condominioId: string, activa?: boolean, limit = 50, offset = 0): Promise<AreaComun[]> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (activa !== undefined) params.set("esta_activa", String(activa));
+  return recursoRequest(`${rutaAreas(condominioId)}?${params}`);
+}
+
+export function registrarArea(condominioId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(rutaAreas(condominioId), { method: "POST", body: JSON.stringify(datos) });
+}
+
+export function configurarArea(condominioId: string, areaId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
+export function cambiarEstadoArea(condominioId: string, areaId: string, esta_activa: boolean): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}/estado`, { method: "PATCH", body: JSON.stringify({ esta_activa }) });
 }
 
 export interface Reserva {
@@ -78,6 +118,7 @@ export interface Reserva {
   hora_inicio: string;
   hora_fin: string;
   costo_reserva: string;
+  moneda?: Moneda;
   estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA";
   creado_en: string;
 }

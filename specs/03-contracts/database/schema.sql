@@ -214,12 +214,21 @@ CREATE TABLE comprobantes_pago (
 CREATE TABLE areas_comunes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
+    edificio_id UUID REFERENCES edificios(id) ON DELETE SET NULL,
     nombre VARCHAR(100) NOT NULL,
     descripcion TEXT,
     aforo_maximo INT NOT NULL CHECK (aforo_maximo > 0),
     costo_reserva NUMERIC(12,2) NOT NULL DEFAULT 0.00 CHECK (costo_reserva >= 0.00),
-    esta_activa BOOLEAN NOT NULL DEFAULT TRUE
+    esta_activa BOOLEAN NOT NULL DEFAULT TRUE,
+    tiempo_maximo_horas INTEGER NOT NULL DEFAULT 4 CHECK (tiempo_maximo_horas >= 1),
+    hora_apertura TIME NOT NULL DEFAULT '00:00',
+    hora_cierre TIME NOT NULL DEFAULT '23:59',
+    CONSTRAINT ck_area_horario_catalogo CHECK (
+        hora_cierre > hora_apertura AND EXTRACT(SECOND FROM hora_apertura) = 0
+        AND EXTRACT(SECOND FROM hora_cierre) = 0
+    )
 );
+CREATE INDEX idx_areas_catalogo_contexto ON areas_comunes (condominio_id, esta_activa, nombre);
 
 -- 7. Tabla de Reservas (Brandon - PROC-04)
 CREATE TABLE reservas (

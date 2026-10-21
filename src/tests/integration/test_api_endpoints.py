@@ -81,7 +81,7 @@ def test_api_reservas_flujo_completo(monkeypatch, autorizacion_aislada):
     # tal como exige OpenAPI; "402" era rechazado por Pydantic antes del servicio.
     monkeypatch.setattr(reservas_router, "RESERVAS_REGISTRADAS", {})
     departamentos = {d["numero"]: str(d["id"]) for d in autorizacion_aislada.datos.values()}
-    condominio_id = str(reservas_router.CONDOMINIO_PILOTO_ID)
+    condominio_id = str(next(iter(autorizacion_aislada.datos.values()))["condominio_id"])
     # 1. Catálogo de áreas comunes
     res_areas = client.get("/api/v1/areas")
     assert res_areas.status_code == 200

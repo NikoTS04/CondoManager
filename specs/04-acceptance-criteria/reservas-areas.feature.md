@@ -2,6 +2,12 @@
 
 ## Característica: Reserva de Áreas Comunes y Control de Solvencia
 
+CON-39: [catálogo persistente](../02-domains/04-reservas/catalogo-areas.md) y
+[BDD ejecutable](../02-domains/04-reservas/features/catalogo_areas.feature).
+Verificar CRUD contextual, Auditor de solo lectura, edificio exclusivo, costo
+Decimal y moneda, horario/duración, no-op, rollback, adopción y reinicio. Desactivar
+excluye del catálogo activo y rechaza nuevas reservas sin borrar las anteriores.
+
 ### Escenario 1: Bloqueo de reserva para departamento con deuda en mora
 ```gherkin
 Dado que el departamento 501 tiene una deuda vencida en estado "EN_MORA"

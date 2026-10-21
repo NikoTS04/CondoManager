@@ -95,9 +95,11 @@ export function MisReservasList({
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-semibold text-ink text-sm">{area.nombre}</h3>
                     <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700">
-                      <MoneyAmount value={area.costo_reserva} />
+                      <MoneyAmount value={area.costo_reserva} moneda={area.moneda} />
                     </span>
                   </div>
+                  <p className="mt-2 text-xs text-muted">Horario diario: {area.hora_apertura}–{area.hora_cierre} · Lima</p>
+                  <p className="text-xs text-muted">Máximo {area.tiempo_maximo_horas} horas por reserva{area.edificio_nombre ? ` · Exclusiva de ${area.edificio_nombre}` : " · Uso compartido"}</p>
                   <p className="mt-1 text-xs text-muted leading-relaxed">
                     {area.descripcion}
                   </p>
@@ -175,7 +177,7 @@ export function MisReservasList({
                       <p className="text-xs text-muted">
                         {formatDate(r.fecha_reserva)} · {formatHora(r.hora_inicio)} a{" "}
                         {formatHora(r.hora_fin)} · Tarifa:{" "}
-                        <MoneyAmount value={r.costo_reserva} className="font-medium" />
+                        <MoneyAmount value={r.costo_reserva} moneda={r.moneda ?? "PEN"} className="font-medium" />
                       </p>
                     </div>
 
