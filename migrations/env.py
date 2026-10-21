@@ -18,8 +18,18 @@ from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, Lote
 from src.modules.cuotas.presupuestos.models import PresupuestoMensual  # noqa: F401
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor  # noqa: F401
 from src.modules.pagos.models import ComprobantePago, ImputacionPago  # noqa: F401
-from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutbox, RevisionPago  # noqa: F401
+from src.modules.pagos.models_persistencia import (  # noqa: F401
+    ArchivoVoucher,
+    EventoPagoOutbox,
+    RevisionPago,
+)
 from src.modules.reservas.areas.models import AreaComun  # noqa: F401
+from src.modules.reservas.models import (  # noqa: F401
+    CancelacionReserva,
+    CobroReserva,
+    EventoReservaOutbox,
+    Reserva,
+)
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol  # noqa: F401
 
 config = context.config

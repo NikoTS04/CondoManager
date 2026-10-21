@@ -262,6 +262,7 @@ Almacena las solicitudes y reservas de áreas comunes (Brandon - PROC-04).
 | `id` | `UUID` | NO | `gen_random_uuid()` | `PRIMARY KEY` | Identificador de la reserva. |
 | `area_id` | `UUID` | NO | - | `REFERENCES areas_comunes(id)` | Parrilla, salón o zona solicitada. |
 | `departamento_id` | `UUID` | NO | - | `REFERENCES departamentos(id)` | Departamento titular de la reserva. |
+| `usuario_id` | `UUID` | NO | - | `REFERENCES usuarios(id) ON DELETE RESTRICT` | Creador original; se conserva al cancelar. |
 | `fecha_reserva` | `DATE` | NO | - | - | Día calendario reservado. |
 | `hora_inicio` | `TIME` | NO | - | - | Hora de inicio del uso. |
 | `hora_fin` | `TIME` | NO | - | `CHECK (hora_fin > hora_inicio)` | Hora de término del uso. |
@@ -322,3 +323,25 @@ edificio, sin añadir campos incompatibles al modelo existente.
 La revisión Alembic nueva crea o valida/adopta comprobantes e imputaciones sin
 borrar filas. El downgrade no elimina tablas adoptadas. No se alteran revisiones
 ya aplicadas ni tablas de reservas/notificaciones.
+
+# Extensión de cancelaciones (CON-46)
+
+Migración `20261021_0012`, sobre el merge `20261020_0011`:
+
+- `reservas`: se crea o adopta el modelo compartido. `zona_horaria VARCHAR(30)`
+  obligatorio, `UTC` por defecto para históricos; admite `America/Lima`.
+  Condominio derivado por área; no se duplica en una segunda tabla de reservas.
+  Conserva `usuario_id UUID NOT NULL` con FK a usuarios, presente en Supabase.
+- `cancelaciones_reserva`: `reserva_id UUID PK/FK RESTRICT`, `actor_id UUID`,
+  `motivo VARCHAR(500)`, `fecha_cancelacion TIMESTAMPTZ`, `resultado JSONB`.
+  La respuesta original incluye la solicitud única de ajuste económico.
+- `cobros_reserva`: `reserva_id UUID PK/FK RESTRICT`, `comprobante_id UUID UNIQUE
+  FK RESTRICT`, `monto NUMERIC(12,2)` positivo, `monto_compensado NUMERIC(12,2)`
+  entre cero y monto, `reembolsable BOOLEAN`. Productor financiero pendiente;
+  cancelación valida comprobante aprobado/conciliado, importe y misma unidad.
+- `eventos_reserva_outbox`: `id UUID PK`, `reserva_id UUID FK RESTRICT`,
+  `tipo VARCHAR(60)`, `payload JSONB`, `creado_en TIMESTAMPTZ`,
+  `publicado_en TIMESTAMPTZ NULL`. Unicidad `(reserva_id, tipo)`; índice de pendientes.
+
+Cancelación, resultado, auditoría y evento se confirman juntos. SQL tiene
+precedencia frente a copias piloto; CON-41/73 reutilizan esta persistencia.

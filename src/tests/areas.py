@@ -25,6 +25,9 @@ class AreasCatalogoFake:
     async def area_global(self, aid):
         return self.datos.get(aid)
 
+    async def ocupaciones(self, aid, cid, fecha):
+        return []
+
     async def edificio(self, cid, eid):
         return None
 

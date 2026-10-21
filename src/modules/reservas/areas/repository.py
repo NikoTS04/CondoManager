@@ -11,6 +11,7 @@ from src.core.security import validar_sesion
 from src.modules.condominios.models import Departamento, Edificio
 from src.modules.reservas.areas.models import AreaComun
 from src.modules.reservas.areas.schemas import AreaComunDTO
+from src.modules.reservas.disponibilidad import DisponibilidadRepository
 from src.modules.usuarios.models import UsuarioDepartamento
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
 
@@ -38,6 +39,10 @@ class AreasRepository:
 
     async def area_global(self, aid):
         return await self.session.get(AreaComun, aid)
+
+    async def ocupaciones(self, aid, cid, fecha):
+        # Se usa bajo el mismo lock/transacción del área al crear una reserva.
+        return await DisponibilidadRepository(self.session).reservas_confirmadas(aid, cid, fecha)
 
     async def edificio(self, cid, eid):
         return await self.session.scalar(

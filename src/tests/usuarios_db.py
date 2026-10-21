@@ -81,14 +81,15 @@ async def borrar_base(base):
 @pytest.fixture
 def db_usuarios(monkeypatch):
     url = (
-        os.getenv("CON39_TEST_DATABASE_URL")
+        os.getenv("CON46_TEST_DATABASE_URL")
+        or os.getenv("CON39_TEST_DATABASE_URL")
         or os.getenv("CON05_TEST_DATABASE_URL")
         or os.getenv("CON06_TEST_DATABASE_URL")
         or os.getenv("CON04_TEST_DATABASE_URL")
         or os.getenv("CON13_TEST_DATABASE_URL")
     )
     if not url:
-        pytest.skip("Defina CON04_TEST_DATABASE_URL con una base PostgreSQL de pruebas.")
+        pytest.skip("Defina CON46_TEST_DATABASE_URL o CON04_TEST_DATABASE_URL con PostgreSQL de pruebas.")
     base = asyncio.run(crear_base(url))
     monkeypatch.setattr(settings, "DEMO_MODE", True)
 

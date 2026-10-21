@@ -376,6 +376,10 @@ La persistencia completa y la lectura de bloqueos operativos se integran con CON
 
 ## CON-46 — Cancelar una reserva
 
+Implementación y guion manual: [entrega CON-46](CON-46-cancelacion-reservas.md).
+Cancelación SQL y outbox implementados; la aceptación integrada requiere el
+productor persistente de CON-41/73 y el consumo de CON-36.
+
 **Historia:** Como residente, quiero cancelar una reserva dentro del plazo permitido, para liberar el horario cuando ya no vaya a utilizarlo.
 
 **Debe incluir:**

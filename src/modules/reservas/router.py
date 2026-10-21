@@ -13,11 +13,11 @@ from src.core.authorization import (
     puede_ver_departamento,
 )
 from src.core.database import get_db_session
-from src.core.roles import ROLES_ADMINISTRATIVOS
 from src.core.security import get_current_user
 from src.modules.pagos.solvencia import get_solvencia_service
 from src.modules.reservas.areas.repository import AreasRepository, get_areas_repository
 from src.modules.reservas.areas.service import AreasService
+from src.modules.reservas.cancelaciones import get_cancelaciones_service
 from src.modules.reservas.disponibilidad import DisponibilidadRepository, DisponibilidadService
 from src.modules.reservas.schemas import (
     AreaComunDTO,
@@ -29,7 +29,6 @@ from src.modules.reservas.schemas import (
 )
 from src.modules.reservas.service import (
     AreaInactivaException,
-    CancelacionInvalidaException,
     ConflictoHorarioException,
     DeudaMoraActivaException,
     HorarioInvalidoException,
@@ -84,15 +83,14 @@ async def disponibilidad_area(
     persistidas = await DisponibilidadRepository(session).reservas_confirmadas(
         area_id, area.condominio_id, fecha
     )
-    # Mantiene visibles las operaciones piloto hasta integrar CON-41/46/73.
+    # SQL es canónico: una cancelación confirmada en otro proceso no puede
+    # quedar oculta por una copia piloto todavía marcada CONFIRMADA.
     piloto = [
         dict(r)
         for r in RESERVAS_REGISTRADAS.values()
         if r["area_id"] == area_id and r["condominio_id"] == area.condominio_id
     ]
-    ids_piloto = {str(r["id"]) for r in piloto}
-    ocupaciones = [r for r in persistidas if str(r["id"]) not in ids_piloto]
-    ocupaciones.extend(r for r in piloto if r["estado"] == "CONFIRMADA")
+    ocupaciones = DisponibilidadService.combinar_fuentes(persistidas, piloto)
     response.headers["Cache-Control"] = "no-store"
     return DisponibilidadService.horarios_ocupados(
         fecha, ocupaciones, area.hora_apertura, area.hora_cierre
@@ -116,6 +114,7 @@ async def listar_reservas(
     condominio_id: uuid.UUID | None = None,
     user: dict = Depends(get_current_user),
     areas_repository=Depends(get_areas_repository),
+    cancelaciones=Depends(get_cancelaciones_service),
 ):
     """Permite a los residentes ver los horarios ocupados de un área común."""
     cid = contexto_consulta(user, condominio_id)
@@ -130,7 +129,9 @@ async def listar_reservas(
         ):
             if fecha is None or r["fecha_reserva"] == fecha:
                 resultados.append(ReservaResponseDTO(**r))
-    return resultados
+    persistidas = await cancelaciones.historial(cid, user, area_id, fecha)
+    ids_sql = {r.id for r in persistidas}
+    return [r for r in resultados if r.id not in ids_sql] + persistidas
 
 
 def get_areas_reserva_repository(solvencia=Depends(get_solvencia_service)):
@@ -181,17 +182,44 @@ async def crear_reserva(
                         "mensaje": "La unidad no pertenece al edificio del área.",
                     },
                 )
+            # Una cancelación SQL debe liberar el turno también al volver a
+            # reservar desde un proceso con una copia piloto todavía antigua.
+            persistidas = await areas_repository.ocupaciones(
+                request.area_id, request.condominio_id, request.fecha_reserva
+            )
+            piloto = [
+                r
+                for r in RESERVAS_REGISTRADAS.values()
+                if r["area_id"] == request.area_id and r["condominio_id"] == request.condominio_id
+            ]
+            ocupados = DisponibilidadService.horarios_ocupados(
+                request.fecha_reserva,
+                DisponibilidadService.combinar_fuentes(persistidas, piloto),
+                area["hora_apertura"].isoformat(),
+                area["hora_cierre"].isoformat(),
+            )
+            existentes = [
+                {
+                    "area_id": request.area_id,
+                    "fecha_reserva": request.fecha_reserva,
+                    "estado": "CONFIRMADA",
+                    "hora_inicio": time.fromisoformat(h.hora_inicio),
+                    "hora_fin": time.fromisoformat(h.hora_fin),
+                }
+                for h in ocupados
+            ]
             reserva_dto, _ = ReservasService.procesar_reserva(
                 request=request,
                 area=area,
                 estado_financiero_depto="AL_DIA",
                 saldo_mora_depto=evaluacion.saldo_vencido,
-                reservas_existentes=list(RESERVAS_REGISTRADAS.values()),
+                reservas_existentes=existentes,
             )
             # Guardar en memoria
             RESERVAS_REGISTRADAS[reserva_dto.id] = {
                 **reserva_dto.model_dump(),
                 "zona_horaria": area["zona_horaria"],
+                "usuario_id": user["sub"],
             }
         return reserva_dto
 
@@ -238,32 +266,18 @@ async def cancelar_reserva(
     reserva_id: uuid.UUID,
     request: Optional[CancelarReservaRequest] = None,
     user: dict = Depends(get_current_user),
+    cancelaciones=Depends(get_cancelaciones_service),
 ):
     """Permite al residente o administrador cancelar una reserva con al menos 24h de anticipación."""
     reserva = RESERVAS_REGISTRADAS.get(reserva_id)
-    if not reserva:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "RESERVA_NO_ENCONTRADA", "mensaje": "Reserva no encontrada."},
+    if reserva is not None:
+        autorizar_departamento(
+            user, reserva["departamento_id"], reserva["condominio_id"], escritura=True
         )
-
-    autorizar_departamento(
-        user, reserva["departamento_id"], reserva["condominio_id"], escritura=True
+    resultado = await cancelaciones.cancelar(
+        reserva_id, request or CancelarReservaRequest(), user, piloto=reserva
     )
-    req = (request or CancelarReservaRequest()).model_copy(
-        update={"es_admin": user["rol"] in ROLES_ADMINISTRATIVOS}
-    )
-
-    try:
-        cancelar_dto, _ = ReservasService.procesar_cancelacion(
-            reserva=reserva,
-            request=req,
-        )
-        # Actualizar en memoria
+    # El servicio ha completado el commit. Nunca adelantar este cambio al SQL.
+    if reserva is not None:
         reserva["estado"] = "CANCELADA"
-        return cancelar_dto
-    except CancelacionInvalidaException as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"error_code": exc.error_code, "mensaje": exc.mensaje},
-        )
+    return resultado

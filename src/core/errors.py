@@ -39,6 +39,18 @@ async def api_error_handler(_request: Request, exc: APIError) -> JSONResponse:
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Adapta validaciones de FastAPI al recurso correspondiente sin exponer entradas."""
 
+    if request.url.path.startswith("/api/v1/reservas/") and request.url.path.endswith("/cancelar"):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error_code": "DATOS_CANCELACION_INVALIDOS",
+                "mensaje": "Indique una reserva válida y un motivo de 1 a 500 caracteres.",
+                "detalles": {
+                    "errores": [{"campo": list(e["loc"]), "tipo": e["type"]} for e in exc.errors()]
+                },
+            },
+        )
+
     if request.url.path.startswith("/api/v1/areas/") and request.url.path.endswith(
         "/disponibilidad"
     ):
