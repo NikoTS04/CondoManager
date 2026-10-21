@@ -13,6 +13,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.modules.reservas.areas.schemas import AreaComunDTO as AreaComunDTO
 
 
+class HorarioOcupado(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    hora_inicio: str = Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]:00$")
+    hora_fin: str = Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]:00$")
+
+
 class CrearReservaRequest(BaseModel):
     condominio_id: uuid.UUID
     area_id: uuid.UUID

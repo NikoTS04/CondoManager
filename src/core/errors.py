@@ -39,6 +39,19 @@ async def api_error_handler(_request: Request, exc: APIError) -> JSONResponse:
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Adapta validaciones de FastAPI al recurso correspondiente sin exponer entradas."""
 
+    if request.url.path.startswith("/api/v1/areas/") and request.url.path.endswith(
+        "/disponibilidad"
+    ):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error_code": "DATOS_DISPONIBILIDAD_INVALIDOS",
+                "mensaje": "Indique un área válida y una fecha YYYY-MM-DD.",
+                "detalles": {
+                    "errores": [{"campo": list(e["loc"]), "tipo": e["type"]} for e in exc.errors()]
+                },
+            },
+        )
     if (
         request.url.path == "/api/v1/areas"
         or request.url.path.startswith("/api/v1/areas/")

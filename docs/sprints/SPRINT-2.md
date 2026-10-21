@@ -303,6 +303,9 @@ Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
 
 ## CON-40 — Consultar disponibilidad
 
+Avance de implementación y recorrido manual: [entrega CON-40](CON-40-disponibilidad.md).
+La persistencia completa y la lectura de bloqueos operativos se integran con CON-73.
+
 **Historia:** Como residente, quiero consultar fechas y horarios disponibles, para escoger una opción antes de solicitar la reserva.
 
 **Debe incluir:**

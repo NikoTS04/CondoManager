@@ -4,22 +4,26 @@ import uuid
 from datetime import date, time
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.authorization import (
     autorizar_departamento,
     contexto_consulta,
     puede_ver_departamento,
 )
+from src.core.database import get_db_session
 from src.core.roles import ROLES_ADMINISTRATIVOS
 from src.core.security import get_current_user
 from src.modules.reservas.areas.repository import get_areas_repository
 from src.modules.reservas.areas.service import AreasService
+from src.modules.reservas.disponibilidad import DisponibilidadRepository, DisponibilidadService
 from src.modules.reservas.schemas import (
     AreaComunDTO,
     CancelarReservaRequest,
     CancelarReservaResponse,
     CrearReservaRequest,
+    HorarioOcupado,
     ReservaResponseDTO,
 )
 from src.modules.reservas.service import (
@@ -61,19 +65,37 @@ async def listar_areas(
     return await AreasService(areas_repository).catalogo(user, condominio_id)
 
 
-@router.get("/areas/{area_id}/disponibilidad")
+@router.get(
+    "/areas/{area_id}/disponibilidad",
+    response_model=List[HorarioOcupado],
+    summary="Horarios ocupados del área sin datos de otros residentes",
+)
 async def disponibilidad_area(
     area_id: uuid.UUID,
     fecha: date,
+    response: Response,
     user: dict = Depends(get_current_user),
     areas_repository=Depends(get_areas_repository),
+    session: AsyncSession = Depends(get_db_session),
 ):
-    await AreasService(areas_repository).publica(area_id, user)
-    return [
-        {"hora_inicio": r["hora_inicio"], "hora_fin": r["hora_fin"]}
+    DisponibilidadService.validar_fecha(fecha)
+    area = await AreasService(areas_repository).publica(area_id, user)
+    persistidas = await DisponibilidadRepository(session).reservas_confirmadas(
+        area_id, area.condominio_id, fecha
+    )
+    # Mantiene visibles las operaciones piloto hasta integrar CON-41/46/73.
+    piloto = [
+        dict(r)
         for r in RESERVAS_REGISTRADAS.values()
-        if r["area_id"] == area_id and r["fecha_reserva"] == fecha and r["estado"] == "CONFIRMADA"
+        if r["area_id"] == area_id and r["condominio_id"] == area.condominio_id
     ]
+    ids_piloto = {str(r["id"]) for r in piloto}
+    ocupaciones = [r for r in persistidas if str(r["id"]) not in ids_piloto]
+    ocupaciones.extend(r for r in piloto if r["estado"] == "CONFIRMADA")
+    response.headers["Cache-Control"] = "no-store"
+    return DisponibilidadService.horarios_ocupados(
+        fecha, ocupaciones, area.hora_apertura, area.hora_cierre
+    )
 
 
 # ============================================================================
