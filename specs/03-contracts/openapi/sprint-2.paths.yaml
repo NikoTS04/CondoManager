@@ -1,9 +1,7 @@
 # Fragmentos referenciados desde condomanager.openapi.yaml.
 # Contrato objetivo: las HU de origen implementan rutas, persistencia y permisos.
+# CON-05/06 conservan sus rutas ya integradas en el documento principal.
 parameters:
-  CondominioPath: {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
-  UsuarioPath: {name: usuario_id, in: path, required: true, schema: {type: string, format: uuid}}
-  DepartamentoPath: {name: departamento_id, in: path, required: true, schema: {type: string, format: uuid}}
   AreaPath: {name: area_id, in: path, required: true, schema: {type: string, format: uuid}}
   ReservaPath: {name: reserva_id, in: path, required: true, schema: {type: string, format: uuid}}
   ComprobantePath: {name: comprobante_id, in: path, required: true, schema: {type: string, format: uuid}}
@@ -19,112 +17,6 @@ responses:
       application/json:
         schema: {$ref: './sprint-2.schemas.yaml#/schemas/Error'}
 paths:
-  /condominios/{condominio_id}/usuarios/{usuario_id}/departamentos:
-    parameters:
-      - {$ref: '#/parameters/CondominioPath'}
-      - {$ref: '#/parameters/UsuarioPath'}
-    get:
-      operationId: listarVinculosUsuario
-      summary: Consultar vínculos de un usuario en el condominio autorizado
-      x-historias: [CON-05]
-      x-implementation-status: pendiente
-      responses:
-        '200':
-          description: Administración y auditor del contexto; incluye vínculos inactivos.
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: './sprint-2.schemas.yaml#/schemas/Vinculo'}}
-        '401': {$ref: '#/responses/Error'}
-        '403': {$ref: '#/responses/Error'}
-        '404': {$ref: '#/responses/Error'}
-        '422': {$ref: '#/responses/Error'}
-    post:
-      operationId: crearVinculoUsuario
-      summary: Vincular un departamento existente sin cambiar el rol del usuario
-      x-historias: [CON-05]
-      x-implementation-status: pendiente
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: './sprint-2.schemas.yaml#/schemas/CrearVinculo'}
-      responses:
-        '201':
-          description: Vínculo activo persistido; administración del contexto.
-          content:
-            application/json:
-              schema: {$ref: './sprint-2.schemas.yaml#/schemas/Vinculo'}
-        '401': {$ref: '#/responses/Error'}
-        '403': {$ref: '#/responses/Error'}
-        '404': {$ref: '#/responses/Error'}
-        '409': {$ref: '#/responses/Error'}
-        '422': {$ref: '#/responses/Error'}
-  /condominios/{condominio_id}/usuarios/{usuario_id}/departamentos/{departamento_id}:
-    parameters:
-      - {$ref: '#/parameters/CondominioPath'}
-      - {$ref: '#/parameters/UsuarioPath'}
-      - {$ref: '#/parameters/DepartamentoPath'}
-    patch:
-      operationId: cambiarEstadoVinculo
-      summary: Activar o desactivar un vínculo conservando el historial
-      x-historias: [CON-05]
-      x-implementation-status: pendiente
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: './sprint-2.schemas.yaml#/schemas/CambiarVinculo'}
-      responses:
-        '200':
-          description: Vínculo actualizado; repetir el estado no duplica auditoría.
-          content:
-            application/json:
-              schema: {$ref: './sprint-2.schemas.yaml#/schemas/Vinculo'}
-        '401': {$ref: '#/responses/Error'}
-        '403': {$ref: '#/responses/Error'}
-        '404': {$ref: '#/responses/Error'}
-        '409': {$ref: '#/responses/Error'}
-        '422': {$ref: '#/responses/Error'}
-  /condominios/{condominio_id}/usuarios/{usuario_id}/roles:
-    parameters:
-      - {$ref: '#/parameters/CondominioPath'}
-      - {$ref: '#/parameters/UsuarioPath'}
-    get:
-      operationId: consultarRolesUsuario
-      summary: Consultar roles contextuales y rol efectivo
-      x-historias: [CON-06]
-      x-implementation-status: pendiente
-      responses:
-        '200':
-          description: Administración o auditor del contexto.
-          content:
-            application/json:
-              schema: {$ref: './sprint-2.schemas.yaml#/schemas/RolesUsuario'}
-        '401': {$ref: '#/responses/Error'}
-        '403': {$ref: '#/responses/Error'}
-        '404': {$ref: '#/responses/Error'}
-        '422': {$ref: '#/responses/Error'}
-    put:
-      operationId: reemplazarRolesUsuario
-      summary: Reemplazar atómicamente los roles contextuales permitidos
-      description: No concede es_superadmin. ADMIN_JUNTA no modifica sus propios roles ni concede o retira ADMIN_JUNTA; esas operaciones requieren SuperAdmin.
-      x-historias: [CON-06]
-      x-implementation-status: pendiente
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: './sprint-2.schemas.yaml#/schemas/AsignacionRoles'}
-      responses:
-        '200':
-          description: Roles persistidos y sesiones previas invalidadas si hubo cambio real.
-          content:
-            application/json:
-              schema: {$ref: './sprint-2.schemas.yaml#/schemas/RolesUsuario'}
-        '401': {$ref: '#/responses/Error'}
-        '403': {$ref: '#/responses/Error'}
-        '404': {$ref: '#/responses/Error'}
-        '422': {$ref: '#/responses/Error'}
   /areas:
     get:
       operationId: listarAreas

@@ -262,12 +262,6 @@ paths:
         '403': { $ref: '#/components/responses/Error403' }
         '404': { description: Usuario no encontrado en el contexto seleccionado }
         '422': { description: DATOS_USUARIO_INVALIDOS }
-  /condominios/{condominio_id}/usuarios/{usuario_id}/departamentos:
-    $ref: './sprint-2.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1usuarios~1%7Busuario_id%7D~1departamentos'
-  /condominios/{condominio_id}/usuarios/{usuario_id}/departamentos/{departamento_id}:
-    $ref: './sprint-2.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1usuarios~1%7Busuario_id%7D~1departamentos~1%7Bdepartamento_id%7D'
-  /condominios/{condominio_id}/usuarios/{usuario_id}/roles:
-    $ref: './sprint-2.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1usuarios~1%7Busuario_id%7D~1roles'
   /cuotas/departamentos:
     get:
       operationId: departamentosDelPortal

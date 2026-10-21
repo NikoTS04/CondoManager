@@ -13,6 +13,8 @@
 
 CON-72 entrega interfaces para que cada responsable implemente sus historias. Definir un endpoint en OpenAPI no lo incorpora a FastAPI. Los routers, DTO Python, tipos TypeScript, repositorios y migraciones actuales deben adoptar estos contratos en las HU indicadas; los almacenes piloto en memoria no satisfacen la integración persistente.
 
+CON-04/05/06 conservan las interfaces ya integradas en `develop`: alta administrativa, vínculos persistentes y una asignación de rol por usuario y condominio. Sus rutas y esquemas permanecen en el OpenAPI principal; los fragmentos del sprint no los duplican.
+
 Para los contratos del Sprint 2 se usan los artefactos de esta tabla. Cada responsable alinea los documentos de dominio, proceso y persistencia afectados en el PR que implemente su HU; esas actualizaciones generales quedan fuera de esta entrega.
 
 ## 2. Convenciones comunes
@@ -24,7 +26,7 @@ Para los contratos del Sprint 2 se usan los artefactos de esta tabla. Cada respo
 - El calendario local no modifica la planificación UTC ya implementada por el worker de cuotas de CON-11; cualquier cambio de ese cron se acuerda en su propia historia.
 - Bearer obligatorio salvo login, salud y demo según su contrato. `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE` son los únicos roles; propietario, copropietario e inquilino son relaciones por departamento.
 - Toda escritura valida rol, condominio y recurso. El residente opera exclusivamente con sus vínculos activos; `AUDITOR` no escribe. Los filtros nunca amplían el permiso. Un SuperAdmin global selecciona contexto para las consultas que lo necesitan.
-- Confirmar la operación, auditoría y evento pendiente en una transacción antes de responder éxito. Una reversión no modifica saldos, horarios ni notificaciones de éxito.
+- Cuando una operación produce eventos, confirmar la operación, auditoría y evento pendiente en una transacción antes de responder éxito. Una reversión no modifica saldos, horarios ni notificaciones de éxito.
 - Error en raíz: `error_code`, `mensaje`, `detalles` opcional como objeto. Las validaciones se agrupan en `detalles.errores`, sin reproducir contraseñas, tokens o contenido de archivos. Durante la adopción el lector frontend conserva compatibilidad con `detail` histórico; los nuevos handlers usan el formato raíz.
 
 ## 3. Usuarios y accesos — Jerson
@@ -33,24 +35,27 @@ CON-04 conserva [alta-administrativa.md](../02-domains/05-usuarios-rbac/alta-adm
 
 ### CON-05: vínculos
 
-Familia `/condominios/{condominio_id}/usuarios/{usuario_id}/departamentos`:
+Se conserva el [contrato de vínculos integrado](../02-domains/05-usuarios-rbac/vinculos-departamentos.md). Familia `/condominios/{condominio_id}/usuarios/{usuario_id}/departamentos`:
 
-- `GET`: administración y auditor consultan vínculos activos e inactivos del contexto.
-- `POST`: administración crea un vínculo activo con `departamento_id` y `tipo_relacion`; responde `201 Vinculo`. El usuario debe pertenecer al contexto y la unidad debe existir en ese condominio.
-- `PATCH .../{departamento_id}`: administración recibe `{"es_activo": false}` o `true`, responde `200 Vinculo`. Un no-op no repite auditoría ni incrementa la revisión de autorización.
-- El par usuario/departamento es único. Un duplicado responde `409 VINCULO_DUPLICADO`; cambios de relación se tramitan de forma explícita en una evolución del contrato, sin duplicar el par.
-- Una unidad activa conserva al menos un propietario titular activo; el primer vínculo se crea como titular. No se desactiva el último titular de una unidad activa: `409 TITULAR_REQUERIDO`. Antes de habilitar copropietario/inquilino debe existir titular. Para sustituirlo se registra primero el vínculo titular de la nueva identidad y luego se desactiva el anterior; cada mutación protege esta condición bajo el mismo bloqueo de unidad.
-- Cambios reales invalidan sesiones anteriores de la identidad afectada mediante `auth_revision`, preservan historial y se auditan. Reactivar un vínculo no revive tokens revocados.
+- `GET`: SuperAdmin o Junta autorizada consultan vínculos activos e inactivos del contexto. Auditor y Residente no acceden a esta gestión administrativa.
+- `PUT .../{departamento_id}` recibe solo `tipo_relacion` (`PROPIETARIO_TITULAR`, `COPROPIETARIO` o `INQUILINO`); crea, cambia o restaura el vínculo y responde `200 VinculoUsuario`.
+- `DELETE .../{departamento_id}` desactiva lógicamente el vínculo y responde `200 VinculoUsuario`; un vínculo inexistente responde `404 VINCULO_NO_ENCONTRADO`.
+- El par usuario/departamento es único y se conserva al restaurar. Crear/cambiar/restaurar exige rol contextual vigente del destino y unidad activa; la desactivación también permite limpiar vínculos con rol revocado o unidad inactiva.
+- El primer vínculo activo de una unidad debe ser titular; copropietarios e inquilinos requieren un titular activo. Retirar o cambiar la relación del último titular responde `409 TITULAR_REQUERIDO`. Para sustituirlo se registra primero otro titular. La tenencia se cuenta desde los vínculos activos, independientemente del estado de acceso de la cuenta o su rol.
+- Cambios reales incrementan `auth_revision` y auditan atómicamente. Un `PUT` idéntico o `DELETE` repetido conserva revisión e historial; todas las precondiciones siguen aplicando. Restaurar no revive tokens revocados.
 
 ### CON-06: roles
 
-Familia `/condominios/{condominio_id}/usuarios/{usuario_id}/roles`: `GET` consulta; `PUT {"roles":[...]}` reemplaza atómicamente el conjunto contextual y devuelve `RolesUsuario`.
+Se conserva el [contrato de roles integrado](../02-domains/05-usuarios-rbac/roles-y-permisos.md). Cada par usuario/condominio tiene como máximo una asignación, con revocación lógica. Familia `/condominios/{condominio_id}/usuarios/{usuario_id}/rol`:
 
-Roles asignables: `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`, sin duplicados y con al menos uno. El rol efectivo usa prioridad `ADMIN_JUNTA > AUDITOR > RESIDENTE`. SuperAdmin puede administrar esos roles; un administrador contextual solo modifica asignaciones de residente/auditor de otras personas, sin conceder o retirar `ADMIN_JUNTA` ni modificar sus propios roles. `es_superadmin` no es editable en esta API.
+- `GET` consulta la asignación, incluso revocada; `PUT {"rol":"RESIDENTE"}` asigna, cambia o reactiva; `DELETE` revoca. Las respuestas son `200 AsignacionRol`: usuario, condominio, rol y `es_activo`.
+- Roles asignables: `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`. La lectura conserva roles SQL históricos; `SUPERADMIN` contextual heredado no concede privilegio global. No hay conjunto de roles ni prioridad entre varios roles de un mismo contexto.
+- SuperAdmin administra contextos activos y puede incorporar una identidad por UUID. Junta solo gestiona Auditor/Residente ya asignados a su contexto, si el rol anterior también es Auditor/Residente; no modifica otra Junta, aunque su asignación esté revocada. Auditor y Residente no acceden a esta gestión.
+- Se rechaza modificar la propia asignación o una identidad SuperAdmin global. `es_superadmin` se provisiona por CLI y no es editable aquí. Un usuario sin asignación responde `404 ROL_NO_ENCONTRADO` en consulta/revocación y en asignación por Junta.
 
-La mutación serializa asignaciones, vuelve a validar al actor y registra auditoría e invalidación de sesión. Repetir el conjunto es no-op. El login conserva selección de condominio para múltiples asignaciones; varias filas del mismo contexto no se presentan como condominios distintos. Las operaciones de usuarios y las consultas del resto del sistema deben resolver el mismo rol efectivo.
+La mutación serializa asignaciones, revalida al actor y confirma rol, auditoría e incremento de `auth_revision` conjuntamente. Repetir el rol activo o la revocación es no-op. Login y rutas protegidas usan asignaciones activas en condominios activos; revocar excluye ese contexto y revoca JWT anteriores. Reactivar conserva la fila y no restaura tokens antiguos.
 
-Las identidades con concesión global `es_superadmin` no se administran mediante esta familia contextual: responder `403 ACCESO_DENEGADO` si se intenta modificar su conjunto de roles aquí. Se preserva la provisión global ya documentada en CON-04.
+`GET /condominios/{condominio_id}/usuarios` conserva los campos de cuenta y añade `rol`, `rol_activo` y `es_superadmin` de solo lectura. `GET /cuotas/departamentos` y la autorización de unidades en pagos/reservas usan el padrón SQL de CON-05, con `edificio_id` y `edificio_nombre` para distinguir números de unidad repetidos. El resto de la persistencia financiera y de reservas corresponde a CON-70/73.
 
 ## 4. Catálogo, disponibilidad y reservas
 
@@ -154,7 +159,7 @@ Además de los códigos por operación, se usan `401 NO_AUTENTICADO`, `TOKEN_INV
 
 | Responsable | Qué debe implementar usando esta base |
 |---|---|
-| Jerson | CON-05/06, catálogo CON-39, revocación y perfil efectivo; conservar CON-04 vigente. |
+| Jerson | Catálogo CON-39; conservar alta CON-04, vínculos CON-05 y rol contextual revocable CON-06 ya integrados. |
 | Anderson | Multipart, recuperación y subsanación CON-22, persistencia/revisión CON-70 y consulta de solvencia CON-42. |
 | Brandon | Respuestas y unicidad CON-23, creación CON-41 y garantía SQL CON-43. |
 | Alejandro | Consumidores y estados de CON-32/34/36/37; distinguir transporte simulado, aceptación y entrega. |

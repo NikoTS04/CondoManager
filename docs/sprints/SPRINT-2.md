@@ -407,6 +407,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 **Base de implementación:** [contratos del Sprint 2 / CON-72](../../specs/05-api/sprint-2-contratos.md), para que cada responsable implemente su HU. La entrega se limita a OpenAPI, esquemas de eventos, catálogo y guía de contratos. Los ajustes de dominio, proceso y persistencia se incorporan junto con la implementación de cada HU.
 
+CON-72 conserva las interfaces de CON-05/06 integradas en `develop`: vínculos mediante `GET/PUT/DELETE` y una asignación contextual mediante `/rol`. Sus rutas y esquemas se mantienen en el OpenAPI principal; los fragmentos del sprint cubren los contratos restantes.
+
 **Estado de verificación:** revisión documental; adopción por los módulos, validación automatizada y revisión de pares pendientes. Publicar estos contratos no acredita el cierre de CON-72.
 
 **Debe incluir:**
