@@ -12,6 +12,8 @@ tags:
     description: Asignaciones contextuales y revocación de permisos.
   - name: Cuotas de Mantenimiento
     description: Presupuestos y emisión mensual de cuotas.
+  - name: Notificaciones
+    description: Bitácora persistente, reintentos, alertas y comunicados (CON-32/34/36/37).
 paths:
   /auth/login:
     post:
@@ -364,6 +366,8 @@ paths:
     get:
       operationId: listarNotificaciones
       summary: Bitácora persistente del contexto para administración y auditoría
+      description: "Bitácora persistente del contexto para administración y auditoría."
+      tags: [Notificaciones]
       parameters:
         - $ref: '#/components/parameters/ContextoConsulta'
         - { name: departamento_id, in: query, schema: { type: string, format: uuid } }
@@ -417,6 +421,8 @@ paths:
     get:
       operationId: obtenerNotificacionDetalle
       summary: Detalle de notificación con historial de intentos de envío ordenados por ciclo y número
+      description: "Detalle de notificación con historial de intentos de envío ordenados por ciclo y número."
+      tags: [Notificaciones]
       parameters:
         - { name: log_id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -479,6 +485,8 @@ paths:
     get:
       operationId: listarMisNotificaciones
       summary: Comunicaciones propias del residente autenticado en unidades con vínculo activo
+      description: "Comunicaciones propias del residente autenticado en unidades con vínculo activo."
+      tags: [Notificaciones]
       parameters:
         - $ref: '#/components/parameters/ContextoConsulta'
         - { name: departamento_id, in: query, schema: { type: string, format: uuid } }
@@ -494,6 +502,8 @@ paths:
     get:
       operationId: listarAlertasNotificaciones
       summary: Listar alertas administrativas abiertas por fallos definitivos de entrega
+      description: "Listar alertas administrativas abiertas por fallos definitivos de entrega."
+      tags: [Notificaciones]
       parameters:
         - $ref: '#/components/parameters/ContextoConsulta'
         - { name: solo_abiertas, in: query, schema: { type: boolean, default: true } }
@@ -525,6 +535,8 @@ paths:
     post:
       operationId: atenderAlertaNotificacion
       summary: Marcar alerta administrativa como atendida (solo administración con escritura)
+      description: "Marcar alerta administrativa como atendida (solo administración con escritura)."
+      tags: [Notificaciones]
       parameters:
         - { name: alerta_id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -536,6 +548,8 @@ paths:
     post:
       operationId: reenviarNotificacion
       summary: Reprogramación manual exclusiva para notificaciones en FALLIDO_PERMANENTE
+      description: "Reprogramación manual exclusiva para notificaciones en FALLIDO_PERMANENTE."
+      tags: [Notificaciones]
       parameters:
         - { name: log_id, in: path, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -556,6 +570,8 @@ paths:
     post:
       operationId: enviarComunicadoMasivo
       summary: Encolar comunicado persistente a residentes con vínculo activo del condominio
+      description: "Encolar comunicado persistente a residentes con vínculo activo del condominio."
+      tags: [Notificaciones]
       requestBody:
         required: true
         content:

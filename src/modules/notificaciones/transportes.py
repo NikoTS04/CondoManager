@@ -327,9 +327,7 @@ class TransporteSimulado:
             raise item
 
         if isinstance(item, ResultadoTransporte):
-            self.envios.append(
-                EnvioSimulado(notif_id, destinatario, canal, asunto, cuerpo, item)
-            )
+            self.envios.append(EnvioSimulado(notif_id, destinatario, canal, asunto, cuerpo, item))
             return item
 
         if not validar_destinatario(destinatario, canal):
@@ -438,9 +436,7 @@ class TransporteSMTP:
             if notif_id
             else make_msgid(domain="condomanager.pe")
         )
-        return await asyncio.to_thread(
-            self._enviar_sincrono, destinatario, asunto, cuerpo, msg_id
-        )
+        return await asyncio.to_thread(self._enviar_sincrono, destinatario, asunto, cuerpo, msg_id)
 
 
 _ETIQUETA_FALLOS = re.compile(r"\+falla(\d)@")

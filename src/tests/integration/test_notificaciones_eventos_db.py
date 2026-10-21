@@ -333,11 +333,7 @@ async def test_con32_emision_lote_real_consume_outbox_e_idempotencia(entorno_db)
     # 4. Consultar notificaciones desde una nueva sesión y verificar aislamiento y montos
     async with factory() as session:
         notificaciones = list(
-            (
-                await session.scalars(
-                    select(Notificacion).order_by(Notificacion.destinatario)
-                )
-            ).all()
+            (await session.scalars(select(Notificacion).order_by(Notificacion.destinatario))).all()
         )
         assert len(notificaciones) == 3
         destinatarios = {n.destinatario for n in notificaciones}
@@ -497,9 +493,7 @@ async def test_con34_pago_reportado_y_revisado_con_tabla_persistida_y_validacion
         conciliadas = list(
             (
                 await session.scalars(
-                    select(Notificacion).where(
-                        Notificacion.plantilla == "NOTIF_PAGO_CONCILIADO"
-                    )
+                    select(Notificacion).where(Notificacion.plantilla == "NOTIF_PAGO_CONCILIADO")
                 )
             ).all()
         )
@@ -561,11 +555,7 @@ async def test_con34_pago_observado_y_rechazado_sin_tabla_comprobantes(entorno_d
 
     async with factory() as session:
         notifs = list(
-            (
-                await session.scalars(
-                    select(Notificacion).order_by(Notificacion.creado_en)
-                )
-            ).all()
+            (await session.scalars(select(Notificacion).order_by(Notificacion.creado_en))).all()
         )
         assert [n.plantilla for n in notifs] == [
             "NOTIF_PAGO_OBSERVADO",
@@ -627,11 +617,7 @@ async def test_con36_reserva_confirmada_y_cancelada_aislamiento_por_departamento
 
     async with factory() as session:
         notifs = list(
-            (
-                await session.scalars(
-                    select(Notificacion).order_by(Notificacion.plantilla)
-                )
-            ).all()
+            (await session.scalars(select(Notificacion).order_by(Notificacion.plantilla))).all()
         )
         assert len(notifs) == 2
         # Solo recibe el destinatario activo del Dpto 102, nunca los del Dpto 101
@@ -672,9 +658,12 @@ async def test_worker_redis_streams_xack_post_commit_y_recuperacion_pendientes(e
             stream,
             {"event": json.dumps({"event_id": str(uuid4()), "event_type": "OtroDominioEvent"})},
         )
-        assert await consumir_lote_stream(
-            redis, factory, stream=stream, group=group, consumer="worker-1", block_ms=50
-        ) == 1
+        assert (
+            await consumir_lote_stream(
+                redis, factory, stream=stream, group=group, consumer="worker-1", block_ms=50
+            )
+            == 1
+        )
         assert (await redis.xpending(stream, group))["pending"] == 0
 
         # 1. Evento que incumple el contrato (APROBADO sin saldo_resultante): reintentarlo no
@@ -786,9 +775,7 @@ async def test_rollback_completo_cuando_falla_en_medio_de_transaccion(entorno_db
             raise RuntimeError("Fallo simulado después de la primera inserción")
         return await original_registrar(session, nueva, ahora=ahora)
 
-    monkeypatch.setattr(
-        mod_consumidores, "registrar_notificacion", registrar_que_falla_en_segunda
-    )
+    monkeypatch.setattr(mod_consumidores, "registrar_notificacion", registrar_que_falla_en_segunda)
 
     evento_id = uuid4()
     ev_reportado = {
@@ -848,4 +835,3 @@ async def test_rechazo_departamento_de_otro_condominio(entorno_db):
     async with factory() as session:
         total_notifs = await session.scalar(select(func.count()).select_from(Notificacion))
         assert total_notifs == 0
-

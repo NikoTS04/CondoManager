@@ -144,7 +144,12 @@ def test_pago_conciliado_nunca_inventa_saldo_por_defecto():
     with pytest.raises(PlantillaVariableFaltanteError):
         PlantillasService.renderizar(
             "NOTIF_PAGO_CONCILIADO",
-            {"nombre": "Ana", "dpto": "302", "monto_aplicado": Decimal("180.00"), "saldo_resultante": None},
+            {
+                "nombre": "Ana",
+                "dpto": "302",
+                "monto_aplicado": Decimal("180.00"),
+                "saldo_resultante": None,
+            },
         )
 
 

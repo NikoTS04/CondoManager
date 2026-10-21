@@ -95,7 +95,9 @@ class Notificacion(Base):
             "estado IN ('EN_COLA', 'REINTENTANDO', 'ACEPTADO', 'ENTREGADO', 'FALLIDO_PERMANENTE')",
             name="ck_notificacion_estado",
         ),
-        CheckConstraint("canal IN ('EMAIL', 'WHATSAPP', 'SMS', 'PUSH')", name="ck_notificacion_canal"),
+        CheckConstraint(
+            "canal IN ('EMAIL', 'WHATSAPP', 'SMS', 'PUSH')", name="ck_notificacion_canal"
+        ),
         CheckConstraint(
             "origen_tipo IN ('CUOTA', 'COMPROBANTE', 'RESERVA', 'COMUNICADO', 'USUARIO')",
             name="ck_notificacion_origen",

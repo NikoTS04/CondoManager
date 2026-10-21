@@ -139,7 +139,9 @@ async def recuperar_pendientes_stream(
             count=count,
         )
         # En Redis 6.2+/7 xautoclaim devuelve (next_id, [(msg_id, fields), ...], [deleted_ids])
-        entradas = reclamados[1] if isinstance(reclamados, (list, tuple)) and len(reclamados) > 1 else []
+        entradas = (
+            reclamados[1] if isinstance(reclamados, (list, tuple)) and len(reclamados) > 1 else []
+        )
         for msg_id, fields in entradas:
             if fields:
                 clave_id = _decodificar_texto(msg_id)

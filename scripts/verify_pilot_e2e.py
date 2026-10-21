@@ -28,9 +28,7 @@ from scripts.seed_condominio_piloto import generar_datos_areas_comunes, generar_
 from src.core.audit import AuditoriaPayload
 from src.modules.cuotas.schemas import EmitirLoteCuotasRequest
 from src.modules.cuotas.service import CuotasService
-from src.modules.notificaciones.entrega import calcular_proximo_intento
-from src.modules.notificaciones.templates import PlantillasService
-from src.modules.notificaciones.transportes import clasificar_fallo, fallo_demostracion
+from src.modules.notificaciones import entrega, templates, transportes
 from src.modules.pagos.moras_service import MotorMorasService
 from src.modules.pagos.schemas import ReportarPagoRequest
 from src.modules.pagos.service import PagosService
@@ -270,7 +268,7 @@ def main():
     # PASO 6: Despacho Multicanal de Notificaciones y Resiliencia
     # ------------------------------------------------------------------------
     print_step(6, "PROC-03 (Alejandro): Despacho Multicanal y Política de Reintentos")
-    asunto, cuerpo = PlantillasService.renderizar(
+    asunto, cuerpo = templates.PlantillasService.renderizar(
         "NOTIF_RESERVA_CONFIRMADA",
         {
             "nombre": "Carlos Mendoza",
@@ -287,21 +285,21 @@ def main():
 
     # El transporte simulado por defecto decide según `intentos`, igual que tras un reinicio.
     def envio(destinatario, intentos):
-        return fallo_demostracion(
+        return transportes.fallo_demostracion(
             SimpleNamespace(destinatario=destinatario, canal="EMAIL", intentos=intentos)
         )
 
     assert envio("residente402@gmail.com", 0).aceptado
     temporal = envio("residente402+falla1@gmail.com", 0)
-    assert clasificar_fallo(temporal.codigo, temporal.detalle) == "FALLO_TEMPORAL"
+    assert transportes.clasificar_fallo(temporal.codigo, temporal.detalle) == "FALLO_TEMPORAL"
     ahora = datetime.now(timezone.utc)
-    proximo = calcular_proximo_intento(1, ahora, jitter_fn=lambda: 0)
+    proximo = entrega.calcular_proximo_intento(1, ahora, jitter_fn=lambda: 0)
     assert proximo == ahora + timedelta(minutes=2)
     assert envio("residente402+falla1@gmail.com", 1).aceptado
     print(f"• Error 503 temporal: reintento programado para {proximo.strftime('%H:%M:%S')} y aceptado.")
 
     rebote = envio("residente402+rebote@gmail.com", 0)
-    assert clasificar_fallo(rebote.codigo, rebote.detalle) == "FALLO_DEFINITIVO"
+    assert transportes.clasificar_fallo(rebote.codigo, rebote.detalle) == "FALLO_DEFINITIVO"
     print("• Hard bounce 550 detectado: se clasifica como definitivo (FALLIDO_PERMANENTE).")
     print("✅ Despacho multicanal y resiliencia validados con éxito.")
 

@@ -87,9 +87,7 @@ def _validar_decimal(nombre: str, valor: Any, *, positivo: bool = False) -> Deci
         try:
             monto = redondear_moneda(Decimal(valor.strip()))
         except InvalidOperation as exc:
-            raise ErrorContratoEvento(
-                f"Campo monetario '{nombre}' inválido: {valor!r}"
-            ) from exc
+            raise ErrorContratoEvento(f"Campo monetario '{nombre}' inválido: {valor!r}") from exc
     else:
         raise ErrorContratoEvento(f"Campo monetario obligatorio '{nombre}' inválido.")
 
@@ -160,9 +158,7 @@ async def _leer_reserva_persistida(
     return dict(fila) if fila is not None else None
 
 
-async def _leer_area_persistida(
-    session: AsyncSession, area_id: uuid.UUID
-) -> dict[str, Any] | None:
+async def _leer_area_persistida(session: AsyncSession, area_id: uuid.UUID) -> dict[str, Any] | None:
     if not await _tabla_existe(session, "areas_comunes"):
         return None
     resultado = await session.execute(
@@ -266,9 +262,7 @@ async def _procesar_cuotas_emitidas(
             if notif_id is not None:
                 ids_creados.append(notif_id)
 
-    await cerrar_evento_consumido(
-        session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados)
-    )
+    await cerrar_evento_consumido(session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados))
     return ResultadoConsumo(
         event_id=event_id,
         event_type=event_type,
@@ -321,10 +315,14 @@ async def _procesar_pago_reportado(
     monto = _validar_decimal("monto", monto_raw, positivo=True)
 
     banco_raw = (
-        (comprobante_bd.get("banco_origen") or comprobante_bd.get("banco"))
-        if comprobante_bd is not None
-        else None
-    ) or data.get("banco") or data.get("banco_origen")
+        (
+            (comprobante_bd.get("banco_origen") or comprobante_bd.get("banco"))
+            if comprobante_bd is not None
+            else None
+        )
+        or data.get("banco")
+        or data.get("banco_origen")
+    )
     banco = _validar_texto("banco", banco_raw)
 
     operacion_raw = (
@@ -384,9 +382,7 @@ async def _procesar_pago_reportado(
         if notif_id is not None:
             ids_creados.append(notif_id)
 
-    await cerrar_evento_consumido(
-        session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados)
-    )
+    await cerrar_evento_consumido(session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados))
     return ResultadoConsumo(
         event_id=event_id,
         event_type=event_type,
@@ -408,9 +404,7 @@ async def _procesar_pago_revisado(
     # Soportar condominio_id explícito o resolverlo cuando venga de PagoConciliadoEvent legado
     condominio_raw = data.get("condominio_id")
     condominio_id = (
-        _parsear_uuid("condominio_id", condominio_raw)
-        if condominio_raw is not None
-        else None
+        _parsear_uuid("condominio_id", condominio_raw) if condominio_raw is not None else None
     )
 
     es_nuevo = await marcar_evento_consumido(
@@ -436,9 +430,7 @@ async def _procesar_pago_revisado(
         resultado_raw = "APROBADO"
     resultado = _validar_texto("resultado", resultado_raw).upper()
     if resultado not in ("APROBADO", "OBSERVADO", "RECHAZADO"):
-        raise ErrorContratoEvento(
-            f"Resultado de revisión inválido en {event_type}: {resultado!r}"
-        )
+        raise ErrorContratoEvento(f"Resultado de revisión inválido en {event_type}: {resultado!r}")
 
     comprobante_bd = await _leer_comprobante_persistido(session, comprobante_id)
     if comprobante_bd is not None:
@@ -507,9 +499,8 @@ async def _procesar_pago_revisado(
             or data.get("motivo_rechazo")
         )
         instrucciones_raw = (
-            (comprobante_bd.get("instrucciones") if comprobante_bd is not None else None)
-            or data.get("instrucciones")
-        )
+            comprobante_bd.get("instrucciones") if comprobante_bd is not None else None
+        ) or data.get("instrucciones")
         motivo = _validar_texto("motivo", motivo_raw)
         instrucciones = _validar_texto("instrucciones", instrucciones_raw)
         contexto_base["motivo"] = motivo
@@ -525,9 +516,8 @@ async def _procesar_pago_revisado(
             or data.get("motivo_rechazo")
         )
         instrucciones_raw = (
-            (comprobante_bd.get("instrucciones") if comprobante_bd is not None else None)
-            or data.get("instrucciones")
-        )
+            comprobante_bd.get("instrucciones") if comprobante_bd is not None else None
+        ) or data.get("instrucciones")
         motivo = _validar_texto("motivo", motivo_raw)
         instrucciones = _validar_texto("instrucciones", instrucciones_raw)
         contexto_base["motivo"] = motivo
@@ -569,9 +559,7 @@ async def _procesar_pago_revisado(
         if notif_id is not None:
             ids_creados.append(notif_id)
 
-    await cerrar_evento_consumido(
-        session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados)
-    )
+    await cerrar_evento_consumido(session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados))
     return ResultadoConsumo(
         event_id=event_id,
         event_type=event_type,
@@ -581,9 +569,7 @@ async def _procesar_pago_revisado(
     )
 
 
-def _resolver_horario_reserva(
-    data: dict[str, Any], reserva_bd: dict[str, Any] | None
-) -> str:
+def _resolver_horario_reserva(data: dict[str, Any], reserva_bd: dict[str, Any] | None) -> str:
     horario = data.get("horario")
     if isinstance(horario, str) and horario.strip():
         return horario.strip()
@@ -600,9 +586,7 @@ def _resolver_horario_reserva(
             else str(hora_inicio).strip()
         )
         fin_str = (
-            hora_fin.strftime("%H:%M")
-            if hasattr(hora_fin, "strftime")
-            else str(hora_fin).strip()
+            hora_fin.strftime("%H:%M") if hasattr(hora_fin, "strftime") else str(hora_fin).strip()
         )
         if ini_str and fin_str:
             return f"{ini_str} - {fin_str}"
@@ -619,9 +603,7 @@ async def _procesar_reserva_confirmada(
     departamento_id = _parsear_uuid("departamento_id", data.get("departamento_id"))
     condominio_raw = data.get("condominio_id")
     condominio_id = (
-        _parsear_uuid("condominio_id", condominio_raw)
-        if condominio_raw is not None
-        else None
+        _parsear_uuid("condominio_id", condominio_raw) if condominio_raw is not None else None
     )
 
     es_nuevo = await marcar_evento_consumido(
@@ -742,9 +724,7 @@ async def _procesar_reserva_confirmada(
         if notif_id is not None:
             ids_creados.append(notif_id)
 
-    await cerrar_evento_consumido(
-        session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados)
-    )
+    await cerrar_evento_consumido(session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados))
     return ResultadoConsumo(
         event_id=event_id,
         event_type=event_type,
@@ -764,9 +744,7 @@ async def _procesar_reserva_cancelada(
     departamento_id = _parsear_uuid("departamento_id", data.get("departamento_id"))
     condominio_raw = data.get("condominio_id")
     condominio_id = (
-        _parsear_uuid("condominio_id", condominio_raw)
-        if condominio_raw is not None
-        else None
+        _parsear_uuid("condominio_id", condominio_raw) if condominio_raw is not None else None
     )
 
     es_nuevo = await marcar_evento_consumido(
@@ -827,9 +805,7 @@ async def _procesar_reserva_cancelada(
     monto_reembolso_raw = data.get("monto_reembolso")
     monto_reembolso_str: str | None = None
     if monto_reembolso_raw is not None:
-        monto_reembolso = _validar_decimal(
-            "monto_reembolso", monto_reembolso_raw, positivo=False
-        )
+        monto_reembolso = _validar_decimal("monto_reembolso", monto_reembolso_raw, positivo=False)
         monto_reembolso_str = f"{monto_reembolso:.2f}"
         if not ajuste_economico:
             if monto_reembolso > Decimal("0.00"):
@@ -886,9 +862,7 @@ async def _procesar_reserva_cancelada(
         if notif_id is not None:
             ids_creados.append(notif_id)
 
-    await cerrar_evento_consumido(
-        session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados)
-    )
+    await cerrar_evento_consumido(session, CONSUMIDOR_NOTIFICACIONES, event_id, len(ids_creados))
     return ResultadoConsumo(
         event_id=event_id,
         event_type=event_type,
@@ -901,25 +875,19 @@ async def _procesar_reserva_cancelada(
 async def consumir_cuotas_emitidas(
     session: AsyncSession, envelope: dict[str, Any], ahora: datetime | None = None
 ) -> ResultadoConsumo:
-    return await _ejecutar_en_transaccion(
-        session, _procesar_cuotas_emitidas, envelope, ahora=ahora
-    )
+    return await _ejecutar_en_transaccion(session, _procesar_cuotas_emitidas, envelope, ahora=ahora)
 
 
 async def consumir_pago_reportado(
     session: AsyncSession, envelope: dict[str, Any], ahora: datetime | None = None
 ) -> ResultadoConsumo:
-    return await _ejecutar_en_transaccion(
-        session, _procesar_pago_reportado, envelope, ahora=ahora
-    )
+    return await _ejecutar_en_transaccion(session, _procesar_pago_reportado, envelope, ahora=ahora)
 
 
 async def consumir_pago_revisado(
     session: AsyncSession, envelope: dict[str, Any], ahora: datetime | None = None
 ) -> ResultadoConsumo:
-    return await _ejecutar_en_transaccion(
-        session, _procesar_pago_revisado, envelope, ahora=ahora
-    )
+    return await _ejecutar_en_transaccion(session, _procesar_pago_revisado, envelope, ahora=ahora)
 
 
 async def consumir_reserva_confirmada(

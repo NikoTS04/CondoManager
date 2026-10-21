@@ -34,7 +34,9 @@ def upgrade():
             sa.ForeignKey("condominios.id", ondelete="RESTRICT"),
             nullable=False,
         ),
-        sa.Column("departamento_id", UUID(), sa.ForeignKey("departamentos.id", ondelete="RESTRICT")),
+        sa.Column(
+            "departamento_id", UUID(), sa.ForeignKey("departamentos.id", ondelete="RESTRICT")
+        ),
         sa.Column("usuario_id", UUID(), sa.ForeignKey("usuarios.id", ondelete="RESTRICT")),
         sa.Column("evento_id", UUID(), nullable=False),
         sa.Column("tipo_evento", sa.String(60), nullable=False),

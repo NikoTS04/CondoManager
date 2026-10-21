@@ -598,7 +598,11 @@ async def test_entregado_no_se_reenvia_y_reprogramar_manual(db_notificaciones: B
         assert final.destinatario == "corregido402@condominio.pe"
         historial = (
             await session.execute(
-                select(NotificacionIntento.ciclo, NotificacionIntento.numero, NotificacionIntento.resultado)
+                select(
+                    NotificacionIntento.ciclo,
+                    NotificacionIntento.numero,
+                    NotificacionIntento.resultado,
+                )
                 .where(NotificacionIntento.notificacion_id == id_fallida)
                 .order_by(NotificacionIntento.ciclo, NotificacionIntento.numero)
             )
@@ -623,7 +627,9 @@ async def test_transporte_por_defecto_fallos_de_demostracion_persisten_entre_rei
         )
         id_rebote = await registrar_notificacion(
             session,
-            _nueva_notif(dpto_num="105", destinatario="demo+rebote@condominio.pe", clave_extra="demo-r"),
+            _nueva_notif(
+                dpto_num="105", destinatario="demo+rebote@condominio.pe", clave_extra="demo-r"
+            ),
             ahora=t0,
         )
 
