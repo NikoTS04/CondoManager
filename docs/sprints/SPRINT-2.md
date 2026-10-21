@@ -211,6 +211,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-32 — Notificar la emisión de una cuota
 
+Guion y resultados: [entrega de notificaciones](CON-32-37-notificaciones.md).
+
 **Historia:** Como residente, quiero recibir el aviso de una nueva cuota, para conocer el monto y la fecha límite de pago.
 
 **Debe incluir:**
@@ -227,6 +229,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 **Trazabilidad:** [NOT-01 del backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#not-01--notificar-la-emisión-de-una-cuota), [dominio de notificaciones](../../specs/02-domains/03-notificaciones/spec.md), [PROC-03](../../specs/02-processes-and-automations/proc-03-notificaciones.md), [catálogo de eventos](../../specs/03-contracts/events/domain-events-catalog.md), [entrega de CON-11](SPRINT-1.md#entrega-técnica-con-11--nicolás).
 
 ## CON-34 — Comunicar el resultado de un pago
+
+Guion y resultados: [entrega de notificaciones](CON-32-37-notificaciones.md).
 
 **Historia:** Como residente, quiero recibir el resultado de la revisión de mi comprobante, para saber si fue aprobado, observado o rechazado.
 
@@ -245,6 +249,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-36 — Notificar reservas y otras operaciones
 
+Guion y resultados: [entrega de notificaciones](CON-32-37-notificaciones.md).
+
 **Historia:** Como usuario, quiero recibir confirmaciones de reservas, cancelaciones, invitaciones y otras operaciones relevantes, para disponer de evidencia de lo ocurrido.
 
 **Debe incluir:**
@@ -261,6 +267,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 **Trazabilidad:** [NOT-05 del backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#not-05--notificar-reservas-y-otras-operaciones), [dominio de notificaciones](../../specs/02-domains/03-notificaciones/spec.md), [PROC-03](../../specs/02-processes-and-automations/proc-03-notificaciones.md), [PROC-04](../../specs/02-processes-and-automations/proc-04-reservas-areas-comunes.md), [PROC-05](../../specs/02-processes-and-automations/proc-05-gestion-usuarios.md).
 
 ## CON-37 — Reintentar notificaciones fallidas
+
+Guion y resultados: [entrega de notificaciones](CON-32-37-notificaciones.md).
 
 **Historia:** Como administrador, quiero que los envíos fallidos se reintenten automáticamente, para recuperar comunicaciones afectadas por interrupciones temporales.
 

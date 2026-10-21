@@ -16,6 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 import sys
 import uuid
+from types import SimpleNamespace
 
 # Asegurar que la raíz del proyecto esté en sys.path
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -27,12 +28,9 @@ from scripts.seed_condominio_piloto import generar_datos_areas_comunes, generar_
 from src.core.audit import AuditoriaPayload
 from src.modules.cuotas.schemas import EmitirLoteCuotasRequest
 from src.modules.cuotas.service import CuotasService
-from src.modules.notificaciones.schemas import (
-    CanalNotificacionEnum,
-    DespacharNotificacionRequest,
-    EstadoNotificacionEnum,
-)
-from src.modules.notificaciones.service import NotificacionesService
+from src.modules.notificaciones.entrega import calcular_proximo_intento
+from src.modules.notificaciones.templates import PlantillasService
+from src.modules.notificaciones.transportes import clasificar_fallo, fallo_demostracion
 from src.modules.pagos.moras_service import MotorMorasService
 from src.modules.pagos.schemas import ReportarPagoRequest
 from src.modules.pagos.service import PagosService
@@ -272,46 +270,39 @@ def main():
     # PASO 6: Despacho Multicanal de Notificaciones y Resiliencia
     # ------------------------------------------------------------------------
     print_step(6, "PROC-03 (Alejandro): Despacho Multicanal y Política de Reintentos")
-    req_notif = DespacharNotificacionRequest(
-        condominio_id="vb3-condo",
-        departamento_id="402",
-        tipo_evento="NOTIF_RESERVA_CONFIRMADA",
-        canal=CanalNotificacionEnum.EMAIL,
-        destinatario="residente402@gmail.com",
-        contexto={
+    asunto, cuerpo = PlantillasService.renderizar(
+        "NOTIF_RESERVA_CONFIRMADA",
+        {
             "nombre": "Carlos Mendoza",
             "dpto": "402",
             "area": parrilla_1["nombre"],
             "fecha": "2026-10-25",
             "horario": "19:00 - 22:00",
+            "costo": "50.00",
+            "normas_convivencia": "Aforo máximo y limpieza obligatoria",
         },
     )
+    print(f"• Plantilla renderizada: {asunto}")
+    assert parrilla_1["nombre"] in cuerpo
 
-    log_notif = NotificacionesService.despachar_notificacion(req_notif)
-    print(f"• Notificación despachada con éxito.")
-    print(f"  Asunto: {log_notif.asunto}")
-    print(f"  Estado: {log_notif.estado.value} | Intentos: {log_notif.intentos}")
-    assert log_notif.estado == EstadoNotificacionEnum.ENTREGADO
+    # El transporte simulado por defecto decide según `intentos`, igual que tras un reinicio.
+    def envio(destinatario, intentos):
+        return fallo_demostracion(
+            SimpleNamespace(destinatario=destinatario, canal="EMAIL", intentos=intentos)
+        )
 
-    # Simulación de resiliencia con error 503 temporal
+    assert envio("residente402@gmail.com", 0).aceptado
+    temporal = envio("residente402+falla1@gmail.com", 0)
+    assert clasificar_fallo(temporal.codigo, temporal.detalle) == "FALLO_TEMPORAL"
     ahora = datetime.now(timezone.utc)
-    log_reintento = NotificacionesService.despachar_notificacion(
-        request=req_notif,
-        transport_fn=lambda *args: {"status": 503, "error": "Service Unavailable"},
-        momento_actual=ahora,
-    )
-    assert log_reintento.estado == EstadoNotificacionEnum.REINTENTANDO
-    assert log_reintento.intentos == 2
-    print(f"• Error 503 manejado: Estado {log_reintento.estado.value} con segundo intento programado para {log_reintento.proximo_reintento.strftime('%H:%M:%S')}.")
+    proximo = calcular_proximo_intento(1, ahora, jitter_fn=lambda: 0)
+    assert proximo == ahora + timedelta(minutes=2)
+    assert envio("residente402+falla1@gmail.com", 1).aceptado
+    print(f"• Error 503 temporal: reintento programado para {proximo.strftime('%H:%M:%S')} y aceptado.")
 
-    # Simulación de Hard Bounce 550
-    log_bounce = NotificacionesService.despachar_notificacion(
-        request=req_notif,
-        transport_fn=lambda *args: {"status": 550, "error": "User unknown"},
-    )
-    assert log_bounce.estado == EstadoNotificacionEnum.FALLIDO_PERMANENTE
-    assert log_bounce.intentos == 1
-    print("• Hard bounce 550 detectado: Abortó reintentos inmediatamente pasando a FALLIDO_PERMANENTE.")
+    rebote = envio("residente402+rebote@gmail.com", 0)
+    assert clasificar_fallo(rebote.codigo, rebote.detalle) == "FALLO_DEFINITIVO"
+    print("• Hard bounce 550 detectado: se clasifica como definitivo (FALLIDO_PERMANENTE).")
     print("✅ Despacho multicanal y resiliencia validados con éxito.")
 
     # ------------------------------------------------------------------------
