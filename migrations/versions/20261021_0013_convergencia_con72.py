@@ -29,6 +29,21 @@ def upgrade():
 
 
 def downgrade():
-    raise RuntimeError(
-        "CON-72: no eliminar versiones de evidencia ni notas; restaurar copia verificada."
+    bind = op.get_bind()
+    if bind.scalar(
+        sa.text("SELECT EXISTS (SELECT 1 FROM revisiones_pago WHERE notas_internas IS NOT NULL)")
+    ):
+        raise RuntimeError("CON-72: existen notas internas; restaurar copia verificada.")
+    if bind.scalar(
+        sa.text(
+            "SELECT EXISTS (SELECT comprobante_id FROM archivos_voucher "
+            "WHERE comprobante_id IS NOT NULL GROUP BY comprobante_id HAVING count(*) > 1)"
+        )
+    ):
+        raise RuntimeError("CON-72: existen versiones de evidencia; restaurar copia verificada.")
+    op.drop_constraint("fk_revision_archivo", "revisiones_pago", type_="foreignkey")
+    op.drop_column("revisiones_pago", "notas_internas")
+    op.drop_column("revisiones_pago", "archivo_nombre")
+    op.create_unique_constraint(
+        "archivos_voucher_comprobante_id_key", "archivos_voucher", ["comprobante_id"]
     )

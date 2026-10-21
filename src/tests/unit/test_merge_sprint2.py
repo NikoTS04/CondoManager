@@ -28,6 +28,13 @@ def test_grafo_alembic_conserva_ambas_ramas_con_una_cabeza():
     assert len(scripts.get_heads()) == 1
     revisiones = {r.revision for r in scripts.walk_revisions()}
     assert {"20261020_0009", "20261020_0009_pagos", "20261020_0010", "20261021_0012"} <= revisiones
+    assert {"20261021_0012", "20261021_0013"} <= revisiones
+    # CON-46 y CON-72 son ramas hermanas de CON-73; 20261021_0014 las une sin fijar la cabeza.
+    assert set(scripts.get_revision("20261021_0014").down_revision) == {
+        "20261021_0012",
+        "20261021_0013",
+    }
+    assert scripts.get_revision("20261021_0012").down_revision == "20261020_0012"
     assert set(scripts.get_revision("20261020_0011").down_revision) == {
         "20261020_0009_pagos",
         "20261020_0010",

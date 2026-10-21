@@ -8,6 +8,7 @@ revision = "20261020_0012"
 down_revision = "20261020_0011"
 branch_labels = None
 depends_on = None
+MARCA = "CON-73 / Alembic 20261020_0012"
 
 
 def fk(tabla):
@@ -49,6 +50,7 @@ def upgrade():
                 nullable=False,
                 server_default=sa.func.now(),
             ),
+            comment=MARCA,
         )
     columnas = validar(
         "reservas",
@@ -101,7 +103,7 @@ def upgrade():
         )
     extensiones = [
         sa.Column("condominio_id", UUID(), fk("condominios")),
-        sa.Column("usuario_id", UUID(), fk("usuarios")),
+        sa.Column("usuario_id", UUID(), fk("usuarios"), comment=MARCA),
         sa.Column("moneda", sa.String(3)),
         sa.Column("area_nombre", sa.Text()),
         sa.Column("zona_horaria", sa.String(40)),
@@ -109,10 +111,12 @@ def upgrade():
         sa.Column("cancelado_por", UUID(), fk("usuarios")),
         sa.Column("motivo_cancelacion", sa.Text()),
     ]
-    if any(c.name in columnas for c in extensiones):
+    # El creador puede venir del esquema histórico (obligatorio); se conserva tal cual.
+    if any(c.name in columnas and c.name != "usuario_id" for c in extensiones):
         raise RuntimeError("CON-73: extensión de reservas preexistente sin revisión Alembic.")
     for columna in extensiones:
-        op.add_column("reservas", columna)
+        if columna.name not in columnas:
+            op.add_column("reservas", columna)
     op.execute("""
         UPDATE reservas r SET condominio_id=a.condominio_id, moneda=c.moneda, zona_horaria='UTC', area_nombre=a.nombre
         FROM areas_comunes a JOIN condominios c ON c.id=a.condominio_id WHERE a.id=r.area_id
@@ -252,6 +256,48 @@ def upgrade():
 
 
 def downgrade():
-    raise RuntimeError(
-        "CON-73: downgrade destructivo deshabilitado; restaurar una copia verificada."
+    bind = op.get_bind()
+    tablas = (
+        "notificaciones_incidencias",
+        "notificaciones_eventos",
+        "notificaciones_intentos",
+        "notificaciones_logs",
+        "eventos_reserva_outbox",
+        "bloqueos_area",
     )
+    for tabla in tablas:
+        if bind.scalar(sa.text(f"SELECT EXISTS (SELECT 1 FROM {tabla})")):
+            raise RuntimeError(f"CON-73: {tabla} contiene datos; restaurar una copia verificada.")
+    creada = sa.inspect(bind).get_table_comment("reservas").get("text") == MARCA
+    if bind.scalar(sa.text("SELECT EXISTS (SELECT 1 FROM reservas)")):
+        if creada:
+            raise RuntimeError("CON-73: no se elimina una tabla de reservas con datos.")
+        if bind.scalar(
+            sa.text(
+                "SELECT EXISTS (SELECT 1 FROM reservas WHERE fecha_cancelacion IS NOT NULL "
+                "OR cancelado_por IS NOT NULL OR motivo_cancelacion IS NOT NULL)"
+            )
+        ):
+            raise RuntimeError("CON-73: existen cancelaciones registradas en reservas.")
+    for tabla in tablas:
+        op.drop_table(tabla)
+    if creada:
+        op.drop_table("reservas")
+        return
+    op.drop_index("idx_reservas_area_fecha", "reservas")
+    op.drop_index("idx_reservas_contexto_unidad", "reservas")
+    op.drop_constraint("ck_reserva_zona", "reservas", type_="check")
+    op.drop_constraint("ck_reserva_moneda", "reservas", type_="check")
+    for columna in (
+        "motivo_cancelacion",
+        "cancelado_por",
+        "fecha_cancelacion",
+        "zona_horaria",
+        "area_nombre",
+        "moneda",
+        "condominio_id",
+    ):
+        op.drop_column("reservas", columna)
+    usuario = next(c for c in sa.inspect(bind).get_columns("reservas") if c["name"] == "usuario_id")
+    if usuario.get("comment") == MARCA:
+        op.drop_column("reservas", "usuario_id")
