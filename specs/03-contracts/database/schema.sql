@@ -363,6 +363,22 @@ CREATE TABLE notificaciones_incidencias (
     motivo TEXT NOT NULL,
     creado_en TIMESTAMPTZ NOT NULL
 );
+CREATE TABLE notificaciones_alertas (
+    id UUID PRIMARY KEY,
+    notificacion_id UUID NOT NULL REFERENCES notificaciones_logs(id) ON DELETE RESTRICT,
+    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
+    departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,
+    ciclo INTEGER NOT NULL,
+    tipo VARCHAR(40) NOT NULL,
+    mensaje TEXT NOT NULL,
+    creada_en TIMESTAMPTZ NOT NULL,
+    atendida_en TIMESTAMPTZ,
+    atendida_por UUID REFERENCES usuarios(id) ON DELETE RESTRICT,
+    CONSTRAINT uq_alerta_notificacion_tipo UNIQUE(notificacion_id, ciclo, tipo),
+    CONSTRAINT ck_alerta_tipo CHECK (tipo IN ('ERROR_DEFINITIVO','INTENTOS_AGOTADOS','ACEPTACION_INCIERTA','DESTINATARIO_INVALIDO','PROVEEDOR_NO_CONFIGURADO')),
+    CONSTRAINT ck_alerta_atencion CHECK ((atendida_en IS NULL) = (atendida_por IS NULL))
+);
+CREATE INDEX idx_alerta_abierta ON notificaciones_alertas(condominio_id, creada_en) WHERE atendida_en IS NULL;
 ALTER TABLE reservas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bloqueos_area ENABLE ROW LEVEL SECURITY;
 ALTER TABLE eventos_reserva_outbox ENABLE ROW LEVEL SECURITY;
@@ -370,6 +386,7 @@ ALTER TABLE notificaciones_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notificaciones_intentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notificaciones_eventos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notificaciones_incidencias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notificaciones_alertas ENABLE ROW LEVEL SECURITY;
 
 -- 8. Bitácora Inmutable de Auditoría (7 campos obligatorios)
 CREATE TABLE auditoria_logs (

@@ -30,4 +30,31 @@ Si el proveedor responde con un error definitivo:
 El sistema aborta inmediatamente los reintentos:
 1. Marca el estado como `FALLIDO_PERMANENTE`.
 2. Registra el detalle del error en `notificaciones_logs`.
-3. Emite una alerta de baja severidad en el panel del Administrador: *"El correo del residente del Dpto. 402 rebotó. Actualice los datos de contacto."*
+3. Crea una alerta administrativa persistente (`ERROR_DEFINITIVO`) en `notificaciones_alertas`, visible en Comunicados de la Junta: *"El correo del residente del Dpto. 402 rebotó. Actualice los datos de contacto."*
+
+## 3. Alertas Administrativas (CON-37)
+
+Cada alerta se asocia a una notificación y a su ciclo; es idempotente por
+`(notificacion_id, ciclo, tipo)`, de modo que un nuevo ciclo manual que vuelve a
+fallar genera otra alerta. El mensaje no contiene contactos ni datos sensibles.
+
+| Tipo | Origen |
+| :--- | :--- |
+| `ERROR_DEFINITIVO` | Rebote o error definitivo del proveedor (por ejemplo 550). |
+| `INTENTOS_AGOTADOS` | Se agotaron los cuatro intentos de un fallo temporal. |
+| `ACEPTACION_INCIERTA` | Intento interrumpido sin resultado conocido; no se reenvía solo. |
+| `DESTINATARIO_INVALIDO` | El contacto del destinatario no es utilizable. |
+| `PROVEEDOR_NO_CONFIGURADO` | Transporte de proveedor sin configuración. |
+
+Atención: `POST /api/v1/notificaciones/alertas/{alerta_id}/atender` (SuperAdmin o
+Junta del contexto; el Auditor solo consulta con `GET /api/v1/notificaciones/alertas`)
+es idempotente y registra la auditoría `NOTIFICACION_ALERTA_ATENDIDA`. El reenvío
+manual con contacto corregido (`POST /api/v1/notificaciones/reenviar/{log_id}`)
+atiende en la misma transacción las alertas abiertas de esa notificación.
+
+## 4. Transporte Simulado Determinista
+
+Mientras no exista proveedor real, el transporte `SIMULADO` interpreta el destinatario:
+`usuario+falla{n}@dominio` responde 503 mientras los intentos acumulados sean menores
+o iguales que `n`, y `usuario+rebote@dominio` responde 550. Solo acredita `ENVIADO`.
+Entrega y resultados: [CON-32/34/36/37](../../../docs/sprints/CON-32-34-36-37-notificaciones.md).
