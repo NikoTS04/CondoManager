@@ -1,5 +1,10 @@
 # Contratos de API y Especificación OpenAPI (API Contracts)
 
+Ampliación financiera objetivo 2026-10-24, **pendiente de implementación**:
+[prorrateo, mora diaria editable, fondos, PDF/DOCX y visor](prorrateo-mora-reportes.md).
+Prevalece sobre ejemplos previos de día 20, gracia 2 o descarga exclusivamente
+como adjunto. Las rutas nuevas están documentadas como objetivo, no desplegadas.
+
 Base de implementación del Sprint 2: [CON-72 — contratos por historia](sprint-2-contratos.md). La guía reúne los acuerdos y enlaza OpenAPI y eventos. El OpenAPI describe el contrato objetivo y distingue operaciones pendientes/parciales; su publicación no implica que los endpoints estén implementados.
 
 La [convergencia implementada](../../docs/sprints/CON-72-convergencia.md) sustituye
@@ -167,14 +172,17 @@ distinto responde `403 ACCESO_DENEGADO`.
       "nombre": "Villa Bonita 3",
       "direccion": "Av. Principal 123, Lima",
       "moneda": "PEN",
-      "regla_mora_tipo": "MONTO_FIJO",
-      "monto_mora_fijo": "20.00",
+      "regla_mora_tipo": "MONTO_DIARIO",
+      "monto_mora_diario": "1.00",
+      "monto_mora_fijo": null,
       "tasa_mora_porcentaje": null,
-      "dia_vencimiento": 20,
-      "dias_gracia": 2
+      "dia_vencimiento": 10,
+      "dias_gracia": 0
     }
     ```
   - *Reglas condicionales:*
+    - `MONTO_DIARIO` (objetivo predeterminado): monto diario positivo editable,
+      default 1.00 PEN, demás campos de mora nulos. Día 10 y gracia 0 por defecto.
     - `MONTO_FIJO`: `monto_mora_fijo` es obligatorio y
       `tasa_mora_porcentaje` debe ser `null`.
     - `PORCENTAJE_SALDO`: `tasa_mora_porcentaje` es obligatoria y
@@ -188,11 +196,12 @@ distinto responde `403 ACCESO_DENEGADO`.
       "nombre": "Villa Bonita 3",
       "direccion": "Av. Principal 123, Lima",
       "moneda": "PEN",
-      "regla_mora_tipo": "MONTO_FIJO",
-      "monto_mora_fijo": "20.00",
+      "regla_mora_tipo": "MONTO_DIARIO",
+      "monto_mora_diario": "1.00",
+      "monto_mora_fijo": null,
       "tasa_mora_porcentaje": null,
-      "dia_vencimiento": 20,
-      "dias_gracia": 2,
+      "dia_vencimiento": 10,
+      "dias_gracia": 0,
       "activo": true,
       "creado_en": "2026-10-08T15:30:00Z"
     }
@@ -233,7 +242,7 @@ su condominio. Los demás roles y todo cruce de contexto reciben
       "periodo": "2026-10",
       "moneda": "PEN",
       "monto_total": "20000.00",
-      "fecha_vencimiento": "2026-10-20"
+      "fecha_vencimiento": "2026-10-10"
     }
     ```
   - *Response (201 Created):* Devuelve `PresupuestoResponse` con UUID, estado,
@@ -250,7 +259,7 @@ su condominio. Los demás roles y todo cruce de contexto reciben
       "periodo": "2026-10",
       "moneda": "PEN",
       "monto_total": "20500.00",
-      "fecha_vencimiento": "2026-10-20"
+      "fecha_vencimiento": "2026-10-10"
     }
     ```
   - *Response (200 OK):* Devuelve el borrador actualizado.
@@ -273,7 +282,7 @@ su condominio. Los demás roles y todo cruce de contexto reciben
       "periodo": "2026-10",
       "moneda": "PEN",
       "monto_total": "20000.00",
-      "fecha_vencimiento": "2026-10-20",
+      "fecha_vencimiento": "2026-10-10",
       "estado": "APROBADO",
       "creado_por": "6a4a78de-c704-44fb-a8b1-9d387ff67c92",
       "creado_en": "2026-10-08T15:30:00Z",
@@ -320,7 +329,7 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
       "periodo": "2026-10",
       "cuotas_cubiertas_saldo_favor": 4,
       "fecha_emision": "2026-10-01T00:00:00Z",
-      "fecha_vencimiento": "2026-10-20"
+      "fecha_vencimiento": "2026-10-10"
     }
     ```
 

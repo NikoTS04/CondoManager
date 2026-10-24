@@ -22,8 +22,8 @@ El módulo gestiona plantillas dinámicas, políticas de reintentos ante fallos 
 | :--- | :--- | :--- | :--- | :--- |
 | `NOTIF_EMISION_CUOTA` | Emisión mensual el día 1 | Email / App | Propietario / Inquilino | Recibo del mes, desglose de conceptos, fecha límite y cuentas bancarias. |
 | `NOTIF_RECORDATORIO_PREVIO` | 3 días antes del vencimiento | Email / WhatsApp | Residente | Recordatorio amistoso de vencimiento próximo para evitar moras. |
-| `NOTIF_CORTE_HOY` | Día del vencimiento (día 20) | Email / WhatsApp | Residente con saldo pendiente | Aviso de última fecha de pago oportuno. |
-| `NOTIF_MORA_APLICADA` | Vencimiento de gracia (día 23) | Email | Residente deudor | Liquidación con recargo de mora y aviso de restricción de áreas comunes. |
+| `NOTIF_CORTE_HOY` | Día del vencimiento (día 10 en Lima) | Email / WhatsApp | Residente con saldo pendiente | Aviso de última fecha de pago oportuno. |
+| `NOTIF_MORA_APLICADA` | Primer día posterior al vencimiento y gracia efectiva (día 11 por defecto) | Email | Residente deudor | Liquidación con mora diaria editable (S/ 1.00 por defecto por cuota) y restricción de áreas comunes. |
 | `NOTIF_PAGO_RECIBIDO` | Residente sube voucher | Email | Residente | Confirmación de recepción de comprobante en proceso de conciliación. |
 | `NOTIF_PAGO_CONCILIADO` | Junta aprueba comprobante | Email / WhatsApp | Residente | Confirmación de pago exitoso, estado de cuenta actualizado y recibo en PDF. |
 | `NOTIF_PAGO_RECHAZADO` | Junta rechaza comprobante | Email | Residente | Motivo del rechazo y enlace para adjuntar nuevo comprobante legible. |
@@ -93,9 +93,9 @@ El módulo gestiona plantillas dinámicas, políticas de reintentos ante fallos 
 ## 8. Escenarios de Aceptación (BDD)
 ```gherkin
 Escenario: Despacho automático de alerta preventiva 3 días antes de vencimiento
-  Dado que la cuota del departamento 102 vence el día 20 del mes
+  Dado que la cuota del departamento 102 vence el día 10 del mes
   Y el departamento mantiene un saldo pendiente de S/ 160.00
-  Cuando el reloj del sistema llega a las 08:00 del día 17 del mes
+  Cuando el reloj del sistema llega a las 08:00 del día 7 del mes en Lima
   Entonces el sistema genera y despacha una notificación de recordatorio preventivo al residente
   Y registra el envío con estado "ENTREGADO" en la bitácora de notificaciones.
 ```

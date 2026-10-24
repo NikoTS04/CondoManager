@@ -23,7 +23,7 @@ Cualquier evento de negocio o acción automática/manual genera obligatoriamente
 | `1. departamento_id` | `UUID / String` | Departamento o unidad habitacional involucrada | `"Dpto-501 (Torre B)"` |
 | `2. timestamp` | `TIMESTAMP WITH TZ` | Fecha y hora exacta en UTC | `2026-09-16T17:30:00Z` |
 | `3. accion_ejecutada` | `VARCHAR(100)` | Código estándar de la operación | `"APLICAR_MORA_CORTE"` |
-| `4. motivo` | `TEXT` | Justificación de negocio o regla aplicada | `"Vencimiento sin pago verificado tras 2 días de gracia"` |
+| `4. motivo` | `TEXT` | Justificación de negocio o regla aplicada | `"Devengo diario por cuota vencida, gracia efectiva 0, fecha local 2026-10-11"` |
 | `5. resultado` | `VARCHAR(50)` | Estado final de la acción | `"EXITOSO"` / `"FALLIDO"` |
 | `6. estado_anterior` | `JSONB` | Fotografía del estado antes de la acción | `{"saldo": 150.00, "estado": "VENCIDO"}` |
 | `7. estado_posterior` | `JSONB` | Fotografía del estado resultante | `{"saldo": 170.00, "estado": "MOROSO"}` |

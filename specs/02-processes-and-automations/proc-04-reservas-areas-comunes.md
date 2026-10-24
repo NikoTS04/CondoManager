@@ -39,6 +39,12 @@ cancela ni borra reservas anteriores y bloquea nuevas solicitudes. Las reservas
 leen condiciones SQL y respetan horario, duración y edificio autorizado.
 
 ### 4.1 Validación Cruzada de Solvencia Financiera
+La gracia efectiva se toma de la cuota (global o excepción del responsable), no
+de una constante ni de la configuración global actual. Con default 0, vence el
+10 y restringe desde el 11 en Lima. Mora pendiente también bloquea, aunque el
+principal esté pagado. Se consulta deuda, sin depender de que el cron haya corrido.
+Ver [regla financiera objetivo](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
+
 Antes de evaluar la disponibilidad física de un espacio, el motor consulta el estado financiero del departamento solicitante:
 - **Condición de Rechazo Automático:** Si el departamento posee al menos una cuota en estado `EN_MORA` o con vencimiento superado tras el periodo de gracia:
   $$\text{Deuda Exigible}(d) > 0 \implies \text{Bloqueo Inmediato de Reserva}$$

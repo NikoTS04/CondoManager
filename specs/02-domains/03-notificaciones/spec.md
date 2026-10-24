@@ -10,6 +10,12 @@
 ---
 
 ## 2. Propósito y Límites del Dominio
+Ampliación objetivo: [calendario financiero](../01-cuotas/prorrateo-y-mora-diaria.md).
+Recordatorio tres días antes (día 7), corte día 10 y primer devengo día 11 sin
+gracia, siempre en Lima. La gracia efectiva se lee de cada cuota. Cada evento
+diario se deduplica por identidad estable; no prometer nueva notificación diaria
+por cada reintento ni exponer evidencia privada en mensajes.
+
 El dominio de Notificaciones es responsable de:
 1. Escuchar eventos asíncronos del bus de eventos (`CuotasEmitidasEvent`, `PagoConciliadoEvent`, `MoraAplicadaEvent`, `ReservaConfirmadaEvent`).
 2. Renderizar plantillas dinámicas personalizadas por residente y departamento.

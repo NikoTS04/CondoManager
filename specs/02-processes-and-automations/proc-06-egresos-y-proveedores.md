@@ -24,6 +24,10 @@ Centralizar el registro clasificado de todas las salidas de dinero del condomini
 ## 4. Reglas de Negocio
 
 ### 4.1 Categorización Estructurada de Gastos
+Catálogo normalizado, correspondencia de las 29 filas de septiembre y reglas de
+cobertura: [prorrateo y fondos de mora](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
+Los códigos originales se conservan como evidencia, nunca como identificador único.
+
 Todo egreso debe imputarse obligatoriamente a una categoría presupuestal predefinida:
 - `SERVICIOS_BASICOS`: Agua común (Sedapal), Electricidad común (Luz del Sur/Enel).
 - `MANTENIMIENTO_PREVENTIVO`: Ascensores (Otis, Schindler, etc.), Bombas de agua hidroneumáticas, Puertas levadizas.
@@ -31,6 +35,18 @@ Todo egreso debe imputarse obligatoriamente a una categoría presupuestal predef
 - `LIMPIEZA_Y_JARDINERIA`: Insumos y servicio de aseo.
 - `GASTOS_ADMINISTRATIVOS`: Comisiones bancarias, software, asesoría contable o legal.
 - `IMPREVISTOS_Y_CONTINGENCIAS`: Reparaciones extraordinarias por fallas súbitas.
+- `OBLIGACIONES_FINANCIADAS`: Cuotas de financiamientos, con capital total,
+  número/total de cuotas, importe del periodo y sustento; no cobrar dos veces capital.
+
+### 4.1.1 Cobertura con moras cobradas
+
+Registrar por edificio y moneda moras cobradas, aplicaciones parciales/totales a
+gastos y saldo disponible. Solo pagos conciliados e imputados a mora financian
+gastos; moras devengadas no constituyen caja. Unitario cero conserva gasto y
+movimiento de cobertura. Bloquear sobregiros, doble aplicación y cruces de fondos
+entre edificios no autorizados. Aplicación al gasto y pago al proveedor son hechos
+distintos: no duplicar egreso. Comprobantes privados consultables en visor por
+tesorería/auditoría, no por residentes ajenos; conservar versiones históricas.
 
 ### 4.2 Repositorio de Contratos y Alertas de Renovación (30 / 60 Días)
 - Cada contrato almacena: RUC del proveedor, fecha de inicio, fecha de término, pólizas de seguro, importe mensual, archivo PDF del contrato firmado y persona de contacto de emergencia.

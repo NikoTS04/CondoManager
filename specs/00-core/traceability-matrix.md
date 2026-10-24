@@ -6,6 +6,18 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 ## Matriz de Trazabilidad de Extremo a Extremo (End-to-End)
 
+### Extensión financiera objetivo (pendiente de implementación)
+
+| Código documental | Regla | Dominio / decisión | Contrato | Aceptación |
+|---|---|---|---|---|
+| FIN-PRORRATEO | Catálogo, reparto por pisos y 139 unidades, cierre de centavos | `02-domains/01-cuotas/prorrateo-y-mora-diaria.md`, ADR-003 | `05-api/prorrateo-mora-reportes.md` | `04-acceptance-criteria/prorrateo-mora-reportes.feature.md` |
+| FIN-MORA-DIARIA | Importe editable default 1 por día/cuota, gracia 0 y fecha bancaria | Mismo dominio, PROC-02/04/05 | Mismo contrato, configuración y devengos | Mismo archivo, escenarios de mora |
+| FIN-FONDOS-MORA | Moras cobradas financian gastos sin doble uso | Mismo dominio, PROC-06 | Mismo contrato, fondos y aplicaciones | Mismo archivo, escenarios de cobertura |
+| FIN-REPORTE | Llenado, aprobación, PDF/DOCX y visor privado | Mismo dominio, PROC-08/02 | Mismo contrato, reportes y evidencia | Mismo archivo, escenarios de exportación y permisos |
+
+Son códigos de documentación, no tickets asignados ni pruebas ejecutables ya conectadas.
+
+
 | ID Req. | Funcionalidad de Negocio | Especificación de Dominio (L2) | Contrato API (L3) | Criterio BDD Ejecutable (L4) | Módulo en `src/` | Responsable |
 | :---: | :--- | :--- | :--- | :--- | :--- | :---: |
 | **RES-01 / CON-39** | Catálogo SQL de áreas y condiciones de uso | `02-domains/04-reservas/catalogo-areas.md` | `/api/v1/condominios/{cid}/areas[/{aid}[/estado]]`, `/areas` | `02-domains/04-reservas/features/catalogo_areas.feature` → `src/tests/bdd/test_catalogo_areas_bdd.py` | `src/modules/reservas/areas/`, `frontend/src/features/junta/AreasSection.tsx` | **Jerson** |

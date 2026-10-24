@@ -1,5 +1,10 @@
 # Matriz de Trazabilidad Integral (Traceability Matrix)
 
+Ampliación financiera objetivo 2026-10-24: ver [matriz canónica](00-core/traceability-matrix.md#extensión-financiera-objetivo-pendiente-de-implementación)
+y [dominio de prorrateo/mora diaria](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
+Incluye FIN-PRORRATEO, FIN-MORA-DIARIA, FIN-FONDOS-MORA y FIN-REPORTE;
+especificados, pendientes de código y automatización de aceptación.
+
 Esta matriz garantiza la cobertura total del ciclo de vida del software en **CondoManager**, vinculando cada requerimiento de negocio y directiva de automatización con su especificación técnica, modelo de datos, contrato API, criterios de prueba BDD, módulo de código fuente y responsable del equipo.
 
 ---

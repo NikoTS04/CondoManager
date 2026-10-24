@@ -1,4 +1,6 @@
 # language: es
+# Contrato de integración previo: fechas día 20 son fixtures explícitos históricos.
+# Objetivo nuevo pendiente: ../../../04-acceptance-criteria/prorrateo-mora-reportes.feature.md
 Característica: Presupuesto mensual y emisión de cuotas de mantenimiento ordinarias
   Como miembro autorizado de la junta
   Quiero registrar y aprobar el presupuesto mensual del condominio

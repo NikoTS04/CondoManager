@@ -1,4 +1,8 @@
 -- Esquema DDL Formal de Referencia en PostgreSQL 16 para CondoManager (SDD)
+-- Base de integración previa. Extensión financiera 2026-10-24 especificada, NO migrada:
+-- ver ../../05-api/prorrateo-mora-reportes.md (política diaria, ítems, devengos,
+-- fondos y versiones). Los CHECK actuales no expresan todavía MONTO_DIARIO.
+-- No ejecutar este archivo para adoptar las nuevas reglas ni reescribir historia.
 -- Extensiones requeridas
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

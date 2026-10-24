@@ -8,6 +8,21 @@ En este repositorio, las especificaciones técnicas representan la **fuente úni
 
 ## 1. Filosofía y Guardarraíles de SDD en CondoManager
 
+### Ampliación financiera 2026-10-24 (especificada, aún no implementada)
+
+- [Prorrateo, catálogo, mora diaria y reportes](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
+- [ADR-003: reparto por pisos](01-architecture/adr/ADR-003-prorrateo-por-pisos.md).
+- [Contratos objetivo de API/persistencia](05-api/prorrateo-mora-reportes.md).
+- [Aceptación documental pendiente de automatización](04-acceptance-criteria/prorrateo-mora-reportes.feature.md).
+
+Vence el día 10 en Lima; gracia default 0 con excepciones por responsable de pago;
+mora editable default 1.00 PEN diaria **por cuota mensual**. Reparto común por pisos
+(14/48, 14/48, 10/48, 10/48); edificio 03 entre 139 unidades. Fondos de moras
+cobradas financian gastos con trazabilidad. Llenado y exportación PDF/DOCX y visor
+privado de evidencia. Documentos de integración anteriores son antecedentes donde
+contradigan esta ampliación; no es una migración ni una capacidad ya desplegada.
+
+
 1. **La especificación precede al código (Spec-First):** Todo cambio en una regla de negocio requiere actualizar primero su especificación en `specs/02-domains/` y sus escenarios BDD correspondientes.
 2. **Ciclo de Automatización Estandarizado:** Todo proceso responde a:
    $$\text{Evento} \longrightarrow \text{Evaluación de Reglas} \longrightarrow \text{Decisión} \longrightarrow \text{Acción} \longrightarrow \text{Verificación}$$

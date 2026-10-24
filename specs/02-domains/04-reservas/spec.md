@@ -13,6 +13,12 @@ condiciones de uso, dinero Decimal y coordinación de persistencia con CON-73.
 ---
 
 ## 2. Propósito y Límites del Dominio
+Ampliación financiera objetivo: [mora diaria y solvencia](../01-cuotas/prorrateo-y-mora-diaria.md).
+Fecha local de Lima, gracia efectiva histórica de la cuota (default 0), no solo
+configuración global vigente. Deuda después del día 10 restringe desde el 11 sin
+esperar al cron. Principal pagado con mora residual también bloquea; EN_REVISION
+no es pago ni solvencia. Pendiente de implementación coordinada con pagos.
+
 El dominio de Reservas es responsable de:
 1. Publicar el catálogo de áreas comunes activas (parrillas, salones sociales, gimnasio, zonas recreativas) con aforos, horarios permitidos y costos asociados.
 2. Gestionar la disponibilidad en calendario en tiempo real mediante transacciones atómicas con bloqueo pesimista (`SELECT FOR UPDATE`).

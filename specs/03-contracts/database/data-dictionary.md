@@ -47,6 +47,14 @@ incluidas carreras entre usuarios. La migración `20261020_0009` añade
 [vínculos](../../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## 1. Tabla: `condominios`
+**Extensión objetivo pendiente de implementación:** MONTO_DIARIO, monto diario
+editable (1.00 PEN por defecto), día 10 y gracia 0. Las tablas y CHECK de esta
+sección describen la integración previa; no usar sus defaults como regla piloto.
+El [contrato de persistencia objetivo](../../05-api/prorrateo-mora-reportes.md#4-persistencia-objetivo-no-migración)
+define excepciones por vínculo, política histórica por cuota, catálogo, ítems,
+asignaciones, devengos únicos por cuota/fecha, fondos y versiones de reportes.
+No es una migración aplicada; todos los importes mantienen NUMERIC/Decimal.
+
 Almacena las comunidades inmobiliarias o edificios matrices.
 
 | Columna | Tipo de Dato | Nulo | Default | Restricciones / Checks | Descripción |

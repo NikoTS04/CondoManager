@@ -1,5 +1,11 @@
 # Modelo de Dominio y Esquema de Entidades (Domain Entities)
 
+Extensión financiera objetivo, aún sin migración: [persistencia de prorrateo y
+mora diaria](../05-api/prorrateo-mora-reportes.md#4-persistencia-objetivo-no-migración).
+Añade catálogo/ítems/asignaciones, detalle de cuota, devengos por fecha, política
+histórica, fondos de moras cobradas y versiones de reporte. El resumen anterior
+sin detalle describe la integración previa, no limita el nuevo modelo.
+
 ## 1. Diagrama Conceptual de Entidades
 
 ```

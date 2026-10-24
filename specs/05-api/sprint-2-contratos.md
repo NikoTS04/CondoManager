@@ -1,12 +1,17 @@
 # CON-72 — Contratos base de implementación del Sprint 2
 
+Ampliación documental 2026-10-24: [prorrateo, mora diaria y reportes](prorrateo-mora-reportes.md).
+El contrato objetivo evoluciona a 2.1.0; MONTO_DIARIO, defaults financieros,
+excepciones, fondos, PDF/DOCX e inline/historial están **pendientes de código**.
+La evidencia de integración CON-72/73/74 no acredita estas nuevas capacidades.
+
 **Responsable:** Gerardo. **Base:** 20/10/2026. **Estado:** implementación integrada y verificación local por CON-73/74; revisión de pares y esquema desplegado pendientes. Evidencia en [convergencia CON-72](../../docs/sprints/CON-72-convergencia.md). Los contratos pueden evolucionar mediante el procedimiento de cambios de la sección 9.
 
 ## 1. Fuentes y alcance
 
 | Artefacto | Uso |
 |---|---|
-| [condomanager.openapi.yaml](../03-contracts/openapi/condomanager.openapi.yaml) | Entrada del contrato HTTP objetivo; versión documental 2.0.0. |
+| [condomanager.openapi.yaml](../03-contracts/openapi/condomanager.openapi.yaml) | Entrada del contrato HTTP objetivo; versión documental 2.1.0 (base implementada 2.0.0 + ampliación financiera pendiente). |
 | [sprint-2.paths.yaml](../03-contracts/openapi/sprint-2.paths.yaml) | Operaciones por HU, estados HTTP, permisos y marcas de implementación pendiente/parcial. |
 | [sprint-2.schemas.yaml](../03-contracts/openapi/sprint-2.schemas.yaml) | Formas de entrada/salida y tipos compartidos. |
 | [Catálogo de eventos](../03-contracts/events/domain-events-catalog.md) | Productores, consumidores, versiones, esquemas y recuperación. |

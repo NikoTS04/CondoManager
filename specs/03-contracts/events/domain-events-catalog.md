@@ -1,5 +1,10 @@
 # Catálogo de eventos — Contrato del Sprint 2 / CON-72
 
+Extensión financiera objetivo (no implementada): [eventos y transacciones](../../05-api/prorrateo-mora-reportes.md#5-eventos-y-transacciones).
+Devengo diario se identifica por cuota/fecha local. Fondos, ajustes y versiones
+de reporte mantienen auditoría y outbox; payloads nuevos requieren versionado
+coordinado, sin reescribir los mensajes ni esquemas históricos de este catálogo.
+
 Base acordada el 20/10/2026. Los contratos HTTP y las reglas asociadas están en [sprint-2-contratos.md](../../05-api/sprint-2-contratos.md). Este catálogo define mensajes para implementar en las historias de origen; no acredita que todos sus productores y consumidores ya estén integrados.
 
 ## Productores, consumidores y esquemas

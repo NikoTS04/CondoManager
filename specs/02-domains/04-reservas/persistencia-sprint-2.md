@@ -1,5 +1,9 @@
 # CON-73/74 — Persistencia e integración del prototipo
 
+Antecedente implementado. La [ampliación financiera](../01-cuotas/prorrateo-y-mora-diaria.md)
+requiere adaptar el guard a fecha Lima y gracia efectiva histórica por cuota,
+default 0. Esta adaptación está especificada, no acreditada por CON-73/74.
+
 Nicolás, 20/10/2026. Se conserva el catálogo SQL de CON-39 y la solvencia de
 CON-42/70. El rediseño visual no forma parte de esta entrega.
 

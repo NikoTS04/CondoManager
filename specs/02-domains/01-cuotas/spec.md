@@ -10,6 +10,13 @@
 ---
 
 ## 2. Propósito y Límites del Dominio
+Ampliación objetivo (pendiente de implementación):
+[prorrateo jerárquico y mora diaria](prorrateo-y-mora-diaria.md). El detalle por
+concepto/edificio determina el total distribuible y la cuota; no se reparte otra
+vez el total global. Día 10, gracia 0 y mora editable de 1.00 PEN por día y cuota.
+La integración que sigue describe el contrato previo sin desglose; no acredita
+implementación de la ampliación.
+
 El dominio de Cuotas de Mantenimiento es responsable de:
 1. Almacenar el presupuesto operativo mensual aprobado por asamblea para cada condominio.
 2. Calcular la alícuota de cada unidad según su coeficiente de participación inmobiliaria o modalidad fija.
@@ -138,7 +145,7 @@ $$\text{Cuota}(u) = \text{round\_half\_up}\left(\frac{\text{PresupuestoTotal}}{N
   "periodo": "2026-10",
   "moneda": "PEN",
   "monto_total": "20000.00",
-  "fecha_vencimiento": "2026-10-20"
+  "fecha_vencimiento": "2026-10-10"
 }
 ```
 
@@ -151,7 +158,7 @@ $$\text{Cuota}(u) = \text{round\_half\_up}\left(\frac{\text{PresupuestoTotal}}{N
   "periodo": "2026-10",
   "moneda": "PEN",
   "monto_total": "20000.00",
-  "fecha_vencimiento": "2026-10-20",
+  "fecha_vencimiento": "2026-10-10",
   "estado": "BORRADOR",
   "creado_por": "6a4a78de-c704-44fb-a8b1-9d387ff67c92",
   "creado_en": "2026-10-08T15:30:00Z",
@@ -229,7 +236,7 @@ condominio y periodo (mes válido `01` a `12`, año `0001` a `9999`).
   "monto_total_facturado": "20000.00",
    "cuotas_cubiertas_saldo_favor": 4,
   "fecha_emision": "2026-10-01T00:00:00Z",
-   "fecha_vencimiento": "2026-10-20"
+    "fecha_vencimiento": "2026-10-10"
 }
 ```
 

@@ -1,6 +1,12 @@
 # CON-22 / CON-70 / CON-42 — Integración financiera de Anderson
 
 ## Alcance y compatibilidad
+**Antecedente de integración.** La ampliación objetivo de
+[mora diaria y prorrateo](../01-cuotas/prorrateo-y-mora-diaria.md) sustituye la
+fecha UTC financiera, la gracia tomada solo de configuración actual y la entrega
+exclusivamente como adjunto. El comportamiento nuevo sigue pendiente de código;
+preservar este documento como referencia histórica, no migrar datos al leerlo.
+
 
 Se reutilizan cuotas, lotes, presupuestos y aplicaciones de saldo a favor de Sprint
 1. No se sustituyen identidad, catálogo, calendario ni notificaciones de otros

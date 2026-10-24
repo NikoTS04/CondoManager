@@ -39,15 +39,20 @@ $$\mathbf{Paso\ 5:} \text{Si existe remanente } R > 0.00 \implies \text{departam
 ---
 
 ## 4. Motor de Moras y Reglas de Corte
-
-- **Cron de Corte:** Se ejecuta diariamente a las `00:01:00 UTC`.
-- **Condición de Aplicación:**
-  ```python
-  hoy > cuota.fecha_vencimiento + timedelta(days=condominio.dias_gracia)
-  and cuota.estado in ["PENDIENTE", "PAGO_PARCIAL"]
-  and not cuota.tiene_comprobante_en_revision
-  ```
-- **Postergación Protectora:** Si el residente cargó un comprobante que aún se encuentra `EN_REVISION` en la bandeja del administrador, la mora se congela automáticamente por 24 horas para no castigar al residente por retrasos en la validación humana de la junta.
+- **Regla objetivo:** [mora diaria y fecha bancaria](../01-cuotas/prorrateo-y-mora-diaria.md), pendiente de implementación; sustituye el corte UTC anterior.
+- **Cron de Corte:** Diariamente a las 00:05 de `America/Lima`, con recuperación de fechas omitidas.
+- **Condición:** Fecha local posterior a vencimiento + gracia histórica efectiva
+  y principal de la cuota impago, incluso si ya está EN_MORA. Vence el 10, gracia
+  global 0 por defecto, con excepción por vínculo del responsable de pago.
+- **Importe:** MONTO_DIARIO editable, default 1.00 PEN por cuota mensual y fecha
+  de atraso. Dos cuotas impagas generan dos moras diarias. Sin capitalización;
+  principal liquidado detiene devengo, no elimina mora residual.
+- **Postergación Protectora:** EN_REVISION permite pausa provisional de 24 h,
+  sin condonar días ni reiniciar la pausa al reprocesar. Al aprobar se usa fecha
+  bancaria validada; al rechazar se recuperan días. Cambios se compensan sin borrar historia.
+- **Fondos:** Separar mora devengada de cobrada; solo lo imputado a mora mediante
+  conciliación alimenta fondos aplicables a gastos. Visor PNG/JPEG/PDF privado,
+  inline o descarga, con evidencia histórica autorizada según contrato objetivo.
 - **Efecto Inmediato:** Al aplicarse la mora:
   1. Se genera un registro de recargo por mora.
   2. El departamento adquiere la marca `estado_financiero = 'EN_MORA'`.

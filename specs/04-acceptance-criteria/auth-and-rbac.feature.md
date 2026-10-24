@@ -80,7 +80,7 @@ Y las reservas de áreas comunes se registran bajo el identificador de su depart
 
 ```gherkin
 Dado que un usuario autenticado tiene rol global "SUPERADMIN"
-Cuando envía una solicitud POST a "/api/v1/condominios" con nombre "Villa Bonita 3", dirección "Av. Principal 123, Lima", moneda "PEN", regla de mora "MONTO_FIJO", monto de mora "20.00", día de vencimiento 20 y 2 días de gracia
+Cuando envía una solicitud POST a "/api/v1/condominios" con nombre "Villa Bonita 3", dirección "Av. Principal 123, Lima", moneda "PEN", regla de mora "MONTO_DIARIO", monto diario "1.00", día de vencimiento 10 y 0 días de gracia
 Entonces la API responde con código HTTP 201 Created
 Y la respuesta contiene un "id" con formato UUID generado por el servidor
 Y el condominio queda persistido con "activo" igual a true
