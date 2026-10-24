@@ -3,6 +3,11 @@
 Rama: `feat/proc-04-con-46-cancelacion-reservas`.
 Contrato: [cancelación del Sprint 2](../../specs/05-api/sprint-2-contratos.md#con-46--gerardo).
 
+Estado consolidado al 21/10/2026: integrada con CON-41/43, CON-73 y el consumo
+de CON-36. La cabeza actual es `20261021_0015`; la evidencia posterior y los límites
+se reúnen en [CON-75](CON-75-entrega-sprint-2.md). Las verificaciones originales
+de este documento conservan su corte y no se ejecutan de nuevo en esta actualización.
+
 ## Implementación
 
 - `POST /api/v1/reservas/{id}/cancelar`, con motivo opcional de 1–500 caracteres.
@@ -25,13 +30,14 @@ Contrato: [cancelación del Sprint 2](../../specs/05-api/sprint-2-contratos.md#c
 
 ## Persistencia e integración
 
-La migración `20261021_0012` parte del merge `20261020_0011`. Crea o adopta
-`reservas`, conserva sus registros y añade `zona_horaria` cuando falta. Crea
-`cancelaciones_reserva`, `cobros_reserva` y `eventos_reserva_outbox`. CON-73 debe
-reutilizar estas tablas y CON-41/43 mantener el orden de locks:
+La migración `20261021_0012` parte de `20261020_0012` de CON-73. Adopta las
+tablas compartidas y conserva las columnas ampliadas de reservas; incorpora
+`cancelaciones_reserva` y `cobros_reserva` sin recrear el outbox ya existente.
+La revisión `20261021_0014` une las ramas de cancelación y convergencia; `0015`
+incorpora alertas de notificaciones. Creación y cancelación mantienen el orden de locks:
 condominio → departamento → área → reserva. No hay un catálogo paralelo.
 
-Revisión de Supabase del 21/10/2026, exclusivamente de lectura: `public.reservas`
+Antecedente de revisión de Supabase del 21/10/2026, exclusivamente de lectura: `public.reservas`
 ya existe, con `usuario_id UUID NOT NULL` y FK a usuarios, `motivo_rechazo`
 opcional y sin `zona_horaria`. Alembic registra `20261020_0011`. El ORM y la
 adopción del piloto conservan el creador original; no se sustituye por el actor
@@ -46,7 +52,9 @@ transacción de solo lectura, interceptando las escrituras: validación estructu
 correcta. Operaciones previstas: añadir zona y check a `reservas`, crear las tres
 tablas auxiliares, su índice y activar RLS. Se comprobó después que Alembic seguía
 en `20261020_0011`, sin la columna ni las tablas nuevas. Esta simulación no
-sustituye las integraciones con PostgreSQL de pruebas.
+sustituye las integraciones con PostgreSQL de pruebas. La
+[reconciliación posterior](reconciliacion-esquema-legacy.md) documenta la adopción
+real a `20261021_0015`, el respaldo y la conservación de los registros originales.
 
 Tras integrar `origin/develop` con CON-41/43, la creación utiliza
 `ReservasRepository` y conserva `usuario_id` y `zona_horaria`. El repositorio
@@ -70,12 +78,15 @@ persistido. La ejecución y el asiento financiero quedan fuera de esta operació
 
 El relay `python -m src.modules.reservas.worker` publica eventos confirmados en
 `condomanager:domain-events`. Puede reentregar el mismo `event_id` si se interrumpe
-entre publicación y marcado; CON-36 debe deduplicar y persistir la entrega real.
+entre publicación y marcado; el consumidor integrado de CON-36 deduplica y
+persiste los avisos. `notificaciones-worker`, incluido en Compose, también publica
+el outbox de reservas y recupera eventos desde SQL.
 Publicar en Redis no acredita envío de correo. El worker no se inicia desde la API.
 
 ## Preparación manual
 
-No se aplicaron cambios a Supabase desde el agente. Con Docker, reconstruye el
+La entrega inicial de CON-46 no aplicó cambios a Supabase; la reparación posterior
+se documenta por separado. Con Docker, reconstruye el
 backend y frontend para incorporar el código: el backend ejecuta
 `alembic upgrade head` al arrancar. Comprueba la revisión antes del recorrido:
 
@@ -133,5 +144,7 @@ Verificación del 21/10/2026 tras integrar `develop` hasta `f104e56`:
   obtiene 0.00 en lugar de 60.15. Ambos se reprodujeron ejecutando esos casos
   desde una copia limpia de `origin/develop` (`f104e56`), sin CON-46.
 
-La revisión manual del portal se mantiene a cargo de Gerardo. Publicar el evento
-en Redis no acredita que el proveedor haya entregado una notificación.
+Los resultados anteriores corresponden al corte inicial de CON-46. La entrega
+posterior de notificaciones reporta la suite integrada aprobada; ver
+[CON-75](CON-75-entrega-sprint-2.md). La revisión del PR mantiene su registro propio.
+Publicar el evento en Redis no acredita entrega externa de una notificación.

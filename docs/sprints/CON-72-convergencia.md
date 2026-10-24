@@ -1,8 +1,10 @@
 # CON-72 — Convergencia de contratos e integración
 
 Responsable de integración: Nicolás. Rama `feat/CORE-con73-con74-integracion`.
-Implementación local; revisión de pares y verificación del esquema desplegado
-pendientes. Se reutilizan la contabilidad de Anderson y la persistencia CON-73.
+Integrada en `develop`. Se reutilizan la contabilidad de Anderson y la persistencia
+CON-73. La reconciliación posterior del esquema desplegado y la evidencia del
+equipo se referencian en [CON-75](CON-75-entrega-sprint-2.md). La aprobación final
+corresponde al PR de entrega.
 
 ## Cambio coordinado
 
@@ -95,9 +97,12 @@ El script permite reproducir el recorrido en otro entorno demo. El build Next.js
 | Verificador SDD / git diff --check | Correctos. |
 | Ruff | Sin diagnósticos nuevos frente a HEAD en archivos de esta entrega; no se limpió la deuda heredada. |
 
-Después del reinicio se recreó únicamente PostgreSQL de pruebas para verificar
+En la verificación original, después del reinicio se recreó únicamente PostgreSQL de pruebas para verificar
 la suite final y el fuzzing. No se volvió a provisionar la demostración perdida.
-Cambios sin commit/push; el despliegue y la revisión del equipo siguen pendientes.
+Ese corte todavía no se había publicado. Posteriormente los cambios se integraron
+en `develop`, se documentó la reconciliación del despliegue y se incorporó el
+cierre de notificaciones en el PR #27. Los resultados anteriores conservan su
+fecha y alcance; esta actualización documental no los vuelve a ejecutar.
 
 Fuera de alcance: rediseño, proveedor externo, limpieza de lint preexistente y
 aprobación final de las historias del equipo. SIMULADO no acredita entrega física.

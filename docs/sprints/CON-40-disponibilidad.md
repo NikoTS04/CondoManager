@@ -3,6 +3,10 @@
 Rama: `feat/proc-04-con-40-disponibilidad`, desde `develop` con CON-39 y CON-72 integrados.
 Contrato: [disponibilidad del Sprint 2](../../specs/05-api/sprint-2-contratos.md).
 
+Estado consolidado al 21/10/2026: integración en `develop`, incluidos reservas,
+cancelaciones y bloqueos SQL de CON-73. La [entrega CON-75](CON-75-entrega-sprint-2.md)
+reúne la evidencia posterior del equipo; no se repiten pruebas en esta actualización.
+
 ## Alcance implementado
 
 - Conserva `GET /api/v1/areas/{area_id}/disponibilidad?fecha=YYYY-MM-DD` y las
@@ -42,18 +46,24 @@ La lectura SQL utiliza las columnas existentes de `reservas` y detecta su zona
 mediante `to_jsonb`, para admitir la columna adicional de CON-73 sin exigirla a
 las tablas históricas. La consulta no crea tablas ni índices.
 
-**Pendiente de CON-73:** definir la lectura SQL de bloqueos operativos activos.
-El normalizador acepta ocupaciones
-con fecha, inicio, fin y zona; el repositorio deberá sumar esos bloqueos al
-integrarse su modelo. No se implementa una gestión pública de bloqueos.
+**Integrado con CON-73:** `DisponibilidadRepository._leer_bloqueos` consulta
+`bloqueos_area` y suma sus intervalos activos al calendario. La creación de
+reservas consulta esas mismas ocupaciones dentro de su transacción. No se
+implementa una gestión pública de bloqueos.
 
 La creación SQL de CON-41 y las cancelaciones de CON-46 conservan sus resultados
 tras reiniciar. Solo las copias piloto anteriores sin registro SQL siguen
 dependiendo de la memoria. La exclusión concurrente corresponde a CON-41/43.
-El cierre de CON-40 requiere
-comprobar el calendario integrado con esas operaciones y los bloqueos reales.
+La evidencia posterior de calendario, concurrencia y reinicio se referencia en
+[CON-73/74](CON-73-CON-74-integracion.md) y en la
+[entrega de notificaciones](CON-32-34-36-37-notificaciones.md), que documenta la
+restauración integrada de los bloqueos y eventos.
 
-### Arranque con la base compartida
+### Antecedente de arranque con la base compartida
+
+Esta sección conserva el diagnóstico de la rama inicial. El estado posterior
+del despliegue está documentado en la
+[reconciliación a 20261021_0015](reconciliacion-esquema-legacy.md).
 
 Supabase ya registra `20261020_0011`, mientras que la base inicial de esta rama
 solo conocía hasta `20261020_0010`. Eso detenía Alembic antes de iniciar la API,
@@ -71,9 +81,9 @@ Las dos migraciones ya forman parte de esa base compartida. Se conservan la
 validación financiera y la actualización de solvencia incorporadas por ese PR,
 junto con la consulta de disponibilidad de CON-40. El conflicto del botón de
 confirmación se resolvió exigiendo tanto disponibilidad consultada como solvencia
-verificada. La revisión manual reportada por Gerardo corresponde a la versión
-anterior a esta integración; conviene repetir el recorrido de reserva/cancelación
-con el nuevo control de solvencia antes de dar por revisada la versión integrada.
+verificada. La revisión manual inicial de Gerardo corresponde a la versión
+anterior a esa integración. Los resultados posteriores del equipo se conservan
+en CON-73/74 y en la entrega consolidada; no se atribuyen al recorrido inicial.
 
 ## Verificación estática realizada
 
@@ -114,11 +124,12 @@ docker compose up -d --build --wait --wait-timeout 180 backend frontend
    condominio o edificio no autorizado (`403`) y petición sin sesión (`401`).
 7. Cuando existan reservas históricas SQL, comprobar su conversión UTC/Lima y que
    solo `CONFIRMADA` ocupa el calendario. Su lectura debe conservarse al reiniciar;
-   las nuevas operaciones piloto todavía no ofrecen esa garantía.
-8. Tras integrar CON-73/41/46, repetir reserva/cancelación y consulta entre procesos
-   y después de reiniciar; añadir el caso de bloqueo operativo activo/inactivo.
+   las nuevas reservas también se guardan en SQL antes de confirmar su respuesta.
+8. Para reproducir la integración CON-73/41/46, consultar entre procesos y después
+   de reiniciar; incluir el caso de bloqueo operativo activo/inactivo.
 
-No se añadieron ni ejecutaron pruebas unitarias o de integración por indicación del
-responsable. El 21 de octubre de 2026 Gerardo informó un resultado satisfactorio
-de su revisión funcional manual. La persistencia y los bloqueos de CON-73 siguen
-pendientes; esa revisión no acredita su integración.
+En la entrega inicial no se añadieron ni ejecutaron pruebas unitarias o de
+integración por indicación del responsable. El 21/10/2026 Gerardo informó un
+resultado satisfactorio de su revisión funcional manual. La persistencia y los
+bloqueos se integraron posteriormente y cuentan con evidencia del equipo
+enlazada arriba. Esta actualización documental reutiliza esa evidencia.

@@ -16,7 +16,7 @@ La evidencia de integración CON-72/73/74 no acredita estas nuevas capacidades.
 | [sprint-2.schemas.yaml](../03-contracts/openapi/sprint-2.schemas.yaml) | Formas de entrada/salida y tipos compartidos. |
 | [Catálogo de eventos](../03-contracts/events/domain-events-catalog.md) | Productores, consumidores, versiones, esquemas y recuperación. |
 
-CON-72 entrega interfaces para que cada responsable implemente sus historias. Definir un endpoint en OpenAPI no lo incorpora a FastAPI. Los routers, DTO Python, tipos TypeScript, repositorios y migraciones actuales deben adoptar estos contratos en las HU indicadas; los almacenes piloto en memoria no satisfacen la integración persistente.
+CON-72 define las interfaces compartidas del sprint. La convergencia integrada incorpora su adopción en routers, DTO Python, tipos TypeScript, repositorios y migraciones, con la evidencia enlazada arriba. La mera definición de un endpoint en OpenAPI o un almacén piloto en memoria no acredita una integración persistente; las futuras modificaciones conservan esta exigencia.
 
 CON-04/05/06/39 conservan las interfaces ya integradas en `develop`: alta administrativa, vínculos persistentes, una asignación de rol por usuario y condominio y catálogo SQL de áreas. Sus rutas y esquemas permanecen en el OpenAPI principal; los fragmentos del sprint no los duplican.
 
