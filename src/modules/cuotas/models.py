@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Numeric,
+    SmallInteger,
     String,
     UniqueConstraint,
 )
@@ -84,6 +85,7 @@ class CuotaMantenimiento(Base):
     fecha_emision: Mapped[date] = mapped_column(Date, nullable=False)
     fecha_vencimiento: Mapped[date] = mapped_column(Date, nullable=False)
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="EMITIDA")
+    dias_gracia_aplicados: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     @property
     def monto_pendiente(self) -> Decimal:
@@ -93,6 +95,7 @@ class CuotaMantenimiento(Base):
     __table_args__ = (
         UniqueConstraint("departamento_id", "periodo", name="uq_departamento_periodo"),
         CheckConstraint("monto_ordinario >= 0.00", name="ck_cuota_monto_ordinario"),
+        CheckConstraint("dias_gracia_aplicados BETWEEN 0 AND 30", name="ck_cuota_gracia_aplicada"),
         CheckConstraint("monto_extraordinario >= 0.00", name="ck_cuota_monto_extraordinario"),
         CheckConstraint("monto_mora >= 0.00", name="ck_cuota_monto_mora"),
         CheckConstraint("monto_descuento >= 0.00", name="ck_cuota_monto_descuento"),

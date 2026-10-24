@@ -160,7 +160,7 @@ export interface NotificacionLog {
 }
 
 export type Moneda = "PEN" | "USD";
-export type ReglaMoraTipo = "MONTO_FIJO" | "PORCENTAJE_SALDO";
+export type ReglaMoraTipo = "MONTO_DIARIO" | "MONTO_FIJO" | "PORCENTAJE_SALDO";
 
 export interface CrearCondominioPayload {
   nombre: string;
@@ -168,12 +168,14 @@ export interface CrearCondominioPayload {
   moneda: Moneda;
   regla_mora_tipo: ReglaMoraTipo;
   monto_mora_fijo: string | null;
+  monto_mora_diario?: string | null;
   tasa_mora_porcentaje: string | null;
   dia_vencimiento: number;
   dias_gracia: number;
 }
 
 export interface Condominio extends CrearCondominioPayload {
+  politica_version: number;
   id: string;
   activo: boolean;
   creado_en: string;
@@ -496,6 +498,20 @@ export async function listarCondominios(): Promise<{
   }
 }
 
+export async function actualizarPoliticaMora(condominio: Condominio, datos: CrearCondominioPayload, motivo: string): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
+  try {
+    const { nombre: _nombre, direccion: _direccion, moneda: _moneda, ...politica } = datos;
+    const response = await fetchProtegido(`/condominios/${encodeURIComponent(condominio.id)}/politica-mora`, {
+      method: "PUT", headers: getAuthHeaders(),
+      body: JSON.stringify({ ...politica, version_esperada: condominio.politica_version, motivo }),
+    });
+    const data = await response.json();
+    return response.ok ? { ok: true, data } : { ok: false, error: obtenerMensajeError(data, "No se pudo actualizar la política. Recargue si cambió la versión.") };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API. Recargue antes de reintentar." };
+  }
+}
+
 export async function obtenerCondominio(
   condominioId: string
 ): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
@@ -725,6 +741,32 @@ export async function subsanarVoucher(comprobanteId: string, archivo: File): Pro
   const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher`, { method: "PUT", headers, body: form });
   const data = await response.json();
   if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo subir el voucher."));
+}
+
+export interface EvidenciaVoucher {
+  evidencia_id: string;
+  content_type: string;
+  creado_en: string;
+}
+
+export async function listarEvidencias(comprobanteId: string, signal?: AbortSignal): Promise<EvidenciaVoucher[]> {
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/evidencias`, {
+    headers: getAuthHeaders(), signal,
+  });
+  if (!response.ok) throw new Error("No se pudo consultar el historial de evidencia.");
+  return response.json();
+}
+
+export async function visualizarVoucher(comprobanteId: string, evidenciaId: string, signal?: AbortSignal): Promise<Blob> {
+  const query = new URLSearchParams({ disposicion: "inline" });
+  if (evidenciaId) query.set("evidencia_id", evidenciaId);
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher?${query}`, {
+    headers: getAuthHeaders(), signal,
+  });
+  if (!response.ok) throw new Error("No se pudo visualizar la evidencia. Verifique su sesión y permisos.");
+  const blob = await response.blob();
+  if (!["image/png", "image/jpeg", "application/pdf"].includes(blob.type)) throw new Error("Formato de evidencia no admitido.");
+  return blob;
 }
 
 export async function descargarVoucher(comprobante: ComprobantePago): Promise<void> {

@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/ui/Dialog";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { formatPeriodo } from "@/lib/format";
+import { compareMoney, isPositiveMoney, normalizeMoney } from "@/lib/money";
 import type {
   DatosPresupuestoPayload,
   Moneda,
@@ -68,7 +69,7 @@ export function PresupuestoMensual({
   const [periodo, setPeriodo] = useState(periodoInicial);
   const [moneda, setMoneda] = useState<Moneda>("PEN");
   const [montoTotal, setMontoTotal] = useState("");
-  const [fechaVencimiento, setFechaVencimiento] = useState(`${periodoInicial}-20`);
+  const [fechaVencimiento, setFechaVencimiento] = useState(`${periodoInicial}-10`);
   const [estado, setEstado] = useState<EstadoVista>("SIN_REGISTRAR");
   const [aprobadoPor, setAprobadoPor] = useState<string | null>(null);
   const [aprobadoEn, setAprobadoEn] = useState<string | null>(null);
@@ -98,7 +99,7 @@ export function PresupuestoMensual({
   const limpiarPeriodoSeleccionado = useCallback((periodoSeleccionado: string) => {
     setPresupuestoId(null);
     setMontoTotal("");
-    setFechaVencimiento(`${periodoSeleccionado}-20`);
+    setFechaVencimiento(`${periodoSeleccionado}-10`);
     setEstado("SIN_REGISTRAR");
     setAprobadoPor(null);
     setAprobadoEn(null);
@@ -153,8 +154,7 @@ export function PresupuestoMensual({
       setError("El periodo debe utilizar el formato AAAA-MM.");
       return null;
     }
-    const monto = Number(montoTotal);
-    if (!Number.isFinite(monto) || monto <= 0 || monto > 9999999999.99) {
+    if (!isPositiveMoney(montoTotal) || compareMoney(montoTotal, "9999999999.99") > 0) {
       setError("El monto total debe ser mayor que cero y respetar NUMERIC(12,2).");
       return null;
     }
@@ -163,7 +163,7 @@ export function PresupuestoMensual({
       return null;
     }
 
-    const montoNormalizado = monto.toFixed(2);
+    const montoNormalizado = normalizeMoney(montoTotal);
     setMontoTotal(montoNormalizado);
     return {
       periodo,

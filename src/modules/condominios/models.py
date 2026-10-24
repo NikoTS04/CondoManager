@@ -34,6 +34,8 @@ class Condominio(Base):
     moneda: Mapped[str] = mapped_column(String(3), nullable=False, default="PEN")
     regla_mora_tipo: Mapped[str] = mapped_column(String(20), nullable=False, default="MONTO_FIJO")
     monto_mora_fijo: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    monto_mora_diario: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    politica_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     tasa_mora_porcentaje: Mapped[Decimal | None] = mapped_column(Numeric(7, 4), nullable=True)
     dia_vencimiento: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     dias_gracia: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -52,7 +54,7 @@ class Condominio(Base):
     __table_args__ = (
         CheckConstraint("moneda IN ('PEN', 'USD')", name="ck_condominio_moneda"),
         CheckConstraint(
-            "regla_mora_tipo IN ('MONTO_FIJO', 'PORCENTAJE_SALDO')",
+            "regla_mora_tipo IN ('MONTO_DIARIO', 'MONTO_FIJO', 'PORCENTAJE_SALDO')",
             name="ck_condominio_regla_mora",
         ),
         CheckConstraint(
@@ -63,12 +65,16 @@ class Condominio(Base):
         CheckConstraint(
             "(regla_mora_tipo = 'MONTO_FIJO' "
             "AND monto_mora_fijo IS NOT NULL "
-            "AND tasa_mora_porcentaje IS NULL) "
+            "AND tasa_mora_porcentaje IS NULL AND monto_mora_diario IS NULL) "
             "OR (regla_mora_tipo = 'PORCENTAJE_SALDO' "
             "AND tasa_mora_porcentaje IS NOT NULL "
-            "AND monto_mora_fijo IS NULL)",
+            "AND monto_mora_fijo IS NULL AND monto_mora_diario IS NULL) "
+            "OR (regla_mora_tipo = 'MONTO_DIARIO' AND monto_mora_diario > 0 "
+            "AND monto_mora_diario IS NOT NULL AND monto_mora_fijo IS NULL "
+            "AND tasa_mora_porcentaje IS NULL)",
             name="ck_condominio_configuracion_mora",
         ),
+        CheckConstraint("politica_version > 0", name="ck_condominio_politica_version"),
     )
 
 

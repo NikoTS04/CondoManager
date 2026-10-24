@@ -53,6 +53,7 @@ async def test_portal_conserva_edificio_y_calcula_deuda_con_gracia(
                 estado="PENDIENTE",
                 monto_total_exigible=Decimal("150.00"),
                 monto_pagado=Decimal("50.00"),
+                dias_gracia_aplicados=None,
             )
         ]
 

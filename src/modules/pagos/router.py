@@ -1,6 +1,6 @@
 """API compatible de pagos con PostgreSQL y evidencia local privada."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Response
@@ -101,16 +101,31 @@ async def descargar_voucher(
     comprobante_id: UUID,
     user: dict = Depends(get_current_user),
     service=Depends(get_pagos_service),
+    disposicion: Literal["inline", "attachment"] = "attachment",
+    evidencia_id: UUID | None = None,
 ):
-    ruta, nombre = await service.voucher(comprobante_id, user)
+    if evidencia_id is None:
+        ruta, nombre = await service.voucher(comprobante_id, user)
+    else:
+        ruta, nombre = await service.voucher(comprobante_id, user, evidencia_id)
     return FileResponse(
         ruta,
         filename=nombre,
+        content_disposition_type=disposicion,
         media_type={".png": "image/png", ".jpg": "image/jpeg", ".pdf": "application/pdf"}[
             ruta.suffix
         ],
         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
     )
+
+
+@router.get("/pagos/{comprobante_id}/evidencias")
+async def listar_evidencias(
+    comprobante_id: UUID,
+    user: dict = Depends(get_current_user),
+    service=Depends(get_pagos_service),
+):
+    return await service.evidencias(comprobante_id, user)
 
 
 @router.get("/pagos/{comprobante_id}/resultado", response_model=ConciliacionResultResponse)

@@ -399,11 +399,32 @@ class PagosPersistentesService:
             }
         )
 
-    async def voucher(self, id, usuario):
+    async def evidencias(self, id, usuario):
+        async with self.session.begin():
+            await self.repo.comprobante(id, usuario)
+            rows = await self.session.execute(
+                select(RevisionPago.id, ArchivoVoucher.content_type, RevisionPago.creado_en)
+                .join(ArchivoVoucher, RevisionPago.archivo_nombre == ArchivoVoucher.nombre)
+                .where(RevisionPago.comprobante_id == id, ArchivoVoucher.comprobante_id == id)
+                .order_by(RevisionPago.creado_en.desc(), RevisionPago.id.desc())
+            )
+            return [dict(evidencia_id=r.id, content_type=r.content_type, creado_en=r.creado_en) for r in rows]
+
+    async def voucher(self, id, usuario, evidencia_id=None):
         async with self.session.begin():
             comprobante, _, _ = await self.repo.comprobante(id, usuario)
-            ruta = await asyncio.to_thread(self.storage.ruta, comprobante.url_voucher)
-            return ruta, comprobante.url_voucher
+            nombre = comprobante.url_voucher
+            if evidencia_id is not None:
+                nombre = await self.session.scalar(
+                    select(ArchivoVoucher.nombre)
+                    .join(RevisionPago, RevisionPago.archivo_nombre == ArchivoVoucher.nombre)
+                    .where(RevisionPago.id == evidencia_id, RevisionPago.comprobante_id == id,
+                           ArchivoVoucher.comprobante_id == id)
+                )
+                if nombre is None:
+                    raise APIError(404, "EVIDENCIA_NO_ENCONTRADA", "No existe evidencia autorizada.")
+            ruta = await asyncio.to_thread(self.storage.ruta, nombre)
+            return ruta, nombre
 
     def _evento(self, comprobante, cid, tipo, extra=None):
         id = uuid4()

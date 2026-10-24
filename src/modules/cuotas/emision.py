@@ -66,6 +66,11 @@ class EmisionCuotasService:
             raise APIError(404, "CONDOMINIO_NO_ENCONTRADO", "No existe el condominio.")
         if not condominio.activo:
             raise APIError(422, "CONDOMINIO_INACTIVO", "El condominio está inactivo.")
+        if condominio.regla_mora_tipo == "MONTO_DIARIO":
+            raise APIError(
+                409, "MOTOR_DIARIO_PENDIENTE",
+                "La política diaria está configurada, pero su motor persistente aún no está habilitado.",
+            )
         existente = await self.session.scalar(
             select(LoteCuotas.id).where(
                 LoteCuotas.condominio_id == cid, LoteCuotas.periodo == request.periodo
@@ -121,6 +126,7 @@ class EmisionCuotasService:
                 fecha_emision=ahora.date(),
                 fecha_vencimiento=presupuesto.fecha_vencimiento,
                 estado="EMITIDA",
+                dias_gracia_aplicados=condominio.dias_gracia,
             )
             self.session.add(cuota)
             await self.session.flush()

@@ -5,6 +5,19 @@ aislamiento por condominio, `Decimal`/`NUMERIC(12,2)` y dinero JSON como cadenas
 Reglas normativas: [dominio](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 Los ejemplos de contratos anteriores no autorizan reescribir datos históricos.
 
+### Avance de implementación — primera entrega
+
+Implementados en la rama de trabajo: alta/configuración de MONTO_DIARIO, edición
+versionada y auditada de política, defaults 10/0/1.00, visor privado PNG/JPEG/PDF,
+consulta de revisiones históricas y descarga compatible. Migración 0016 aditiva:
+congela en cuotas existentes la gracia efectiva al adoptar (no se presume que sea
+la regla original), y nuevas emisiones anteriores guardan su gracia efectiva.
+**El motor diario aún no está integrado**: emitir bajo MONTO_DIARIO devuelve
+409 `MOTOR_DIARIO_PENDIENTE` para no producir cuotas sin política/devengo completos.
+No confundir configuración preparada con recaudación automatizada operativa.
+Pendientes: excepciones individuales, snapshots completos, devengos persistentes,
+conciliación por fecha bancaria, prorrateo/fondos y exportaciones PDF/DOCX.
+
 ## 1. Política financiera y excepciones
 
 Extender alta/consulta de condominio con `MONTO_DIARIO` y `monto_mora_diario`.
@@ -42,6 +55,14 @@ Respuestas 200 con configuración efectiva, actor y fecha; 401/403/404 por
 identidad/ámbito/ausencia; 422 por importes no finitos, escala, modalidad o vínculo
 inválidos; 409 por conflicto de versión. Repetir el mismo cambio es no-op.
 Control de versión requerido para no perder cambios concurrentes.
+
+La edición usa `version_esperada` (entero positivo); la respuesta del condominio
+incluye `politica_version`. Coincidencia de versión y datos idénticos no crea
+auditoría ni incrementa versión. Una versión obsoleta responde 409.
+Para consultar evidencia histórica se usa `evidencia_id` de revisión y
+`GET /pagos/{comprobante_id}/evidencias` devuelve solo id, tipo y fecha, nunca
+notas internas ni nombres de almacenamiento. La versión vigente puede consultarse
+sin identificador, incluso para comprobantes anteriores al registro de revisiones.
 
 ## 2. Presupuesto detallado y reporte
 

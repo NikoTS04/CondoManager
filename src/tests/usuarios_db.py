@@ -45,6 +45,7 @@ REVISIONES_API = (
     "20261021_0012_cancelaciones_reserva",
     "20261021_0014_unir_reservas_y_convergencia",
     "20261021_0015_alertas_notificaciones",
+    "20261024_0016_politica_mora_diaria",
 )
 
 

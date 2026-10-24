@@ -27,6 +27,33 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /condominios/{condominio_id}/politica-mora:
+    put:
+      operationId: actualizarPoliticaMora
+      summary: Editar política financiera sin recalcular cuotas históricas
+      x-implementation-status: implementado-configuracion-motor-diario-pendiente
+      parameters:
+        - name: condominio_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ActualizarPoliticaMoraRequest'}
+      responses:
+        '200':
+          description: Política actualizada o no-op con la misma versión; auditoría atómica para cambios.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CondominioResponse'}
+        '403': {description: Rol o contexto no autorizado}
+        '404': {description: Condominio inexistente o inactivo}
+        '409': {description: Versión obsoleta}
+        '422': {description: Configuración inválida}
+  /pagos/{comprobante_id}/evidencias:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1evidencias'
   /auth/login:
     post:
       operationId: iniciarSesion
@@ -1266,6 +1293,19 @@ components:
           then:
             required: [monto_mora_diario]
 
+    ActualizarPoliticaMoraRequest:
+      type: object
+      additionalProperties: false
+      required: [regla_mora_tipo, dia_vencimiento, dias_gracia, version_esperada, motivo]
+      properties:
+        regla_mora_tipo: {type: string, enum: [MONTO_DIARIO, MONTO_FIJO, PORCENTAJE_SALDO]}
+        monto_mora_diario: {type: [string, 'null'], pattern: '^(?!0+\.00$)[0-9]{1,10}\.[0-9]{2}$'}
+        monto_mora_fijo: {type: [string, 'null']}
+        tasa_mora_porcentaje: {type: [string, 'null']}
+        dia_vencimiento: {type: integer, minimum: 1, maximum: 28}
+        dias_gracia: {type: integer, minimum: 0, maximum: 30}
+        version_esperada: {type: integer, minimum: 1}
+        motivo: {type: string, minLength: 1, maxLength: 1000}
     CondominioResponse:
       type: object
       additionalProperties: false
@@ -1285,7 +1325,8 @@ components:
         direccion: { type: string }
         moneda: { type: string, enum: [PEN, USD] }
         regla_mora_tipo: { type: string, enum: [MONTO_DIARIO, MONTO_FIJO, PORCENTAJE_SALDO] }
-        monto_mora_diario: { type: [string, 'null'], example: '1.00', description: Extensión financiera pendiente de implementación. }
+        monto_mora_diario: { type: [string, 'null'], example: '1.00', description: Configuración implementada; motor persistente y emisión diaria pendientes. }
+        politica_version: {type: integer, minimum: 1, example: 1}
         monto_mora_fijo: { type: [string, 'null'], example: "20.00" }
         tasa_mora_porcentaje: { type: [string, 'null'], example: null }
         dia_vencimiento: { type: integer, minimum: 1, maximum: 28 }

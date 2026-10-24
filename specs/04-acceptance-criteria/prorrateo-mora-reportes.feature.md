@@ -3,6 +3,13 @@
 Escenarios documentales **pendientes de automatización e implementación**; no son
 pruebas ya ejecutables. Regla: [dominio](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 
+Primera entrega: pruebas automáticas de configuración/versionado en
+`src/tests/unit/test_politica_diaria.py`, transporte inline en
+`src/tests/integration/test_voucher_inline.py` e historial real dentro de
+`src/tests/integration/test_convergencia_con72.py` (requiere PostgreSQL).
+Motor diario, reparto, fondos y exportaciones de los escenarios siguientes
+permanecen pendientes; no se considera completada esta característica integral.
+
 ```gherkin
 Característica: Mora diaria por cuota mensual y fecha bancaria
   Escenario: Sin gracia predeterminada
