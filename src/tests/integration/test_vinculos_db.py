@@ -490,7 +490,9 @@ async def test_inexistentes_y_sin_autenticacion(caso):
 async def test_portal_calcula_deuda_solo_de_cuotas_sql_vencidas(caso):
     base, client = caso["base"], caso["client"]
     await vincular(caso)
-    hoy = datetime.now(UTC).date()
+    from src.shared.fechas import fecha_lima
+
+    hoy = fecha_lima()
     async with base.sessions() as db, db.begin():
         for periodo, total, pagado, vence in [
             ("2026-01", "100.25", "40.10", hoy - timedelta(days=3)),

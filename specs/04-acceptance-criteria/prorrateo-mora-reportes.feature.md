@@ -10,8 +10,23 @@ Primera entrega: pruebas automáticas de configuración/versionado en
 Motor diario, reparto, fondos y exportaciones de los escenarios siguientes
 permanecen pendientes; no se considera completada esta característica integral.
 
+Segunda entrega: `src/tests/unit/test_condiciones_pago.py` cubre herencia/override,
+versionado, auditoría, snapshot y frontera UTC/Lima. La integración concurrente
+real está en `src/tests/integration/test_condiciones_pago_db.py` (PostgreSQL).
+
 ```gherkin
 Característica: Mora diaria por cuota mensual y fecha bancaria
+  Escenario: Revocar responsable no restaura su excepción al reactivar vínculo
+    Dado responsable con gracia individual 5 y gracia global 0
+    Cuando se revoca el vínculo y luego se restaura
+    Entonces las nuevas cuotas heredan gracia global hasta nueva designación explícita
+    Y las cuotas emitidas antes mantienen su responsable y gracia histórica
+
+  Escenario: Cambios concurrentes de condiciones de pago
+    Dado versión 1 de condiciones de pago de un departamento
+    Cuando dos administradores envían cambios distintos con versión esperada 1
+    Entonces solo uno confirma y el segundo recibe 409
+
   Escenario: Sin gracia predeterminada
     Dado una cuota con vencimiento 2026-10-10 y principal pendiente de 150.00 PEN
     Y política diaria de 1.00 PEN y gracia 0

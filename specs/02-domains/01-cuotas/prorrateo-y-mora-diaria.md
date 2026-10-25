@@ -8,6 +8,11 @@ pendientes. Emisión MONTO_DIARIO temporalmente rechazada con
 `MOTOR_DIARIO_PENDIENTE`; no desplegar como solución financiera completa.
 Detalle de adopción: [contrato](../../05-api/prorrateo-mora-reportes.md#avance-de-implementación--primera-entrega).
 
+Segunda entrega: excepciones por vínculo, responsable único, revocación segura y
+snapshot de nuevas emisiones implementados. Migración 0017 y concurrencia
+verificadas en PostgreSQL aislado. No se inventan snapshots históricos. Motor
+diario persistente y reconstrucción bancaria siguen pendientes de integración.
+
 Especificación objetivo aprobada por el responsable del proyecto (2026-10-24).
 **Pendiente de implementación**: no afirma que estas capacidades existan en código.
 Complementa CON-9/10/11/13 y sustituye las reglas anteriores de vencimiento el día

@@ -18,7 +18,34 @@ No confundir configuración preparada con recaudación automatizada operativa.
 Pendientes: excepciones individuales, snapshots completos, devengos persistentes,
 conciliación por fecha bancaria, prorrateo/fondos y exportaciones PDF/DOCX.
 
+### Avance de implementación — segunda entrega
+
+Condiciones individuales y snapshots completos de nuevas emisiones implementados.
+La migración 0017 agrega override nullable al vínculo, responsable único por
+departamento, control de versión y JSON de política por cuota. No rellena
+snapshots de cuotas antiguas con políticas supuestas. La consulta de solvencia
+usa fecha local de Lima en los portales y el guard de reservas; la fecha bancaria
+para reconstruir imputaciones sigue pendiente. El motor diario y su bloqueo de
+emisión permanecen pendientes, al igual que prorrateo/fondos y exportaciones.
+La interfaz de vínculos permite designar/retirar responsable y configurar gracia.
+Verificación: suite completa ejecutada en PostgreSQL temporal, más escenarios de
+concurrencia y emisión con override. El reparador legacy está ligado a su head
+anterior y continúa rechazando el head financiero; no usarlo para adoptar 0017.
+
 ## 1. Política financiera y excepciones
+
+La segunda entrega define `GET/PUT /departamentos/{id}/condiciones-pago` para
+Junta/SuperAdmin; auditor puede consultar. PUT exige `version_esperada` positiva,
+motivo no vacío, vínculo responsable nullable y override nullable 0..30 (sin
+responsable, override debe ser null). GET devuelve `version`, responsable
+designado, override y `dias_gracia_efectivos`; una designación cuyo vínculo ya no
+está activo no aporta gracia. La selección no modifica permisos ni saldos.
+Versiones obsoletas responden 409, incluso si el payload coincide.
+La revocación de un vínculo elimina su designación como responsable; restaurarlo
+no restaura automáticamente privilegios financieros. La emisión conserva
+modalidad, importes, versión global, gracia efectiva, responsable y zona Lima.
+Para cuotas antiguas, solo se fotografía la gracia de adopción de 0016; no se
+fabrican modalidad, importes ni responsables históricos.
 
 Extender alta/consulta de condominio con `MONTO_DIARIO` y `monto_mora_diario`.
 Defaults al omitir configuración nueva: día 10, gracia 0, modalidad MONTO_DIARIO

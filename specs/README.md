@@ -12,8 +12,14 @@ En este repositorio, las especificaciones técnicas representan la **fuente úni
 Avance parcial: configuración de mora y visor privado implementados en la rama
 de trabajo; el resto de la ampliación financiera sigue pendiente. Ver
 [estado de la primera entrega](05-api/prorrateo-mora-reportes.md#avance-de-implementación--primera-entrega).
-La migración 0016 aún debe verificarse/aplicarse en PostgreSQL antes de usar
-esta versión. Emisión MONTO_DIARIO bloqueada hasta integrar el motor contable.
+Las migraciones 0016/0017 deben aplicarse explícitamente al entorno de destino
+antes de usar esta versión. Emisión MONTO_DIARIO bloqueada hasta integrar el motor contable.
+
+Segunda entrega: responsable por unidad, gracia individual y snapshot de política
+para nuevas cuotas implementados (migración 0017). Verificados en una instancia
+PostgreSQL temporal, incluida concurrencia y conservación de snapshots. No se han
+aplicado estas migraciones a la base de la aplicación. El motor diario continúa
+bloqueado; fondos/prorrateo y exportaciones todavía no están implementados.
 
 - [Prorrateo, catálogo, mora diaria y reportes](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 - [ADR-003: reparto por pisos](01-architecture/adr/ADR-003-prorrateo-por-pisos.md).

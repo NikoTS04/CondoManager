@@ -271,6 +271,27 @@ function rutaVinculos(condominioId: string, usuarioId: string): string {
   return `/condominios/${encodeURIComponent(condominioId)}/usuarios/${encodeURIComponent(usuarioId)}/departamentos`;
 }
 
+export interface CondicionesPago {
+  departamento_id: string;
+  version: number;
+  vinculo_responsable_id: string | null;
+  dias_gracia_override: number | null;
+  dias_gracia_efectivos: number;
+}
+
+export function consultarCondicionesPago(departamentoId: string): Promise<CondicionesPago> {
+  return recursoRequest(`/departamentos/${encodeURIComponent(departamentoId)}/condiciones-pago`);
+}
+
+export function guardarCondicionesPago(departamentoId: string, datos: {
+  vinculo_responsable_id: string | null; dias_gracia_override: number | null;
+  version_esperada: number; motivo: string;
+}): Promise<CondicionesPago> {
+  return recursoRequest(`/departamentos/${encodeURIComponent(departamentoId)}/condiciones-pago`, {
+    method: "PUT", body: JSON.stringify(datos),
+  });
+}
+
 export function listarVinculosUsuario(condominioId: string, usuarioId: string): Promise<VinculoUsuario[]> {
   return recursoRequest(rutaVinculos(condominioId, usuarioId));
 }

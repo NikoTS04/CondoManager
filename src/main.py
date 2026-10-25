@@ -13,6 +13,7 @@ from src.core.errors import (
     request_validation_handler,
     unexpected_error_handler,
 )
+from src.modules.condominios.condiciones_pago import router as condiciones_pago_router
 from src.modules.condominios.estructura.router import router as estructura_router
 from src.modules.condominios.router import router as condominios_router
 from src.modules.cuotas.distribucion.router import router as distribucion_router
@@ -49,6 +50,7 @@ app.add_exception_handler(Exception, unexpected_error_handler)
 
 app.include_router(usuarios_router, prefix="/api/v1")
 app.include_router(condominios_router, prefix="/api/v1")
+app.include_router(condiciones_pago_router, prefix="/api/v1")
 app.include_router(estructura_router, prefix="/api/v1")
 app.include_router(cuotas_router, prefix="/api/v1")
 app.include_router(presupuestos_router, prefix="/api/v1")

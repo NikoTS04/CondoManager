@@ -27,6 +27,43 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /departamentos/{departamento_id}/condiciones-pago:
+    parameters:
+      - name: departamento_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: consultarCondicionesPago
+      summary: Consultar responsable vigente, gracia efectiva y versión de la unidad
+      x-implementation-status: implementado
+      responses:
+        '200':
+          description: Consulta administrativa; auditor solo lectura.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CondicionesPagoResponse'}
+        '403': {description: Rol o condominio no autorizado}
+        '404': {description: Departamento inexistente}
+    put:
+      operationId: configurarCondicionesPago
+      summary: Designar responsable y gracia individual para nuevas emisiones
+      x-implementation-status: implementado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CondicionesPagoRequest'}
+      responses:
+        '200':
+          description: Cambio auditado o no-op; no modifica cuotas emitidas.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CondicionesPagoResponse'}
+        '403': {description: Solo Junta o SuperAdmin del contexto}
+        '404': {description: Departamento inexistente}
+        '409': {description: Versión de condiciones obsoleta}
+        '422': {description: Vínculo ajeno/inactivo o valores inválidos}
   /condominios/{condominio_id}/politica-mora:
     put:
       operationId: actualizarPoliticaMora
@@ -1293,6 +1330,31 @@ components:
           then:
             required: [monto_mora_diario]
 
+    CondicionesPagoRequest:
+      type: object
+      additionalProperties: false
+      required: [vinculo_responsable_id, dias_gracia_override, version_esperada, motivo]
+      properties:
+        vinculo_responsable_id: {type: [string, 'null'], format: uuid}
+        dias_gracia_override: {type: [integer, 'null'], minimum: 0, maximum: 30}
+        version_esperada: {type: integer, minimum: 1}
+        motivo: {type: string, minLength: 1, maxLength: 1000}
+      if:
+        properties:
+          vinculo_responsable_id: {type: 'null'}
+      then:
+        properties:
+          dias_gracia_override: {type: 'null'}
+    CondicionesPagoResponse:
+      type: object
+      additionalProperties: false
+      required: [departamento_id, version, vinculo_responsable_id, dias_gracia_override, dias_gracia_efectivos]
+      properties:
+        departamento_id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        vinculo_responsable_id: {type: [string, 'null'], format: uuid}
+        dias_gracia_override: {type: [integer, 'null'], minimum: 0, maximum: 30}
+        dias_gracia_efectivos: {type: integer, minimum: 0, maximum: 30}
     ActualizarPoliticaMoraRequest:
       type: object
       additionalProperties: false

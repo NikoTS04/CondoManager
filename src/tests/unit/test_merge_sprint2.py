@@ -1,6 +1,6 @@
 """Regresiones del cruce entre catalogo, portal y solvencia; sin base de datos."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -15,6 +15,7 @@ from src.modules.reservas.router import (
     get_creacion_reservas_repository,
 )
 from src.modules.usuarios.departamentos import DepartamentosPortalRepository
+from src.shared.fechas import fecha_lima
 
 
 def test_catalogo_y_solvencia_comparten_sesion_para_no_bloquearse():
@@ -49,7 +50,7 @@ async def test_portal_conserva_edificio_y_calcula_deuda_con_gracia(
     async def cuotas(self, did):
         return [
             SimpleNamespace(
-                fecha_vencimiento=datetime.now(UTC).date() - timedelta(days=dias_vencida),
+                fecha_vencimiento=fecha_lima() - timedelta(days=dias_vencida),
                 estado="PENDIENTE",
                 monto_total_exigible=Decimal("150.00"),
                 monto_pagado=Decimal("50.00"),

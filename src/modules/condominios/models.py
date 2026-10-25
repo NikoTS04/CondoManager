@@ -124,12 +124,21 @@ class Departamento(Base):
     activo: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=true()
     )
+    responsable_pago_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("usuario_departamentos.id", name="fk_departamento_responsable_pago", ondelete="SET NULL"),
+        nullable=True,
+    )
+    condiciones_pago_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Relaciones
     edificio: Mapped["Edificio"] = relationship(back_populates="departamentos")
 
     __table_args__ = (
         UniqueConstraint("edificio_id", "numero", name="uq_edificio_departamento"),
+        CheckConstraint("condiciones_pago_version > 0", name="ck_departamento_condiciones_version"),
         Index("idx_departamentos_edificio", "edificio_id"),
         Index(
             "uq_departamento_numero_normalizado",

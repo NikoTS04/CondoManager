@@ -86,6 +86,7 @@ class CuotaMantenimiento(Base):
     fecha_vencimiento: Mapped[date] = mapped_column(Date, nullable=False)
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="EMITIDA")
     dias_gracia_aplicados: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    politica_mora_aplicada: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     @property
     def monto_pendiente(self) -> Decimal:

@@ -26,6 +26,7 @@ from src.modules.pagos.schemas import (
 )
 from src.modules.pagos.service import PagosService
 from src.modules.pagos.storage import MAX_BYTES, VoucherStorage
+from src.shared.fechas import fecha_lima
 
 
 class PagosPersistentesService:
@@ -82,7 +83,7 @@ class PagosPersistentesService:
                 if not puede_ver_departamento(usuario, depto.id):
                     continue
                 cuotas = await self.repo.cuotas(depto.id)
-                saldo = saldo_en_mora(cuotas, condominio.dias_gracia, datetime.now(UTC).date())
+                saldo = saldo_en_mora(cuotas, condominio.dias_gracia, fecha_lima())
                 resultado.append(
                     {
                         "id": depto.id,
@@ -270,10 +271,11 @@ class PagosPersistentesService:
                     "La decisión ya es definitiva; no se vuelve a aplicar.",
                 )
             ahora = datetime.now(UTC)
+            hoy = fecha_lima()
             anterior = {"estado": comprobante.estado, "saldo_a_favor": str(depto.saldo_a_favor)}
             total_aplicado, credito = CERO, CERO
             if request.decision == "APROBADO":
-                plan = plan_imputacion(cuotas, comprobante.monto, ahora.date())
+                plan = plan_imputacion(cuotas, comprobante.monto, hoy)
                 credito = plan["remanente"]
                 if depto.saldo_a_favor + credito > MAX_MONEDA:
                     raise APIError(
@@ -286,7 +288,7 @@ class PagosPersistentesService:
                     cuota.monto_pagado += aplicado
                     if cuota.monto_pagado == cuota.monto_total_exigible:
                         cuota.estado = "PAGADA"
-                    elif saldo_en_mora([cuota], condominio.dias_gracia, ahora.date()) > CERO:
+                    elif saldo_en_mora([cuota], condominio.dias_gracia, hoy) > CERO:
                         cuota.estado = "EN_MORA"
                     else:
                         cuota.estado = "PAGO_PARCIAL"
@@ -301,7 +303,7 @@ class PagosPersistentesService:
                 depto.saldo_a_favor += credito
                 depto.estado_financiero = (
                     "EN_MORA"
-                    if saldo_en_mora(cuotas, condominio.dias_gracia, ahora.date()) > CERO
+                    if saldo_en_mora(cuotas, condominio.dias_gracia, hoy) > CERO
                     else "AL_DIA"
                 )
             comprobante.estado = request.decision
@@ -317,7 +319,7 @@ class PagosPersistentesService:
                 ),
                 saldo_a_favor_generado=credito,
                 departamento_habilitado_reservas=saldo_en_mora(
-                    cuotas, condominio.dias_gracia, ahora.date()
+                    cuotas, condominio.dias_gracia, hoy
                 )
                 == CERO,
                 motivo_rechazo=comprobante.motivo_rechazo,

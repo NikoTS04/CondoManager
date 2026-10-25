@@ -47,6 +47,14 @@ incluidas carreras entre usuarios. La migración `20261020_0009` añade
 [vínculos](../../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## 1. Tabla: `condominios`
+Migración de trabajo 0017 (requiere 0016): `usuario_departamentos.dias_gracia_override`
+SMALLINT nullable 0..30; `departamentos.responsable_pago_id` UUID nullable FK a
+vínculo (pertenencia a la unidad validada en servicio) y `condiciones_pago_version`
+INTEGER positivo, default 1. `cuotas_mantenimiento.politica_mora_aplicada` JSONB
+nullable contiene snapshot de nuevas emisiones; no se fabrican snapshots legacy.
+La FK de responsable es SET NULL ante borrado físico; en la API la revocación
+lógica retira explícitamente la designación e incrementa versión con auditoría.
+
 **Extensión objetivo pendiente de implementación:** MONTO_DIARIO, monto diario
 editable (1.00 PEN por defecto), día 10 y gracia 0. Las tablas y CHECK de esta
 sección describen la integración previa; no usar sus defaults como regla piloto.

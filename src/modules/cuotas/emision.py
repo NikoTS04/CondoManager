@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.audit import AuditoriaPayload
 from src.core.errors import APIError
 from src.core.models_audit import AuditoriaLogORM
+from src.modules.condominios.condiciones_pago import fotografiar_politica
 from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.cuotas.distribucion.exceptions import DistribucionError
 from src.modules.cuotas.distribucion.repository import SQLAlchemyDistribucionRepository
@@ -19,6 +20,7 @@ from src.modules.cuotas.presupuestos.repository import SQLAlchemyPresupuestoRepo
 from src.modules.cuotas.saldos.repository import SQLAlchemySaldoFavorRepository
 from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorService
 from src.modules.cuotas.schemas import EmitirLoteCuotasResponse, EmitirLoteRequest
+from src.modules.usuarios.models import UsuarioDepartamento
 
 
 def cerrar_centavos(montos: dict[UUID, Decimal], total: Decimal) -> dict[UUID, Decimal]:
@@ -110,9 +112,20 @@ class EmisionCuotasService:
         except DistribucionError as exc:
             raise APIError(422, exc.error_code, exc.mensaje, exc.detalles) from exc
         ahora = datetime.now(UTC)
+        responsables = {
+            v.departamento_id: v for v in await self.session.scalars(
+                select(UsuarioDepartamento)
+                .join(Departamento, Departamento.responsable_pago_id == UsuarioDepartamento.id)
+                .join(Edificio, Departamento.edificio_id == Edificio.id)
+                .where(Edificio.condominio_id == cid,
+                       UsuarioDepartamento.departamento_id == Departamento.id,
+                       UsuarioDepartamento.es_activo.is_(True))
+            )
+        }
         cubiertas = 0
         saldos = SaldosFavorService(SQLAlchemySaldoFavorRepository(self.session))
         for departamento in departamentos:
+            politica = fotografiar_politica(condominio, responsables.get(departamento.id))
             cuota = CuotaMantenimiento(
                 id=uuid4(),
                 departamento_id=departamento.id,
@@ -126,7 +139,8 @@ class EmisionCuotasService:
                 fecha_emision=ahora.date(),
                 fecha_vencimiento=presupuesto.fecha_vencimiento,
                 estado="EMITIDA",
-                dias_gracia_aplicados=condominio.dias_gracia,
+                dias_gracia_aplicados=politica["dias_gracia"],
+                politica_mora_aplicada=politica,
             )
             self.session.add(cuota)
             await self.session.flush()
