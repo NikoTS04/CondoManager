@@ -1,13 +1,19 @@
 # CondoManager - Especificaciones Técnicas (Spec-Driven Development de Nivel Empresarial)
 
+## Despliegue recuperado — 26 octubre 2026
+
+Base activa en `20261025_0020`, backend y tres workers healthy, sin alterar hechos
+históricos ni importar caja. Respaldo, dos ensayos y 650 pruebas aprobadas:
+[evidencia operativa](../docs/sprints/reconciliacion-esquema-20261026.md).
+
 ## Avance de implementación: fondos y cobertura (0020)
 
 Fondos por edificio/moneda desde cobros conciliados, reservas versionadas para
 gastos, liberación y confirmación sin doble descuento integrados en interfaz,
 aprobación, emisión y PDF/DOCX. Retroactivos sin respaldo disponible se bloquean
 íntegramente. No se importa caja histórica ni se editan aprobados. Desplegar la
-migración y consumidor compatibles antes de activar productores. Solo se han
-aplicado migraciones a PostgreSQL aislado de pruebas, no a la base de la aplicación.
+migración y consumidor compatibles antes de activar productores. La entrega inicial
+solo se probó de forma aislada; el despliegue actual está documentado arriba.
 
 ### Verificación local del cierre
 
@@ -28,7 +34,7 @@ recuperación al arrancar y a las 00:05 de Lima, conciliación bancaria prospect
 y compensaciones inmutables. Recibos históricos y CON-13 no se reescriben; un
 déficit de crédito utilizado se bloquea hasta financiarlo expresamente. Ledger,
 auditoría y eventos v2 se confirman juntos. Fondos para gastos se integran en 0020.
-Migración 0019 probada solo en PostgreSQL aislado, no en la base de la aplicación.
+Migración 0019 probada primero en PostgreSQL aislado y desplegada el 26 de octubre.
 
 ## Avance de implementación: prorrateo detallado (0018)
 
@@ -37,7 +43,7 @@ con snapshot y emisión jerárquica implementados. Reporte por edificio con
 previsualización y descarga PDF/DOCX de la misma versión, incluido BORRADOR y
 anexo administrativo de cargos/centavos. El residente no recibe anexos ajenos.
 El catálogo se registra explícitamente desde la interfaz; no se sembraron gastos
-ni fondos históricos. La migración 0018 no se ha aplicado a la base de la aplicación.
+ni fondos históricos. La migración 0018 se desplegó el 26 de octubre.
 Motor diario/reconstrucción bancaria se integran en 0019. La cobertura con fondos
 se integra en 0020, respaldada por caja real, no por la mera existencia del reporte.
 
@@ -54,7 +60,7 @@ Configuración y visor (0016), responsable/gracia/snapshot (0017), prorrateo y
 reportes (0018), motor diario/fecha bancaria (0019), fondos/cobertura (0020). Ver
 [estado y límites de cada entrega](05-api/prorrateo-mora-reportes.md).
 Revisar y aplicar las migraciones explícitamente al entorno de destino antes de
-usar esta versión; no se han aplicado a la base de la aplicación. Instalar el
+usar esta versión en otro entorno. En la base activa se aplicaron el 26 de octubre. Instalar el
 consumidor compatible antes de activar el productor/worker diario.
 
 - [Prorrateo, catálogo, mora diaria y reportes](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
@@ -67,7 +73,7 @@ mora editable default 1.00 PEN diaria **por cuota mensual**. Reparto común por 
 (14/48, 14/48, 10/48, 10/48); edificio 03 entre 139 unidades. Fondos de moras
 cobradas financian gastos con trazabilidad. Llenado y exportación PDF/DOCX y visor
 privado de evidencia. Documentos de integración anteriores son antecedentes donde
-contradigan esta ampliación; no es una migración ni una capacidad ya desplegada.
+contradigan esta ampliación; sus ejemplos no autorizan una adopción histórica.
 
 
 1. **La especificación precede al código (Spec-First):** Todo cambio en una regla de negocio requiere actualizar primero su especificación en `specs/02-domains/` y sus escenarios BDD correspondientes.

@@ -60,7 +60,7 @@ docker compose up -d --build --wait --wait-timeout 180 redis backend frontend
 docker compose ps
 ```
 
-El backend ejecuta `alembic upgrade head` antes de iniciar la API. La cabeza de esta rama es `20261025_0020`: revisar respaldo, revisión y compatibilidad antes de arrancar contra una base existente. Las migraciones financieras 0016–0020 se han probado en bases aisladas, no aplicado a la base de la aplicación. El reparador [legacy](docs/sprints/reconciliacion-esquema-legacy.md) no adopta estas revisiones financieras. Los fondos se reconocen prospectivamente desde cobros de mora conciliados; no se importa caja histórica.
+El backend ejecuta `alembic upgrade head` antes de iniciar la API. La cabeza de esta rama es `20261025_0020`: revisar respaldo, revisión y compatibilidad antes de arrancar contra una base existente. El despliegue se recuperó y actualizó a 0020 el 26 de octubre tras respaldo, dos restauraciones de ensayo y validación de datos originales; ver [resultado y límites](docs/sprints/reconciliacion-esquema-20261026.md). El reparador [legacy](docs/sprints/reconciliacion-esquema-legacy.md) no adopta estas revisiones financieras. Los fondos se reconocen prospectivamente desde cobros de mora conciliados; no se importa caja histórica.
 
 | Servicio | Dirección |
 |---|---|

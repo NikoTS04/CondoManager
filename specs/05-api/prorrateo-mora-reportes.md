@@ -5,6 +5,9 @@ aislamiento por condominio, `Decimal`/`NUMERIC(12,2)` y dinero JSON como cadenas
 Reglas normativas: [dominio](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 Los ejemplos de contratos anteriores no autorizan reescribir datos históricos.
 
+Despliegue actualizado a 0020 el 26 de octubre, tras respaldo y ensayo restaurado;
+ver [recuperación y verificación](../../docs/sprints/reconciliacion-esquema-20261026.md).
+
 ### Avance de implementación — quinta entrega (0020)
 
 Fondos por edificio/moneda integrados con conciliación legacy y diaria, reservas,
@@ -37,8 +40,8 @@ mora previamente cobrada no adoptada. Esa base no se importa como caja ni genera
 reversos de efectivo inexistente. Septiembre y sus 5400.00 requieren documentación
 y conciliación antes de una adopción histórica explícita. No se implementa aquí
 edición de cuotas/presupuestos aprobados, exoneraciones manuales, transferencias
-entre fondos ni pagos a proveedores. La migración 0020 no se ha aplicado a la
-base de la aplicación.
+entre fondos ni pagos a proveedores. La migración 0020 se aplicó el 26 de octubre
+sin importar caja histórica; el ensayo inicial de la entrega fue aislado.
 
 ### Avance de implementación — cuarta entrega (0019)
 
@@ -61,8 +64,8 @@ Recibos/revisiones originales permanecen históricos. Las imputaciones vigentes
 son la suma firmada del ledger por componente, no SUM de recibos originales.
 Nuevos cargos/compensaciones publican eventos v2, con relay y consumidor compatibles.
 
-Migración aditiva 0019, sin reconstruir políticas ni pagos históricos. No aplicada
-a la base de la aplicación. Los fondos que quedaron pendientes en esta entrega
+Migración aditiva 0019, sin reconstruir políticas ni pagos históricos. Al cierre
+inicial no estaba desplegada; se aplicó el 26 de octubre. Los fondos pendientes en esta entrega
 se integran en 0020; los ajustes manuales de cuotas aprobadas no están incluidos.
 
 ### Avance de implementación — primera entrega
