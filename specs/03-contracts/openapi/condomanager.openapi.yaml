@@ -2,14 +2,14 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: Contrato objetivo del Sprint 2 acordado en CON-72. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
-  version: 2.1.0
+  version: 2.2.0
 x-contract-baseline: CON-72-2026-10-20
 x-contract-guide: ../../05-api/sprint-2-contratos.md
 x-financial-extension:
   status: especificado-pendiente-de-implementacion
   guide: ../../05-api/prorrateo-mora-reportes.md
   domain: ../../02-domains/01-cuotas/prorrateo-y-mora-diaria.md
-  note: Los campos MONTO_DIARIO, defaults financieros y visualización inline son contrato objetivo; las rutas de reportes, fondos y excepciones se detallan en la guía y aún no están implementadas.
+  note: Configuración, excepciones, visor, prorrateo y exportación implementados. Motor diario, conciliación retroactiva y fondos siguen pendientes; ver guía de avances.
 x-payments-implementation-note: CON-72 es la base normativa implementada por pagos. x-core-implementation conserva únicamente una instantánea histórica anterior a la convergencia; no define API adicionales vigentes.
 security: [{ bearerAuth: [] }]
 servers:
@@ -27,6 +27,12 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /presupuestos/{presupuesto_id}/prorrateo/exportar:
+    $ref: './prorrateo.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1prorrateo~1exportar'
+  /condominios/{condominio_id}/conceptos-presupuestales:
+    $ref: './prorrateo.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1conceptos-presupuestales'
+  /presupuestos/{presupuesto_id}/prorrateo:
+    $ref: './prorrateo.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1prorrateo'
   /departamentos/{departamento_id}/condiciones-pago:
     parameters:
       - name: departamento_id
@@ -876,6 +882,10 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: version_esperada
+          in: query
+          description: Obligatoria para presupuesto detallado; conflicto o ausencia responde 409.
+          schema: {type: integer, minimum: 1}
         - name: id
           in: path
           required: true
@@ -1399,7 +1409,16 @@ components:
     CrearPresupuestoRequest:
       type: object
       additionalProperties: false
-      required: [condominio_id, periodo, moneda, monto_total, fecha_vencimiento]
+      required: [condominio_id, periodo, moneda, fecha_vencimiento]
+      if:
+        required: [items]
+        properties:
+          items: {type: array}
+      then: {}
+      else:
+        required: [monto_total]
+        properties:
+          monto_total: {not: {const: '0.00'}}
       properties:
         condominio_id: { type: string, format: uuid }
         periodo:
@@ -1410,14 +1429,25 @@ components:
         monto_total:
           type: string
           pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
-          not: { const: '0.00' }
           example: '20000.00'
         fecha_vencimiento: { type: string, format: date, example: '2026-10-10' }
+        items: {$ref: './prorrateo.schemas.yaml#/schemas/Items'}
+        version_esperada: {type: integer, minimum: 1}
 
     ActualizarPresupuestoRequest:
       type: object
       additionalProperties: false
-      required: [periodo, moneda, monto_total, fecha_vencimiento]
+      required: [periodo, moneda, fecha_vencimiento]
+      if:
+        required: [items]
+        properties:
+          items: {type: array}
+      then:
+        required: [version_esperada]
+      else:
+        required: [monto_total]
+        properties:
+          monto_total: {not: {const: '0.00'}}
       properties:
         periodo:
           type: string
@@ -1427,9 +1457,10 @@ components:
         monto_total:
           type: string
           pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
-          not: { const: '0.00' }
           example: '20500.00'
         fecha_vencimiento: { type: string, format: date, example: '2026-10-10' }
+        items: {$ref: './prorrateo.schemas.yaml#/schemas/Items'}
+        version_esperada: {type: integer, minimum: 1}
 
     PresupuestoResponse:
       type: object
@@ -1447,6 +1478,8 @@ components:
         - aprobado_por
         - aprobado_en
         - actualizado_en
+        - version
+        - items
       properties:
         id: { type: string, format: uuid }
         condominio_id: { type: string, format: uuid }
@@ -1460,6 +1493,8 @@ components:
         aprobado_por: { type: [string, 'null'] }
         aprobado_en: { type: [string, 'null'], format: date-time }
         actualizado_en: { type: string, format: date-time }
+        version: {type: integer, minimum: 1}
+        items: {$ref: './prorrateo.schemas.yaml#/schemas/Items'}
 
     EmitirLoteCuotasRequest:
       type: object

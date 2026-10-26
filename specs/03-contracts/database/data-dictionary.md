@@ -47,6 +47,14 @@ incluidas carreras entre usuarios. La migración `20261020_0009` añade
 [vínculos](../../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## 1. Tabla: `condominios`
+Extensión 0018: catálogo `conceptos_presupuestales` con UUID, FK de condominio,
+código único por condominio, categoría, descripción y activo. Presupuesto añade
+`version INTEGER` positivo default 1, `items JSONB NULL`, `prorrateo_snapshot JSONB NULL`;
+cuota añade `detalle_prorrateo JSONB NULL`. Totales de presupuesto/lote admiten 0
+para cierre neto de ítems; contrato legacy sigue exigiendo monto positivo.
+Lote añade método JERARQUICA. Ítems y snapshots se validan y auditan dentro del
+agregado mensual; no se crean tablas de ítems/asignaciones duplicadas.
+
 Migración de trabajo 0017 (requiere 0016): `usuario_departamentos.dias_gracia_override`
 SMALLINT nullable 0..30; `departamentos.responsable_pago_id` UUID nullable FK a
 vínculo (pertenencia a la unidad validada en servicio) y `condiciones_pago_version`

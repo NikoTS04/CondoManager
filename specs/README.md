@@ -1,5 +1,16 @@
 # CondoManager - Especificaciones Técnicas (Spec-Driven Development de Nivel Empresarial)
 
+## Avance de implementación: prorrateo detallado (0018)
+
+Catálogo contextual, llenado por conceptos, versionado del borrador, aprobación
+con snapshot y emisión jerárquica implementados. Reporte por edificio con
+previsualización y descarga PDF/DOCX de la misma versión, incluido BORRADOR y
+anexo administrativo de cargos/centavos. El residente no recibe anexos ajenos.
+El catálogo se registra explícitamente desde la interfaz; no se sembraron gastos
+ni fondos históricos. La migración 0018 no se ha aplicado a la base de la aplicación.
+Motor diario/reconstrucción bancaria y cobertura con fondos de moras siguen
+pendientes; no se habilitan por la existencia del reporte.
+
 Bienvenido a la documentación técnica oficial de **CondoManager**, estructurada bajo una disciplina rigurosa de **Desarrollo Guiado por Especificaciones (Spec-Driven Development - SDD)**.
 
 En este repositorio, las especificaciones técnicas representan la **fuente única de verdad (Single Source of Truth)**. Ningún código se implementa sin un contrato y especificación previa aprobada.

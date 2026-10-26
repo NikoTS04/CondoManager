@@ -41,9 +41,9 @@ class LoteCuotas(Base):
 
     __table_args__ = (
         UniqueConstraint("condominio_id", "periodo", name="uq_lote_condominio_periodo"),
-        CheckConstraint("monto_total_facturado > 0", name="ck_lote_monto"),
+        CheckConstraint("monto_total_facturado >= 0", name="ck_lote_monto"),
         CheckConstraint("total_cuotas_emitidas > 0", name="ck_lote_cantidad"),
-        CheckConstraint("metodo IN ('POR_ALICUOTA', 'EQUITATIVA')", name="ck_lote_metodo"),
+        CheckConstraint("metodo IN ('POR_ALICUOTA', 'EQUITATIVA', 'JERARQUICA')", name="ck_lote_metodo"),
     )
 
 
@@ -87,6 +87,7 @@ class CuotaMantenimiento(Base):
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="EMITIDA")
     dias_gracia_aplicados: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     politica_mora_aplicada: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    detalle_prorrateo: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     @property
     def monto_pendiente(self) -> Decimal:

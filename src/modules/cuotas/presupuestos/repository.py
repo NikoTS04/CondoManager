@@ -8,12 +8,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.models_audit import AuditoriaLogORM
-from src.modules.condominios.models import Condominio
+from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.cuotas.presupuestos.exceptions import PresupuestoPeriodoDuplicadoError
-from src.modules.cuotas.presupuestos.models import PresupuestoMensual
+from src.modules.cuotas.presupuestos.models import ConceptoPresupuestal, PresupuestoMensual
+from src.modules.cuotas.prorrateo import calcular_prorrateo
+from src.modules.cuotas.prorrateo_schemas import ItemPresupuesto
 
 
 class PresupuestoRepository(Protocol):
+    async def preparar_detalle(self, condominio_id: UUID, items: list) -> dict: ...
     async def obtener_condominio(self, condominio_id: UUID) -> Condominio | None: ...
 
     async def obtener_por_id(
@@ -53,7 +56,7 @@ class SQLAlchemyPresupuestoRepository:
 
     async def obtener_condominio(self, condominio_id: UUID) -> Condominio | None:
         resultado = await self._session.execute(
-            select(Condominio).where(Condominio.id == condominio_id)
+            select(Condominio).where(Condominio.id == condominio_id).with_for_update()
         )
         return resultado.scalar_one_or_none()
 
@@ -68,9 +71,24 @@ class SQLAlchemyPresupuestoRepository:
         if condominio_id is not None:
             consulta = consulta.where(PresupuestoMensual.condominio_id == condominio_id)
         if bloquear:
+            cid = await self._session.scalar(select(PresupuestoMensual.condominio_id).where(
+                PresupuestoMensual.id == presupuesto_id,
+                *([PresupuestoMensual.condominio_id == condominio_id] if condominio_id is not None else []),
+            ))
+            if cid is None:
+                return None
+            await self.obtener_condominio(cid)
             consulta = consulta.with_for_update()
-        resultado = await self._session.execute(consulta)
+        resultado = await self._session.execute(consulta.execution_options(populate_existing=True))
         return resultado.scalar_one_or_none()
+
+    async def preparar_detalle(self, condominio_id, items):
+        edificios = list(await self._session.scalars(select(Edificio).where(Edificio.condominio_id == condominio_id).order_by(Edificio.id)))
+        departamentos = list(await self._session.scalars(
+            select(Departamento).join(Edificio).where(Edificio.condominio_id == condominio_id, Departamento.activo.is_(True)).order_by(Departamento.id)
+        ))
+        conceptos = list(await self._session.scalars(select(ConceptoPresupuestal).where(ConceptoPresupuestal.condominio_id == condominio_id)))
+        return calcular_prorrateo([ItemPresupuesto.model_validate(i) for i in items], edificios, departamentos, {c.id: c for c in conceptos})
 
     async def obtener_por_condominio_periodo(
         self, condominio_id: UUID, periodo: str

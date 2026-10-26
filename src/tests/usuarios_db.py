@@ -47,6 +47,7 @@ REVISIONES_API = (
     "20261021_0015_alertas_notificaciones",
     "20261024_0016_politica_mora_diaria",
     "20261024_0017_condiciones_pago",
+    "20261025_0018_prorrateo_detallado",
 )
 
 

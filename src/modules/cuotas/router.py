@@ -34,7 +34,7 @@ async def departamentos_del_portal(
 async def emitir_lote_cuotas(
     request: EmitirLoteRequest,
     user: Annotated[dict[str, Any], Depends(require_presupuesto_user)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session, use_cache=False)],
 ):
     if not user.get("sub") or not user.get("rol"):
         raise APIError(401, "TOKEN_INVALIDO", "Faltan identidad o rol en el token.")

@@ -1,5 +1,12 @@
 # Catálogo de eventos — Contrato del Sprint 2 / CON-72
 
+Prorrateo detallado: `CuotasEmitidasEvent` con `schema_version: 2` y método
+`JERARQUICA`, validado por
+[`cuotas-prorrateo-emitidas.v2.schema.json`](schemas/cuotas-prorrateo-emitidas.v2.schema.json).
+El productor legacy conserva su payload y esquema originales. Notificaciones
+acepta ambos y deduplica el mismo event_id; instalar consumidor compatible antes
+de habilitar productor detallado. No se reescriben envelopes persistidos.
+
 Extensión financiera objetivo (no implementada): [eventos y transacciones](../../05-api/prorrateo-mora-reportes.md#5-eventos-y-transacciones).
 Devengo diario se identifica por cuota/fecha local. Fondos, ajustes y versiones
 de reporte mantienen auditoría y outbox; payloads nuevos requieren versionado

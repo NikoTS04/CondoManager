@@ -1,9 +1,15 @@
 # Contratos de API y Especificación OpenAPI (API Contracts)
 
-Ampliación financiera objetivo 2026-10-24, **pendiente de implementación**:
+Ampliación financiera, estado de implementación al 2026-10-25:
 [prorrateo, mora diaria editable, fondos, PDF/DOCX y visor](prorrateo-mora-reportes.md).
 Prevalece sobre ejemplos previos de día 20, gracia 2 o descarga exclusivamente
-como adjunto. Las rutas nuevas están documentadas como objetivo, no desplegadas.
+como adjunto. Configuración de política y excepciones, visor privado, catálogo,
+presupuesto detallado versionado, aprobación con snapshot, emisión jerárquica y
+reporte PDF/DOCX implementados; migración 0018 aún no aplicada a la base de la
+aplicación. Mora diaria persistente, conciliación retroactiva y fondos pendientes.
+Los contratos del prorrateo se publican en OpenAPI 2.2.0 y sus fragmentos
+`prorrateo.paths.yaml` / `prorrateo.schemas.yaml`; la emisión detallada publica
+`CuotasEmitidasEvent` v2, manteniendo intacto el evento legacy.
 
 Base de implementación del Sprint 2: [CON-72 — contratos por historia](sprint-2-contratos.md). La guía reúne los acuerdos y enlaza OpenAPI y eventos. El OpenAPI describe el contrato objetivo y distingue operaciones pendientes/parciales; su publicación no implica que los endpoints estén implementados.
 

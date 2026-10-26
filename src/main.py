@@ -18,6 +18,7 @@ from src.modules.condominios.estructura.router import router as estructura_route
 from src.modules.condominios.router import router as condominios_router
 from src.modules.cuotas.distribucion.router import router as distribucion_router
 from src.modules.cuotas.presupuestos.router import router as presupuestos_router
+from src.modules.cuotas.prorrateo_api import router as prorrateo_router
 from src.modules.cuotas.router import router as cuotas_router
 from src.modules.notificaciones.router import router as notificaciones_router
 from src.modules.pagos.router import router as pagos_router
@@ -54,6 +55,7 @@ app.include_router(condiciones_pago_router, prefix="/api/v1")
 app.include_router(estructura_router, prefix="/api/v1")
 app.include_router(cuotas_router, prefix="/api/v1")
 app.include_router(presupuestos_router, prefix="/api/v1")
+app.include_router(prorrateo_router, prefix="/api/v1")
 app.include_router(distribucion_router, prefix="/api/v1")
 app.include_router(pagos_router, prefix="/api/v1")
 app.include_router(reservas_router, prefix="/api/v1")

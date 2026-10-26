@@ -27,7 +27,6 @@ from src.modules.condominios.models import Departamento, Edificio
 from src.modules.cuotas.distribucion.models import ConfiguracionDistribucion
 from src.modules.cuotas.emision import EmisionCuotasService
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, LoteCuotas
-from src.modules.cuotas.presupuestos.models import PresupuestoMensual
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor
 from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorService
 from src.modules.cuotas.schemas import EmitirLoteRequest
@@ -104,20 +103,13 @@ async def preparar(factory, *, metodo="EQUITATIVA", estado="APROBADO", total="10
             ), {"id": id, "eid": eid, "numero": str(i + 1),
                 "coeficiente": Decimal("33.3334" if i == 0 else "33.3333"),
                 "saldo": Decimal("40.00" if i == 0 else "0.00"), "activo": i < 3})
-        session.add(
-            PresupuestoMensual(
-                id=uuid4(),
-                condominio_id=cid,
-                periodo="2026-10",
-                moneda="PEN",
-                monto_total=Decimal(total),
-                fecha_vencimiento=date(2026, 10, 20),
-                estado=estado,
-                creado_por="prueba",
-                aprobado_por="prueba" if estado == "APROBADO" else None,
-                aprobado_en=None if estado != "APROBADO" else datetime.now(UTC),
-            )
-        )
+        await session.execute(text(
+            "INSERT INTO presupuestos_mensuales (id,condominio_id,periodo,moneda,monto_total,"
+            "fecha_vencimiento,estado,creado_por,aprobado_por,aprobado_en) "
+            "VALUES (:id,:cid,'2026-10','PEN',:total,'2026-10-20',:estado,'prueba',:actor,:fecha)"
+        ), {"id": uuid4(), "cid": cid, "total": Decimal(total), "estado": estado,
+            "actor": "prueba" if estado == "APROBADO" else None,
+            "fecha": datetime.now(UTC) if estado == "APROBADO" else None})
         session.add(
             ConfiguracionDistribucion(
                 id=uuid4(),

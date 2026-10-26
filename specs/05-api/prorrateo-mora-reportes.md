@@ -93,6 +93,59 @@ sin identificador, incluso para comprobantes anteriores al registro de revisione
 
 ## 2. Presupuesto detallado y reporte
 
+Implementado en la tercera entrega (0018): catálogo, ítems, reparto, snapshot,
+emisión, previsualización y PDF/DOCX. El catálogo se llena explícitamente; no se
+importó ni aprobó automáticamente septiembre. Las asignaciones explícitas y
+valores de origen se admiten por API; la interfaz facilita los repartos por
+pisos y directo, sin un editor avanzado de asignaciones manuales.
+La cobertura con fondos, revisión posterior de presupuestos aprobados y motor
+diario/reconstrucción bancaria permanecen pendientes de implementación.
+
+### Contrato de la tercera entrega
+
+POST/PUT admiten `items` y `version_esperada`. Sin items se conserva el contrato
+legacy (total positivo obligatorio). Con items, el servidor calcula el total;
+un total de control enviado debe coincidir. Se admite total cero, nunca cuotas
+negativas. PUT de un presupuesto detallado y su aprobación exigen la versión
+vigente; aprobación usa query `version_esperada`. No se permite convertir
+silenciosamente un presupuesto detallado en uno legacy omitiendo sus ítems.
+
+Cada ítem conserva UUID, `concepto_id`, sección, importe del periodo, cargo/abono,
+referencias y método POR_PISOS / DIRECTO_EDIFICIO / ASIGNACION_EXPLICITA. El último
+requiere importes por edificio, motivo y documento. El método unitario es
+EQUITATIVA (default) o POR_ALICUOTA, normalizado dentro de cada edificio. El padrón
+aprobado debe coincidir con el activo al emitir; si cambió se rechaza la emisión,
+no se redistribuyen importes históricos. No se confunde este método jerárquico
+con una tercera modalidad global de alícuotas: el lote usa `JERARQUICA`.
+
+El catálogo persistido se consulta/crea con GET/POST
+`/condominios/{id}/conceptos-presupuestales`. Código estable único por condominio,
+categoría, descripción y estado activo. Auditor solo consulta. Ítems solo admiten
+conceptos activos del mismo condominio. La cobertura con moras distinta de cero
+se rechaza mientras no esté integrado el fondo conciliado.
+
+Persistencia mínima: catálogo relacional; ítems ordenados JSONB en el presupuesto,
+snapshot JSONB congelado al aprobar y detalle JSONB por cuota. Reemplaza las tablas
+separadas de ítems/asignaciones propuestas inicialmente: el agregado mensual se
+guarda transaccionalmente, su versión y auditoría conservan el historial sin
+mantener dos representaciones editables del mismo detalle. No se generan nuevos
+versionados de un presupuesto aprobado en esta entrega; correcciones posteriores
+requieren el proceso de ajuste todavía pendiente.
+
+GET `/presupuestos/{id}/prorrateo` permite previsualizar el borrador con datos
+actuales o consultar el snapshot aprobado, filtrando `edificio_id`. Residente
+solo consulta versión aprobada y edificio al que está vinculado actualmente;
+sin anexo individual de otros departamentos. PDF/DOCX se exportan desde
+el mismo reporte autorizado, no desde otro presupuesto paralelo.
+
+La exportación implementada usa `version` explícita positiva, `formato=pdf|docx`
+y `edificio_id` opcional para administración (obligatorio para residente). La
+versión se comprueba al capturar los datos autorizados; una diferencia responde
+409. Generación en memoria con ReportLab/python-docx, sin archivos públicos.
+Exportación fallida responde 503 sin modificar el presupuesto ni emitir cuotas.
+Las descripciones públicas deben evitar datos personales: el residente recibe
+solo el subconjunto público del reporte de su propio edificio.
+
 Extender POST/PUT de presupuestos con `items`. El borrador conserva UUID de ítems;
 no se identifican por código origen. Cada ítem contiene campos del dominio,
 método de asignación, referencias y, si corresponde, cronograma de financiación.
@@ -106,10 +159,10 @@ periodo. No aceptar montos sustitutivos desde la emisión.
 Para presupuestos históricos sin ítems se mantiene lectura/emisión bajo su
 contrato anterior. Una nueva emisión detallada valida y consume el desglose,
 sin cambiar la unicidad del lote condominio/periodo ni cuota departamento/periodo.
-El cambio de request debe versionarse explícitamente en la futura implementación;
-no afirmar que clientes actuales ya soportan esta estructura.
+La ampliación del request está publicada en OpenAPI 2.2.0; la interfaz de Junta
+admite ítems y versión sin exigir cambios a clientes legacy sin detalle.
 
-Ejemplo de asignación calculada (no entrada de totales):
+Ejemplo objetivo de asignación con fondos (pendiente, no entrada aceptada actualmente):
 
 ```json
 {
@@ -170,6 +223,13 @@ La evidencia de egresos requiere un contrato privado equivalente, limitado a
 tesorería/auditoría; no se expone con el endpoint de pagos de residentes.
 
 ## 4. Persistencia objetivo (no migración)
+
+Decisión implementada en 0018: `conceptos_presupuestales` relacional;
+`presupuestos_mensuales.items`, `prorrateo_snapshot` y `cuotas_mantenimiento.detalle_prorrateo`
+JSONB; `presupuestos_mensuales.version` entero positivo. Las entidades separadas
+de ítems/asignaciones/detalles/versiones en la tabla de diseño inicial siguiente
+quedan sustituidas por este agregado auditado; fondos y devengos siguen como
+diseño pendiente, no como tablas ya creadas.
 
 | Entidad | Adición / restricción |
 |---|---|

@@ -188,6 +188,54 @@ export interface DatosPresupuestoPayload {
   moneda: Moneda;
   monto_total: string;
   fecha_vencimiento: string;
+  items?: ItemPresupuesto[] | null;
+  version_esperada?: number;
+}
+
+export interface ConceptoPresupuestal {
+  id: string; condominio_id: string; codigo: string; categoria: string; descripcion: string; activo: boolean;
+}
+
+export interface ItemPresupuesto {
+  id: string; concepto_id: string; monto_periodo: string; tipo_movimiento: "CARGO" | "ABONO";
+  seccion: "AACC" | "EDIFICIO" | "CRONOGRAMA_AACC";
+  metodo_asignacion: "POR_PISOS" | "DIRECTO_EDIFICIO" | "ASIGNACION_EXPLICITA";
+  metodo_unitario?: "EQUITATIVA" | "POR_ALICUOTA";
+  edificio_id?: string | null; descripcion?: string; codigo_origen?: string;
+  observacion_origen?: string; referencia_servicio?: string; referencia_documento?: string;
+  asignaciones_explicitas?: Record<string, string>; motivo_asignacion?: string;
+  monto_origen_condominio?: string | null; monto_origen_edificio?: string | null; monto_unitario_origen?: string | null;
+  obligacion_referencia?: string; numero_cuota?: number | null; total_cuotas?: number | null;
+  monto_total_obligacion?: string | null; monto_cubierto_moras?: string;
+}
+
+export function listarConceptosPresupuestales(cid: string): Promise<ConceptoPresupuestal[]> {
+  return recursoRequest(`/condominios/${encodeURIComponent(cid)}/conceptos-presupuestales`);
+}
+export function crearConceptoPresupuestal(cid: string, datos: { codigo: string; categoria: string; descripcion: string }): Promise<ConceptoPresupuestal> {
+  return recursoRequest(`/condominios/${encodeURIComponent(cid)}/conceptos-presupuestales`, { method: "POST", body: JSON.stringify(datos) });
+}
+export interface ReporteProrrateo {
+  version: number; estado: string; monto_total: string;
+  edificios: { id: string; nombre: string; pisos: number }[];
+  items: { id: string; codigo: string; descripcion: string; seccion: string; monto_periodo: string;
+    tipo_movimiento: string; metodo_asignacion: string;
+    asignaciones: { edificio_id: string; monto: string; unitario: string; unidades: number }[] }[];
+}
+export function consultarProrrateo(id: string): Promise<ReporteProrrateo> {
+  return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/prorrateo`);
+}
+
+export async function exportarProrrateo(id: string, version: number, formato: "pdf" | "docx", edificioId: string): Promise<void> {
+  const query = new URLSearchParams({ version: String(version), formato, edificio_id: edificioId });
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/prorrateo/exportar?${query}`, { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error(obtenerMensajeError(await response.json(), "No se pudo generar el reporte."));
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `Prorrateo-${id}-${edificioId}-v${version}.${formato}`;
+  document.body.appendChild(enlace); enlace.click(); enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
@@ -195,6 +243,7 @@ export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
 }
 
 export interface PresupuestoMensual extends CrearPresupuestoPayload {
+  version: number;
   id: string;
   estado: EstadoPresupuesto;
   creado_por: string;
@@ -607,10 +656,10 @@ export async function actualizarPresupuesto(
 }
 
 export async function aprobarPresupuesto(
-  presupuestoId: string
+  presupuestoId: string, version?: number
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetchProtegido(`/presupuestos/${presupuestoId}/aprobar`, {
+    const response = await fetchProtegido(`/presupuestos/${presupuestoId}/aprobar${version === undefined ? "" : `?version_esperada=${version}`}`, {
       method: "POST",
       headers: getAuthHeaders(),
     });

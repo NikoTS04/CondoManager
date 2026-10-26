@@ -43,6 +43,10 @@ async def consumir(session_factory, payload):
         tipo = payload["event_type"]
         modelo, plantilla = TIPOS[tipo]
         eid = UUID(payload["event_id"])
+        if modelo is EventoLoteOutbox:
+            version = payload.get("schema_version", 1)
+            if version not in (1, 2) or (version == 2 and payload.get("data", {}).get("metodo") != "JERARQUICA"):
+                raise ValueError("VERSION_CUOTAS_NO_SOPORTADA")
         if modelo is EventoPagoOutbox:
             canonico = "schema_version" in payload
             if payload.get("schema_version" if canonico else "version") != 1:

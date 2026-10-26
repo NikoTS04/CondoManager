@@ -1,5 +1,11 @@
 # Aceptación objetivo: prorrateo, moras, reportes y evidencia
 
+Tercera entrega: `src/tests/unit/test_prorrateo.py` verifica pisos, 139 unidades,
+abonos, centavos y límites; `src/tests/integration/test_prorrateo_db.py` prueba
+catálogo, versiones, snapshot, emisión, privacidad, eventos v2 y exportación en
+PostgreSQL. `src/tests/unit/test_documentos_prorrateo.py` abre PDF/DOCX y verifica
+importes, estado y versión. Fondos y mora diaria siguen pendientes.
+
 Escenarios documentales **pendientes de automatización e implementación**; no son
 pruebas ya ejecutables. Regla: [dominio](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 
@@ -88,6 +94,16 @@ Característica: Mora diaria por cuota mensual y fecha bancaria
     Y reprocesar no renueva indefinidamente la pausa
 
 Característica: Reparto por pisos y unidades
+  Escenario: Presupuesto detallado aprobado no se altera al emitir
+    Dado un presupuesto detallado aprobado con snapshot de conceptos y padrón
+    Cuando cambia el padrón de unidades activas antes de emitir
+    Entonces se rechaza la emisión sin redistribuir ni crear cuotas parciales
+
+  Escenario: Total distribuible cero
+    Dado cargos y abonos que se compensan exactamente sin cargos individuales negativos
+    Cuando se aprueba y emite el presupuesto detallado
+    Entonces se conservan el detalle y las cuotas de bruto cero pagadas sin consumir créditos
+
   Escenario: Cuatro edificios con pesos exactos
     Dado edificios con 14, 14, 10 y 10 pisos y gasto común de 4800.00
     Cuando se calcula POR_PISOS

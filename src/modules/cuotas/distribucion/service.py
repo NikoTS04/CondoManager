@@ -34,6 +34,23 @@ from src.shared.decimal_types import (
 )
 
 
+def cerrar_centavos(montos: dict[UUID, Decimal], total: Decimal) -> dict[UUID, Decimal]:
+    """Cierre determinista sin float ni cargos negativos; requiere importes redondeados."""
+    resultado = dict(montos)
+    diferencia = total - sum(resultado.values(), Decimal("0.00"))
+    orden = sorted(resultado, key=lambda id: (-resultado[id], id.int))
+    paso = Decimal("0.01") if diferencia > 0 else Decimal("-0.01")
+    while diferencia:
+        for id in orden:
+            if paso < 0 and resultado[id] == 0:
+                continue
+            resultado[id] += paso
+            diferencia -= paso
+            if not diferencia:
+                break
+    return resultado
+
+
 @dataclass(frozen=True)
 class ActorDistribucion:
     id: str

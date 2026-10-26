@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from src.core.audit import AuditoriaPayload
+from src.core.errors import APIError
 from src.core.models_audit import AuditoriaLogORM
 from src.modules.cuotas.presupuestos.exceptions import (
     AccesoPresupuestoDenegadoError,
@@ -48,6 +49,9 @@ class PresupuestosService:
         if condominio is None:
             raise CondominioNoEncontradoError(request.condominio_id)
         self._validar_moneda(request.moneda.value, condominio.moneda)
+        items = [i.model_dump(mode="json") for i in request.items] if request.items is not None else None
+        if items is not None:
+            await self._repository.preparar_detalle(request.condominio_id, items)
 
         existente = await self._repository.obtener_por_condominio_periodo(
             request.condominio_id,
@@ -72,6 +76,7 @@ class PresupuestosService:
             aprobado_por=None,
             aprobado_en=None,
             actualizado_en=ahora,
+            version=1, items=items,
         )
         auditoria = await self._crear_auditoria(
             presupuesto=presupuesto,
@@ -113,6 +118,17 @@ class PresupuestosService:
             )
 
         estado_anterior = self._serializar(presupuesto)
+        if presupuesto.items is not None or request.items is not None:
+            self._validar_version(presupuesto, request.version_esperada)
+        elif request.version_esperada is not None:
+            self._validar_version(presupuesto, request.version_esperada)
+        if presupuesto.items is not None and request.items is None:
+            raise APIError(422, "DETALLE_REQUERIDO", "No omita los ítems de un presupuesto detallado.")
+        items = [i.model_dump(mode="json") for i in request.items] if request.items is not None else None
+        if items is not None:
+            await self._repository.preparar_detalle(presupuesto.condominio_id, items)
+        presupuesto.items = items
+        presupuesto.version = (presupuesto.version or 1) + 1
         presupuesto.periodo = request.periodo
         presupuesto.moneda = request.moneda.value
         presupuesto.monto_total = request.monto_total
@@ -133,6 +149,7 @@ class PresupuestosService:
         self,
         presupuesto_id: UUID,
         actor: ActorPresupuesto,
+        version_esperada: int | None = None,
     ) -> PresupuestoMensual:
         self._asegurar_rol(actor, escritura=True)
         presupuesto = await self._obtener_por_id(presupuesto_id, actor)
@@ -144,6 +161,14 @@ class PresupuestosService:
             )
 
         estado_anterior = self._serializar(presupuesto)
+        if presupuesto.items is not None or version_esperada is not None:
+            self._validar_version(presupuesto, version_esperada)
+        if presupuesto.items is not None:
+            snapshot = await self._repository.preparar_detalle(presupuesto.condominio_id, presupuesto.items)
+            if snapshot["monto_total"] != f"{presupuesto.monto_total:.2f}":
+                raise APIError(409, "PRESUPUESTO_DESCUADRADO", "El detalle no coincide con el total.")
+            presupuesto.prorrateo_snapshot = snapshot
+        presupuesto.version = (presupuesto.version or 1) + 1
         ahora = datetime.now(UTC)
         presupuesto.estado = EstadoPresupuesto.APROBADO.value
         presupuesto.aprobado_por = actor.id
@@ -284,9 +309,17 @@ class PresupuestosService:
         )
 
     @staticmethod
+    def _validar_version(presupuesto, version):
+        if version != (presupuesto.version or 1):
+            raise APIError(409, "PRESUPUESTO_VERSION_OBSOLETA", "Recargue el presupuesto antes de modificar o aprobar.")
+
+    @staticmethod
     def _serializar(presupuesto: PresupuestoMensual) -> dict[str, Any]:
         return {
             "id": str(presupuesto.id),
+            "version": presupuesto.version or 1,
+            "items": presupuesto.items,
+            "prorrateo_snapshot": presupuesto.prorrateo_snapshot,
             "condominio_id": str(presupuesto.condominio_id),
             "periodo": presupuesto.periodo,
             "moneda": presupuesto.moneda,
