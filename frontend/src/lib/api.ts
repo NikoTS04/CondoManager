@@ -220,7 +220,43 @@ export interface ReporteProrrateo {
   edificios: { id: string; nombre: string; pisos: number }[];
   items: { id: string; codigo: string; descripcion: string; seccion: string; monto_periodo: string;
     tipo_movimiento: string; metodo_asignacion: string;
-    asignaciones: { edificio_id: string; monto: string; unitario: string; unidades: number }[] }[];
+    asignaciones: { edificio_id: string; monto: string; monto_bruto?: string; monto_cubierto_moras?: string; unitario: string; unidades: number }[] }[];
+  fondos_moras?: ResumenFondoMoras[];
+}
+
+export interface ResumenFondoMoras {
+  edificio_id: string; periodo: string; moneda: Moneda; capturado_en: string;
+  saldo_disponible: string; saldo_reservado: string; total_aplicado: string;
+  saldo_disponible_inicial: string; cobros_netos_periodo: string; reservas_periodo: string;
+  cobros_confirmados_periodo: string; reversos_cobro_periodo: string; aplicaciones_confirmadas_periodo: string;
+  liberaciones_periodo: string; saldo_disponible_final: string; mora_pendiente_cobro: string;
+  movimientos?: { id: string; tipo: string; importe: string; fecha_local: string }[];
+}
+export interface AplicacionMoras {
+  id: string; presupuesto_id: string; item_id: string; edificio_id: string; monto: string;
+  motivo: string; estado: "RESERVADA" | "CONFIRMADA" | "LIBERADA"; creado_en: string;
+}
+export function consultarFondoMoras(eid: string, periodo: string): Promise<ResumenFondoMoras> {
+  return recursoRequest(`/edificios/${encodeURIComponent(eid)}/fondos-moras?periodo=${encodeURIComponent(periodo)}`);
+}
+export function listarAplicacionesMoras(id: string): Promise<AplicacionMoras[]> {
+  return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras`);
+}
+export async function reservarMoras(id: string, clave: string, payload: {
+  version_esperada: number; item_id: string; edificio_id: string; monto: string; motivo: string;
+}): Promise<AplicacionMoras> {
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras`, {
+    method: "POST", headers: { ...getAuthHeaders(), "Idempotency-Key": clave }, body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo reservar el fondo."));
+  return data as AplicacionMoras;
+}
+export async function liberarMoras(id: string, aplicacionId: string, version: number): Promise<void> {
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras/${encodeURIComponent(aplicacionId)}?version_esperada=${version}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(obtenerMensajeError(await response.json(), "No se pudo liberar la reserva."));
 }
 export function consultarProrrateo(id: string): Promise<ReporteProrrateo> {
   return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/prorrateo`);

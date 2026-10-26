@@ -49,6 +49,8 @@ def test_renderizado_todas_las_plantillas():
         "saldo_restante": str(Decimal("0.00")),
         "motivo_rechazo": "Comprobante no visible",
         "monto_mora": str(Decimal("20.00")),
+        "fecha_local": "2026-10-11",
+        "tipo_movimiento": "Cargo",
         "nuevo_saldo": str(Decimal("170.00")),
         "aviso_bloqueo_reservas": "Inhabilitado para reservar",
         "area": "Zona de Parrilla 1",

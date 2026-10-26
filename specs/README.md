@@ -1,5 +1,35 @@
 # CondoManager - Especificaciones Técnicas (Spec-Driven Development de Nivel Empresarial)
 
+## Avance de implementación: fondos y cobertura (0020)
+
+Fondos por edificio/moneda desde cobros conciliados, reservas versionadas para
+gastos, liberación y confirmación sin doble descuento integrados en interfaz,
+aprobación, emisión y PDF/DOCX. Retroactivos sin respaldo disponible se bloquean
+íntegramente. No se importa caja histórica ni se editan aprobados. Desplegar la
+migración y consumidor compatibles antes de activar productores. Solo se han
+aplicado migraciones a PostgreSQL aislado de pruebas, no a la base de la aplicación.
+
+### Verificación local del cierre
+
+- Suite completa: **639 pruebas aprobadas**, incluido PostgreSQL aislado,
+  concurrencia, rollback financiero, privacidad y migraciones protegidas.
+- TypeScript, ESLint y Ruff de archivos cambiados correctos. Ruff global conserva
+  38 hallazgos ajenos a estas entregas, no corregidos en este alcance.
+- Chromium de escritorio y móvil (390 px), con API simulada: reserva, liberación,
+  recálculo, aprobación y reporte. Se corrigió el desborde horizontal móvil;
+  la tabla conserva desplazamiento local accesible por teclado.
+- Los endpoints financieros se probaron aparte contra PostgreSQL real. La prueba
+  de navegador no acredita despliegue ni un recorrido contra la base de la aplicación.
+
+## Avance de implementación: mora diaria y fecha bancaria (0019)
+
+Nuevas emisiones diarias habilitadas con snapshot, cargos únicos por cuota/fecha,
+recuperación al arrancar y a las 00:05 de Lima, conciliación bancaria prospectiva
+y compensaciones inmutables. Recibos históricos y CON-13 no se reescriben; un
+déficit de crédito utilizado se bloquea hasta financiarlo expresamente. Ledger,
+auditoría y eventos v2 se confirman juntos. Fondos para gastos se integran en 0020.
+Migración 0019 probada solo en PostgreSQL aislado, no en la base de la aplicación.
+
 ## Avance de implementación: prorrateo detallado (0018)
 
 Catálogo contextual, llenado por conceptos, versionado del borrador, aprobación
@@ -8,8 +38,8 @@ previsualización y descarga PDF/DOCX de la misma versión, incluido BORRADOR y
 anexo administrativo de cargos/centavos. El residente no recibe anexos ajenos.
 El catálogo se registra explícitamente desde la interfaz; no se sembraron gastos
 ni fondos históricos. La migración 0018 no se ha aplicado a la base de la aplicación.
-Motor diario/reconstrucción bancaria y cobertura con fondos de moras siguen
-pendientes; no se habilitan por la existencia del reporte.
+Motor diario/reconstrucción bancaria se integran en 0019. La cobertura con fondos
+se integra en 0020, respaldada por caja real, no por la mera existencia del reporte.
 
 Bienvenido a la documentación técnica oficial de **CondoManager**, estructurada bajo una disciplina rigurosa de **Desarrollo Guiado por Especificaciones (Spec-Driven Development - SDD)**.
 
@@ -19,18 +49,13 @@ En este repositorio, las especificaciones técnicas representan la **fuente úni
 
 ## 1. Filosofía y Guardarraíles de SDD en CondoManager
 
-### Ampliación financiera 2026-10-24 (especificada, aún no implementada)
-Avance parcial: configuración de mora y visor privado implementados en la rama
-de trabajo; el resto de la ampliación financiera sigue pendiente. Ver
-[estado de la primera entrega](05-api/prorrateo-mora-reportes.md#avance-de-implementación--primera-entrega).
-Las migraciones 0016/0017 deben aplicarse explícitamente al entorno de destino
-antes de usar esta versión. Emisión MONTO_DIARIO bloqueada hasta integrar el motor contable.
-
-Segunda entrega: responsable por unidad, gracia individual y snapshot de política
-para nuevas cuotas implementados (migración 0017). Verificados en una instancia
-PostgreSQL temporal, incluida concurrencia y conservación de snapshots. No se han
-aplicado estas migraciones a la base de la aplicación. El motor diario continúa
-bloqueado; fondos/prorrateo y exportaciones todavía no están implementados.
+### Ampliación financiera 2026-10-24 (implementación por entregas)
+Configuración y visor (0016), responsable/gracia/snapshot (0017), prorrateo y
+reportes (0018), motor diario/fecha bancaria (0019), fondos/cobertura (0020). Ver
+[estado y límites de cada entrega](05-api/prorrateo-mora-reportes.md).
+Revisar y aplicar las migraciones explícitamente al entorno de destino antes de
+usar esta versión; no se han aplicado a la base de la aplicación. Instalar el
+consumidor compatible antes de activar el productor/worker diario.
 
 - [Prorrateo, catálogo, mora diaria y reportes](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 - [ADR-003: reparto por pisos](01-architecture/adr/ADR-003-prorrateo-por-pisos.md).

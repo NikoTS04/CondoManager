@@ -48,6 +48,8 @@ REVISIONES_API = (
     "20261024_0016_politica_mora_diaria",
     "20261024_0017_condiciones_pago",
     "20261025_0018_prorrateo_detallado",
+    "20261025_0019_motor_mora_diaria",
+    "20261025_0020_fondos_moras",
 )
 
 

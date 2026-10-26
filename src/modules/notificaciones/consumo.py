@@ -13,11 +13,16 @@ from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox
 from src.modules.notificaciones.models import EventoConsumido, IncidenciaEvento
 from src.modules.notificaciones.repository import NotificacionesRepository
 from src.modules.notificaciones.templates import PlantillaIncompletaError
+from src.modules.pagos.fondos_models import EventoFondoMorasOutbox
 from src.modules.pagos.models import ComprobantePago
+from src.modules.pagos.models_mora import EventoMoraOutbox
 from src.modules.pagos.models_persistencia import EventoPagoOutbox
 from src.modules.reservas.models import EventoReservaOutbox, Reserva
 
 TIPOS = {
+    "FondosMorasActualizadosEvent": (EventoFondoMorasOutbox, None),
+    "MoraAplicadaEvent": (EventoMoraOutbox, "NOTIF_MORA_DIARIA"),
+    "MoraAjustadaEvent": (EventoMoraOutbox, "NOTIF_MORA_DIARIA"),
     "CuotasEmitidasEvent": (EventoLoteOutbox, "NOTIF_EMISION_CUOTA"),
     "PagoReportadoEvent": (EventoPagoOutbox, "NOTIF_PAGO_RECIBIDO"),
     "PagoConciliadoEvent": (EventoPagoOutbox, "NOTIF_PAGO_CONCILIADO"),
@@ -60,6 +65,10 @@ async def consumir(session_factory, payload):
                 )
         if modelo is EventoReservaOutbox and payload.get("schema_version") != 1:
             raise ValueError("VERSION_RESERVA_NO_SOPORTADA")
+        if modelo is EventoMoraOutbox and payload.get("schema_version") != 2:
+            raise ValueError("VERSION_MORA_NO_SOPORTADA")
+        if modelo is EventoFondoMorasOutbox and payload.get("schema_version") != 1:
+            raise ValueError("VERSION_FONDOS_NO_SOPORTADA")
         async with session_factory() as db, db.begin():
             original = await db.get(modelo, eid)
             # El evento debe representar exactamente una operación ya confirmada.
@@ -82,6 +91,9 @@ async def consumir(session_factory, payload):
             condominio = await db.get(Condominio, cid)
             if condominio is None:
                 raise ValueError("CONTEXTO_EVENTO_INVALIDO")
+            if modelo is EventoFondoMorasOutbox:
+                # Evento interno de tesorería: se reconoce, no se envía deuda ajena a residentes.
+                return 0
             repo = NotificacionesRepository(db)
             if tipo == "CuotasEmitidasEvent":
                 cuotas = list(
@@ -108,6 +120,13 @@ async def consumir(session_factory, payload):
                     )
                     for c in cuotas
                 ]
+            elif modelo is EventoMoraOutbox:
+                did = UUID(data["departamento_id"])
+                operaciones = [(UUID(data["devengo_id"]), did, {
+                    "fecha_local": data["fecha_local"], "monto_mora": data["importe"],
+                    "nuevo_saldo": data["saldo_pendiente"], "moneda": data["moneda"],
+                    "tipo_movimiento": "Cargo" if tipo == "MoraAplicadaEvent" else "Ajuste",
+                })]
             else:
                 did = UUID(data["departamento_id"])
                 operacion = UUID(data.get("reserva_id") or data["comprobante_id"])

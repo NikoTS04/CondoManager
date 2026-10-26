@@ -104,6 +104,10 @@ paths:
                   monto_total: {$ref: './prorrateo.schemas.yaml#/schemas/Dinero'}
                   edificios: {type: array, items: {type: object}}
                   items: {type: array, items: {type: object}}
+                  fondos_moras:
+                    type: array
+                    description: Resumen sin movimientos privados, congelado al aprobar y filtrado al edificio autorizado.
+                    items: {$ref: './fondos-moras.schemas.yaml#/schemas/Resumen'}
         '403': {description: Ámbito ajeno o borrador consultado por residente}
         '404': {description: Presupuesto o edificio no encontrado}
         '409': {description: Presupuesto histórico sin desglose}

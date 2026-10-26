@@ -21,6 +21,7 @@ from src.modules.cuotas.presupuestos.router import router as presupuestos_router
 from src.modules.cuotas.prorrateo_api import router as prorrateo_router
 from src.modules.cuotas.router import router as cuotas_router
 from src.modules.notificaciones.router import router as notificaciones_router
+from src.modules.pagos.fondos_api import router as fondos_router
 from src.modules.pagos.router import router as pagos_router
 from src.modules.reservas.areas.router import router as areas_router
 from src.modules.reservas.router import router as reservas_router
@@ -58,6 +59,7 @@ app.include_router(presupuestos_router, prefix="/api/v1")
 app.include_router(prorrateo_router, prefix="/api/v1")
 app.include_router(distribucion_router, prefix="/api/v1")
 app.include_router(pagos_router, prefix="/api/v1")
+app.include_router(fondos_router, prefix="/api/v1")
 app.include_router(reservas_router, prefix="/api/v1")
 app.include_router(areas_router, prefix="/api/v1")
 app.include_router(notificaciones_router, prefix="/api/v1")

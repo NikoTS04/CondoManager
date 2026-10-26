@@ -276,7 +276,7 @@ paths:
     post:
       operationId: conciliarPago
       summary: Aprobar, observar o rechazar con resultado financiero persistido
-      description: Solo administración del contexto. Repetir el mismo resultado final devuelve la respuesta original sin otra imputación; una decisión distinta exige estado EN_REVISION.
+      description: Solo administración del contexto. Repetir el mismo resultado final devuelve el recibo original sin otra imputación; una decisión distinta exige estado EN_REVISION. En cuotas diarias reconstruye pagos nuevos por fecha bancaria y UUID, preservando recibos y registrando compensaciones. 422 FECHA_BANCARIA_FUTURA por fecha posterior a hoy en Lima; 409 CREDITO_RETROACTIVO_CONSUMIDO o FONDOS_MORAS_COMPROMETIDOS si la reconstrucción necesita saldo utilizado. El rechazo recupera los días postergados sin imputar el pago. La mora efectivamente cobrada se reconoce en su fondo por edificio, no el principal ni el crédito excedente.
       x-historias: [CON-34, CON-70]
       x-implementation-status: implementado
       requestBody:

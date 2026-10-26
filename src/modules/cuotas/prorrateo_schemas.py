@@ -86,8 +86,8 @@ class ItemPresupuesto(BaseModel):
 
     @model_validator(mode="after")
     def validar_asignacion(self):
-        if self.monto_cubierto_moras != 0:
-            raise ValueError("La cobertura requiere fondos de moras conciliados aún no integrados.")
+        if self.monto_cubierto_moras > self.monto_periodo or (self.tipo_movimiento == "ABONO" and self.monto_cubierto_moras):
+            raise ValueError("La cobertura no puede superar el cargo ni financiar un abono.")
         if (self.metodo_asignacion == "DIRECTO_EDIFICIO") != (self.edificio_id is not None):
             raise ValueError("Solo DIRECTO_EDIFICIO exige edificio_id.")
         if self.metodo_asignacion == "ASIGNACION_EXPLICITA":

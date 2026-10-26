@@ -126,7 +126,7 @@ class PresupuestosService:
             raise APIError(422, "DETALLE_REQUERIDO", "No omita los ítems de un presupuesto detallado.")
         items = [i.model_dump(mode="json") for i in request.items] if request.items is not None else None
         if items is not None:
-            await self._repository.preparar_detalle(presupuesto.condominio_id, items)
+            await self._repository.preparar_detalle(presupuesto.condominio_id, items, presupuesto.id)
         presupuesto.items = items
         presupuesto.version = (presupuesto.version or 1) + 1
         presupuesto.periodo = request.periodo
@@ -164,7 +164,8 @@ class PresupuestosService:
         if presupuesto.items is not None or version_esperada is not None:
             self._validar_version(presupuesto, version_esperada)
         if presupuesto.items is not None:
-            snapshot = await self._repository.preparar_detalle(presupuesto.condominio_id, presupuesto.items)
+            await self._repository.confirmar_coberturas(presupuesto, actor)
+            snapshot = await self._repository.preparar_detalle(presupuesto.condominio_id, presupuesto.items, presupuesto.id)
             if snapshot["monto_total"] != f"{presupuesto.monto_total:.2f}":
                 raise APIError(409, "PRESUPUESTO_DESCUADRADO", "El detalle no coincide con el total.")
             presupuesto.prorrateo_snapshot = snapshot

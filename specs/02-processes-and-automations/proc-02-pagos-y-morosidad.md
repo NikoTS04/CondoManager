@@ -36,6 +36,27 @@ Esta decisión sustituye únicamente el transporte S3 del voucher durante este p
 - Si la validación pasa, el comprobante queda en estado `EN_REVISION` y se notifica a la junta directiva para su conciliación bancaria.
 
 ### 4.2 Motor de Moras Automatizado
+Entrega 0019: habilitar nuevas emisiones MONTO_DIARIO con su snapshot completo.
+El worker de pagos recupera al arrancar y a las 00:05 de Lima los días hasta la
+fecha local actual (incluida). Nunca devenga antes de la emisión ni migra cuotas
+históricas sin snapshot diario. La pausa de revisión dura 24 h desde el reporte
+original, no desde el último intento o subsanación. No habilita reservas.
+
+Devengos únicos por cuota/fecha y compensaciones firmadas son inmutables. El
+motor reconstruye pagos nuevos de esta entrega por fecha bancaria y UUID para
+empates; las amortizaciones anteriores y CON-13 son una base histórica fija.
+Las imputaciones originales y revisiones siguen siendo recibos históricos;
+`conciliaciones_diarias` conserva el padrón de cuotas existentes al validar cada
+pago: un recálculo no reutiliza su excedente en cuotas emitidas después, ni aunque
+compartan fecha con la operación. CON-13 conserva sus amortizaciones originales.
+`movimientos_imputacion_diaria` registra componentes y deltas compensatorios
+(mora, extraordinaria, ordinaria y crédito). Su suma es la imputación vigente.
+Un retroactivo que reduzca crédito ya consumido se rechaza con 409
+`CREDITO_RETROACTIVO_CONSUMIDO`, sin cambios, hasta resolver su financiación.
+No se inventa saldo ni se redistribuyen amortizaciones históricas de CON-13.
+0020 integra fondos utilizables para gastos; ajustes administrativos manuales no
+están incluidos. El cobro anterior a esa adopción permanece como base no importada.
+
 - **Fecha de Corte:** Día 10 de cada mes a las 23:59:59 de Lima.
 - **Periodo de Gracia:** 0 por defecto; global o excepción del responsable de pago, fotografiada al emitir.
 - **Regla de Recargo:** Por cada cuota mensual con principal impago después del vencimiento y gracia:
@@ -47,6 +68,13 @@ Esta decisión sustituye únicamente el transporte S3 del voucher durante este p
   - Se inhabilita la capacidad del residente para solicitar reservas en áreas comunes (PROC-04).
 
 ### 4.3 Imputación de Pagos (Orden de Prelación)
+La aprobación valida que la fecha bancaria no sea futura. Con cuotas diarias,
+reconstruye devengos e imputaciones por componente antes de calcular el estado
+actual. La mora cesa al cubrir principal, no depende del estado textual ni cobra
+interés sobre sí misma. Rechazo/observación recuperan los días provisionalmente
+postergados. Nuevos eventos MoraAplicadaEvent/MoraAjustadaEvent v2 se confirman
+con el ledger y son consumidos idempotentemente; no cambian eventos anteriores.
+
 La fecha efectiva es la operación bancaria validada, no la aprobación. Regularizar
 devengos e imputaciones posteriores mediante ajustes auditados, sin borrar historia.
 Moras generadas son cuentas por cobrar; solo moras cobradas por pagos conciliados

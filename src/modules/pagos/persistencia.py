@@ -14,8 +14,10 @@ from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.pagos.contabilidad import CERO, MAX_MONEDA, plan_imputacion, saldo_en_mora
+from src.modules.pagos.fondos import FondosMorasService
 from src.modules.pagos.models import ComprobantePago, ImputacionPago
 from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutbox, RevisionPago
+from src.modules.pagos.mora_diaria import MoraDiariaService
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.pagos.schemas import (
     ComprobantePagoDTO,
@@ -274,33 +276,45 @@ class PagosPersistentesService:
             hoy = fecha_lima()
             anterior = {"estado": comprobante.estado, "saldo_a_favor": str(depto.saldo_a_favor)}
             total_aplicado, credito = CERO, CERO
+            if request.decision == "APROBADO" and comprobante.fecha_operacion > hoy:
+                raise APIError(422, "FECHA_BANCARIA_FUTURA", "La fecha bancaria no puede ser futura en Lima.")
+            motor = await MoraDiariaService(self.session).reconstruir(
+                depto, condominio, cuotas, usuario, hoy,
+                nuevo=comprobante if request.decision == "APROBADO" else None,
+                pausar_revision=False, ahora=ahora,
+            )
             if request.decision == "APROBADO":
-                plan = plan_imputacion(cuotas, comprobante.monto, hoy)
-                credito = plan["remanente"]
-                if depto.saldo_a_favor + credito > MAX_MONEDA:
-                    raise APIError(
-                        422, "SALDO_FUERA_DE_RANGO", "El saldo a favor excede el límite contable."
-                    )
-                for cuota in cuotas:
-                    aplicado = plan["aplicaciones"].get(cuota.id, CERO)
-                    if aplicado <= CERO:
-                        continue
-                    cuota.monto_pagado += aplicado
-                    if cuota.monto_pagado == cuota.monto_total_exigible:
-                        cuota.estado = "PAGADA"
-                    elif saldo_en_mora([cuota], condominio.dias_gracia, hoy) > CERO:
-                        cuota.estado = "EN_MORA"
-                    else:
-                        cuota.estado = "PAGO_PARCIAL"
-                    self.session.add(
-                        ImputacionPago(
-                            comprobante_id=id,
-                            cuota_id=cuota.id,
-                            monto_aplicado=aplicado,
+                if motor is not None:
+                    total_aplicado, credito = motor["monto_imputado"], motor["credito"]
+                else:
+                    plan = plan_imputacion(cuotas, comprobante.monto, comprobante.fecha_operacion)
+                    imputaciones = {}
+                    credito = plan["remanente"]
+                    if depto.saldo_a_favor + credito > MAX_MONEDA:
+                        raise APIError(
+                            422, "SALDO_FUERA_DE_RANGO", "El saldo a favor excede el límite contable."
                         )
-                    )
-                    total_aplicado += aplicado
-                depto.saldo_a_favor += credito
+                    for cuota in cuotas:
+                        aplicado = plan["aplicaciones"].get(cuota.id, CERO)
+                        if aplicado <= CERO:
+                            continue
+                        cuota.monto_pagado += aplicado
+                        if cuota.monto_pagado == cuota.monto_total_exigible:
+                            cuota.estado = "PAGADA"
+                        elif saldo_en_mora([cuota], condominio.dias_gracia, hoy) > CERO:
+                            cuota.estado = "EN_MORA"
+                        else:
+                            cuota.estado = "PAGO_PARCIAL"
+                        imputacion_id = uuid4()
+                        self.session.add(ImputacionPago(id=imputacion_id, comprobante_id=id,
+                                                        cuota_id=cuota.id, monto_aplicado=aplicado))
+                        imputaciones[id, cuota.id] = imputacion_id
+                        total_aplicado += aplicado
+                    depto.saldo_a_favor += credito
+                    await FondosMorasService(self.session).registrar_cobros(
+                        depto, condominio, {}, {(id, cid, "MORA"): importes[0]
+                            for cid, importes in plan["componentes"].items() if importes[0]},
+                        {}, usuario, legacy=imputaciones)
                 depto.estado_financiero = (
                     "EN_MORA"
                     if saldo_en_mora(cuotas, condominio.dias_gracia, hoy) > CERO

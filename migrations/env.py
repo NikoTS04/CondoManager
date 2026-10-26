@@ -24,7 +24,20 @@ from src.modules.notificaciones.models import (  # noqa: F401
     IntentoNotificacion,
     Notificacion,
 )
+from src.modules.pagos.fondos_models import (  # noqa: F401
+    AplicacionMoras,
+    CobroMoraFondo,
+    EventoFondoMorasOutbox,
+    MovimientoFondoMoras,
+)
 from src.modules.pagos.models import ComprobantePago, ImputacionPago  # noqa: F401
+from src.modules.pagos.models_mora import (  # noqa: F401
+    AjusteDevengoMora,
+    ConciliacionDiaria,
+    DevengoMora,
+    EventoMoraOutbox,
+    MovimientoImputacionDiaria,
+)
 from src.modules.pagos.models_persistencia import (  # noqa: F401
     ArchivoVoucher,
     EventoPagoOutbox,

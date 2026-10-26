@@ -7,6 +7,16 @@ from string import Formatter
 from typing import Any, Dict, Tuple
 
 PLANTILLAS_CONFIG = {
+    "NOTIF_MORA_DIARIA": {
+        "asunto": "CondoManager: {tipo_movimiento} de mora diaria",
+        "cuerpo": (
+            "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
+            "{tipo_movimiento} correspondiente al {fecha_local}: {moneda} {monto_mora}.\n"
+            "Saldo pendiente al registrar el movimiento: {moneda} {nuevo_saldo}.\n"
+            "Los ajustes conservan el historial y consideran la fecha bancaria validada.\n"
+            "Atentamente,\nAdministración"
+        ),
+    },
     "NOTIF_EMISION_CUOTA": {
         "asunto": "CondoManager: Emisión de cuota de mantenimiento - Periodo {periodo}",
         "cuerpo": (

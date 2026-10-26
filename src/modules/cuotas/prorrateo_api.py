@@ -97,7 +97,7 @@ async def consultar_prorrateo(presupuesto_id: UUID, edificio_id: UUID | None = N
             raise APIError(409, "PRESUPUESTO_SIN_DETALLE", "El presupuesto histórico no tiene detalle reconstruido.")
         if p.estado == "BORRADOR":
             p = await SQLAlchemyPresupuestoRepository(session).obtener_por_id(p.id, p.condominio_id, bloquear=True)
-        snapshot = deepcopy(p.prorrateo_snapshot) if p.prorrateo_snapshot is not None else await SQLAlchemyPresupuestoRepository(session).preparar_detalle(p.condominio_id, p.items)
+        snapshot = deepcopy(p.prorrateo_snapshot) if p.prorrateo_snapshot is not None else await SQLAlchemyPresupuestoRepository(session).preparar_detalle(p.condominio_id, p.items, p.id)
         if edificio_id is not None:
             snapshot["edificios"] = [e for e in snapshot["edificios"] if e["id"] == str(edificio_id)]
             if not snapshot["edificios"]:
@@ -108,6 +108,8 @@ async def consultar_prorrateo(presupuesto_id: UUID, edificio_id: UUID | None = N
                 item["asignaciones"] = [a for a in item["asignaciones"] if a["edificio_id"] == str(edificio_id)]
             snapshot["items"] = [i for i in snapshot["items"] if i["asignaciones"]]
             snapshot["monto_total"] = f"{sum((Decimal(m) for m in snapshot['cuotas'].values()), Decimal('0.00')):.2f}"
+            if "fondos_moras" in snapshot:
+                snapshot["fondos_moras"] = [f for f in snapshot["fondos_moras"] if f["edificio_id"] == str(edificio_id)]
         if residente:
             snapshot.pop("cuotas")
             for e in snapshot["edificios"]:

@@ -38,7 +38,9 @@ schemas:
       seccion: {enum: [AACC, EDIFICIO, CRONOGRAMA_AACC]}
       tipo_movimiento: {enum: [CARGO, ABONO], default: CARGO}
       monto_periodo: {$ref: '#/schemas/Dinero'}
-      monto_cubierto_moras: {const: '0.00', description: Fondos de moras todavía no integrados.}
+      monto_cubierto_moras:
+        $ref: '#/schemas/Dinero'
+        description: Calculado por servidor desde aplicaciones vigentes. Conservar al editar; no se acepta cobertura sin reserva ni en abonos.
       metodo_asignacion: {enum: [POR_PISOS, DIRECTO_EDIFICIO, ASIGNACION_EXPLICITA], default: POR_PISOS}
       metodo_unitario: {enum: [EQUITATIVA, POR_ALICUOTA], default: EQUITATIVA}
       edificio_id: {type: [string, 'null'], format: uuid}

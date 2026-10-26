@@ -40,6 +40,30 @@ Todo egreso debe imputarse obligatoriamente a una categoría presupuestal predef
 
 ### 4.1.1 Cobertura con moras cobradas
 
+Entrega 0020: ledger por edificio/moneda con cobros conciliados posteriores a la
+adopción, reservas para ítems y liberaciones. No se importa caja histórica ni se
+considera disponible el principal, crédito del residente o mora sin cobrar.
+Los cobros diarios conservan una base no adoptada por comprobante/cuota para no
+fabricar fondos a partir del ledger anterior. La atribución al edificio/moneda
+del cobro queda fija; un retroactivo compensa en ese mismo fondo.
+
+La reserva exige borrador detallado, versión vigente, Idempotency-Key y motivo.
+Reduce disponibilidad al instante; aprobación confirma sin descontar otra vez.
+Retirar cobertura solo libera reservas, nunca aplicaciones confirmadas. PUT del
+borrador no puede omitir ítems cubiertos ni alterar su cobertura arbitrariamente.
+Una corrección bancaria que dejaría disponibilidad negativa responde 409
+FONDOS_MORAS_COMPROMETIDOS y revierte toda la conciliación. Nuevos cobros reales
+o liberar otras reservas pueden resolver la insuficiencia; no hay ingreso manual
+sin sustento, transferencias entre edificios ni edición de cuotas emitidas.
+
+Saldo disponible = cobros netos - reservas vigentes - aplicaciones confirmadas.
+La reserva y liberación recalculan el neto del presupuesto, incrementan versión y
+auditan. Se resta cobertura después del reparto bruto entre edificios y antes
+del reparto unitario; no se traslada el beneficio a otra torre. Reportes guardan
+bruto/cobertura/distribuible y resumen de fondos capturado al aprobar.
+Fecha de reconocimiento de caja: confirmación local Lima; fecha bancaria del
+comprobante se conserva separada. El pago a proveedor sigue siendo otro hecho.
+
 Registrar por edificio y moneda moras cobradas, aplicaciones parciales/totales a
 gastos y saldo disponible. Solo pagos conciliados e imputados a mora financian
 gastos; moras devengadas no constituyen caja. Unitario cero conserva gasto y

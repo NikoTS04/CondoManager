@@ -91,17 +91,20 @@ async def test_no_permite_editar_a_roles_sin_permiso(rol):
 
 
 @pytest.mark.asyncio
-async def test_emision_diaria_bloqueada_hasta_integrar_motor():
+async def test_emision_diaria_continua_a_validar_presupuesto():
     from src.modules.cuotas.emision import EmisionCuotasService
     from src.modules.cuotas.saldos.service import ActorSaldoFavor
     from src.modules.cuotas.schemas import EmitirLoteRequest
 
     cid = uuid4()
     session = MagicMock()
-    session.scalar = AsyncMock(return_value=Condominio(id=cid, activo=True, regla_mora_tipo="MONTO_DIARIO"))
+    session.scalar = AsyncMock(side_effect=[Condominio(id=cid, activo=True, regla_mora_tipo="MONTO_DIARIO"), None])
+    resultado = MagicMock()
+    resultado.scalar_one_or_none.return_value = None
+    session.execute = AsyncMock(return_value=resultado)
     service = EmisionCuotasService(session)
     with pytest.raises(APIError) as exc:
         await service._emitir(EmitirLoteRequest(condominio_id=cid, periodo="2026-10"),
                              ActorSaldoFavor(str(uuid4()), "ADMIN_JUNTA", cid))
-    assert exc.value.error_code == "MOTOR_DIARIO_PENDIENTE"
+    assert exc.value.error_code == "PRESUPUESTO_NO_APROBADO"
     session.add.assert_not_called()

@@ -39,7 +39,7 @@ $$\mathbf{Paso\ 5:} \text{Si existe remanente } R > 0.00 \implies \text{departam
 ---
 
 ## 4. Motor de Moras y Reglas de Corte
-- **Regla objetivo:** [mora diaria y fecha bancaria](../01-cuotas/prorrateo-y-mora-diaria.md), pendiente de implementación; sustituye el corte UTC anterior.
+- **Regla vigente:** [mora diaria y fecha bancaria](../01-cuotas/prorrateo-y-mora-diaria.md), implementada prospectivamente en 0019; sustituye el corte UTC anterior sin adoptar políticas históricas supuestas. Fondos por edificio y cobertura de gastos integrados en 0020, sin importar efectivo histórico.
 - **Cron de Corte:** Diariamente a las 00:05 de `America/Lima`, con recuperación de fechas omitidas.
 - **Condición:** Fecha local posterior a vencimiento + gracia histórica efectiva
   y principal de la cuota impago, incluso si ya está EN_MORA. Vence el 10, gracia

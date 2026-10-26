@@ -45,7 +45,7 @@ export function ProrrateoEditor({ cid, items, onChange, disabled, moneda }: {
 
   return <section className="space-y-4 rounded-xl border border-line p-4" aria-label="Detalle del prorrateo">
     <h3 className="font-semibold">Conceptos y reparto</h3>
-    <p className="text-sm text-muted">Importes del periodo; los totales y ajustes de centavos se validan en el servidor. No se aceptan coberturas con moras sin fondos conciliados.</p>
+    <p className="text-sm text-muted">Importes brutos del periodo; los totales y centavos se validan en el servidor. Gestiona la cobertura en Fondos de moras cobradas después de guardar.</p>
     {error && <Alert tone="danger">{error}</Alert>}
     {!disabled && <>
       <details className="rounded border border-line p-3" onKeyDown={(event) => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault(); }}><summary className="cursor-pointer">Registrar un concepto nuevo</summary>
@@ -94,7 +94,8 @@ export function ProrrateoEditor({ cid, items, onChange, disabled, moneda }: {
             <Field label="Importe total de obligación"><MoneyInput moneda={moneda} value={item.monto_total_obligacion ?? ""} onValueChange={(v) => cambiar(item.id, { monto_total_obligacion: v })} /></Field>
           </>}
         </div>
-        {!disabled && <Button type="button" size="sm" variant="danger" onClick={() => onChange(items.filter((i) => i.id !== item.id))}>Quitar ítem del borrador</Button>}
+        {item.monto_cubierto_moras && item.monto_cubierto_moras !== "0.00" && <p className="text-sm text-muted">Cobertura registrada: {item.monto_cubierto_moras}. Las reservas se liberan en Fondos de moras; las coberturas confirmadas no se eliminan.</p>}
+        {!disabled && <Button type="button" size="sm" variant="danger" disabled={!!item.monto_cubierto_moras && item.monto_cubierto_moras !== "0.00"} onClick={() => onChange(items.filter((i) => i.id !== item.id))}>Quitar ítem del borrador</Button>}
       </fieldset>;
     })}
   </section>;

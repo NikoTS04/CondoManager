@@ -76,7 +76,7 @@ def test_dinero_en_limite_externo(valor):
 
 
 def test_no_permite_cobertura_ficticia_ni_asignacion_sin_sustento():
-    for cambios in ({"monto_cubierto_moras": "1.00"}, {"metodo_asignacion": "ASIGNACION_EXPLICITA", "asignaciones_explicitas": {uuid4(): "2.00"}}, {"numero_cuota": 2, "total_cuotas": 1}):
+    for cambios in ({"monto_cubierto_moras": "3.00"}, {"metodo_asignacion": "ASIGNACION_EXPLICITA", "asignaciones_explicitas": {uuid4(): "2.00"}}, {"numero_cuota": 2, "total_cuotas": 1}):
         with pytest.raises(ValidationError):
             ItemPresupuesto(concepto_id=uuid4(), seccion="AACC", monto_periodo="2.00", **cambios)
 
@@ -105,3 +105,29 @@ def test_total_servidor_no_acepta_control_inconsistente_ni_ids_repetidos():
 def test_textos_exportables_sin_controles_xml(texto):
     with pytest.raises(ValidationError):
         ItemPresupuesto(concepto_id=uuid4(), seccion="AACC", monto_periodo="1.00", descripcion=texto)
+
+
+def test_cobertura_requiere_reserva_y_solo_beneficia_edificio_destino():
+    edificios, departamentos, conceptos = padron()
+    request = item(conceptos, monto_cubierto_moras="1400.00")
+    with pytest.raises(APIError) as exc:
+        calcular_prorrateo([request], edificios, departamentos, conceptos)
+    assert exc.value.error_code == "COBERTURA_SIN_RESERVA"
+    reporte = calcular_prorrateo([request], edificios, departamentos, conceptos,
+                                 {(request.id, edificios[0].id): Decimal("1400.00")})
+    assert reporte["monto_total"] == "3400.00"
+    a = reporte["items"][0]["asignaciones"]
+    assert a[0]["monto_bruto"] == a[0]["monto_cubierto_moras"] == "1400.00"
+    assert a[0]["monto"] == a[0]["unitario"] == "0.00"
+    assert a[1]["monto"] == "1400.00"
+
+
+def test_cobertura_no_admite_abonos_ni_exceder_asignacion_del_edificio():
+    edificios, departamentos, conceptos = padron()
+    with pytest.raises(ValidationError):
+        item(conceptos, tipo_movimiento="ABONO", monto_cubierto_moras="1.00")
+    request = item(conceptos, monto_cubierto_moras="1500.00")
+    with pytest.raises(APIError) as exc:
+        calcular_prorrateo([request], edificios, departamentos, conceptos,
+                           {(request.id, edificios[0].id): Decimal("1500.00")})
+    assert exc.value.error_code == "COBERTURA_EXCEDE_GASTO"

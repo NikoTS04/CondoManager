@@ -1,10 +1,76 @@
 # Aceptación objetivo: prorrateo, moras, reportes y evidencia
 
+Característica: Fondos conciliados y cobertura de gastos (0020)
+  Escenario: Solo la mora efectivamente cobrada alimenta fondos
+    Dado un pago aprobado con principal, mora y crédito excedente
+    Cuando se concilia, solo el componente mora entra al fondo de su edificio
+    Y reintentos o el devengo diario no duplican ni crean caja
+
+  Escenario: Reserva concurrente y cobertura íntegra
+    Dado un fondo disponible y un gasto exclusivo de igual importe
+    Cuando se reserva y aprueba su cobertura con versión y clave idempotente
+    Entonces se conserva el gasto bruto y el cargo unitario es cero
+    Y aprobación no vuelve a descontar el fondo
+    Y dos solicitudes no pueden gastar más saldo del disponible
+
+  Escenario: Liberación y modificación del borrador
+    Dado una reserva vigente en un ítem del borrador
+    Cuando se libera, el fondo recupera disponibilidad y el neto vuelve a cobrarse
+    Y omitir el ítem sin liberarla o liberar una confirmada responde conflicto
+
+  Escenario: Retroactivo con fondos comprometidos
+    Dado moras cobradas reservadas o aplicadas a gastos
+    Cuando un retroactivo necesita revertir más de la disponibilidad
+    Entonces responde 409 FONDOS_MORAS_COMPROMETIDOS sin cambios parciales
+
+  Escenario: Reporte privado y snapshot de caja
+    Dado un presupuesto aprobado con cobertura de moras
+    Cuando se exporta PDF o DOCX se muestran bruto, cobertura, neto y resumen congelado
+    Y el residente no recibe movimientos bancarios ni aplicaciones ajenas
+
+Característica: Devengo diario persistente y conciliación bancaria (0019)
+  Escenario: Recuperación e idempotencia por cuota mensual
+    Dado dos cuotas diarias impagas con política y gracia fotografiadas
+    Cuando dos workers recuperan los días posteriores al vencimiento y gracia
+    Entonces existe un cargo por cuota y fecha local, sin duplicados
+    Y mora, deuda, auditoría y outbox se confirman juntos
+
+  Escenario: Pago bancario oportuno aprobado tarde
+    Dado un pago suficiente con fecha bancaria dentro del plazo
+    Y cargos diarios contabilizados mientras se revisaba
+    Cuando la junta valida y aprueba el pago
+    Entonces se compensan los cargos posteriores sin borrar los originales
+    Y no se cobra mora por la demora administrativa
+
+  Escenario: Pagos aprobados fuera del orden bancario
+    Dado un pago posterior ya aprobado y un nuevo pago bancario anterior
+    Cuando se aprueba el anterior
+    Entonces se reconstruyen ambos en orden fecha y UUID
+    Y las diferencias se registran por componente sin reescribir revisiones
+
+  Escenario: Crédito retroactivo ya consumido
+    Dado que una reconstrucción necesita reducir crédito que ya no está disponible
+    Cuando se intenta aprobar el retroactivo
+    Entonces responde 409 CREDITO_RETROACTIVO_CONSUMIDO sin cambios financieros
+
+  Escenario: Pausa de revisión no renovable por el job
+    Dado un comprobante en revisión reportado hace menos de 24 horas
+    Cuando se ejecuta el motor, se postergan cargos nuevos provisionalmente
+    Y tras las 24 horas o al rechazar se recuperan todos los días exigibles
+
+
 Tercera entrega: `src/tests/unit/test_prorrateo.py` verifica pisos, 139 unidades,
 abonos, centavos y límites; `src/tests/integration/test_prorrateo_db.py` prueba
 catálogo, versiones, snapshot, emisión, privacidad, eventos v2 y exportación en
 PostgreSQL. `src/tests/unit/test_documentos_prorrateo.py` abre PDF/DOCX y verifica
-importes, estado y versión. Fondos y mora diaria siguen pendientes.
+importes, estado y versión. La cuarta entrega añade
+`src/tests/unit/test_calculo_mora_diaria.py` y
+`src/tests/integration/test_mora_diaria_db.py`: fechas, recuperación, pausa,
+concurrencia, retroactivos, crédito consumido, conservación de recibos, eventos,
+rollback y downgrade. La quinta entrega se verifica con
+`src/tests/integration/test_fondos_moras_db.py`: cobros reales, cobertura cero,
+idempotencia, concurrencia, retroactivos, adopción prospectiva, permisos, eventos,
+rollback, inmutabilidad y downgrade; también con pruebas puras de cobertura.
 
 Escenarios documentales **pendientes de automatización e implementación**; no son
 pruebas ya ejecutables. Regla: [dominio](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).

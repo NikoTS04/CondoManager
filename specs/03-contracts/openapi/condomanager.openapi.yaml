@@ -2,14 +2,14 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: Contrato objetivo del Sprint 2 acordado en CON-72. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
-  version: 2.2.0
+  version: 2.4.0
 x-contract-baseline: CON-72-2026-10-20
 x-contract-guide: ../../05-api/sprint-2-contratos.md
 x-financial-extension:
-  status: especificado-pendiente-de-implementacion
+  status: implementado-prospectivo
   guide: ../../05-api/prorrateo-mora-reportes.md
   domain: ../../02-domains/01-cuotas/prorrateo-y-mora-diaria.md
-  note: Configuración, excepciones, visor, prorrateo y exportación implementados. Motor diario, conciliación retroactiva y fondos siguen pendientes; ver guía de avances.
+  note: Configuración, visor, prorrateo, exportación, motor diario, conciliación y fondos por edificio implementados prospectivamente. Sin adopción automática de caja histórica ni edición de cuotas aprobadas; ver guía de límites.
 x-payments-implementation-note: CON-72 es la base normativa implementada por pagos. x-core-implementation conserva únicamente una instantánea histórica anterior a la convergencia; no define API adicionales vigentes.
 security: [{ bearerAuth: [] }]
 servers:
@@ -27,6 +27,12 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /edificios/{edificio_id}/fondos-moras:
+    $ref: './fondos-moras.paths.yaml#/paths/~1edificios~1%7Bedificio_id%7D~1fondos-moras'
+  /presupuestos/{presupuesto_id}/aplicaciones-moras:
+    $ref: './fondos-moras.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1aplicaciones-moras'
+  /presupuestos/{presupuesto_id}/aplicaciones-moras/{aplicacion_id}:
+    $ref: './fondos-moras.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1aplicaciones-moras~1%7Baplicacion_id%7D'
   /presupuestos/{presupuesto_id}/prorrateo/exportar:
     $ref: './prorrateo.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1prorrateo~1exportar'
   /condominios/{condominio_id}/conceptos-presupuestales:
@@ -74,7 +80,7 @@ paths:
     put:
       operationId: actualizarPoliticaMora
       summary: Editar política financiera sin recalcular cuotas históricas
-      x-implementation-status: implementado-configuracion-motor-diario-pendiente
+      x-implementation-status: implementado
       parameters:
         - name: condominio_id
           in: path
@@ -1397,7 +1403,7 @@ components:
         direccion: { type: string }
         moneda: { type: string, enum: [PEN, USD] }
         regla_mora_tipo: { type: string, enum: [MONTO_DIARIO, MONTO_FIJO, PORCENTAJE_SALDO] }
-        monto_mora_diario: { type: [string, 'null'], example: '1.00', description: Configuración implementada; motor persistente y emisión diaria pendientes. }
+        monto_mora_diario: { type: [string, 'null'], example: '1.00', description: Importe diario fotografiado en nuevas cuotas; motor persistente implementado en 0019. }
         politica_version: {type: integer, minimum: 1, example: 1}
         monto_mora_fijo: { type: [string, 'null'], example: "20.00" }
         tasa_mora_porcentaje: { type: [string, 'null'], example: null }

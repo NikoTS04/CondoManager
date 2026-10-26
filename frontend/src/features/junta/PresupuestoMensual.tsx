@@ -11,7 +11,8 @@ import { ConfirmDialog } from "@/components/ui/Dialog";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { formatPeriodo } from "@/lib/format";
-import { addMoney, compareMoney, isPositiveMoney, isValidMoney, normalizeMoney } from "@/lib/money";
+import { addMoney, compareMoney, isPositiveMoney, isValidMoney, normalizeMoney, subtractMoney } from "@/lib/money";
+import { FondosMorasPanel } from "./FondosMorasPanel";
 import { ProrrateoEditor } from "./ProrrateoEditor";
 import { ProrrateoPreview } from "./ProrrateoPreview";
 import type { ItemPresupuesto } from "@/lib/api";
@@ -86,8 +87,9 @@ export function PresupuestoMensual({
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmarAprobacion, setConfirmarAprobacion] = useState(false);
+  const [operandoFondos, setOperandoFondos] = useState(false);
 
-  const bloqueado = estado === "APROBADO" || !puedeEditar;
+  const bloqueado = estado === "APROBADO" || !puedeEditar || operandoFondos;
 
   const aplicarPresupuesto = useCallback((presupuesto: PresupuestoPersistido) => {
     setItems(presupuesto.items ?? null);
@@ -262,9 +264,16 @@ export function PresupuestoMensual({
     }
   }
 
+  async function recargarTrasCobertura() {
+    if (!condominioId) return;
+    const resultado = await obtenerPresupuestoPorPeriodo(condominioId, periodo);
+    if (!resultado.ok || !resultado.data) throw new Error(resultado.error || "No se pudo recargar el presupuesto.");
+    aplicarPresupuesto(resultado.data);
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(17rem,0.85fr)]">
-      <Card>
+      <Card className="min-w-0">
         <CardHeader
           title="Registrar presupuesto mensual"
           description="El presupuesto debe aprobarse antes de emitir las cuotas del periodo."
@@ -293,7 +302,7 @@ export function PresupuestoMensual({
                 <Input value={condominioId || "Sin contexto configurado"} readOnly />
               </Field>
               <Field label="Periodo" required>
-                <Input type="month" value={periodo} onChange={(event) => setPeriodo(event.target.value)} disabled={consultando} />
+                <Input type="month" value={periodo} onChange={(event) => setPeriodo(event.target.value)} disabled={consultando || operandoFondos} />
               </Field>
               <Field label="Moneda" required>
                 <Select
@@ -336,9 +345,16 @@ export function PresupuestoMensual({
             {items === null && puedeEditar && !bloqueado && <Button type="button" variant="secondary" onClick={() => { setItems([]); setMontoTotal("0.00"); setCambiosPendientes(true); }}>Desglosar presupuesto por conceptos</Button>}
             {items !== null && condominioId && <ProrrateoEditor key={condominioId} cid={condominioId} items={items} moneda={moneda} disabled={bloqueado || consultando || guardando || aprobando} onChange={(nuevos) => {
               setItems(nuevos); setCambiosPendientes(true); setVerReporte(false);
-              try { setMontoTotal(addMoney(...nuevos.map((i) => i.tipo_movimiento === "ABONO" ? `-${i.monto_periodo}` : i.monto_periodo))); }
+              try { setMontoTotal(addMoney(...nuevos.map((i) => {
+                const neto = subtractMoney(i.monto_periodo, i.monto_cubierto_moras ?? "0.00");
+                return i.tipo_movimiento === "ABONO" ? `-${neto}` : neto;
+              }))); }
               catch { setMontoTotal(""); }
             }} />}
+            {items !== null && presupuestoId && <FondosMorasPanel key={presupuestoId} presupuestoId={presupuestoId}
+              version={version} periodo={periodo} moneda={moneda} items={items}
+              soloLectura={estado === "APROBADO" || !puedeEditar} disabled={cambiosPendientes || consultando || guardando || aprobando}
+              onActualizado={recargarTrasCobertura} onBusy={setOperandoFondos} />}
             {items !== null && presupuestoId && <Button type="button" variant="secondary" disabled={cambiosPendientes || consultando || guardando} onClick={() => setVerReporte(!verReporte)}>Ver prorrateo guardado</Button>}
             {verReporte && presupuestoId && <ProrrateoPreview key={`${presupuestoId}:${version}`} presupuestoId={presupuestoId} moneda={moneda} />}
 
@@ -348,7 +364,7 @@ export function PresupuestoMensual({
                   type="button"
                   variant="secondary"
                   onClick={() => void guardarBorrador()}
-                  disabled={aprobando || consultando || estado === "APROBADO"}
+                  disabled={aprobando || consultando || operandoFondos || estado === "APROBADO"}
                   loading={guardando}
                   loadingText="Guardando..."
                   icon={<Save className="h-4 w-4" aria-hidden="true" />}
@@ -357,7 +373,7 @@ export function PresupuestoMensual({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!presupuestoId || cambiosPendientes || guardando || estado === "APROBADO"}
+                  disabled={!presupuestoId || cambiosPendientes || guardando || operandoFondos || estado === "APROBADO"}
                   icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
                 >
                   Aprobar presupuesto

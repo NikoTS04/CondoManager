@@ -26,6 +26,7 @@ from src.modules.cuotas.saldos.repository import SQLAlchemySaldoFavorRepository
 from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorService
 from src.modules.cuotas.schemas import EmitirLoteCuotasResponse, EmitirLoteRequest
 from src.modules.usuarios.models import UsuarioDepartamento
+from src.shared.fechas import fecha_lima
 
 
 class EmisionCuotasService:
@@ -56,11 +57,6 @@ class EmisionCuotasService:
             raise APIError(404, "CONDOMINIO_NO_ENCONTRADO", "No existe el condominio.")
         if not condominio.activo:
             raise APIError(422, "CONDOMINIO_INACTIVO", "El condominio está inactivo.")
-        if condominio.regla_mora_tipo == "MONTO_DIARIO":
-            raise APIError(
-                409, "MOTOR_DIARIO_PENDIENTE",
-                "La política diaria está configurada, pero su motor persistente aún no está habilitado.",
-            )
         existente = await self.session.scalar(
             select(LoteCuotas.id).where(
                 LoteCuotas.condominio_id == cid, LoteCuotas.periodo == request.periodo
@@ -145,7 +141,7 @@ class EmisionCuotasService:
                 monto_mora=Decimal("0.00"),
                 monto_pagado=Decimal("0.00"),
                 monto_descuento=Decimal("0.00"),
-                fecha_emision=ahora.date(),
+                fecha_emision=fecha_lima(),
                 fecha_vencimiento=presupuesto.fecha_vencimiento,
                 estado="EMITIDA",
                 dias_gracia_aplicados=politica["dias_gracia"],

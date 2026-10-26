@@ -2,6 +2,13 @@
 
 ## Estado y precedencia
 
+Estado actual 0020: prorrateo/exportaciones (0018), motor diario/fecha bancaria
+(0019) y fondos/cobertura de gastos (0020) implementados prospectivamente. No se
+adoptan cuotas, políticas o caja histórica automáticamente. Edición de aprobados,
+exoneraciones manuales, transferencias y tesorería de proveedores no están
+incluidas. Los párrafos siguientes conservan el avance histórico de las primeras
+entregas; consultar el [estado completo](../../05-api/prorrateo-mora-reportes.md).
+
 Avance parcial en rama de implementación: configuración diaria y edición auditada,
 visor privado e historial implementados. Motor diario, prorrateo y fondos aún
 pendientes. Emisión MONTO_DIARIO temporalmente rechazada con
@@ -50,6 +57,14 @@ con fecha de vigencia explícita y conciliación de saldos.
   bloquea reservas, pero no genera nuevos recargos por sí misma.
 
 ### Conciliación y fecha efectiva
+
+Adopción prospectiva 0019: el recálculo automático cubre nuevas cuotas con
+snapshot MONTO_DIARIO y pagos conciliados por este motor. Registros previos sin
+esa trazabilidad son base fija, no se convierten desde la configuración actual.
+Los cargos comienzan en la mayor de emisión y primer día posterior a gracia.
+Los ajustes preservan devengos, imputaciones, revisiones y eventos originales.
+Si un retroactivo consume crédito no disponible, se bloquea con 409 hasta
+resolver financiación sustituta; no se modifica CON-13 silenciosamente.
 
 La fecha efectiva es `fecha_operacion` bancaria **validada** por la junta, no la
 fecha de carga ni de aprobación. Se conserva el orden de imputación existente:

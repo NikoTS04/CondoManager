@@ -47,6 +47,36 @@ incluidas carreras entre usuarios. La migración `20261020_0009` añade
 [vínculos](../../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## 1. Tabla: `condominios`
+Extensión 0020, sin caja histórica automática:
+- `cobros_mora_fondo`: UUID, comprobante/cuota únicos, condominio/edificio/moneda
+  de origen congelados, base_no_adoptada NUMERIC(12,2) no negativa y creación UTC.
+- `aplicaciones_fondo_moras`: UUID, presupuesto/ítem/edificio, importe positivo,
+  motivo, clave única por presupuesto, versión solicitada, estado y fechas UTC.
+  Trigger admite únicamente RESERVADA → CONFIRMADA/LIBERADA; no DELETE ni cambios
+  de importe/origen. El ítem vive en JSONB, validado bajo el lock del presupuesto.
+- `movimientos_fondo_moras`: UUID, ámbito/moneda, importe firmado, COBRO/RESERVA/
+  LIBERACION, referencia a cobro o aplicación, fuente diaria/legacy única nullable
+  y creación UTC. UNIQUE(aplicacion_id, tipo) impide reservar/liberar dos veces.
+  Cobros y movimientos son inmutables; sum(importe) es el disponible del fondo.
+- `eventos_fondo_moras_outbox`: UUID, edificio, payload, creación/publicación UTC.
+No se admite sobregiro bajo locks de condominio; ajustes bancarios insuficientes
+se revierten íntegramente. El resumen aprobado se conserva en prorrateo_snapshot.
+
+Extensión 0019 (sin adopción de cuotas/pagos históricos):
+- `devengos_mora`: UUID, FK cuota, fecha local, importe positivo NUMERIC(12,2),
+  política JSONB y creación UTC; UNIQUE(cuota_id, fecha_local).
+- `ajustes_devengo_mora`: UUID, FK devengo, importe firmado no cero, comprobante
+  causante nullable y creación UTC. La suma con el cargo da su valor vigente.
+- `conciliaciones_diarias`: PK/FK comprobante, cuotas evaluadas JSONB y creación
+  UTC; fija el alcance para no reutilizar crédito en emisiones posteriores.
+- `movimientos_imputacion_diaria`: UUID, FK comprobante, cuota nullable solo para
+  CREDITO, componente MORA/EXTRAORDINARIA/ORDINARIA/CREDITO, importe firmado no cero,
+  causante nullable y creación UTC. Suma por comprobante/cuota/componente es la
+  imputación vigente; `imputaciones_pago` y revisiones conservan el recibo original.
+- `eventos_mora_outbox`: UUID, FK cuota, payload JSONB, creación/publicación UTC.
+Los cuatro ledgers rechazan UPDATE/DELETE; ajustes se insertan con auditoría.
+No representan fondos disponibles para gastar. Downgrade bloqueado con uso diario.
+
 Extensión 0018: catálogo `conceptos_presupuestales` con UUID, FK de condominio,
 código único por condominio, categoría, descripción y activo. Presupuesto añade
 `version INTEGER` positivo default 1, `items JSONB NULL`, `prorrateo_snapshot JSONB NULL`;

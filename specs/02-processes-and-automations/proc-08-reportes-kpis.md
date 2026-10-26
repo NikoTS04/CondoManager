@@ -26,13 +26,16 @@ Calcular y consolidar en tiempo real los indicadores clave de desempeño financi
 ---
 
 ## 4. Generador Automatizado de Balances Mensuales (PDF)
-Estado 0018: reporte de prorrateo y sus exportaciones PDF/DOCX implementados.
+Estado 0020: reporte de prorrateo y sus exportaciones PDF/DOCX implementados.
 Se generan desde el mismo snapshot aprobado o captura versionada del borrador,
 con marca de estado y controles privados de ámbito. No constituyen todavía un
-balance de caja conciliado ni implementan el cierre mensual automático descrito
-más abajo; el registro de fondos/egresos y ese cierre siguen pendientes.
+balance bancario completo ni implementan el cierre mensual automático descrito
+más abajo. Fondos de moras cobradas, reservas, aplicaciones y reversos integrados
+en 0020; egresos de proveedores y cierre bancario completo no están incluidos.
 
-Ampliación objetivo pendiente de implementación: [reporte de prorrateo](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md#7-reporte-mensual-llenado-consulta-pdf-y-docx).
+Alcance normativo del [reporte de prorrateo](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md#7-reporte-mensual-llenado-consulta-pdf-y-docx).
+El catálogo se carga explícitamente; la copia automática de conceptos recurrentes
+de otro periodo no forma parte de esta implementación.
 Permite llenado en borrador, precarga de conceptos, cálculo, previsualización y
 aprobación; descarga en PDF y DOCX desde la misma versión. Incluye CONDOMINIO →
 EDIFICIO → UNITARIO, gastos, abonos, financiamientos, coberturas con moras, fondos

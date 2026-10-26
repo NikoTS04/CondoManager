@@ -1,11 +1,73 @@
 # Contrato objetivo: prorrateo, mora diaria, reportes y evidencia
 
-Estado: **especificado, no implementado**. Base `/api/v1`, Bearer Token,
+Estado: **flujo prospectivo implementado (0016–0020)**. Base `/api/v1`, Bearer Token,
 aislamiento por condominio, `Decimal`/`NUMERIC(12,2)` y dinero JSON como cadenas.
 Reglas normativas: [dominio](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 Los ejemplos de contratos anteriores no autorizan reescribir datos históricos.
 
+### Avance de implementación — quinta entrega (0020)
+
+Fondos por edificio/moneda integrados con conciliación legacy y diaria, reservas,
+liberación, confirmación al aprobar, interfaz administrativa y reporte PDF/DOCX.
+Solo el componente MORA realmente conciliado ingresa al fondo. No se transfieren
+fondos entre edificios ni se confunde principal, saldo a favor o mora devengada
+con caja. Cobros, movimientos y sus compensaciones son inmutables; aplicaciones
+solo transitan RESERVADA → CONFIRMADA/LIBERADA. Todos los cambios son auditados y
+emiten FondosMorasActualizadosEvent v1, reconocido como evento interno sin enviar
+información de tesorería a residentes.
+
+POST de aplicaciones exige versión y clave idempotente. Reserva/liberación
+recalcula el neto del borrador e incrementa versión. Al aprobar se confirma sin
+otro descuento y se congela el resumen del fondo. PUT conserva los importes
+cubiertos registrados, no permite omitir ítems con reservas. Cobertura cero y
+presupuestos históricos sin detalle mantienen compatibilidad; PDF/DOCX anteriores
+sin datos de fondos siguen exportándose.
+
+GET del fondo reconoce caja en el periodo local de confirmación, no cambia la
+fecha bancaria del pago. Incluye disponible inicial/final, cobros netos, reservas,
+liberaciones, disponible/reservado actual, aplicado y mora pendiente separada.
+El reporte aprobado conserva solo ese resumen agregado, sin movimientos privados.
+Una corrección que dejaría disponibilidad negativa responde 409
+FONDOS_MORAS_COMPROMETIDOS y revierte pagos, cuotas, crédito, caja, auditoría y
+outbox. Puede resolverse liberando reservas o con nuevos cobros reales antes de
+reintentar; no existe un botón para inventar financiación.
+
+Adopción prospectiva: cada comprobante/cuota fija su edificio, moneda y base de
+mora previamente cobrada no adoptada. Esa base no se importa como caja ni genera
+reversos de efectivo inexistente. Septiembre y sus 5400.00 requieren documentación
+y conciliación antes de una adopción histórica explícita. No se implementa aquí
+edición de cuotas/presupuestos aprobados, exoneraciones manuales, transferencias
+entre fondos ni pagos a proveedores. La migración 0020 no se ha aplicado a la
+base de la aplicación.
+
+### Avance de implementación — cuarta entrega (0019)
+
+Motor diario persistente y conciliación de pagos nuevos por fecha bancaria
+implementados. Se retira el bloqueo `MOTOR_DIARIO_PENDIENTE` de nuevas emisiones.
+El worker de pagos recupera fechas omitidas al arrancar y a las 00:05 de Lima.
+Cada cuota con snapshot diario devenga desde la mayor de emisión y primer día
+posterior a gracia; el día bancario del pago tardío es inclusivo, sin capitalizar.
+Se reconstruyen pagos nuevos por `(fecha_operacion, id)` y se compensan devengos e
+imputaciones sin borrar los originales. Los pagos/CON-13 previos son base fija.
+`conciliaciones_diarias` fija qué cuotas existían al aprobar cada pago, evitando
+reutilizar excedentes ya aplicados a cuotas emitidas después, incluso el mismo día.
+
+La pausa provisional toma el reporte EN_REVISION más antiguo y dura 24 h desde
+su creación; reintentos, nuevos reportes o subsanaciones no renuevan esa pausa.
+Aprobar, observar o rechazar regulariza los días sin esa pausa. Una fecha bancaria
+futura responde 422 `FECHA_BANCARIA_FUTURA`; un déficit de crédito utilizado,
+409 `CREDITO_RETROACTIVO_CONSUMIDO`. No se aplica parcialmente la operación.
+Recibos/revisiones originales permanecen históricos. Las imputaciones vigentes
+son la suma firmada del ledger por componente, no SUM de recibos originales.
+Nuevos cargos/compensaciones publican eventos v2, con relay y consumidor compatibles.
+
+Migración aditiva 0019, sin reconstruir políticas ni pagos históricos. No aplicada
+a la base de la aplicación. Los fondos que quedaron pendientes en esta entrega
+se integran en 0020; los ajustes manuales de cuotas aprobadas no están incluidos.
+
 ### Avance de implementación — primera entrega
+
+Estado histórico de esa entrega; la cuarta entrega sustituye su bloqueo diario.
 
 Implementados en la rama de trabajo: alta/configuración de MONTO_DIARIO, edición
 versionada y auditada de política, defaults 10/0/1.00, visor privado PNG/JPEG/PDF,
@@ -19,6 +81,8 @@ Pendientes: excepciones individuales, snapshots completos, devengos persistentes
 conciliación por fecha bancaria, prorrateo/fondos y exportaciones PDF/DOCX.
 
 ### Avance de implementación — segunda entrega
+
+Estado histórico; consultar arriba el avance de la cuarta entrega.
 
 Condiciones individuales y snapshots completos de nuevas emisiones implementados.
 La migración 0017 agrega override nullable al vínculo, responsable único por
@@ -98,8 +162,8 @@ emisión, previsualización y PDF/DOCX. El catálogo se llena explícitamente; n
 importó ni aprobó automáticamente septiembre. Las asignaciones explícitas y
 valores de origen se admiten por API; la interfaz facilita los repartos por
 pisos y directo, sin un editor avanzado de asignaciones manuales.
-La cobertura con fondos, revisión posterior de presupuestos aprobados y motor
-diario/reconstrucción bancaria permanecen pendientes de implementación.
+La cobertura con fondos se integra en la quinta entrega y motor diario/fecha
+bancaria en la cuarta. La revisión posterior de aprobados no está incluida.
 
 ### Contrato de la tercera entrega
 
@@ -121,8 +185,8 @@ con una tercera modalidad global de alícuotas: el lote usa `JERARQUICA`.
 El catálogo persistido se consulta/crea con GET/POST
 `/condominios/{id}/conceptos-presupuestales`. Código estable único por condominio,
 categoría, descripción y estado activo. Auditor solo consulta. Ítems solo admiten
-conceptos activos del mismo condominio. La cobertura con moras distinta de cero
-se rechaza mientras no esté integrado el fondo conciliado.
+conceptos activos del mismo condominio. La cobertura con moras debe coincidir
+con aplicaciones vigentes del fondo conciliado, nunca con un número libre.
 
 Persistencia mínima: catálogo relacional; ítems ordenados JSONB en el presupuesto,
 snapshot JSONB congelado al aprobar y detalle JSONB por cuota. Reemplaza las tablas
@@ -162,7 +226,7 @@ sin cambiar la unicidad del lote condominio/periodo ni cuota departamento/period
 La ampliación del request está publicada en OpenAPI 2.2.0; la interfaz de Junta
 admite ítems y versión sin exigir cambios a clientes legacy sin detalle.
 
-Ejemplo objetivo de asignación con fondos (pendiente, no entrada aceptada actualmente):
+Ejemplo de cobertura calculada desde una aplicación confirmada (no entrada libre):
 
 ```json
 {
@@ -181,7 +245,7 @@ reservas de fondos que reducen disponibilidad para otros borradores; eliminarlas
 o anular el borrador libera la reserva. Aprobación confirma la aplicación sin
 descontar de nuevo. No incluir una cobertura sin fondos en una versión aprobada.
 
-### Operaciones objetivo
+### Operaciones de fondos y reporte
 
 | Método/ruta | Resultado | Permiso/regla |
 |---|---|---|
@@ -189,6 +253,7 @@ descontar de nuevo. No incluir una cobertura sin fondos en una versión aprobada
 | `GET /presupuestos/{id}/prorrateo/exportar?edificio_id=...&version=...&formato=pdf` | 200, archivo privado | Mismos permisos; formato `pdf` o `docx` |
 | `GET /edificios/{id}/fondos-moras?periodo=YYYY-MM` | 200, movimientos, saldo disponible y reservado | Junta/auditor del contexto |
 | `POST /presupuestos/{id}/aplicaciones-moras` | 201, reserva vinculada a ítem/edificio/importe/motivo | Junta, borrador; clave de idempotencia obligatoria |
+| `GET /presupuestos/{id}/aplicaciones-moras` | 200, aplicaciones y estados, incluidas liberadas | Junta/auditor del contexto |
 | `DELETE /presupuestos/{id}/aplicaciones-moras/{aplicacion_id}` | 204, libera reserva no confirmada | Junta, solo borrador; auditar, no borrar historial |
 
 Aplicaciones confirmadas solo admiten compensación auditada con motivo y
@@ -229,7 +294,15 @@ Decisión implementada en 0018: `conceptos_presupuestales` relacional;
 JSONB; `presupuestos_mensuales.version` entero positivo. Las entidades separadas
 de ítems/asignaciones/detalles/versiones en la tabla de diseño inicial siguiente
 quedan sustituidas por este agregado auditado; fondos y devengos siguen como
-diseño pendiente, no como tablas ya creadas.
+diseño pendiente. La entrega 0019 implementa `devengos_mora` (único cuota/fecha),
+`ajustes_devengo_mora` (compensaciones firmadas), `conciliaciones_diarias` (padrón
+original por comprobante), `movimientos_imputacion_diaria` (componentes firmados)
+y `eventos_mora_outbox`. Las cuatro primeras impiden UPDATE/DELETE por trigger.
+El downgrade de 0019 rechaza operaciones o cuotas diarias existentes.
+0020 crea `cobros_mora_fondo` (origen y base no adoptada),
+`movimientos_fondo_moras` (importes firmados con origen único),
+`aplicaciones_fondo_moras` (clave por presupuesto y transición protegida) y
+`eventos_fondo_moras_outbox`. Su downgrade rechaza cobros o aplicaciones.
 
 | Entidad | Adición / restricción |
 |---|---|
