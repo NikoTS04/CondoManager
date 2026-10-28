@@ -1,11 +1,12 @@
 """Reparación legacy ensayada exclusivamente en esquemas PostgreSQL de pruebas."""
 
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
 
-from scripts.reconciliar_esquema_legacy import reconciliar, validar_modelos
+from scripts.reconciliar_esquema_legacy import HEAD, reconciliar, validar_modelos
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 
@@ -43,6 +44,11 @@ async def preparar_legacy(conn):
 
 @pytest.mark.parametrize("fallo", [None, "revision", "notificaciones", "cancelacion", "cobro", "validacion_final"])
 async def test_reconcilia_o_revierte_atomicamente(db_usuarios, monkeypatch, fallo):
+    # Ensayo del reparador fijado a su revisión original, no autorización para head nuevo.
+    monkeypatch.setattr(
+        "scripts.reconciliar_esquema_legacy.ScriptDirectory.from_config",
+        lambda _: SimpleNamespace(get_current_head=lambda: HEAD),
+    )
     async with db_usuarios.engine.connect() as conn:
         transaction = await conn.begin()
         try:
@@ -84,3 +90,8 @@ async def test_reconcilia_o_revierte_atomicamente(db_usuarios, monkeypatch, fall
                     await conn.run_sync(reconciliar)
         finally:
             await transaction.rollback()
+
+
+async def test_reparador_legacy_rechaza_head_financiero_actual():
+    with pytest.raises(RuntimeError, match="El head cambió"):
+        reconciliar(None)

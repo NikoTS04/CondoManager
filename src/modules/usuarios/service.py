@@ -324,6 +324,14 @@ class UsuariosService:
             if vinculo
             else {}
         )
+        retirando_responsable = (
+            relacion is None and vinculo is not None
+            and getattr(departamento, "responsable_pago_id", None) == vinculo.id
+        )
+        if retirando_responsable:
+            anterior["responsable_pago_id"] = str(vinculo.id)
+            departamento.responsable_pago_id = None
+            departamento.condiciones_pago_version += 1
         if vinculo is None:
             vinculo = UsuarioDepartamento(
                 usuario_id=uid, departamento_id=did, tipo_relacion=relacion, es_activo=True
@@ -338,6 +346,8 @@ class UsuariosService:
             accion = "VINCULO_CAMBIADO"
         usuario.auth_revision += 1
         try:
+            if retirando_responsable:
+                await self.repo.agregar(departamento)
             await self.repo.agregar(usuario, vinculo)
             posterior = self.repo.representar_vinculo(vinculo, departamento, edificio)
             await self._auditar(

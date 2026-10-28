@@ -11,6 +11,11 @@ import { ConfirmDialog } from "@/components/ui/Dialog";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { formatPeriodo } from "@/lib/format";
+import { addMoney, compareMoney, isPositiveMoney, isValidMoney, normalizeMoney, subtractMoney } from "@/lib/money";
+import { FondosMorasPanel } from "./FondosMorasPanel";
+import { ProrrateoEditor } from "./ProrrateoEditor";
+import { ProrrateoPreview } from "./ProrrateoPreview";
+import type { ItemPresupuesto } from "@/lib/api";
 import type {
   DatosPresupuestoPayload,
   Moneda,
@@ -65,10 +70,13 @@ export function PresupuestoMensual({
 }: PresupuestoMensualProps) {
   const periodoInicial = periodoActual();
   const [presupuestoId, setPresupuestoId] = useState<string | null>(null);
+  const [items, setItems] = useState<ItemPresupuesto[] | null>(null);
+  const [version, setVersion] = useState(1);
+  const [verReporte, setVerReporte] = useState(false);
   const [periodo, setPeriodo] = useState(periodoInicial);
   const [moneda, setMoneda] = useState<Moneda>("PEN");
   const [montoTotal, setMontoTotal] = useState("");
-  const [fechaVencimiento, setFechaVencimiento] = useState(`${periodoInicial}-20`);
+  const [fechaVencimiento, setFechaVencimiento] = useState(`${periodoInicial}-10`);
   const [estado, setEstado] = useState<EstadoVista>("SIN_REGISTRAR");
   const [aprobadoPor, setAprobadoPor] = useState<string | null>(null);
   const [aprobadoEn, setAprobadoEn] = useState<string | null>(null);
@@ -79,10 +87,14 @@ export function PresupuestoMensual({
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmarAprobacion, setConfirmarAprobacion] = useState(false);
+  const [operandoFondos, setOperandoFondos] = useState(false);
 
-  const bloqueado = estado === "APROBADO" || !puedeEditar;
+  const bloqueado = estado === "APROBADO" || !puedeEditar || operandoFondos;
 
   const aplicarPresupuesto = useCallback((presupuesto: PresupuestoPersistido) => {
+    setItems(presupuesto.items ?? null);
+    setVersion(presupuesto.version);
+    setVerReporte(false);
     setPresupuestoId(presupuesto.id);
     setPeriodo(presupuesto.periodo);
     setMoneda(presupuesto.moneda);
@@ -96,9 +108,10 @@ export function PresupuestoMensual({
   }, [onCambioAprobado]);
 
   const limpiarPeriodoSeleccionado = useCallback((periodoSeleccionado: string) => {
+    setItems(null); setVersion(1); setVerReporte(false);
     setPresupuestoId(null);
     setMontoTotal("");
-    setFechaVencimiento(`${periodoSeleccionado}-20`);
+    setFechaVencimiento(`${periodoSeleccionado}-10`);
     setEstado("SIN_REGISTRAR");
     setAprobadoPor(null);
     setAprobadoEn(null);
@@ -149,12 +162,15 @@ export function PresupuestoMensual({
   }, [aplicarPresupuesto, condominioId, limpiarPeriodoSeleccionado, periodo]);
 
   function construirDatos(): DatosPresupuestoPayload | null {
+    if (items !== null && items.length === 0) {
+      setError("Agrega al menos un ítem al presupuesto detallado.");
+      return null;
+    }
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) {
       setError("El periodo debe utilizar el formato AAAA-MM.");
       return null;
     }
-    const monto = Number(montoTotal);
-    if (!Number.isFinite(monto) || monto <= 0 || monto > 9999999999.99) {
+    if (!(items === null ? isPositiveMoney(montoTotal) : isValidMoney(montoTotal) && compareMoney(montoTotal, "0.00") >= 0) || compareMoney(montoTotal, "9999999999.99") > 0) {
       setError("El monto total debe ser mayor que cero y respetar NUMERIC(12,2).");
       return null;
     }
@@ -163,13 +179,14 @@ export function PresupuestoMensual({
       return null;
     }
 
-    const montoNormalizado = monto.toFixed(2);
+    const montoNormalizado = normalizeMoney(montoTotal);
     setMontoTotal(montoNormalizado);
     return {
       periodo,
       moneda,
       monto_total: montoNormalizado,
       fecha_vencimiento: fechaVencimiento,
+      items, ...(presupuestoId ? { version_esperada: version } : {}),
     };
   }
 
@@ -232,7 +249,7 @@ export function PresupuestoMensual({
     if (!presupuestoId) return;
     setAprobando(true);
     try {
-      const resultado = await aprobarPresupuesto(presupuestoId);
+      const resultado = await aprobarPresupuesto(presupuestoId, version);
       if (!resultado.ok || !resultado.data) {
         setError(resultado.error || "No se pudo aprobar el presupuesto.");
         return;
@@ -247,9 +264,16 @@ export function PresupuestoMensual({
     }
   }
 
+  async function recargarTrasCobertura() {
+    if (!condominioId) return;
+    const resultado = await obtenerPresupuestoPorPeriodo(condominioId, periodo);
+    if (!resultado.ok || !resultado.data) throw new Error(resultado.error || "No se pudo recargar el presupuesto.");
+    aplicarPresupuesto(resultado.data);
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(17rem,0.85fr)]">
-      <Card>
+      <Card className="min-w-0">
         <CardHeader
           title="Registrar presupuesto mensual"
           description="El presupuesto debe aprobarse antes de emitir las cuotas del periodo."
@@ -278,7 +302,7 @@ export function PresupuestoMensual({
                 <Input value={condominioId || "Sin contexto configurado"} readOnly />
               </Field>
               <Field label="Periodo" required>
-                <Input type="month" value={periodo} onChange={(event) => setPeriodo(event.target.value)} disabled={consultando} />
+                <Input type="month" value={periodo} onChange={(event) => setPeriodo(event.target.value)} disabled={consultando || operandoFondos} />
               </Field>
               <Field label="Moneda" required>
                 <Select
@@ -301,7 +325,7 @@ export function PresupuestoMensual({
                     setCambiosPendientes(true);
                   }}
                   moneda={moneda}
-                  disabled={bloqueado || consultando}
+                  disabled={bloqueado || consultando || items !== null}
                 />
               </Field>
             </div>
@@ -318,13 +342,29 @@ export function PresupuestoMensual({
               />
             </Field>
 
+            {items === null && puedeEditar && !bloqueado && <Button type="button" variant="secondary" onClick={() => { setItems([]); setMontoTotal("0.00"); setCambiosPendientes(true); }}>Desglosar presupuesto por conceptos</Button>}
+            {items !== null && condominioId && <ProrrateoEditor key={condominioId} cid={condominioId} items={items} moneda={moneda} disabled={bloqueado || consultando || guardando || aprobando} onChange={(nuevos) => {
+              setItems(nuevos); setCambiosPendientes(true); setVerReporte(false);
+              try { setMontoTotal(addMoney(...nuevos.map((i) => {
+                const neto = subtractMoney(i.monto_periodo, i.monto_cubierto_moras ?? "0.00");
+                return i.tipo_movimiento === "ABONO" ? `-${neto}` : neto;
+              }))); }
+              catch { setMontoTotal(""); }
+            }} />}
+            {items !== null && presupuestoId && <FondosMorasPanel key={presupuestoId} presupuestoId={presupuestoId}
+              version={version} periodo={periodo} moneda={moneda} items={items}
+              soloLectura={estado === "APROBADO" || !puedeEditar} disabled={cambiosPendientes || consultando || guardando || aprobando}
+              onActualizado={recargarTrasCobertura} onBusy={setOperandoFondos} />}
+            {items !== null && presupuestoId && <Button type="button" variant="secondary" disabled={cambiosPendientes || consultando || guardando} onClick={() => setVerReporte(!verReporte)}>Ver prorrateo guardado</Button>}
+            {verReporte && presupuestoId && <ProrrateoPreview key={`${presupuestoId}:${version}`} presupuestoId={presupuestoId} moneda={moneda} />}
+
             {puedeEditar && (
               <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                 <Button
                   type="button"
                   variant="secondary"
                   onClick={() => void guardarBorrador()}
-                  disabled={aprobando || consultando || estado === "APROBADO"}
+                  disabled={aprobando || consultando || operandoFondos || estado === "APROBADO"}
                   loading={guardando}
                   loadingText="Guardando..."
                   icon={<Save className="h-4 w-4" aria-hidden="true" />}
@@ -333,7 +373,7 @@ export function PresupuestoMensual({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!presupuestoId || cambiosPendientes || guardando || estado === "APROBADO"}
+                  disabled={!presupuestoId || cambiosPendientes || guardando || operandoFondos || estado === "APROBADO"}
                   icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
                 >
                   Aprobar presupuesto

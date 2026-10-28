@@ -59,9 +59,9 @@ def huellas(conn, tablas, archivo_notificaciones=None):
     return result
 
 
-def validar_modelos(conn):
+def validar_modelos(conn, tablas=None):
     inspector = sa.inspect(conn)
-    for tabla in Base.metadata.sorted_tables:
+    for tabla in Base.metadata.sorted_tables if tablas is None else tablas:
         columnas = {c["name"]: c for c in inspector.get_columns(tabla.name)}
         for columna in tabla.columns:
             actual = columnas.get(columna.name)

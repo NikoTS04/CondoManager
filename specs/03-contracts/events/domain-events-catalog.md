@@ -1,5 +1,27 @@
 # Catálogo de eventos — Contrato del Sprint 2 / CON-72
 
+Fondos 0020: `FondosMorasActualizadosEvent`, schema_version 1,
+[`fondos-moras.v1.schema.json`](schemas/fondos-moras.v1.schema.json). Outbox propio
+para COBRO (incluye compensación firmada), RESERVA, LIBERACION y CONFIRMACION
+(importe cero, no vuelve a descontar). Relay de pagos conserva event_id al
+reintentar. Notificaciones reconoce/deduplica el evento interno sin enviar datos
+de tesorería a residentes ni ejecutar finanzas. Desplegar migración y consumidor
+compatible antes de activar los nuevos productores.
+
+Motor diario 0019: `MoraAplicadaEvent` / `MoraAjustadaEvent` con `schema_version: 2`,
+[`mora-diaria.v2.schema.json`](schemas/mora-diaria.v2.schema.json), producidos en
+`eventos_mora_outbox`. El ID del cargo es estable por cuota/fecha; compensaciones
+tienen ID nuevo y referencian el devengo. Consumidor notificaciones compatible,
+sin reinterpretar el esquema histórico `mora-aplicada.schema.json`. Desplegar
+migración y consumidor antes de habilitar el worker/productor diario.
+
+Prorrateo detallado: `CuotasEmitidasEvent` con `schema_version: 2` y método
+`JERARQUICA`, validado por
+[`cuotas-prorrateo-emitidas.v2.schema.json`](schemas/cuotas-prorrateo-emitidas.v2.schema.json).
+El productor legacy conserva su payload y esquema originales. Notificaciones
+acepta ambos y deduplica el mismo event_id; instalar consumidor compatible antes
+de habilitar productor detallado. No se reescriben envelopes persistidos.
+
 Extensión financiera objetivo (no implementada): [eventos y transacciones](../../05-api/prorrateo-mora-reportes.md#5-eventos-y-transacciones).
 Devengo diario se identifica por cuota/fecha local. Fondos, ajustes y versiones
 de reporte mantienen auditoría y outbox; payloads nuevos requieren versionado

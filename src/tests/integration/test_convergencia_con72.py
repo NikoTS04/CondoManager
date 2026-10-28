@@ -119,6 +119,21 @@ async def test_ciclo_completo_contra_contrato_y_eventos(api_pagos):
     privado = await client.get(listado.json()[0]["url_voucher"], headers=usuario)
     assert privado.content == imagen() and privado.headers["cache-control"] == "no-store"
     assert privado.headers["content-type"] == "image/png"
+    historial = await client.get(f"/api/v1/pagos/{id}/evidencias", headers=usuario)
+    assert historial.status_code == 200 and len(historial.json()) == 2
+    assert all(set(e) == {"evidencia_id", "content_type", "creado_en"} for e in historial.json())
+    for e in historial.json():
+        vista = await client.get(
+            f"/api/v1/pagos/{id}/voucher",
+            params={"evidencia_id": e["evidencia_id"], "disposicion": "inline"},
+            headers=usuario,
+        )
+        assert vista.status_code == 200 and vista.content == imagen()
+        assert vista.headers["content-disposition"].startswith("inline")
+    inexistente = await client.get(
+        f"/api/v1/pagos/{id}/voucher?evidencia_id={uuid4()}", headers=usuario
+    )
+    assert inexistente.status_code == 404
     async with base.sessions() as db:
         archivos = list(await db.scalars(select(ArchivoVoucher)))
         revisiones = list(await db.scalars(select(RevisionPago)))

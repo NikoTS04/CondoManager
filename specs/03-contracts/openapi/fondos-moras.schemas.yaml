@@ -1,0 +1,62 @@
+schemas:
+  DineroAgregado:
+    type: string
+    pattern: '^-?[0-9]+\.[0-9]{2}$'
+  ReservaRequest:
+    type: object
+    additionalProperties: false
+    required: [version_esperada, item_id, edificio_id, monto, motivo]
+    properties:
+      version_esperada: {type: integer, minimum: 1}
+      item_id: {type: string, format: uuid}
+      edificio_id: {type: string, format: uuid}
+      monto:
+        $ref: './prorrateo.schemas.yaml#/schemas/Dinero'
+        not: {const: '0.00'}
+      motivo: {type: string, minLength: 1, maxLength: 1000}
+  Aplicacion:
+    type: object
+    additionalProperties: false
+    required: [id, presupuesto_id, item_id, edificio_id, monto, motivo, estado, creado_en]
+    properties:
+      id: {type: string, format: uuid}
+      presupuesto_id: {type: string, format: uuid}
+      item_id: {type: string, format: uuid}
+      edificio_id: {type: string, format: uuid}
+      monto: {$ref: './prorrateo.schemas.yaml#/schemas/Dinero'}
+      motivo: {type: string}
+      estado: {enum: [RESERVADA, CONFIRMADA, LIBERADA]}
+      creado_en: {type: string, format: date-time}
+  Resumen:
+    type: object
+    required: [edificio_id, periodo, moneda, saldo_disponible, saldo_reservado, total_aplicado, saldo_disponible_inicial, cobros_netos_periodo, reservas_periodo, liberaciones_periodo, saldo_disponible_final, mora_pendiente_cobro, capturado_en]
+    properties:
+      edificio_id: {type: string, format: uuid}
+      periodo: {type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'}
+      moneda: {enum: [PEN, USD]}
+      saldo_disponible: {$ref: '#/schemas/DineroAgregado'}
+      saldo_reservado: {$ref: '#/schemas/DineroAgregado'}
+      total_aplicado: {$ref: '#/schemas/DineroAgregado'}
+      saldo_disponible_inicial: {$ref: '#/schemas/DineroAgregado'}
+      cobros_netos_periodo: {$ref: '#/schemas/DineroAgregado'}
+      cobros_confirmados_periodo: {$ref: '#/schemas/DineroAgregado'}
+      reversos_cobro_periodo: {$ref: '#/schemas/DineroAgregado'}
+      aplicaciones_confirmadas_periodo: {$ref: '#/schemas/DineroAgregado', description: Confirmación de coberturas previamente reservadas; no descontar otra vez.}
+      reservas_periodo: {$ref: '#/schemas/DineroAgregado'}
+      liberaciones_periodo: {$ref: '#/schemas/DineroAgregado'}
+      saldo_disponible_final: {$ref: '#/schemas/DineroAgregado'}
+      mora_pendiente_cobro: {$ref: '#/schemas/DineroAgregado'}
+      capturado_en: {type: string, format: date-time}
+      movimientos:
+        type: array
+        description: Solo endpoint administrativo; no se incluye en el snapshot público del reporte.
+        items:
+          type: object
+          required: [id, tipo, importe, fecha_local, aplicacion_id, cobro_id]
+          properties:
+            id: {type: string, format: uuid}
+            tipo: {enum: [COBRO, RESERVA, LIBERACION]}
+            importe: {$ref: '#/schemas/DineroAgregado'}
+            fecha_local: {type: string, format: date}
+            aplicacion_id: {type: [string, 'null'], format: uuid}
+            cobro_id: {type: [string, 'null'], format: uuid}

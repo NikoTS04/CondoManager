@@ -7,12 +7,9 @@ import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from scripts.seed_areas_demo import cargar_areas_demo
-from scripts.seed_usuarios_demo import cargar_demo
 from src.tests.pagos_db import did
-from src.tests.usuarios_db import REVISIONES, migrar
+from src.tests.usuarios_db import REVISIONES, copiar_demo_legacy, migrar
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 AREA = "11111111-1111-1111-1111-111111111101"
@@ -36,10 +33,7 @@ async def test_adopta_sin_perder_instantes_o_revierte_sin_perder_datos(db_usuari
                     c, REVISIONES[: REVISIONES.index("20261020_0012_reservas_notificaciones")]
                 )
             )
-            async with AsyncSession(bind=conn, expire_on_commit=False) as db:
-                await cargar_demo(db)
-                await cargar_areas_demo(db)
-                await db.commit()
+            await conn.run_sync(lambda c: copiar_demo_legacy(c, db_usuarios.esquema))
             await conn.execute(
                 text("""
                 CREATE TABLE reservas (

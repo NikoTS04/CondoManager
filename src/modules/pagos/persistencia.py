@@ -14,8 +14,10 @@ from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.pagos.contabilidad import CERO, MAX_MONEDA, plan_imputacion, saldo_en_mora
+from src.modules.pagos.fondos import FondosMorasService
 from src.modules.pagos.models import ComprobantePago, ImputacionPago
 from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutbox, RevisionPago
+from src.modules.pagos.mora_diaria import MoraDiariaService
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.pagos.schemas import (
     ComprobantePagoDTO,
@@ -26,6 +28,7 @@ from src.modules.pagos.schemas import (
 )
 from src.modules.pagos.service import PagosService
 from src.modules.pagos.storage import MAX_BYTES, VoucherStorage
+from src.shared.fechas import fecha_lima
 
 
 class PagosPersistentesService:
@@ -82,7 +85,7 @@ class PagosPersistentesService:
                 if not puede_ver_departamento(usuario, depto.id):
                     continue
                 cuotas = await self.repo.cuotas(depto.id)
-                saldo = saldo_en_mora(cuotas, condominio.dias_gracia, datetime.now(UTC).date())
+                saldo = saldo_en_mora(cuotas, condominio.dias_gracia, fecha_lima())
                 resultado.append(
                     {
                         "id": depto.id,
@@ -270,38 +273,51 @@ class PagosPersistentesService:
                     "La decisión ya es definitiva; no se vuelve a aplicar.",
                 )
             ahora = datetime.now(UTC)
+            hoy = fecha_lima()
             anterior = {"estado": comprobante.estado, "saldo_a_favor": str(depto.saldo_a_favor)}
             total_aplicado, credito = CERO, CERO
+            if request.decision == "APROBADO" and comprobante.fecha_operacion > hoy:
+                raise APIError(422, "FECHA_BANCARIA_FUTURA", "La fecha bancaria no puede ser futura en Lima.")
+            motor = await MoraDiariaService(self.session).reconstruir(
+                depto, condominio, cuotas, usuario, hoy,
+                nuevo=comprobante if request.decision == "APROBADO" else None,
+                pausar_revision=False, ahora=ahora,
+            )
             if request.decision == "APROBADO":
-                plan = plan_imputacion(cuotas, comprobante.monto, ahora.date())
-                credito = plan["remanente"]
-                if depto.saldo_a_favor + credito > MAX_MONEDA:
-                    raise APIError(
-                        422, "SALDO_FUERA_DE_RANGO", "El saldo a favor excede el límite contable."
-                    )
-                for cuota in cuotas:
-                    aplicado = plan["aplicaciones"].get(cuota.id, CERO)
-                    if aplicado <= CERO:
-                        continue
-                    cuota.monto_pagado += aplicado
-                    if cuota.monto_pagado == cuota.monto_total_exigible:
-                        cuota.estado = "PAGADA"
-                    elif saldo_en_mora([cuota], condominio.dias_gracia, ahora.date()) > CERO:
-                        cuota.estado = "EN_MORA"
-                    else:
-                        cuota.estado = "PAGO_PARCIAL"
-                    self.session.add(
-                        ImputacionPago(
-                            comprobante_id=id,
-                            cuota_id=cuota.id,
-                            monto_aplicado=aplicado,
+                if motor is not None:
+                    total_aplicado, credito = motor["monto_imputado"], motor["credito"]
+                else:
+                    plan = plan_imputacion(cuotas, comprobante.monto, comprobante.fecha_operacion)
+                    imputaciones = {}
+                    credito = plan["remanente"]
+                    if depto.saldo_a_favor + credito > MAX_MONEDA:
+                        raise APIError(
+                            422, "SALDO_FUERA_DE_RANGO", "El saldo a favor excede el límite contable."
                         )
-                    )
-                    total_aplicado += aplicado
-                depto.saldo_a_favor += credito
+                    for cuota in cuotas:
+                        aplicado = plan["aplicaciones"].get(cuota.id, CERO)
+                        if aplicado <= CERO:
+                            continue
+                        cuota.monto_pagado += aplicado
+                        if cuota.monto_pagado == cuota.monto_total_exigible:
+                            cuota.estado = "PAGADA"
+                        elif saldo_en_mora([cuota], condominio.dias_gracia, hoy) > CERO:
+                            cuota.estado = "EN_MORA"
+                        else:
+                            cuota.estado = "PAGO_PARCIAL"
+                        imputacion_id = uuid4()
+                        self.session.add(ImputacionPago(id=imputacion_id, comprobante_id=id,
+                                                        cuota_id=cuota.id, monto_aplicado=aplicado))
+                        imputaciones[id, cuota.id] = imputacion_id
+                        total_aplicado += aplicado
+                    depto.saldo_a_favor += credito
+                    await FondosMorasService(self.session).registrar_cobros(
+                        depto, condominio, {}, {(id, cid, "MORA"): importes[0]
+                            for cid, importes in plan["componentes"].items() if importes[0]},
+                        {}, usuario, legacy=imputaciones)
                 depto.estado_financiero = (
                     "EN_MORA"
-                    if saldo_en_mora(cuotas, condominio.dias_gracia, ahora.date()) > CERO
+                    if saldo_en_mora(cuotas, condominio.dias_gracia, hoy) > CERO
                     else "AL_DIA"
                 )
             comprobante.estado = request.decision
@@ -317,7 +333,7 @@ class PagosPersistentesService:
                 ),
                 saldo_a_favor_generado=credito,
                 departamento_habilitado_reservas=saldo_en_mora(
-                    cuotas, condominio.dias_gracia, ahora.date()
+                    cuotas, condominio.dias_gracia, hoy
                 )
                 == CERO,
                 motivo_rechazo=comprobante.motivo_rechazo,
@@ -399,11 +415,32 @@ class PagosPersistentesService:
             }
         )
 
-    async def voucher(self, id, usuario):
+    async def evidencias(self, id, usuario):
+        async with self.session.begin():
+            await self.repo.comprobante(id, usuario)
+            rows = await self.session.execute(
+                select(RevisionPago.id, ArchivoVoucher.content_type, RevisionPago.creado_en)
+                .join(ArchivoVoucher, RevisionPago.archivo_nombre == ArchivoVoucher.nombre)
+                .where(RevisionPago.comprobante_id == id, ArchivoVoucher.comprobante_id == id)
+                .order_by(RevisionPago.creado_en.desc(), RevisionPago.id.desc())
+            )
+            return [dict(evidencia_id=r.id, content_type=r.content_type, creado_en=r.creado_en) for r in rows]
+
+    async def voucher(self, id, usuario, evidencia_id=None):
         async with self.session.begin():
             comprobante, _, _ = await self.repo.comprobante(id, usuario)
-            ruta = await asyncio.to_thread(self.storage.ruta, comprobante.url_voucher)
-            return ruta, comprobante.url_voucher
+            nombre = comprobante.url_voucher
+            if evidencia_id is not None:
+                nombre = await self.session.scalar(
+                    select(ArchivoVoucher.nombre)
+                    .join(RevisionPago, RevisionPago.archivo_nombre == ArchivoVoucher.nombre)
+                    .where(RevisionPago.id == evidencia_id, RevisionPago.comprobante_id == id,
+                           ArchivoVoucher.comprobante_id == id)
+                )
+                if nombre is None:
+                    raise APIError(404, "EVIDENCIA_NO_ENCONTRADA", "No existe evidencia autorizada.")
+            ruta = await asyncio.to_thread(self.storage.ruta, nombre)
+            return ruta, nombre
 
     def _evento(self, comprobante, cid, tipo, extra=None):
         id = uuid4()

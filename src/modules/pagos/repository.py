@@ -140,7 +140,7 @@ class SQLAlchemyPagosRepository:
         )
         payload = AuditoriaPayload(
             condominio_id=str(cid),
-            departamento_id=str(did),
+            departamento_id=str(did) if did is not None else None,
             accion_ejecutada=accion,
             motivo=motivo,
             resultado="EXITOSO" if exito else "FALLIDO",

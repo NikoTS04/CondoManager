@@ -13,10 +13,24 @@ from src.modules.condominios.repository import (
     CondominioRepository,
     SQLAlchemyCondominioRepository,
 )
-from src.modules.condominios.schemas import CondominioResponse, CrearCondominioRequest
-from src.modules.condominios.service import CondominiosService
+from src.modules.condominios.schemas import (
+    ActualizarPoliticaMoraRequest,
+    CondominioResponse,
+    CrearCondominioRequest,
+)
+from src.modules.condominios.service import CondominiosService, actualizar_politica_mora
 
 router = APIRouter(prefix="/condominios", tags=["Condominios"])
+
+
+@router.put("/{condominio_id}/politica-mora", response_model=CondominioResponse)
+async def editar_politica_mora(
+    condominio_id: UUID,
+    request: ActualizarPoliticaMoraRequest,
+    usuario: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session, use_cache=False),
+):
+    return await actualizar_politica_mora(session, condominio_id, request, usuario)
 
 
 async def require_superadmin(

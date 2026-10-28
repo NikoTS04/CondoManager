@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Select } from "@/components/ui/Field";
+import { Dialog } from "@/components/ui/Dialog";
+import { CondicionesPagoForm } from "./CondicionesPagoForm";
 import {
   asignarVinculoUsuario, listarDepartamentos, listarEdificios, listarVinculosUsuario, revocarVinculoUsuario,
   type CuentaUsuarioConRol, type DepartamentoRegistrado, type Edificio, type VinculoUsuario,
@@ -33,6 +35,7 @@ export function VinculosUsuarioSection({ condominioId, usuario, onCerrar }: Prop
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const [condiciones, setCondiciones] = useState<VinculoUsuario | null>(null);
   const form = useRef<HTMLFormElement>(null);
   const section = useRef<HTMLDivElement>(null);
   const puedeAsignar = usuario.rol_activo && usuario.rol !== "SUPERADMIN";
@@ -127,6 +130,7 @@ export function VinculosUsuarioSection({ condominioId, usuario, onCerrar }: Prop
                       <td className="p-3"><Badge tone={vinculo.es_activo ? "success" : "neutral"}>{vinculo.es_activo ? "Vínculo activo" : "Vínculo inactivo"}</Badge></td>
                       <td className="p-3"><div className="flex flex-wrap gap-2">
                         <Button variant="secondary" size="sm" disabled={busy || !puedeAsignar || !vinculo.departamento_activo} onClick={() => editar(vinculo)} aria-label={`Editar vínculo de ${vinculo.edificio_nombre} ${vinculo.numero}`}>Editar relación</Button>
+                        {vinculo.es_activo && vinculo.departamento_activo && <Button variant="secondary" size="sm" disabled={busy} onClick={() => setCondiciones(vinculo)}>Condiciones de pago</Button>}
                         {vinculo.es_activo
                           ? <Button variant="ghost" size="sm" disabled={busy} onClick={() => void guardar(vinculo.departamento_id, null)} aria-label={`Desactivar vínculo de ${vinculo.edificio_nombre} ${vinculo.numero}`}>Desactivar vínculo</Button>
                           : <Button variant="secondary" size="sm" disabled={busy || !puedeAsignar || !vinculo.departamento_activo} onClick={() => void guardar(vinculo.departamento_id, vinculo.tipo_relacion)} aria-label={`Restaurar vínculo de ${vinculo.edificio_nombre} ${vinculo.numero}`}>Restaurar vínculo</Button>}
@@ -139,6 +143,9 @@ export function VinculosUsuarioSection({ condominioId, usuario, onCerrar }: Prop
           </>
         )}
       </CardBody>
+      <Dialog open={condiciones !== null} onClose={() => setCondiciones(null)} title="Responsable y gracia de pago" description={`${usuario.nombre} ${usuario.apellido} · ${condiciones?.edificio_nombre ?? ""} ${condiciones?.numero ?? ""}`}>
+        {condiciones && <CondicionesPagoForm key={condiciones.id} departamentoId={condiciones.departamento_id} vinculoId={condiciones.id} />}
+      </Dialog>
     </Card></div>
   );
 }

@@ -1,0 +1,66 @@
+schemas:
+  Dinero:
+    type: string
+    pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
+  ConceptoRequest:
+    type: object
+    additionalProperties: false
+    required: [codigo, categoria, descripcion]
+    properties:
+      codigo: {type: string, pattern: '^[A-Z][A-Z0-9-]{1,29}$'}
+      categoria:
+        enum: [SERVICIOS_BASICOS, MANTENIMIENTO_PREVENTIVO, SEGURIDAD_Y_VIGILANCIA, LIMPIEZA_Y_JARDINERIA, GASTOS_ADMINISTRATIVOS, IMPREVISTOS_Y_CONTINGENCIAS, OBLIGACIONES_FINANCIADAS]
+      descripcion: {type: string, minLength: 1, maxLength: 500}
+  ConceptoResponse:
+    type: object
+    additionalProperties: false
+    required: [id, condominio_id, codigo, categoria, descripcion, activo]
+    properties:
+      id: {type: string, format: uuid}
+      condominio_id: {type: string, format: uuid}
+      codigo: {type: string}
+      categoria: {type: string}
+      descripcion: {type: string}
+      activo: {type: boolean}
+  Items:
+    type: [array, 'null']
+    minItems: 1
+    maxItems: 500
+    items: {$ref: '#/schemas/Item'}
+  Item:
+    type: object
+    additionalProperties: false
+    required: [concepto_id, seccion, monto_periodo]
+    properties:
+      id: {type: string, format: uuid, description: Generado por servidor si se omite; conservar al editar.}
+      concepto_id: {type: string, format: uuid}
+      descripcion: {type: string, maxLength: 1000, default: ''}
+      seccion: {enum: [AACC, EDIFICIO, CRONOGRAMA_AACC]}
+      tipo_movimiento: {enum: [CARGO, ABONO], default: CARGO}
+      monto_periodo: {$ref: '#/schemas/Dinero'}
+      monto_cubierto_moras:
+        $ref: '#/schemas/Dinero'
+        description: Calculado por servidor desde aplicaciones vigentes. Conservar al editar; no se acepta cobertura sin reserva ni en abonos.
+      metodo_asignacion: {enum: [POR_PISOS, DIRECTO_EDIFICIO, ASIGNACION_EXPLICITA], default: POR_PISOS}
+      metodo_unitario: {enum: [EQUITATIVA, POR_ALICUOTA], default: EQUITATIVA}
+      edificio_id: {type: [string, 'null'], format: uuid}
+      asignaciones_explicitas:
+        type: object
+        propertyNames: {format: uuid}
+        additionalProperties: {$ref: '#/schemas/Dinero'}
+      motivo_asignacion: {type: string, maxLength: 1000}
+      codigo_origen: {type: string, maxLength: 40}
+      observacion_origen: {type: string, maxLength: 1000}
+      referencia_servicio: {type: string, maxLength: 200}
+      referencia_documento: {type: string, maxLength: 500}
+      monto_origen_condominio: {type: [string, 'null'], maxLength: 40}
+      monto_origen_edificio: {type: [string, 'null'], maxLength: 40}
+      monto_unitario_origen: {type: [string, 'null'], maxLength: 40}
+      obligacion_referencia: {type: string, maxLength: 500}
+      numero_cuota: {type: [integer, 'null'], minimum: 1}
+      total_cuotas: {type: [integer, 'null'], minimum: 1}
+      monto_total_obligacion:
+        anyOf:
+          - {$ref: '#/schemas/Dinero'}
+          - {type: 'null'}
+    description: El servicio valida pertenencia al condominio, asignaciones exactas con sustento y cronograma de financiación completo.

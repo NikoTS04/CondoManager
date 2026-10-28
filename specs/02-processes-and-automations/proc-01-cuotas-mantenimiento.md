@@ -10,6 +10,13 @@
 ---
 
 ## 2. Propósito y Alcance del Proceso
+Implementación 0018: ítems opcionales para conservar presupuestos legacy;
+detalle nuevo con catálogo, total calculado, versión y snapshot congelado al
+aprobar. La emisión detallada usa el snapshot, conserva cargos y ajustes por
+cuota y no vuelve a repartir el total global. Padrón diferente al aprobado
+rechaza emisión. Total cero permitido solo en el contrato detallado, sin
+cuotas negativas ni consumo ficticio de saldos a favor.
+
 Regla objetivo vigente: [prorrateo jerárquico y mora diaria](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 El presupuesto se desglosa por concepto, edificio y unidad; el piloto usa pisos
 para repartir AACC y división entre 139 para edificio 03. Esta ampliación está

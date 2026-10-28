@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FondosMorasActualizadosEvent v1 — interno de tesorería",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "event_type", "schema_version", "producer", "occurred_at", "data"],
+  "properties": {
+    "event_id": {"type": "string", "format": "uuid"},
+    "event_type": {"const": "FondosMorasActualizadosEvent"},
+    "schema_version": {"const": 1},
+    "producer": {"const": "service.pagos"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condominio_id", "edificio_id", "moneda", "tipo", "importe", "aplicacion_id", "presupuesto_id"],
+      "properties": {
+        "condominio_id": {"type": "string", "format": "uuid"},
+        "edificio_id": {"type": "string", "format": "uuid"},
+        "moneda": {"enum": ["PEN", "USD"]},
+        "tipo": {"enum": ["COBRO", "RESERVA", "LIBERACION", "CONFIRMACION"]},
+        "importe": {"type": "string", "pattern": "^-?[0-9]+\\.[0-9]{2}$"},
+        "aplicacion_id": {"type": ["string", "null"], "format": "uuid"},
+        "presupuesto_id": {"type": ["string", "null"], "format": "uuid"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"data": {"properties": {"tipo": {"const": "CONFIRMACION"}}}}},
+      "then": {"properties": {"data": {"properties": {"importe": {"const": "0.00"}}}}},
+      "else": {"properties": {"data": {"properties": {"importe": {"not": {"enum": ["0.00", "-0.00"]}}}}}}
+    },
+    {
+      "if": {"properties": {"data": {"properties": {"tipo": {"const": "RESERVA"}}}}},
+      "then": {"properties": {"data": {"properties": {"importe": {"pattern": "^-[0-9]+\\.[0-9]{2}$"}}}}}
+    },
+    {
+      "if": {"properties": {"data": {"properties": {"tipo": {"const": "LIBERACION"}}}}},
+      "then": {"properties": {"data": {"properties": {"importe": {"pattern": "^[0-9]+\\.[0-9]{2}$"}}}}}
+    }
+  ]
+}

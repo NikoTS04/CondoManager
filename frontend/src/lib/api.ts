@@ -160,7 +160,7 @@ export interface NotificacionLog {
 }
 
 export type Moneda = "PEN" | "USD";
-export type ReglaMoraTipo = "MONTO_FIJO" | "PORCENTAJE_SALDO";
+export type ReglaMoraTipo = "MONTO_DIARIO" | "MONTO_FIJO" | "PORCENTAJE_SALDO";
 
 export interface CrearCondominioPayload {
   nombre: string;
@@ -168,12 +168,14 @@ export interface CrearCondominioPayload {
   moneda: Moneda;
   regla_mora_tipo: ReglaMoraTipo;
   monto_mora_fijo: string | null;
+  monto_mora_diario?: string | null;
   tasa_mora_porcentaje: string | null;
   dia_vencimiento: number;
   dias_gracia: number;
 }
 
 export interface Condominio extends CrearCondominioPayload {
+  politica_version: number;
   id: string;
   activo: boolean;
   creado_en: string;
@@ -186,6 +188,90 @@ export interface DatosPresupuestoPayload {
   moneda: Moneda;
   monto_total: string;
   fecha_vencimiento: string;
+  items?: ItemPresupuesto[] | null;
+  version_esperada?: number;
+}
+
+export interface ConceptoPresupuestal {
+  id: string; condominio_id: string; codigo: string; categoria: string; descripcion: string; activo: boolean;
+}
+
+export interface ItemPresupuesto {
+  id: string; concepto_id: string; monto_periodo: string; tipo_movimiento: "CARGO" | "ABONO";
+  seccion: "AACC" | "EDIFICIO" | "CRONOGRAMA_AACC";
+  metodo_asignacion: "POR_PISOS" | "DIRECTO_EDIFICIO" | "ASIGNACION_EXPLICITA";
+  metodo_unitario?: "EQUITATIVA" | "POR_ALICUOTA";
+  edificio_id?: string | null; descripcion?: string; codigo_origen?: string;
+  observacion_origen?: string; referencia_servicio?: string; referencia_documento?: string;
+  asignaciones_explicitas?: Record<string, string>; motivo_asignacion?: string;
+  monto_origen_condominio?: string | null; monto_origen_edificio?: string | null; monto_unitario_origen?: string | null;
+  obligacion_referencia?: string; numero_cuota?: number | null; total_cuotas?: number | null;
+  monto_total_obligacion?: string | null; monto_cubierto_moras?: string;
+}
+
+export function listarConceptosPresupuestales(cid: string): Promise<ConceptoPresupuestal[]> {
+  return recursoRequest(`/condominios/${encodeURIComponent(cid)}/conceptos-presupuestales`);
+}
+export function crearConceptoPresupuestal(cid: string, datos: { codigo: string; categoria: string; descripcion: string }): Promise<ConceptoPresupuestal> {
+  return recursoRequest(`/condominios/${encodeURIComponent(cid)}/conceptos-presupuestales`, { method: "POST", body: JSON.stringify(datos) });
+}
+export interface ReporteProrrateo {
+  version: number; estado: string; monto_total: string;
+  edificios: { id: string; nombre: string; pisos: number }[];
+  items: { id: string; codigo: string; descripcion: string; seccion: string; monto_periodo: string;
+    tipo_movimiento: string; metodo_asignacion: string;
+    asignaciones: { edificio_id: string; monto: string; monto_bruto?: string; monto_cubierto_moras?: string; unitario: string; unidades: number }[] }[];
+  fondos_moras?: ResumenFondoMoras[];
+}
+
+export interface ResumenFondoMoras {
+  edificio_id: string; periodo: string; moneda: Moneda; capturado_en: string;
+  saldo_disponible: string; saldo_reservado: string; total_aplicado: string;
+  saldo_disponible_inicial: string; cobros_netos_periodo: string; reservas_periodo: string;
+  cobros_confirmados_periodo: string; reversos_cobro_periodo: string; aplicaciones_confirmadas_periodo: string;
+  liberaciones_periodo: string; saldo_disponible_final: string; mora_pendiente_cobro: string;
+  movimientos?: { id: string; tipo: string; importe: string; fecha_local: string }[];
+}
+export interface AplicacionMoras {
+  id: string; presupuesto_id: string; item_id: string; edificio_id: string; monto: string;
+  motivo: string; estado: "RESERVADA" | "CONFIRMADA" | "LIBERADA"; creado_en: string;
+}
+export function consultarFondoMoras(eid: string, periodo: string): Promise<ResumenFondoMoras> {
+  return recursoRequest(`/edificios/${encodeURIComponent(eid)}/fondos-moras?periodo=${encodeURIComponent(periodo)}`);
+}
+export function listarAplicacionesMoras(id: string): Promise<AplicacionMoras[]> {
+  return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras`);
+}
+export async function reservarMoras(id: string, clave: string, payload: {
+  version_esperada: number; item_id: string; edificio_id: string; monto: string; motivo: string;
+}): Promise<AplicacionMoras> {
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras`, {
+    method: "POST", headers: { ...getAuthHeaders(), "Idempotency-Key": clave }, body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo reservar el fondo."));
+  return data as AplicacionMoras;
+}
+export async function liberarMoras(id: string, aplicacionId: string, version: number): Promise<void> {
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras/${encodeURIComponent(aplicacionId)}?version_esperada=${version}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(obtenerMensajeError(await response.json(), "No se pudo liberar la reserva."));
+}
+export function consultarProrrateo(id: string): Promise<ReporteProrrateo> {
+  return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/prorrateo`);
+}
+
+export async function exportarProrrateo(id: string, version: number, formato: "pdf" | "docx", edificioId: string): Promise<void> {
+  const query = new URLSearchParams({ version: String(version), formato, edificio_id: edificioId });
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/prorrateo/exportar?${query}`, { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error(obtenerMensajeError(await response.json(), "No se pudo generar el reporte."));
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `Prorrateo-${id}-${edificioId}-v${version}.${formato}`;
+  document.body.appendChild(enlace); enlace.click(); enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
@@ -193,6 +279,7 @@ export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
 }
 
 export interface PresupuestoMensual extends CrearPresupuestoPayload {
+  version: number;
   id: string;
   estado: EstadoPresupuesto;
   creado_por: string;
@@ -267,6 +354,27 @@ export interface VinculoUsuario {
 
 function rutaVinculos(condominioId: string, usuarioId: string): string {
   return `/condominios/${encodeURIComponent(condominioId)}/usuarios/${encodeURIComponent(usuarioId)}/departamentos`;
+}
+
+export interface CondicionesPago {
+  departamento_id: string;
+  version: number;
+  vinculo_responsable_id: string | null;
+  dias_gracia_override: number | null;
+  dias_gracia_efectivos: number;
+}
+
+export function consultarCondicionesPago(departamentoId: string): Promise<CondicionesPago> {
+  return recursoRequest(`/departamentos/${encodeURIComponent(departamentoId)}/condiciones-pago`);
+}
+
+export function guardarCondicionesPago(departamentoId: string, datos: {
+  vinculo_responsable_id: string | null; dias_gracia_override: number | null;
+  version_esperada: number; motivo: string;
+}): Promise<CondicionesPago> {
+  return recursoRequest(`/departamentos/${encodeURIComponent(departamentoId)}/condiciones-pago`, {
+    method: "PUT", body: JSON.stringify(datos),
+  });
 }
 
 export function listarVinculosUsuario(condominioId: string, usuarioId: string): Promise<VinculoUsuario[]> {
@@ -496,6 +604,20 @@ export async function listarCondominios(): Promise<{
   }
 }
 
+export async function actualizarPoliticaMora(condominio: Condominio, datos: CrearCondominioPayload, motivo: string): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
+  try {
+    const { nombre: _nombre, direccion: _direccion, moneda: _moneda, ...politica } = datos;
+    const response = await fetchProtegido(`/condominios/${encodeURIComponent(condominio.id)}/politica-mora`, {
+      method: "PUT", headers: getAuthHeaders(),
+      body: JSON.stringify({ ...politica, version_esperada: condominio.politica_version, motivo }),
+    });
+    const data = await response.json();
+    return response.ok ? { ok: true, data } : { ok: false, error: obtenerMensajeError(data, "No se pudo actualizar la política. Recargue si cambió la versión.") };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API. Recargue antes de reintentar." };
+  }
+}
+
 export async function obtenerCondominio(
   condominioId: string
 ): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
@@ -570,10 +692,10 @@ export async function actualizarPresupuesto(
 }
 
 export async function aprobarPresupuesto(
-  presupuestoId: string
+  presupuestoId: string, version?: number
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetchProtegido(`/presupuestos/${presupuestoId}/aprobar`, {
+    const response = await fetchProtegido(`/presupuestos/${presupuestoId}/aprobar${version === undefined ? "" : `?version_esperada=${version}`}`, {
       method: "POST",
       headers: getAuthHeaders(),
     });
@@ -725,6 +847,32 @@ export async function subsanarVoucher(comprobanteId: string, archivo: File): Pro
   const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher`, { method: "PUT", headers, body: form });
   const data = await response.json();
   if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo subir el voucher."));
+}
+
+export interface EvidenciaVoucher {
+  evidencia_id: string;
+  content_type: string;
+  creado_en: string;
+}
+
+export async function listarEvidencias(comprobanteId: string, signal?: AbortSignal): Promise<EvidenciaVoucher[]> {
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/evidencias`, {
+    headers: getAuthHeaders(), signal,
+  });
+  if (!response.ok) throw new Error("No se pudo consultar el historial de evidencia.");
+  return response.json();
+}
+
+export async function visualizarVoucher(comprobanteId: string, evidenciaId: string, signal?: AbortSignal): Promise<Blob> {
+  const query = new URLSearchParams({ disposicion: "inline" });
+  if (evidenciaId) query.set("evidencia_id", evidenciaId);
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher?${query}`, {
+    headers: getAuthHeaders(), signal,
+  });
+  if (!response.ok) throw new Error("No se pudo visualizar la evidencia. Verifique su sesión y permisos.");
+  const blob = await response.blob();
+  if (!["image/png", "image/jpeg", "application/pdf"].includes(blob.type)) throw new Error("Formato de evidencia no admitido.");
+  return blob;
 }
 
 export async function descargarVoucher(comprobante: ComprobantePago): Promise<void> {

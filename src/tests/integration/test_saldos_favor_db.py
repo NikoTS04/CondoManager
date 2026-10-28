@@ -21,6 +21,7 @@ from src.modules.cuotas.models import CuotaMantenimiento
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor
 from src.modules.cuotas.saldos.repository import SQLAlchemySaldoFavorRepository
 from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorService
+from src.modules.usuarios.models import Usuario, UsuarioDepartamento
 
 
 @pytest_asyncio.fixture
@@ -41,6 +42,8 @@ async def session_saldos():
                     Condominio,
                     Edificio,
                     Departamento,
+                    Usuario,
+                    UsuarioDepartamento,
                     CuotaMantenimiento,
                     AplicacionSaldoFavor,
                     AuditoriaLogORM,

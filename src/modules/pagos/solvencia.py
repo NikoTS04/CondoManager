@@ -1,7 +1,6 @@
 """Guard de CON-42: integrable en la misma transacción de CON-41/73."""
 
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +10,7 @@ from src.core.errors import APIError
 from src.modules.pagos.contabilidad import CERO, saldo_en_mora
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.pagos.schemas import SolvenciaResponse
+from src.shared.fechas import fecha_lima
 
 
 class SolvenciaService:
@@ -24,7 +24,7 @@ class SolvenciaService:
             if not depto.activo:
                 raise APIError(403, "DEPARTAMENTO_INACTIVO", "El departamento está inactivo.")
             cuotas = await self.repo.cuotas(depto.id)
-            saldo = saldo_en_mora(cuotas, condominio.dias_gracia, datetime.now(UTC).date())
+            saldo = saldo_en_mora(cuotas, condominio.dias_gracia, fecha_lima())
             return SolvenciaResponse(
                 departamento_id=did,
                 saldo_vencido=saldo,
@@ -45,7 +45,7 @@ class SolvenciaService:
             if condominio.id != solicitud.condominio_id:
                 raise HTTPException(403, detail={"error_code": "ACCESO_DENEGADO"})
             cuotas = await self.repo.cuotas(depto.id, bloquear=True)
-            saldo = saldo_en_mora(cuotas, condominio.dias_gracia, datetime.now(UTC).date())
+            saldo = saldo_en_mora(cuotas, condominio.dias_gracia, fecha_lima())
             if saldo > CERO:
                 bloqueo = {
                     "error_code": "DEUDA_MORA_ACTIVA",

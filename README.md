@@ -60,7 +60,7 @@ docker compose up -d --build --wait --wait-timeout 180 redis backend frontend
 docker compose ps
 ```
 
-El backend ejecuta `alembic upgrade head` antes de iniciar la API. La cabeza de este corte es `20261021_0015`. Para una base existente, revisar primero su revisión y compatibilidad; el caso legacy y su reparación aplicada están en [reconciliación del esquema](docs/sprints/reconciliacion-esquema-legacy.md).
+El backend ejecuta `alembic upgrade head` antes de iniciar la API. La cabeza de esta rama es `20261025_0020`: revisar respaldo, revisión y compatibilidad antes de arrancar contra una base existente. El despliegue se recuperó y actualizó a 0020 el 26 de octubre tras respaldo, dos restauraciones de ensayo y validación de datos originales; ver [resultado y límites](docs/sprints/reconciliacion-esquema-20261026.md). El reparador [legacy](docs/sprints/reconciliacion-esquema-legacy.md) no adopta estas revisiones financieras. Los fondos se reconocen prospectivamente desde cobros de mora conciliados; no se importa caja histórica.
 
 | Servicio | Dirección |
 |---|---|
@@ -101,7 +101,7 @@ Después de preparar los datos y presupuestos que correspondan al entorno:
 docker compose up -d --build --wait --wait-timeout 180 cuotas-worker pagos-worker notificaciones-worker
 ```
 
-El worker de cuotas puede emitir periodos pendientes desde el día UTC configurado en `CUOTAS_DIA_EMISION`. El de pagos publica su outbox y mantiene el almacenamiento de vouchers; el de notificaciones consume cuotas, pagos y reservas, publica eventos de reservas y procesa reintentos y alertas.
+El worker de cuotas puede emitir periodos pendientes desde el día UTC configurado en `CUOTAS_DIA_EMISION`. El de pagos publica outboxes, mantiene vouchers y recupera moras diarias al arrancar y a las 00:05 de Lima. El de notificaciones consume cuotas, pagos, moras v2 y reservas, y procesa reintentos y alertas. Instalar migración y consumidor compatible antes de activar el productor/worker diario. Ver [alcance financiero y límites](specs/05-api/prorrateo-mora-reportes.md).
 
 ## Límites del prototipo
 

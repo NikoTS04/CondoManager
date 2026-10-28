@@ -23,15 +23,15 @@ from src.core.errors import APIError
 from src.core.models_audit import AuditoriaLogORM
 from src.core.security import create_access_token
 from src.main import app
-from src.modules.condominios.models import Condominio, Departamento, Edificio
+from src.modules.condominios.models import Departamento, Edificio
 from src.modules.cuotas.distribucion.models import ConfiguracionDistribucion
 from src.modules.cuotas.emision import EmisionCuotasService
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, LoteCuotas
-from src.modules.cuotas.presupuestos.models import PresupuestoMensual
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor
 from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorService
 from src.modules.cuotas.schemas import EmitirLoteRequest
 from src.modules.cuotas.worker import emitir_pendientes, publicar_pendientes
+from src.tests.usuarios_db import REVISIONES_API
 
 pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
 
@@ -52,7 +52,8 @@ def migrar(conn, revisiones=REVISIONES):
 
 
 @asynccontextmanager
-async def base_emision(revisiones=REVISIONES):
+async def base_emision(revisiones=None):
+    revisiones = REVISIONES_API if revisiones is None else revisiones
     url = os.getenv("CON11_TEST_DATABASE_URL") or os.getenv("CON13_TEST_DATABASE_URL")
     if not url:
         pytest.skip(
@@ -83,18 +84,12 @@ async def factory():
 async def preparar(factory, *, metodo="EQUITATIVA", estado="APROBADO", total="100.00"):
     cid = uuid4()
     async with factory() as session, session.begin():
-        session.add(
-            Condominio(
-                id=cid,
-                nombre="CON-11",
-                direccion="Prueba",
-                moneda="PEN",
-                regla_mora_tipo="MONTO_FIJO",
-                monto_mora_fijo=Decimal("0.00"),
-                dia_vencimiento=20,
-                dias_gracia=2,
-            )
-        )
+        # Datos comunes a esquemas históricos y actuales; no insertar columnas futuras.
+        await session.execute(text(
+            "INSERT INTO condominios (id,nombre,direccion,moneda,regla_mora_tipo,"
+            "monto_mora_fijo,dia_vencimiento,dias_gracia) "
+            "VALUES (:id,'CON-11','Prueba','PEN','MONTO_FIJO',0,20,2)"
+        ), {"id": cid})
         await session.flush()
         eid = uuid4()
         session.add(Edificio(id=eid, condominio_id=cid, nombre_bloque="Norte", total_pisos=1))
@@ -102,31 +97,19 @@ async def preparar(factory, *, metodo="EQUITATIVA", estado="APROBADO", total="10
         # UUIDs reproducibles para verificar el desempate del centavo residual.
         ids = [UUID(int=i) for i in range(1, 5)]
         for i, id in enumerate(ids):
-            session.add(
-                Departamento(
-                    id=id,
-                    edificio_id=eid,
-                    numero=str(i + 1),
-                    piso=1,
-                    coeficiente_participacion=Decimal("33.3334" if i == 0 else "33.3333"),
-                    saldo_a_favor=Decimal("40.00" if i == 0 else "0.00"),
-                    activo=i < 3,
-                )
-            )
-        session.add(
-            PresupuestoMensual(
-                id=uuid4(),
-                condominio_id=cid,
-                periodo="2026-10",
-                moneda="PEN",
-                monto_total=Decimal(total),
-                fecha_vencimiento=date(2026, 10, 20),
-                estado=estado,
-                creado_por="prueba",
-                aprobado_por="prueba" if estado == "APROBADO" else None,
-                aprobado_en=None if estado != "APROBADO" else datetime.now(UTC),
-            )
-        )
+            await session.execute(text(
+                "INSERT INTO departamentos (id,edificio_id,numero,piso,coeficiente_participacion,"
+                "saldo_a_favor,activo) VALUES (:id,:eid,:numero,1,:coeficiente,:saldo,:activo)"
+            ), {"id": id, "eid": eid, "numero": str(i + 1),
+                "coeficiente": Decimal("33.3334" if i == 0 else "33.3333"),
+                "saldo": Decimal("40.00" if i == 0 else "0.00"), "activo": i < 3})
+        await session.execute(text(
+            "INSERT INTO presupuestos_mensuales (id,condominio_id,periodo,moneda,monto_total,"
+            "fecha_vencimiento,estado,creado_por,aprobado_por,aprobado_en) "
+            "VALUES (:id,:cid,'2026-10','PEN',:total,'2026-10-20',:estado,'prueba',:actor,:fecha)"
+        ), {"id": uuid4(), "cid": cid, "total": Decimal(total), "estado": estado,
+            "actor": "prueba" if estado == "APROBADO" else None,
+            "fecha": datetime.now(UTC) if estado == "APROBADO" else None})
         session.add(
             ConfiguracionDistribucion(
                 id=uuid4(),
@@ -309,8 +292,8 @@ async def test_http_identidad_contexto_contrato_y_persistencia(factory):
 
 
 @pytest.mark.asyncio
-async def test_migracion_reversible_y_fk_con13(factory):
-    async with factory() as session, session.begin():
+async def test_migracion_reversible_y_fk_con13():
+    async with base_emision(REVISIONES) as factory, factory() as session, session.begin():
         conn = await session.connection()
 
         def ciclo(conn):
@@ -394,6 +377,10 @@ async def test_migracion_adopta_backup_con_datos_y_downgrade_conserva_cuotas():
             assert (await conn.execute(text("SELECT * FROM cuotas_mantenimiento"))).one() == previo
             assert await conn.scalar(text("SELECT cuota_id FROM referencia_legacy")) == cuota_id
         # Las cuotas nuevas también se emiten sobre la tabla adoptada.
+        async with factory() as session, session.begin():
+            conn = await session.connection()
+            restantes = tuple(r for r in REVISIONES_API if r not in REVISIONES)
+            await conn.run_sync(lambda c: migrar(c, restantes))
         response = await emitir(factory, cid)
         assert response.total_cuotas_emitidas == 3
         async with factory() as session:

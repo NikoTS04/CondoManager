@@ -1,0 +1,114 @@
+paths:
+  /presupuestos/{presupuesto_id}/prorrateo/exportar:
+    parameters:
+      - name: presupuesto_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: exportarProrrateo
+      x-implementation-status: implementado
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1}
+        - name: formato
+          in: query
+          schema: {enum: [pdf, docx], default: pdf}
+        - name: edificio_id
+          in: query
+          schema: {type: string, format: uuid}
+          description: Obligatorio para residente, limitado a su edificio.
+      responses:
+        '200':
+          description: Archivo de la versión capturada, autorizado y generado en memoria. BORRADOR claramente identificado si procede.
+          headers:
+            Content-Disposition: {schema: {type: string}, description: Attachment con nombre saneado por periodo/edificio/versión.}
+            Cache-Control: {schema: {const: no-store}}
+            X-Content-Type-Options: {schema: {const: nosniff}}
+          content:
+            application/pdf: {schema: {type: string, format: binary}}
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document: {schema: {type: string, format: binary}}
+        '403': {description: Reporte o edificio no autorizado}
+        '404': {description: Presupuesto o edificio no encontrado}
+        '409': {description: Versión obsoleta o presupuesto histórico sin detalle}
+        '422': {description: Parámetros o detalle inválidos}
+        '503': {description: Fallo de generación; sin cambios financieros}
+  /condominios/{condominio_id}/conceptos-presupuestales:
+    parameters:
+      - name: condominio_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: listarConceptosPresupuestales
+      x-implementation-status: implementado
+      responses:
+        '200':
+          description: Catálogo de su contexto; auditor solo lectura.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: './prorrateo.schemas.yaml#/schemas/ConceptoResponse'}
+        '403': {description: Rol o contexto no autorizado}
+        '404': {description: Condominio inexistente}
+    post:
+      operationId: crearConceptoPresupuestal
+      x-implementation-status: implementado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './prorrateo.schemas.yaml#/schemas/ConceptoRequest'}
+      responses:
+        '201':
+          description: Concepto registrado y auditado.
+          content:
+            application/json:
+              schema: {$ref: './prorrateo.schemas.yaml#/schemas/ConceptoResponse'}
+        '403': {description: Solo Junta/SuperAdmin del contexto}
+        '404': {description: Condominio inexistente o inactivo}
+        '409': {description: Código ya registrado en el condominio}
+        '422': {description: Código, categoría o descripción inválidos}
+  /presupuestos/{presupuesto_id}/prorrateo:
+    parameters:
+      - name: presupuesto_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: consultarProrrateo
+      x-implementation-status: implementado
+      parameters:
+        - name: edificio_id
+          in: query
+          schema: {type: string, format: uuid}
+          description: Obligatorio para residente; solo edificios propios.
+      responses:
+        '200':
+          description: Borrador recalculado o snapshot aprobado; residentes sin anexos individuales ni referencias privadas. No modifica el presupuesto.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [presupuesto_id, version, periodo, moneda, estado, fecha_vencimiento, monto_total, edificios, items]
+                properties:
+                  presupuesto_id: {type: string, format: uuid}
+                  version: {type: integer, minimum: 1}
+                  periodo: {type: string}
+                  moneda: {enum: [PEN, USD]}
+                  estado: {enum: [BORRADOR, APROBADO]}
+                  fecha_vencimiento: {type: string, format: date}
+                  monto_total: {$ref: './prorrateo.schemas.yaml#/schemas/Dinero'}
+                  edificios: {type: array, items: {type: object}}
+                  items: {type: array, items: {type: object}}
+                  fondos_moras:
+                    type: array
+                    description: Resumen sin movimientos privados, congelado al aprobar y filtrado al edificio autorizado.
+                    items: {$ref: './fondos-moras.schemas.yaml#/schemas/Resumen'}
+        '403': {description: Ámbito ajeno o borrador consultado por residente}
+        '404': {description: Presupuesto o edificio no encontrado}
+        '409': {description: Presupuesto histórico sin desglose}
+        '422': {description: Detalle/padrón inválido en previsualización}

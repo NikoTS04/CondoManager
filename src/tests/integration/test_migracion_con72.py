@@ -11,14 +11,12 @@ from alembic.operations import Operations
 from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scripts.seed_areas_demo import cargar_areas_demo
-from scripts.seed_usuarios_demo import cargar_demo
 from src.modules.pagos.models import ComprobantePago
 from src.modules.pagos.models_persistencia import ArchivoVoucher, RevisionPago
 from src.modules.pagos.persistencia import PagosPersistentesService
 from src.modules.usuarios.demo import id_demo
 from src.tests.pagos_db import did
-from src.tests.usuarios_db import REVISIONES, migrar
+from src.tests.usuarios_db import REVISIONES, copiar_demo_legacy, migrar
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 
@@ -29,6 +27,7 @@ async def test_migracion_conserva_resultado_y_asocia_evidencia(db_usuarios):
         await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
         await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
         await conn.run_sync(lambda c: migrar(c, REVISIONES[:-1]))
+        await conn.run_sync(lambda c: copiar_demo_legacy(c, db_usuarios.esquema))
         cid, rid, nombre = uuid4(), uuid4(), f"{uuid4()}.png"
         resultado = {
             "comprobante_id": str(cid),
@@ -39,8 +38,6 @@ async def test_migracion_conserva_resultado_y_asocia_evidencia(db_usuarios):
             "departamento_habilitado_reservas": False,
         }
         async with AsyncSession(bind=conn, expire_on_commit=False) as db:
-            await cargar_demo(db)
-            await cargar_areas_demo(db)
             db.add(
                 ComprobantePago(
                     id=cid,

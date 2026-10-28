@@ -26,6 +26,7 @@ def cuota(**extra):
             "monto_total_exigible": Decimal("100.00"),
             "monto_pagado": Decimal("0.00"),
             "fecha_vencimiento": date(2026, 10, 20),
+            "dias_gracia_aplicados": None,
             **extra,
         }
     )

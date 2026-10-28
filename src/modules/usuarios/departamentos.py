@@ -1,6 +1,5 @@
 """Catálogo SQL común al portal y a la validación de unidades de negocio (CON-05)."""
 
-from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import Depends
@@ -13,6 +12,7 @@ from src.modules.pagos.contabilidad import CERO, saldo_en_mora
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.usuarios.models import UsuarioDepartamento
 from src.modules.usuarios.schemas import DepartamentoPortalDTO
+from src.shared.fechas import fecha_lima
 
 
 class DepartamentosPortalRepository:
@@ -29,7 +29,7 @@ class DepartamentosPortalRepository:
 
     async def _representar(self, departamento, edificio, condominio):
         cuotas = await SQLAlchemyPagosRepository(self.session).cuotas(departamento.id)
-        deuda = saldo_en_mora(cuotas, condominio.dias_gracia, datetime.now(UTC).date())
+        deuda = saldo_en_mora(cuotas, condominio.dias_gracia, fecha_lima())
         return DepartamentoPortalDTO(
             id=departamento.id,
             condominio_id=edificio.condominio_id,

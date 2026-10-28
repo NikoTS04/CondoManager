@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     UniqueConstraint,
     text,
@@ -68,8 +69,11 @@ class UsuarioDepartamento(Base):
     )
     es_activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    dias_gracia_override: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+
     __table_args__ = (
         UniqueConstraint("usuario_id", "departamento_id", name="uq_usuario_depto"),
+        CheckConstraint("dias_gracia_override BETWEEN 0 AND 30", name="ck_vinculo_gracia_override"),
         Index(
             "idx_vinculos_titulares_activos",
             "departamento_id",

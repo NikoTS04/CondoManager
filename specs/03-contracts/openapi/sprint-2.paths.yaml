@@ -170,9 +170,9 @@ paths:
     get:
       operationId: descargarVoucher
       summary: Recuperar la última versión autorizada del archivo privado
-      description: Extensión objetivo pendiente de implementación para inline e historial. Mismos permisos en visualización y descarga; sin JWT en URL. Attachment sigue siendo el comportamiento compatible.
+      description: Visualización inline e historial privados implementados. Mismos permisos en visualización y descarga; sin JWT en URL. Attachment sigue siendo el comportamiento compatible.
       x-historias: [CON-22]
-      x-implementation-status: parcial-inline-e-historial-pendientes
+      x-implementation-status: implementado
       parameters:
         - name: disposicion
           in: query
@@ -227,6 +227,30 @@ paths:
         '415': {$ref: '#/responses/Error'}
         '422': {$ref: '#/responses/Error'}
         '503': {$ref: '#/responses/Error'}
+  /pagos/{comprobante_id}/evidencias:
+    parameters:
+      - {$ref: '#/parameters/ComprobantePath'}
+    get:
+      operationId: listarEvidenciasPago
+      summary: Historial autorizado sin nombres de almacenamiento ni notas internas
+      x-implementation-status: implementado
+      responses:
+        '200':
+          description: Revisiones con archivo histórico disponible en registro privado.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [evidencia_id, content_type, creado_en]
+                  properties:
+                    evidencia_id: {type: string, format: uuid}
+                    content_type: {type: string, enum: [image/png, image/jpeg, application/pdf]}
+                    creado_en: {type: string, format: date-time}
+        '403': {$ref: '#/responses/Error'}
+        '404': {$ref: '#/responses/Error'}
   /pagos/{comprobante_id}/resultado:
     parameters:
       - {$ref: '#/parameters/ComprobantePath'}
@@ -252,7 +276,7 @@ paths:
     post:
       operationId: conciliarPago
       summary: Aprobar, observar o rechazar con resultado financiero persistido
-      description: Solo administración del contexto. Repetir el mismo resultado final devuelve la respuesta original sin otra imputación; una decisión distinta exige estado EN_REVISION.
+      description: Solo administración del contexto. Repetir el mismo resultado final devuelve el recibo original sin otra imputación; una decisión distinta exige estado EN_REVISION. En cuotas diarias reconstruye pagos nuevos por fecha bancaria y UUID, preservando recibos y registrando compensaciones. 422 FECHA_BANCARIA_FUTURA por fecha posterior a hoy en Lima; 409 CREDITO_RETROACTIVO_CONSUMIDO o FONDOS_MORAS_COMPROMETIDOS si la reconstrucción necesita saldo utilizado. El rechazo recupera los días postergados sin imputar el pago. La mora efectivamente cobrada se reconoce en su fondo por edificio, no el principal ni el crédito excedente.
       x-historias: [CON-34, CON-70]
       x-implementation-status: implementado
       requestBody:

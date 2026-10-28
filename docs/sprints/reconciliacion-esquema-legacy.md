@@ -66,6 +66,10 @@ workers ni se reprodujeron eventos históricos como parte de esta reparación.
 
 ## Procedimiento futuro
 
+El incidente posterior del 26 de octubre tiene un marcador y head diferentes:
+ver [recuperación 20261026](reconciliacion-esquema-20261026.md). Su adaptador no
+relaja los guards de revisión de este script histórico.
+
 No volver a ejecutar el adaptador contra el head: rechaza revisiones distintas del
 legacy. No usar `alembic stamp` ni modificar manualmente `alembic_version` para
 sortear errores nuevos. Ante deriva nueva: respaldo nuevo, restauración, comparación

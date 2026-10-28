@@ -234,10 +234,10 @@
     "semantic_hash": "b8b4bd807d574ae496dc89118c56f649"
   },
   "frontend/src/features/junta/ConfiguracionCondominio.tsx": {
-    "mtime": 1792380117.8199918,
-    "seen": 1792555405.0175345,
-    "ast_hash": "95e85ca4840167d2c686114ede6b8771",
-    "semantic_hash": "95e85ca4840167d2c686114ede6b8771"
+    "mtime": 1792884937.2940493,
+    "seen": 1792987681.339801,
+    "ast_hash": "1d748c07c37e5c75814240bd318af2d6",
+    "semantic_hash": "1d748c07c37e5c75814240bd318af2d6"
   },
   "frontend/src/features/junta/CuotasSection.tsx": {
     "mtime": 1792473105.7747915,
@@ -270,10 +270,10 @@
     "semantic_hash": "0cebd82f6257f3d4d4c2a1af8a81e846"
   },
   "frontend/src/features/junta/PresupuestoMensual.tsx": {
-    "mtime": 1792620614.1283307,
-    "seen": 1792621529.463222,
-    "ast_hash": "aa5894d2457f8b716e0ad7643fbe3892",
-    "semantic_hash": "aa5894d2457f8b716e0ad7643fbe3892"
+    "mtime": 1792991451.4741957,
+    "seen": 1792992108.9734666,
+    "ast_hash": "8330990c6c3812fbc915b9786983e1b8",
+    "semantic_hash": "8330990c6c3812fbc915b9786983e1b8"
   },
   "frontend/src/features/junta/ResumenSection.tsx": {
     "mtime": 1792620614.1283307,
@@ -294,10 +294,10 @@
     "semantic_hash": "e6fe796dabe34ea8d74bd89d564f2aff"
   },
   "frontend/src/features/junta/VinculosUsuarioSection.tsx": {
-    "mtime": 1792552112.3341265,
-    "seen": 1792555405.0175633,
-    "ast_hash": "576b172855ea1591382f5e39c5d43cdd",
-    "semantic_hash": "576b172855ea1591382f5e39c5d43cdd"
+    "mtime": 1792885853.309331,
+    "seen": 1792987681.3404787,
+    "ast_hash": "f62e6614879aedd92f0f0b015abda4c6",
+    "semantic_hash": "f62e6614879aedd92f0f0b015abda4c6"
   },
   "frontend/src/features/junta/calculos.ts": {
     "mtime": 1792380117.8199918,
@@ -354,10 +354,10 @@
     "semantic_hash": "fbd4b1ea2198f19d0586afdaccc882f9"
   },
   "frontend/src/lib/api.ts": {
-    "mtime": 1792620614.1313307,
-    "seen": 1792621529.4636002,
-    "ast_hash": "ee64027379055e1eac4eb180fd06646f",
-    "semantic_hash": "ee64027379055e1eac4eb180fd06646f"
+    "mtime": 1792991066.6029882,
+    "seen": 1792992108.9743805,
+    "ast_hash": "75556e478b0e51bf26a03b495c868d32",
+    "semantic_hash": "75556e478b0e51bf26a03b495c868d32"
   },
   "frontend/src/lib/cn.ts": {
     "mtime": 1792380117.8213723,
@@ -414,10 +414,10 @@
     "semantic_hash": "c1c3ac5a8a8b1d026a837dec5e5a5ab7"
   },
   "migrations/env.py": {
-    "mtime": 1792620614.18433,
-    "seen": 1792621529.4640367,
-    "ast_hash": "99e7d455d8e81b53fafbd89f104cbba3",
-    "semantic_hash": "99e7d455d8e81b53fafbd89f104cbba3"
+    "mtime": 1792990376.9414072,
+    "seen": 1792992108.9749506,
+    "ast_hash": "0d387db82c0ce390d2b01e2d4fe15adf",
+    "semantic_hash": "0d387db82c0ce390d2b01e2d4fe15adf"
   },
   "migrations/versions/20261008_0001_crear_condominios_y_auditoria.py": {
     "mtime": 1792380117.8227687,
@@ -480,10 +480,10 @@
     "semantic_hash": "495d8c653ce123c2cc5ae023a18954de"
   },
   "pyproject.toml": {
-    "mtime": 1792620614.18433,
-    "seen": 1792621529.464735,
-    "ast_hash": "4df61185689962e186b8030046ae1aa7",
-    "semantic_hash": "4df61185689962e186b8030046ae1aa7"
+    "mtime": 1792986798.2878134,
+    "seen": 1792987681.343095,
+    "ast_hash": "7cacd4674144e621690f9e6ef3afe2fc",
+    "semantic_hash": "7cacd4674144e621690f9e6ef3afe2fc"
   },
   "scripts/ci/verify_api_contract.py": {
     "mtime": 1792620614.18533,
@@ -654,10 +654,10 @@
     "semantic_hash": "7bc4d23f374a5d360474fb0f22805835"
   },
   "src/main.py": {
-    "mtime": 1792620614.19733,
-    "seen": 1792621529.466313,
-    "ast_hash": "e9cf0412ab9cd21d0c907528b1e9f65c",
-    "semantic_hash": "e9cf0412ab9cd21d0c907528b1e9f65c"
+    "mtime": 1792989819.79655,
+    "seen": 1792992108.9779794,
+    "ast_hash": "2d428d13c227a7a93c6610e69dec54db",
+    "semantic_hash": "2d428d13c227a7a93c6610e69dec54db"
   },
   "src/modules/condominios/__init__.py": {
     "mtime": 1790129522.4487212,
@@ -702,10 +702,10 @@
     "semantic_hash": "d77c7cdb6b8b445d08d9a820e07ef124"
   },
   "src/modules/condominios/models.py": {
-    "mtime": 1792380117.8285418,
-    "seen": 1792555405.0177543,
-    "ast_hash": "eb392d9c1ca25443caec094e419f6129",
-    "semantic_hash": "eb392d9c1ca25443caec094e419f6129"
+    "mtime": 1792885743.0325935,
+    "seen": 1792987681.3457482,
+    "ast_hash": "d012261a677bb8675d8c7217073546a7",
+    "semantic_hash": "d012261a677bb8675d8c7217073546a7"
   },
   "src/modules/condominios/repository.py": {
     "mtime": 1792380117.8285418,
@@ -714,22 +714,22 @@
     "semantic_hash": "8e9a577987bf21525bc46d846bba3d9f"
   },
   "src/modules/condominios/router.py": {
-    "mtime": 1792552112.3411264,
-    "seen": 1792555405.01776,
-    "ast_hash": "3a041c438213f6a2c8e24722429c7f44",
-    "semantic_hash": "3a041c438213f6a2c8e24722429c7f44"
+    "mtime": 1792885004.1291437,
+    "seen": 1792987681.345817,
+    "ast_hash": "7cfb100390b7a8428524f60b023ed074",
+    "semantic_hash": "7cfb100390b7a8428524f60b023ed074"
   },
   "src/modules/condominios/schemas.py": {
-    "mtime": 1792380117.8285418,
-    "seen": 1792555405.017763,
-    "ast_hash": "287012025f4dae658683b02d0473f456",
-    "semantic_hash": "287012025f4dae658683b02d0473f456"
+    "mtime": 1792884845.6220882,
+    "seen": 1792987681.3458204,
+    "ast_hash": "fc85a530017c1bef245334d72375096b",
+    "semantic_hash": "fc85a530017c1bef245334d72375096b"
   },
   "src/modules/condominios/service.py": {
-    "mtime": 1792380117.8285418,
-    "seen": 1792555405.017766,
-    "ast_hash": "eb33864cffdb41d6ba215f53153e0718",
-    "semantic_hash": "eb33864cffdb41d6ba215f53153e0718"
+    "mtime": 1792885004.1311438,
+    "seen": 1792987681.3458233,
+    "ast_hash": "672f782ab5b797b4bb2bdea8855aa165",
+    "semantic_hash": "672f782ab5b797b4bb2bdea8855aa165"
   },
   "src/modules/cuotas/distribucion/__init__.py": {
     "mtime": 1792380117.829659,
@@ -768,22 +768,22 @@
     "semantic_hash": "eeea57af18bd83b03b85479657796353"
   },
   "src/modules/cuotas/distribucion/service.py": {
-    "mtime": 1792380117.8297844,
-    "seen": 1792555405.0177858,
-    "ast_hash": "509899d7297bb2ad04d54e1fa78dd1fd",
-    "semantic_hash": "509899d7297bb2ad04d54e1fa78dd1fd"
+    "mtime": 1792985531.8425424,
+    "seen": 1792987681.3462415,
+    "ast_hash": "6011be521ff443cff1672584985f9671",
+    "semantic_hash": "6011be521ff443cff1672584985f9671"
   },
   "src/modules/cuotas/emision.py": {
-    "mtime": 1792473105.7797916,
-    "seen": 1792555405.0177882,
-    "ast_hash": "028637e219ead6c103123029234f9105",
-    "semantic_hash": "028637e219ead6c103123029234f9105"
+    "mtime": 1792988108.3203423,
+    "seen": 1792992108.979201,
+    "ast_hash": "4a8280ce758b5335e3c15dc335ac6f55",
+    "semantic_hash": "4a8280ce758b5335e3c15dc335ac6f55"
   },
   "src/modules/cuotas/models.py": {
-    "mtime": 1792473105.7797916,
-    "seen": 1792555405.0177906,
-    "ast_hash": "8229e0b4e6e04a0ae88aecf06f0a0ab5",
-    "semantic_hash": "8229e0b4e6e04a0ae88aecf06f0a0ab5"
+    "mtime": 1792985531.8505423,
+    "seen": 1792987681.3462505,
+    "ast_hash": "a0915381f0ddb2b7071801d55dab7d26",
+    "semantic_hash": "a0915381f0ddb2b7071801d55dab7d26"
   },
   "src/modules/cuotas/presupuestos/__init__.py": {
     "mtime": 1792380117.8303232,
@@ -798,40 +798,40 @@
     "semantic_hash": "bc79ce6cdfc19411c863f9f578bf4f7d"
   },
   "src/modules/cuotas/presupuestos/models.py": {
-    "mtime": 1792380117.8304334,
-    "seen": 1792555405.0177977,
-    "ast_hash": "1ea6b1add34eab40f91d6ddae969ecfd",
-    "semantic_hash": "1ea6b1add34eab40f91d6ddae969ecfd"
+    "mtime": 1792985971.7029815,
+    "seen": 1792987681.3463945,
+    "ast_hash": "697eda89636f40a4e147f13f2aed93fb",
+    "semantic_hash": "697eda89636f40a4e147f13f2aed93fb"
   },
   "src/modules/cuotas/presupuestos/repository.py": {
-    "mtime": 1792380117.8304334,
-    "seen": 1792555405.0178008,
-    "ast_hash": "b3990ff1beb3348ad20272ad7d070ffa",
-    "semantic_hash": "b3990ff1beb3348ad20272ad7d070ffa"
+    "mtime": 1792990376.9414072,
+    "seen": 1792992108.9794517,
+    "ast_hash": "d0a16f1b1a91d1827d91a5054ebd5a3c",
+    "semantic_hash": "d0a16f1b1a91d1827d91a5054ebd5a3c"
   },
   "src/modules/cuotas/presupuestos/router.py": {
-    "mtime": 1792552112.3411264,
-    "seen": 1792555405.017803,
-    "ast_hash": "f1a9e18fca5aaea5943c44c050ffdb06",
-    "semantic_hash": "f1a9e18fca5aaea5943c44c050ffdb06"
+    "mtime": 1792986341.9662137,
+    "seen": 1792987681.3464012,
+    "ast_hash": "a3a66de87ef2450705345ce8a73b300a",
+    "semantic_hash": "a3a66de87ef2450705345ce8a73b300a"
   },
   "src/modules/cuotas/presupuestos/schemas.py": {
-    "mtime": 1792380117.8304334,
-    "seen": 1792555405.017806,
-    "ast_hash": "46789731ee363e36f4c7147cc5895cb3",
-    "semantic_hash": "46789731ee363e36f4c7147cc5895cb3"
+    "mtime": 1792989785.2270138,
+    "seen": 1792992108.979532,
+    "ast_hash": "57f37b551cc1548d5934dcdb8f238607",
+    "semantic_hash": "57f37b551cc1548d5934dcdb8f238607"
   },
   "src/modules/cuotas/presupuestos/service.py": {
-    "mtime": 1792380117.8304334,
-    "seen": 1792555405.017809,
-    "ast_hash": "a42ca31797a4dde9e8d47ae6cba698b8",
-    "semantic_hash": "a42ca31797a4dde9e8d47ae6cba698b8"
+    "mtime": 1792989785.2280138,
+    "seen": 1792992108.9795349,
+    "ast_hash": "6dbbf415ba22e5b527860e0bb77ff139",
+    "semantic_hash": "6dbbf415ba22e5b527860e0bb77ff139"
   },
   "src/modules/cuotas/router.py": {
-    "mtime": 1792552112.3411264,
-    "seen": 1792555405.0178118,
-    "ast_hash": "643887dbe4944e43d476bcfc20d5941e",
-    "semantic_hash": "643887dbe4944e43d476bcfc20d5941e"
+    "mtime": 1792986165.7995276,
+    "seen": 1792987681.3464186,
+    "ast_hash": "fe87cafd87cfc8d7630d61fd98519902",
+    "semantic_hash": "fe87cafd87cfc8d7630d61fd98519902"
   },
   "src/modules/cuotas/saldos/__init__.py": {
     "mtime": 1792380117.8309996,
@@ -906,10 +906,10 @@
     "semantic_hash": "807104cb4b055df78ae078d3a968e706"
   },
   "src/modules/notificaciones/templates.py": {
-    "mtime": 1792620614.1993299,
-    "seen": 1792621529.468692,
-    "ast_hash": "a7b66381dfeeabd511760746693cd7a8",
-    "semantic_hash": "a7b66381dfeeabd511760746693cd7a8"
+    "mtime": 1792988108.3193424,
+    "seen": 1792992108.9805663,
+    "ast_hash": "12e8aa4d17266b7d0fae2f632f941d6e",
+    "semantic_hash": "12e8aa4d17266b7d0fae2f632f941d6e"
   },
   "src/modules/pagos/models.py": {
     "mtime": 1790129541.8708763,
@@ -924,10 +924,10 @@
     "semantic_hash": "821b2add633c7b1ff9244c9b707292bd"
   },
   "src/modules/pagos/router.py": {
-    "mtime": 1792620614.2003298,
-    "seen": 1792621529.468914,
-    "ast_hash": "a44f55962b762fd1d50c367f0d27a12e",
-    "semantic_hash": "a44f55962b762fd1d50c367f0d27a12e"
+    "mtime": 1792884867.5763798,
+    "seen": 1792987681.3479285,
+    "ast_hash": "8befe8780faa3668c4ffb72faebf8bfb",
+    "semantic_hash": "8befe8780faa3668c4ffb72faebf8bfb"
   },
   "src/modules/pagos/schemas.py": {
     "mtime": 1792620614.20133,
@@ -1008,16 +1008,16 @@
     "semantic_hash": "e05f67a3f2368070680c8ec055bb7c06"
   },
   "src/modules/usuarios/departamentos.py": {
-    "mtime": 1792556762.9045513,
-    "seen": 1792595820.7597477,
-    "ast_hash": "f4daabf52dcc0698ea89c4a8f56c111a",
-    "semantic_hash": "f4daabf52dcc0698ea89c4a8f56c111a"
+    "mtime": 1792885827.7750065,
+    "seen": 1792987681.3492064,
+    "ast_hash": "a29433bf823e29e59a10631bf3cad823",
+    "semantic_hash": "a29433bf823e29e59a10631bf3cad823"
   },
   "src/modules/usuarios/models.py": {
-    "mtime": 1792552112.3441265,
-    "seen": 1792555405.017897,
-    "ast_hash": "8c350274778a6234df8cf1950109ffb7",
-    "semantic_hash": "8c350274778a6234df8cf1950109ffb7"
+    "mtime": 1792885743.0329065,
+    "seen": 1792987681.3492098,
+    "ast_hash": "b7682452bf01517d9d14bfd3ec73cf3d",
+    "semantic_hash": "b7682452bf01517d9d14bfd3ec73cf3d"
   },
   "src/modules/usuarios/piloto.py": {
     "mtime": 1792552112.3441265,
@@ -1044,10 +1044,10 @@
     "semantic_hash": "22090488c271e61e385e36ce4c041db2"
   },
   "src/modules/usuarios/service.py": {
-    "mtime": 1792552112.3441265,
-    "seen": 1792555405.0179124,
-    "ast_hash": "f6edf172aa705be4009c68ab03291277",
-    "semantic_hash": "f6edf172aa705be4009c68ab03291277"
+    "mtime": 1792885782.8775573,
+    "seen": 1792987681.349472,
+    "ast_hash": "6a1e80506120ec10ad32f3649a76c6ea",
+    "semantic_hash": "6a1e80506120ec10ad32f3649a76c6ea"
   },
   "src/shared/decimal_types.py": {
     "mtime": 1792380117.831391,
@@ -1176,16 +1176,16 @@
     "semantic_hash": "f1b10dc216ecf4d874085fda1f125ffb"
   },
   "src/tests/integration/test_emision_db.py": {
-    "mtime": 1792552112.3461266,
-    "seen": 1792555405.017973,
-    "ast_hash": "1ef82023567cdabcba4513c72d72ea63",
-    "semantic_hash": "1ef82023567cdabcba4513c72d72ea63"
+    "mtime": 1792987053.2370653,
+    "seen": 1792987681.3513327,
+    "ast_hash": "dfba9e0c2954370c7f25e5fe27a5454e",
+    "semantic_hash": "dfba9e0c2954370c7f25e5fe27a5454e"
   },
   "src/tests/integration/test_estructura_db.py": {
-    "mtime": 1792552112.3461266,
-    "seen": 1792555405.0179758,
-    "ast_hash": "1e70a32a35cc4802c3297274726705c9",
-    "semantic_hash": "1e70a32a35cc4802c3297274726705c9"
+    "mtime": 1792886273.689967,
+    "seen": 1792987681.351336,
+    "ast_hash": "210af8e3c960581471cc4f97c6099646",
+    "semantic_hash": "210af8e3c960581471cc4f97c6099646"
   },
   "src/tests/integration/test_presupuestos_api.py": {
     "mtime": 1792552112.3461266,
@@ -1200,10 +1200,10 @@
     "semantic_hash": "aaa8ffa84cf772f16f2f8bf1e444fafc"
   },
   "src/tests/integration/test_saldos_favor_db.py": {
-    "mtime": 1792380117.8323913,
-    "seen": 1792555405.0179837,
-    "ast_hash": "e501b93ec86599861788f765380e6db6",
-    "semantic_hash": "e501b93ec86599861788f765380e6db6"
+    "mtime": 1792886034.3590157,
+    "seen": 1792987681.3517883,
+    "ast_hash": "3bfefd6b43804b3ed661b6a2f71e8e79",
+    "semantic_hash": "3bfefd6b43804b3ed661b6a2f71e8e79"
   },
   "src/tests/integration/test_seed_data.py": {
     "mtime": 1790129881.9194303,
@@ -1218,10 +1218,10 @@
     "semantic_hash": "f29d5689107a753799b13aa65c4f0c15"
   },
   "src/tests/integration/test_vinculos_db.py": {
-    "mtime": 1792620614.2123296,
-    "seen": 1792621529.4716392,
-    "ast_hash": "ab29dc0d4c9afdb66e6f9eafefd36585",
-    "semantic_hash": "ab29dc0d4c9afdb66e6f9eafefd36585"
+    "mtime": 1792886975.0685449,
+    "seen": 1792987681.3519347,
+    "ast_hash": "3f1f393b4b7190bb61dc9b9a8dc5f118",
+    "semantic_hash": "3f1f393b4b7190bb61dc9b9a8dc5f118"
   },
   "src/tests/unit/test_audit.py": {
     "mtime": 1790127675.5982888,
@@ -1266,10 +1266,10 @@
     "semantic_hash": "e69df35930d71ae5abdac121b71a2aa5"
   },
   "src/tests/unit/test_notificaciones_service.py": {
-    "mtime": 1792620614.2133298,
-    "seen": 1792621529.4720857,
-    "ast_hash": "5cccb82e4adde904f795322a3fcba2e8",
-    "semantic_hash": "5cccb82e4adde904f795322a3fcba2e8"
+    "mtime": 1792988228.0212889,
+    "seen": 1792992108.9860005,
+    "ast_hash": "caffa6b600aefc98c74a98c1b3390730",
+    "semantic_hash": "caffa6b600aefc98c74a98c1b3390730"
   },
   "src/tests/unit/test_pagos_service.py": {
     "mtime": 1792620614.2143297,
@@ -1296,10 +1296,10 @@
     "semantic_hash": "a0bc2cfd3fdf2ef8c96108be445e770d"
   },
   "src/tests/usuarios_db.py": {
-    "mtime": 1792620614.2143297,
-    "seen": 1792621529.4722698,
-    "ast_hash": "34166c18120f03ee96e7cfa302038193",
-    "semantic_hash": "34166c18120f03ee96e7cfa302038193"
+    "mtime": 1792989819.79655,
+    "seen": 1792992108.986348,
+    "ast_hash": "84d12a5698d56153a07f7b7f8bb2b29e",
+    "semantic_hash": "84d12a5698d56153a07f7b7f8bb2b29e"
   },
   ".spectral-functions/oasDocumentSchema.js": {
     "mtime": 1792556762.8948457,
@@ -1308,10 +1308,10 @@
     "semantic_hash": "832e519d366488446d4573170fa77532"
   },
   "frontend/src/components/domain/VoucherDownloadButton.tsx": {
-    "mtime": 1792556762.896551,
-    "seen": 1792595820.7502053,
-    "ast_hash": "ba6e819a3a3332695e2b444fab13c6e4",
-    "semantic_hash": "ba6e819a3a3332695e2b444fab13c6e4"
+    "mtime": 1792884902.2211401,
+    "seen": 1792987681.3382256,
+    "ast_hash": "d7cf9f89b2256e544bd5e2e2a4ebc7fb",
+    "semantic_hash": "d7cf9f89b2256e544bd5e2e2a4ebc7fb"
   },
   "frontend/src/features/residente/AvisosList.tsx": {
     "mtime": 1792620614.1283307,
@@ -1368,10 +1368,10 @@
     "semantic_hash": "83ef0d5d90079d3a47cc1e53a35777fd"
   },
   "src/modules/notificaciones/consumo.py": {
-    "mtime": 1792620614.19733,
-    "seen": 1792621529.4686732,
-    "ast_hash": "8dc3f09b1e1a26969cd66c9494a3e6a1",
-    "semantic_hash": "8dc3f09b1e1a26969cd66c9494a3e6a1"
+    "mtime": 1792989819.79655,
+    "seen": 1792992108.980207,
+    "ast_hash": "37e03ff9d14a8128e7dacd73b8e8edbe",
+    "semantic_hash": "37e03ff9d14a8128e7dacd73b8e8edbe"
   },
   "src/modules/notificaciones/models.py": {
     "mtime": 1792620614.19733,
@@ -1398,10 +1398,10 @@
     "semantic_hash": "be9a7b336e1e8f14ab2651486e817957"
   },
   "src/modules/pagos/contabilidad.py": {
-    "mtime": 1792556762.903551,
-    "seen": 1792595820.758864,
-    "ast_hash": "e1f16340764ab1a126b0bc80f2d942ad",
-    "semantic_hash": "e1f16340764ab1a126b0bc80f2d942ad"
+    "mtime": 1792987938.068413,
+    "seen": 1792992108.980633,
+    "ast_hash": "82998a93c91dcb2fbbbc52824457b574",
+    "semantic_hash": "82998a93c91dcb2fbbbc52824457b574"
   },
   "src/modules/pagos/models_persistencia.py": {
     "mtime": 1792620614.1993299,
@@ -1410,22 +1410,22 @@
     "semantic_hash": "c7b67ba257902e4c467df50ef964db27"
   },
   "src/modules/pagos/persistencia.py": {
-    "mtime": 1792620614.2003298,
-    "seen": 1792621529.4689085,
-    "ast_hash": "0effbf60615c8de80260c7fcd434505e",
-    "semantic_hash": "0effbf60615c8de80260c7fcd434505e"
+    "mtime": 1792989819.79555,
+    "seen": 1792992108.9808335,
+    "ast_hash": "82cf539a31b20e56e0670a165a430b00",
+    "semantic_hash": "82cf539a31b20e56e0670a165a430b00"
   },
   "src/modules/pagos/repository.py": {
-    "mtime": 1792620614.2003298,
-    "seen": 1792621529.4689112,
-    "ast_hash": "ab7b7b7e206b2d58aa4494d6c71fc432",
-    "semantic_hash": "ab7b7b7e206b2d58aa4494d6c71fc432"
+    "mtime": 1792989758.849793,
+    "seen": 1792992108.9808366,
+    "ast_hash": "62e527ed9042510629ec1d9a1fbeb731",
+    "semantic_hash": "62e527ed9042510629ec1d9a1fbeb731"
   },
   "src/modules/pagos/solvencia.py": {
-    "mtime": 1792556762.9045513,
-    "seen": 1792595820.7590568,
-    "ast_hash": "6b868bffc80d4fd264c5ae31a3aad058",
-    "semantic_hash": "6b868bffc80d4fd264c5ae31a3aad058"
+    "mtime": 1792885827.774163,
+    "seen": 1792987681.3480635,
+    "ast_hash": "22f0d43edb1ed0bebb13d55f4845b0f3",
+    "semantic_hash": "22f0d43edb1ed0bebb13d55f4845b0f3"
   },
   "src/modules/pagos/storage.py": {
     "mtime": 1792620614.20133,
@@ -1434,10 +1434,10 @@
     "semantic_hash": "bfa4b0dc0419879dc211e904ece256b8"
   },
   "src/modules/pagos/worker.py": {
-    "mtime": 1792556762.9045513,
-    "seen": 1792595820.759063,
-    "ast_hash": "aeede3ce6754788d35d6f3ec1a48371a",
-    "semantic_hash": "aeede3ce6754788d35d6f3ec1a48371a"
+    "mtime": 1792989819.79655,
+    "seen": 1792992108.9811246,
+    "ast_hash": "78f591e63107af87aa37c2f250487c4e",
+    "semantic_hash": "78f591e63107af87aa37c2f250487c4e"
   },
   "src/modules/reservas/persistencia.py": {
     "mtime": 1792620614.2023299,
@@ -1470,22 +1470,22 @@
     "semantic_hash": "77ce352f85e57253285fb2d28f1691ca"
   },
   "src/tests/integration/test_convergencia_con72.py": {
-    "mtime": 1792620614.2093298,
-    "seen": 1792621529.4711828,
-    "ast_hash": "af8319115fc7d9f599801ab44df7c341",
-    "semantic_hash": "af8319115fc7d9f599801ab44df7c341"
+    "mtime": 1792885114.4933112,
+    "seen": 1792987681.3512578,
+    "ast_hash": "de1c9dc0f83f21e5fc6cb3f446fd13bb",
+    "semantic_hash": "de1c9dc0f83f21e5fc6cb3f446fd13bb"
   },
   "src/tests/integration/test_migracion_con72.py": {
-    "mtime": 1792620614.2103298,
-    "seen": 1792621529.471371,
-    "ast_hash": "acf11e4fae5ef7c0972ed24f74d2e3a4",
-    "semantic_hash": "acf11e4fae5ef7c0972ed24f74d2e3a4"
+    "mtime": 1792886625.0852592,
+    "seen": 1792987681.3513389,
+    "ast_hash": "d91cc90df4dbd5016ab0f416308bc42c",
+    "semantic_hash": "d91cc90df4dbd5016ab0f416308bc42c"
   },
   "src/tests/integration/test_migracion_con73.py": {
-    "mtime": 1792620614.2103298,
-    "seen": 1792621529.4713738,
-    "ast_hash": "d0f77762e351eb1a1a46e1f9560dc23d",
-    "semantic_hash": "d0f77762e351eb1a1a46e1f9560dc23d"
+    "mtime": 1792886625.0856125,
+    "seen": 1792987681.351342,
+    "ast_hash": "6776b47d3f78075e2972c1a97e301aa8",
+    "semantic_hash": "6776b47d3f78075e2972c1a97e301aa8"
   },
   "src/tests/integration/test_pagos_db.py": {
     "mtime": 1792620614.2113297,
@@ -1512,16 +1512,16 @@
     "semantic_hash": "33a293f5e6c09121efc31f379244bcc2"
   },
   "src/tests/unit/test_merge_sprint2.py": {
-    "mtime": 1792620614.2133298,
-    "seen": 1792621529.4720159,
-    "ast_hash": "381b9836e91e17bfc2991f877e9ed8e3",
-    "semantic_hash": "381b9836e91e17bfc2991f877e9ed8e3"
+    "mtime": 1792887340.426154,
+    "seen": 1792987681.3526516,
+    "ast_hash": "287719c5f911423b32ac963acdf8d701",
+    "semantic_hash": "287719c5f911423b32ac963acdf8d701"
   },
   "src/tests/unit/test_pagos_contabilidad_storage.py": {
-    "mtime": 1792620614.2133298,
-    "seen": 1792621529.4720883,
-    "ast_hash": "2c19bcad9ff7205e16ebbf76014de254",
-    "semantic_hash": "2c19bcad9ff7205e16ebbf76014de254"
+    "mtime": 1792885035.1321864,
+    "seen": 1792987681.352861,
+    "ast_hash": "b65521c1277680037f0cbea465040ee2",
+    "semantic_hash": "b65521c1277680037f0cbea465040ee2"
   },
   "frontend/tests/presentation.test.mjs": {
     "mtime": 1792620614.1323307,
@@ -1614,10 +1614,10 @@
     "semantic_hash": "74318b702c78ecd0c5b722455a4c8454"
   },
   "src/tests/integration/test_reconciliacion_esquema_legacy.py": {
-    "mtime": 1792620614.2113297,
-    "seen": 1792621529.471447,
-    "ast_hash": "40b840d8ab8ae9e4e2194e35dd82ebc0",
-    "semantic_hash": "40b840d8ab8ae9e4e2194e35dd82ebc0"
+    "mtime": 1792887340.42479,
+    "seen": 1792987681.3516414,
+    "ast_hash": "4ebfc791960b5dd783ba6b683eb5b5a8",
+    "semantic_hash": "4ebfc791960b5dd783ba6b683eb5b5a8"
   },
   "src/tests/unit/test_cancelaciones.py": {
     "mtime": 1792620614.2123296,
@@ -1642,5 +1642,209 @@
     "seen": 1792621529.4721584,
     "ast_hash": "a763fbd346e18e667fd2966372b54129",
     "semantic_hash": "a763fbd346e18e667fd2966372b54129"
+  },
+  "frontend/src/features/junta/CondicionesPagoForm.tsx": {
+    "mtime": 1792885853.3090904,
+    "seen": 1792987681.3397973,
+    "ast_hash": "7fc6dc56cca9027860c7cdfc249c5af5",
+    "semantic_hash": "7fc6dc56cca9027860c7cdfc249c5af5"
+  },
+  "frontend/src/features/junta/ProrrateoEditor.tsx": {
+    "mtime": 1792991155.236464,
+    "seen": 1792992108.9734697,
+    "ast_hash": "dd983a764d0302eb86c13d3726d24bff",
+    "semantic_hash": "dd983a764d0302eb86c13d3726d24bff"
+  },
+  "frontend/src/features/junta/ProrrateoPreview.tsx": {
+    "mtime": 1792991155.2373097,
+    "seen": 1792992108.973473,
+    "ast_hash": "bbb8dc4ecc11abd40c2fe5a22662c18c",
+    "semantic_hash": "bbb8dc4ecc11abd40c2fe5a22662c18c"
+  },
+  "migrations/versions/20261024_0016_politica_mora_diaria.py": {
+    "mtime": 1792885004.1329005,
+    "seen": 1792987681.3430853,
+    "ast_hash": "4509d815fe669929b372d402ea33015e",
+    "semantic_hash": "4509d815fe669929b372d402ea33015e"
+  },
+  "migrations/versions/20261024_0017_condiciones_pago.py": {
+    "mtime": 1792885782.8800042,
+    "seen": 1792987681.3430886,
+    "ast_hash": "8532674fef66fcfe238a1178b7a9b7ab",
+    "semantic_hash": "8532674fef66fcfe238a1178b7a9b7ab"
+  },
+  "migrations/versions/20261025_0018_prorrateo_detallado.py": {
+    "mtime": 1792985645.3841069,
+    "seen": 1792987681.3430917,
+    "ast_hash": "c8474e30a415472d92a1c576a7286715",
+    "semantic_hash": "c8474e30a415472d92a1c576a7286715"
+  },
+  "specs/03-contracts/events/schemas/cuotas-prorrateo-emitidas.v2.schema.json": {
+    "mtime": 1792985971.7059815,
+    "seen": 1792987681.343935,
+    "ast_hash": "328f6c913650a67626d6f21e9b5a2c74",
+    "semantic_hash": "328f6c913650a67626d6f21e9b5a2c74"
+  },
+  "src/modules/condominios/condiciones_pago.py": {
+    "mtime": 1792885782.8775573,
+    "seen": 1792987681.3453004,
+    "ast_hash": "90b9858fd8e60adc9f81ae0c6189b3cd",
+    "semantic_hash": "90b9858fd8e60adc9f81ae0c6189b3cd"
+  },
+  "src/modules/cuotas/documentos_prorrateo.py": {
+    "mtime": 1792991066.6039884,
+    "seen": 1792992108.9791982,
+    "ast_hash": "3b58e20d529a7eaa61c1f994f1afb133",
+    "semantic_hash": "3b58e20d529a7eaa61c1f994f1afb133"
+  },
+  "src/modules/cuotas/prorrateo.py": {
+    "mtime": 1792989785.2270138,
+    "seen": 1792992108.9795377,
+    "ast_hash": "8f31c121aae3448a52eb9b580d496c86",
+    "semantic_hash": "8f31c121aae3448a52eb9b580d496c86"
+  },
+  "src/modules/cuotas/prorrateo_api.py": {
+    "mtime": 1792989785.2280138,
+    "seen": 1792992108.9795408,
+    "ast_hash": "4c1c4386a47393dbaf80af49a058e5a9",
+    "semantic_hash": "4c1c4386a47393dbaf80af49a058e5a9"
+  },
+  "src/modules/cuotas/prorrateo_schemas.py": {
+    "mtime": 1792989785.2270138,
+    "seen": 1792992108.979543,
+    "ast_hash": "2f37d3ef274c725a550ff8fa743f5a17",
+    "semantic_hash": "2f37d3ef274c725a550ff8fa743f5a17"
+  },
+  "src/shared/fechas.py": {
+    "mtime": 1792885827.7730503,
+    "seen": 1792987681.349547,
+    "ast_hash": "130b5ead07aba883ac81f38aea888b03",
+    "semantic_hash": "130b5ead07aba883ac81f38aea888b03"
+  },
+  "src/tests/integration/test_condiciones_pago_db.py": {
+    "mtime": 1792887340.426154,
+    "seen": 1792987681.3511813,
+    "ast_hash": "77a35774efcd3c2a906a2408bd7885d9",
+    "semantic_hash": "77a35774efcd3c2a906a2408bd7885d9"
+  },
+  "src/tests/integration/test_prorrateo_db.py": {
+    "mtime": 1792987147.6462677,
+    "seen": 1792987681.3516374,
+    "ast_hash": "569994ab7bf6762b46dbad376f4cf90d",
+    "semantic_hash": "569994ab7bf6762b46dbad376f4cf90d"
+  },
+  "src/tests/integration/test_voucher_inline.py": {
+    "mtime": 1792885114.493085,
+    "seen": 1792987681.351938,
+    "ast_hash": "2452aea0d23e528ef00a2ad54017941f",
+    "semantic_hash": "2452aea0d23e528ef00a2ad54017941f"
+  },
+  "src/tests/unit/test_condiciones_pago.py": {
+    "mtime": 1792886144.5725403,
+    "seen": 1792987681.352204,
+    "ast_hash": "117d11be8ed7e2292b3d778691e511ae",
+    "semantic_hash": "117d11be8ed7e2292b3d778691e511ae"
+  },
+  "src/tests/unit/test_documentos_prorrateo.py": {
+    "mtime": 1792986958.591751,
+    "seen": 1792987681.3525043,
+    "ast_hash": "c252ccce24e66c41f48311fc94b1cda7",
+    "semantic_hash": "c252ccce24e66c41f48311fc94b1cda7"
+  },
+  "src/tests/unit/test_politica_diaria.py": {
+    "mtime": 1792988228.020289,
+    "seen": 1792992108.9861221,
+    "ast_hash": "a9f24549cd2d37edad5d84ca334ebfd7",
+    "semantic_hash": "a9f24549cd2d37edad5d84ca334ebfd7"
+  },
+  "src/tests/unit/test_prorrateo.py": {
+    "mtime": 1792989895.9967022,
+    "seen": 1792992108.986125,
+    "ast_hash": "fca0f9bee899f14fb240ac7f767356ea",
+    "semantic_hash": "fca0f9bee899f14fb240ac7f767356ea"
+  },
+  "frontend/src/features/junta/FondosMorasPanel.tsx": {
+    "mtime": 1792990001.7066112,
+    "seen": 1792992108.9732604,
+    "ast_hash": "acbad424fbace95cc722b4b327205968",
+    "semantic_hash": "acbad424fbace95cc722b4b327205968"
+  },
+  "migrations/versions/20261025_0019_motor_mora_diaria.py": {
+    "mtime": 1792988472.150175,
+    "seen": 1792992108.9760268,
+    "ast_hash": "d4d18982445c95baa043e8ce49cf6f27",
+    "semantic_hash": "d4d18982445c95baa043e8ce49cf6f27"
+  },
+  "migrations/versions/20261025_0020_fondos_moras.py": {
+    "mtime": 1792990376.9404073,
+    "seen": 1792992108.9760296,
+    "ast_hash": "bf75c1e6604b6d47b3b2b1ff7da0712f",
+    "semantic_hash": "bf75c1e6604b6d47b3b2b1ff7da0712f"
+  },
+  "specs/03-contracts/events/schemas/fondos-moras.v1.schema.json": {
+    "mtime": 1792991079.6782084,
+    "seen": 1792992108.9769177,
+    "ast_hash": "146ce50d0fb86b5354d1258b79d9dd23",
+    "semantic_hash": "146ce50d0fb86b5354d1258b79d9dd23"
+  },
+  "specs/03-contracts/events/schemas/mora-diaria.v2.schema.json": {
+    "mtime": 1792988108.3203423,
+    "seen": 1792992108.9769883,
+    "ast_hash": "168a1cebdd765312b2f6182aeac6cf77",
+    "semantic_hash": "168a1cebdd765312b2f6182aeac6cf77"
+  },
+  "src/modules/pagos/calculo_diario.py": {
+    "mtime": 1792988472.150175,
+    "seen": 1792992108.9806297,
+    "ast_hash": "7c587cf9bbaeee339d2f21b05cdb6dfb",
+    "semantic_hash": "7c587cf9bbaeee339d2f21b05cdb6dfb"
+  },
+  "src/modules/pagos/fondos.py": {
+    "mtime": 1792991066.6029882,
+    "seen": 1792992108.980636,
+    "ast_hash": "63416e3ab539d5033174737d7997d808",
+    "semantic_hash": "63416e3ab539d5033174737d7997d808"
+  },
+  "src/modules/pagos/fondos_api.py": {
+    "mtime": 1792990376.9404073,
+    "seen": 1792992108.9806387,
+    "ast_hash": "517903de3119ba7ffbad8962f464ca2c",
+    "semantic_hash": "517903de3119ba7ffbad8962f464ca2c"
+  },
+  "src/modules/pagos/fondos_models.py": {
+    "mtime": 1792990376.9404073,
+    "seen": 1792992108.9806414,
+    "ast_hash": "71bd4695cb22df2ec364d7d6768d3abd",
+    "semantic_hash": "71bd4695cb22df2ec364d7d6768d3abd"
+  },
+  "src/modules/pagos/models_mora.py": {
+    "mtime": 1792988472.150175,
+    "seen": 1792992108.9807057,
+    "ast_hash": "6d54d05fc9bec772562c19e6ac3636bb",
+    "semantic_hash": "6d54d05fc9bec772562c19e6ac3636bb"
+  },
+  "src/modules/pagos/mora_diaria.py": {
+    "mtime": 1792989819.79555,
+    "seen": 1792992108.9807703,
+    "ast_hash": "cc545e5ce0dbad3a2ed46ab9db823b78",
+    "semantic_hash": "cc545e5ce0dbad3a2ed46ab9db823b78"
+  },
+  "src/tests/integration/test_fondos_moras_db.py": {
+    "mtime": 1792991066.6039884,
+    "seen": 1792992108.9842575,
+    "ast_hash": "3e9e3b27a8a51eeac200e56e87f23bca",
+    "semantic_hash": "3e9e3b27a8a51eeac200e56e87f23bca"
+  },
+  "src/tests/integration/test_mora_diaria_db.py": {
+    "mtime": 1792988559.3741336,
+    "seen": 1792992108.984379,
+    "ast_hash": "fbfb5b6d995ea927bfe5de30c70ee927",
+    "semantic_hash": "fbfb5b6d995ea927bfe5de30c70ee927"
+  },
+  "src/tests/unit/test_calculo_mora_diaria.py": {
+    "mtime": 1792988228.0212889,
+    "seen": 1792992108.9852834,
+    "ast_hash": "833120953da4aae39b7ec703c1602826",
+    "semantic_hash": "833120953da4aae39b7ec703c1602826"
   }
 }

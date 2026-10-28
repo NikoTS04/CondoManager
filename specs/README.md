@@ -1,5 +1,52 @@
 # CondoManager - Especificaciones Técnicas (Spec-Driven Development de Nivel Empresarial)
 
+## Despliegue recuperado — 26 octubre 2026
+
+Base activa en `20261025_0020`, backend y tres workers healthy, sin alterar hechos
+históricos ni importar caja. Respaldo, dos ensayos y 650 pruebas aprobadas:
+[evidencia operativa](../docs/sprints/reconciliacion-esquema-20261026.md).
+
+## Avance de implementación: fondos y cobertura (0020)
+
+Fondos por edificio/moneda desde cobros conciliados, reservas versionadas para
+gastos, liberación y confirmación sin doble descuento integrados en interfaz,
+aprobación, emisión y PDF/DOCX. Retroactivos sin respaldo disponible se bloquean
+íntegramente. No se importa caja histórica ni se editan aprobados. Desplegar la
+migración y consumidor compatibles antes de activar productores. La entrega inicial
+solo se probó de forma aislada; el despliegue actual está documentado arriba.
+
+### Verificación local del cierre
+
+- Suite completa: **639 pruebas aprobadas**, incluido PostgreSQL aislado,
+  concurrencia, rollback financiero, privacidad y migraciones protegidas.
+- TypeScript, ESLint y Ruff de archivos cambiados correctos. Ruff global conserva
+  38 hallazgos ajenos a estas entregas, no corregidos en este alcance.
+- Chromium de escritorio y móvil (390 px), con API simulada: reserva, liberación,
+  recálculo, aprobación y reporte. Se corrigió el desborde horizontal móvil;
+  la tabla conserva desplazamiento local accesible por teclado.
+- Los endpoints financieros se probaron aparte contra PostgreSQL real. La prueba
+  de navegador no acredita despliegue ni un recorrido contra la base de la aplicación.
+
+## Avance de implementación: mora diaria y fecha bancaria (0019)
+
+Nuevas emisiones diarias habilitadas con snapshot, cargos únicos por cuota/fecha,
+recuperación al arrancar y a las 00:05 de Lima, conciliación bancaria prospectiva
+y compensaciones inmutables. Recibos históricos y CON-13 no se reescriben; un
+déficit de crédito utilizado se bloquea hasta financiarlo expresamente. Ledger,
+auditoría y eventos v2 se confirman juntos. Fondos para gastos se integran en 0020.
+Migración 0019 probada primero en PostgreSQL aislado y desplegada el 26 de octubre.
+
+## Avance de implementación: prorrateo detallado (0018)
+
+Catálogo contextual, llenado por conceptos, versionado del borrador, aprobación
+con snapshot y emisión jerárquica implementados. Reporte por edificio con
+previsualización y descarga PDF/DOCX de la misma versión, incluido BORRADOR y
+anexo administrativo de cargos/centavos. El residente no recibe anexos ajenos.
+El catálogo se registra explícitamente desde la interfaz; no se sembraron gastos
+ni fondos históricos. La migración 0018 se desplegó el 26 de octubre.
+Motor diario/reconstrucción bancaria se integran en 0019. La cobertura con fondos
+se integra en 0020, respaldada por caja real, no por la mera existencia del reporte.
+
 Bienvenido a la documentación técnica oficial de **CondoManager**, estructurada bajo una disciplina rigurosa de **Desarrollo Guiado por Especificaciones (Spec-Driven Development - SDD)**.
 
 En este repositorio, las especificaciones técnicas representan la **fuente única de verdad (Single Source of Truth)**. Ningún código se implementa sin un contrato y especificación previa aprobada.
@@ -8,7 +55,13 @@ En este repositorio, las especificaciones técnicas representan la **fuente úni
 
 ## 1. Filosofía y Guardarraíles de SDD en CondoManager
 
-### Ampliación financiera 2026-10-24 (especificada, aún no implementada)
+### Ampliación financiera 2026-10-24 (implementación por entregas)
+Configuración y visor (0016), responsable/gracia/snapshot (0017), prorrateo y
+reportes (0018), motor diario/fecha bancaria (0019), fondos/cobertura (0020). Ver
+[estado y límites de cada entrega](05-api/prorrateo-mora-reportes.md).
+Revisar y aplicar las migraciones explícitamente al entorno de destino antes de
+usar esta versión en otro entorno. En la base activa se aplicaron el 26 de octubre. Instalar el
+consumidor compatible antes de activar el productor/worker diario.
 
 - [Prorrateo, catálogo, mora diaria y reportes](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 - [ADR-003: reparto por pisos](01-architecture/adr/ADR-003-prorrateo-por-pisos.md).
@@ -20,7 +73,7 @@ mora editable default 1.00 PEN diaria **por cuota mensual**. Reparto común por 
 (14/48, 14/48, 10/48, 10/48); edificio 03 entre 139 unidades. Fondos de moras
 cobradas financian gastos con trazabilidad. Llenado y exportación PDF/DOCX y visor
 privado de evidencia. Documentos de integración anteriores son antecedentes donde
-contradigan esta ampliación; no es una migración ni una capacidad ya desplegada.
+contradigan esta ampliación; sus ejemplos no autorizan una adopción histórica.
 
 
 1. **La especificación precede al código (Spec-First):** Todo cambio en una regla de negocio requiere actualizar primero su especificación en `specs/02-domains/` y sus escenarios BDD correspondientes.

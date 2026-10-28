@@ -45,6 +45,11 @@ REVISIONES_API = (
     "20261021_0012_cancelaciones_reserva",
     "20261021_0014_unir_reservas_y_convergencia",
     "20261021_0015_alertas_notificaciones",
+    "20261024_0016_politica_mora_diaria",
+    "20261024_0017_condiciones_pago",
+    "20261025_0018_prorrateo_detallado",
+    "20261025_0019_motor_mora_diaria",
+    "20261025_0020_fondos_moras",
 )
 
 
@@ -53,6 +58,21 @@ def migrar(connection, revisiones=None):
     with Operations.context(MigrationContext.configure(connection)):
         for nombre in revisiones:
             import_module("migrations.versions." + nombre).upgrade()
+
+
+def copiar_demo_legacy(connection, esquema_origen):
+    """Semilla histórica sin cargar el ORM actual sobre tablas de otra versión."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(connection)
+    quote = connection.dialect.identifier_preparer.quote_identifier
+    for tabla in ("condominios", "edificios", "departamentos", "usuarios",
+                  "usuario_roles", "usuario_departamentos", "areas_comunes"):
+        columnas = ", ".join(quote(c["name"]) for c in inspector.get_columns(tabla))
+        connection.execute(text(
+            f"INSERT INTO {quote(tabla)} ({columnas}) "
+            f"SELECT {columnas} FROM {quote(esquema_origen)}.{quote(tabla)}"
+        ))
 
 
 @dataclass

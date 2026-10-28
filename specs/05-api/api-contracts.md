@@ -1,9 +1,16 @@
 # Contratos de API y Especificación OpenAPI (API Contracts)
 
-Ampliación financiera objetivo 2026-10-24, **pendiente de implementación**:
+Ampliación financiera, estado de implementación al 2026-10-25:
 [prorrateo, mora diaria editable, fondos, PDF/DOCX y visor](prorrateo-mora-reportes.md).
 Prevalece sobre ejemplos previos de día 20, gracia 2 o descarga exclusivamente
-como adjunto. Las rutas nuevas están documentadas como objetivo, no desplegadas.
+como adjunto. Configuración de política y excepciones, visor privado, catálogo,
+presupuesto detallado versionado, aprobación con snapshot, emisión jerárquica y
+reporte PDF/DOCX implementados; migración 0018 aún no aplicada a la base de la
+aplicación. Mora diaria persistente y conciliación retroactiva prospectiva se
+integran en 0019; fondos por edificio y cobertura de gastos se integran en 0020.
+Los contratos del prorrateo se publican en OpenAPI 2.2.0 y sus fragmentos
+`prorrateo.paths.yaml` / `prorrateo.schemas.yaml`; la emisión detallada publica
+`CuotasEmitidasEvent` v2, manteniendo intacto el evento legacy.
 
 Base de implementación del Sprint 2: [CON-72 — contratos por historia](sprint-2-contratos.md). La guía reúne los acuerdos y enlaza OpenAPI y eventos. El OpenAPI describe el contrato objetivo y distingue operaciones pendientes/parciales; su publicación no implica que los endpoints estén implementados.
 
@@ -35,6 +42,38 @@ Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y res
 ---
 
 ## 2. Contratos Principales por Módulo
+
+### Fondos de moras cobradas (0020)
+
+GET `/edificios/{id}/fondos-moras?periodo=YYYY-MM` entrega saldos, resumen mensual
+y movimientos privados de caja reconocida en Lima. Solo administración/auditor
+del contexto. GET `/presupuestos/{id}/aplicaciones-moras` lista coberturas.
+POST exige `Idempotency-Key`, `version_esperada`, `item_id`, `edificio_id`, `monto`
+como cadena positiva y `motivo`. Misma clave/payload devuelve la aplicación
+original; otro payload, versión obsoleta o saldo insuficiente: 409. DELETE
+`/presupuestos/{id}/aplicaciones-moras/{aplicacion_id}?version_esperada=N` libera
+solo una reserva; repetir liberación es no-op. Confirmadas no se eliminan.
+Reservar/liberar incrementa versión y recalcula monto_total/coverage por servidor.
+PUT valida la cobertura contra reservas existentes, no acepta coberturas ficticias.
+409 FONDOS_MORAS_COMPROMETIDOS bloquea un retroactivo sin financiación suficiente.
+Ledger, auditoría, presupuesto y eventos FondosMorasActualizadosEvent v1 se
+confirman juntos. No se importa efectivo histórico ni se crean egresos bancarios
+por aplicar una cobertura. Los reportes aprobados siguen siendo inmutables.
+
+### Mora diaria y conciliación bancaria (0019)
+
+Nuevas emisiones MONTO_DIARIO habilitadas con snapshot, devengos persistentes y
+reconstrucción de pagos nuevos en orden `(fecha_operacion, comprobante_id)`.
+No hay endpoint público para ejecutar el cron ni recibir importes de mora del
+cliente. Aprobación valida la fecha bancaria ya reportada (no futura) y conserva
+el request de conciliación. 422 `FECHA_BANCARIA_FUTURA` si es posterior a hoy en
+Lima; 409 `CREDITO_RETROACTIVO_CONSUMIDO` si la reconstrucción requiere saldo ya
+utilizado. Todo se revierte ante error. Recibos, resultados idempotentes de
+revisión e imputaciones originales se conservan; las correcciones posteriores
+constan en ledger por componente y auditoría. No se reconstruyen pagos históricos
+anteriores a esta adopción ni se convierten cuotas legacy a políticas actuales.
+MoraAplicadaEvent y MoraAjustadaEvent v2 usan outbox independiente y consumidor
+compatible; 0020 integra el fondo de cobros y las reservas sin caja histórica.
 
 ### Pagos persistentes y solvencia (CON-22 / CON-70 / CON-42)
 
