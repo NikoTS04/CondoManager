@@ -43,7 +43,9 @@ class LoteCuotas(Base):
         UniqueConstraint("condominio_id", "periodo", name="uq_lote_condominio_periodo"),
         CheckConstraint("monto_total_facturado >= 0", name="ck_lote_monto"),
         CheckConstraint("total_cuotas_emitidas > 0", name="ck_lote_cantidad"),
-        CheckConstraint("metodo IN ('POR_ALICUOTA', 'EQUITATIVA', 'JERARQUICA')", name="ck_lote_metodo"),
+        CheckConstraint(
+            "metodo IN ('POR_ALICUOTA', 'EQUITATIVA', 'JERARQUICA')", name="ck_lote_metodo"
+        ),
     )
 
 

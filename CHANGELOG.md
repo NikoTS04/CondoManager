@@ -6,7 +6,7 @@ Cambios relevantes de CondoManager, organizados por entrega. Se registran capaci
 
 ### Candidato de entrega del Sprint 2
 
-Base integrada: `develop` hasta `52b4512` (merge del PR #27). Preparación para PR de `develop` a `main`, sin asignar una nueva versión ni declarar publicación. Alcance y evidencia consolidados en [CON-75](docs/sprints/CON-75-entrega-sprint-2.md).
+Base del candidato: `develop` en `f49dc55` (merge del PR #28), que incluye el Sprint 2 del corte `52b4512` y su ampliación financiera posterior. Entrega mediante [PR #25](https://github.com/NikoTS04/CondoManager/pull/25), sin asignar una nueva versión ni declarar publicación. Alcance en [CON-75](docs/sprints/CON-75-entrega-sprint-2.md) y evidencia actual en [validación del candidato](docs/sprints/SPRINT-2-VALIDACION-PR25.md).
 
 #### Agregado
 
@@ -16,13 +16,19 @@ Base integrada: `develop` hasta `52b4512` (merge del PR #27). Preparación para 
 - **CON-32/34/36/37:** avisos de cuotas, recepción/revisión de pagos y reservas, cola durable, consumo idempotente, reintentos y alertas administrativas. Transporte simulado identificado.
 - **CON-72/73/74:** contratos adoptados por API y frontend, subsanación de vouchers observados, errores públicos coherentes y persistencia integrada de reservas y comunicaciones.
 - **CON-75:** matriz de 20 elementos, guiones y evidencia reportada por el equipo, límites y preparación del merge. Esta consolidación documental no repite pruebas.
+- **Ampliación financiera posterior al cierre original:** configuración versionada de mora diaria y gracia por responsable, presupuesto por conceptos, prorrateo jerárquico y documentos PDF/DOCX privados. Conciliación por fecha bancaria con movimientos compensatorios y fondos por edificio basados en moras efectivamente cobradas. Alcance prospectivo detallado en `specs/05-api/prorrateo-mora-reportes.md`; no importa caja histórica.
 
 #### Corregido e integrado
 
-- Grafo Alembic unificado con cabeza `20261021_0015`; restauración de contexto de reservas, bloqueos operativos, auditoría y eventos de confirmación tras integrar las ramas.
+- Grafo Alembic unificado: cabeza del cierre original `20261021_0015`, ampliada hasta `20261025_0020`; restauración de contexto de reservas, bloqueos operativos, auditoría y eventos de confirmación tras integrar las ramas.
 - Reconciliación documentada del esquema legacy, conservando los registros originales y adoptando el esquema canónico.
 - Healthchecks de vida de workers para el arranque de Docker Compose.
 - README, índice de documentos y notas de entrega actualizados al Sprint 2; los resultados históricos conservan su corte y procedencia.
+- Compatibilidad de las pruebas BDD: pytest limitado a versiones anteriores a 9.1 mientras pytest-bdd utilice la API de fixtures retirada. Se mantiene la cobertura mínima del 80 %.
+- OpenAPI: arrays de condiciones con `items` explícito y descripción de respuesta 422 correctamente citada en YAML; no se relajan las reglas de validación.
+- Workflow de contratos CON-72 con la variable de PostgreSQL que resuelven sus fixtures, evitando omisiones de integración.
+- Conciliación de pagos legacy: las imputaciones y cobros se persisten antes de los movimientos del fondo que los referencian, dentro de la misma transacción. Se evita un error 500 de clave foránea al aprobar desde una aplicación recién iniciada; el reintento conserva la idempotencia.
+- Formato Ruff de los archivos que introducían deuda respecto de `main`, con comprobación de AST conservado; análisis y cachés `graphify-out` retirados del versionamiento.
 
 #### Límites de la entrega
 

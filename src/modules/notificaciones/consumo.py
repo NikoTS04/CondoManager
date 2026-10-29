@@ -50,7 +50,9 @@ async def consumir(session_factory, payload):
         eid = UUID(payload["event_id"])
         if modelo is EventoLoteOutbox:
             version = payload.get("schema_version", 1)
-            if version not in (1, 2) or (version == 2 and payload.get("data", {}).get("metodo") != "JERARQUICA"):
+            if version not in (1, 2) or (
+                version == 2 and payload.get("data", {}).get("metodo") != "JERARQUICA"
+            ):
                 raise ValueError("VERSION_CUOTAS_NO_SOPORTADA")
         if modelo is EventoPagoOutbox:
             canonico = "schema_version" in payload
@@ -122,11 +124,19 @@ async def consumir(session_factory, payload):
                 ]
             elif modelo is EventoMoraOutbox:
                 did = UUID(data["departamento_id"])
-                operaciones = [(UUID(data["devengo_id"]), did, {
-                    "fecha_local": data["fecha_local"], "monto_mora": data["importe"],
-                    "nuevo_saldo": data["saldo_pendiente"], "moneda": data["moneda"],
-                    "tipo_movimiento": "Cargo" if tipo == "MoraAplicadaEvent" else "Ajuste",
-                })]
+                operaciones = [
+                    (
+                        UUID(data["devengo_id"]),
+                        did,
+                        {
+                            "fecha_local": data["fecha_local"],
+                            "monto_mora": data["importe"],
+                            "nuevo_saldo": data["saldo_pendiente"],
+                            "moneda": data["moneda"],
+                            "tipo_movimiento": "Cargo" if tipo == "MoraAplicadaEvent" else "Ajuste",
+                        },
+                    )
+                ]
             else:
                 did = UUID(data["departamento_id"])
                 operacion = UUID(data.get("reserva_id") or data["comprobante_id"])

@@ -17,7 +17,9 @@ from src.modules.condominios.condiciones_pago import (
 from src.shared.fechas import fecha_lima
 
 
-@pytest.mark.parametrize("override,activo,esperado", [(None, True, 2), (0, True, 0), (5, True, 5), (5, False, 2)])
+@pytest.mark.parametrize(
+    "override,activo,esperado", [(None, True, 2), (0, True, 0), (5, True, 5), (5, False, 2)]
+)
 def test_herencia_y_override(override, activo, esperado):
     vinculo = SimpleNamespace(es_activo=activo, dias_gracia_override=override)
     assert gracia_efectiva(2, vinculo) == esperado
@@ -27,20 +29,39 @@ def test_herencia_y_override(override, activo, esperado):
 @pytest.mark.parametrize("dias", [-1, 31, 1.5, True, "2"])
 def test_gracia_solo_entera_en_rango(dias):
     with pytest.raises(ValidationError):
-        CondicionesPagoRequest(vinculo_responsable_id=uuid4(), dias_gracia_override=dias,
-                               version_esperada=1, motivo="Acta")
+        CondicionesPagoRequest(
+            vinculo_responsable_id=uuid4(),
+            dias_gracia_override=dias,
+            version_esperada=1,
+            motivo="Acta",
+        )
 
 
 def test_sin_responsable_hereda_y_motivo_obligatorio():
     for cambios in ({"dias_gracia_override": 2}, {"motivo": "  "}):
         with pytest.raises(ValidationError):
-            CondicionesPagoRequest(**({"vinculo_responsable_id": None, "dias_gracia_override": None,
-                                       "version_esperada": 1, "motivo": "Acta"} | cambios))
+            CondicionesPagoRequest(
+                **(
+                    {
+                        "vinculo_responsable_id": None,
+                        "dias_gracia_override": None,
+                        "version_esperada": 1,
+                        "motivo": "Acta",
+                    }
+                    | cambios
+                )
+            )
 
 
 def test_snapshot_no_cambia_con_configuracion_vigente():
-    condominio = SimpleNamespace(politica_version=1, regla_mora_tipo="MONTO_DIARIO", monto_mora_diario=Decimal("1.00"),
-                                 monto_mora_fijo=None, tasa_mora_porcentaje=None, dias_gracia=2)
+    condominio = SimpleNamespace(
+        politica_version=1,
+        regla_mora_tipo="MONTO_DIARIO",
+        monto_mora_diario=Decimal("1.00"),
+        monto_mora_fijo=None,
+        tasa_mora_porcentaje=None,
+        dias_gracia=2,
+    )
     vinculo = SimpleNamespace(id=uuid4(), es_activo=True, dias_gracia_override=0)
     snapshot = fotografiar_politica(condominio, vinculo)
     condominio.monto_mora_diario = Decimal("5.00")
@@ -72,7 +93,9 @@ async def test_designacion_auditada_noop_y_version_obsoleta():
     service.repo.auditar = AsyncMock()
     service._vinculo = AsyncMock(side_effect=[None, vinculo])
     actor = {"rol": "ADMIN_JUNTA", "condominio_id": str(condominio.id)}
-    req = CondicionesPagoRequest(vinculo_responsable_id=vid, dias_gracia_override=0, version_esperada=1, motivo="Acta")
+    req = CondicionesPagoRequest(
+        vinculo_responsable_id=vid, dias_gracia_override=0, version_esperada=1, motivo="Acta"
+    )
     resultado = await service.procesar(did, actor, req)
     assert resultado.dias_gracia_efectivos == 0 and resultado.version == 2
     assert depto.responsable_pago_id == vid and vinculo.dias_gracia_override == 0
@@ -91,10 +114,17 @@ async def test_no_permite_vinculo_ajeno_o_inactivo():
     session.begin.return_value.__aenter__ = AsyncMock()
     session.begin.return_value.__aexit__ = AsyncMock(return_value=False)
     service = CondicionesPagoService(session)
-    service.repo.departamento = AsyncMock(return_value=(SimpleNamespace(responsable_pago_id=None, condiciones_pago_version=1), SimpleNamespace(id=uuid4(), dias_gracia=0)))
+    service.repo.departamento = AsyncMock(
+        return_value=(
+            SimpleNamespace(responsable_pago_id=None, condiciones_pago_version=1),
+            SimpleNamespace(id=uuid4(), dias_gracia=0),
+        )
+    )
     service.repo.auditar = AsyncMock()
     service._vinculo = AsyncMock(return_value=None)
-    req = CondicionesPagoRequest(vinculo_responsable_id=uuid4(), dias_gracia_override=0, version_esperada=1, motivo="Acta")
+    req = CondicionesPagoRequest(
+        vinculo_responsable_id=uuid4(), dias_gracia_override=0, version_esperada=1, motivo="Acta"
+    )
     with pytest.raises(APIError) as exc:
         await service.procesar(uuid4(), {"rol": "SUPERADMIN"}, req)
     assert exc.value.status_code == 422

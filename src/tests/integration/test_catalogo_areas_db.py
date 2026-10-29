@@ -199,10 +199,7 @@ async def test_horario_y_duracion_rechazados_sin_reserva(caso_areas, inicio, fin
     response = await client.post(
         "/api/v1/reservas", headers=residente, json=turno(base, area["id"], inicio, fin)
     )
-    assert (
-        response.status_code == 400
-        and response.json()["error_code"] == "HORARIO_INVALIDO"
-    )
+    assert response.status_code == 400 and response.json()["error_code"] == "HORARIO_INVALIDO"
     async with base.sessions() as db:
         assert await db.scalar(select(Reserva.id)) is None
 
@@ -228,9 +225,18 @@ async def test_cancelacion_de_turno_local_respetando_frontera_24_horas(caso_area
     assert response.status_code == 201 and response.json()["moneda"] == "PEN"
     async with base.sessions() as db:
         reserva = await db.get(Reserva, UUID(response.json()["id"]))
-        registro = {k: getattr(reserva, k) for k in (
-            "id", "condominio_id", "departamento_id", "fecha_reserva", "hora_inicio", "estado", "zona_horaria",
-        )}
+        registro = {
+            k: getattr(reserva, k)
+            for k in (
+                "id",
+                "condominio_id",
+                "departamento_id",
+                "fecha_reserva",
+                "hora_inicio",
+                "estado",
+                "zona_horaria",
+            )
+        }
     # 10:00 Lima equivale a 15:00 UTC; el límite es el día anterior a esa hora.
     limite = datetime.combine(
         registro["fecha_reserva"] - timedelta(days=1), datetime.min.time(), tzinfo=UTC

@@ -15,10 +15,18 @@ def dinero_cadena(value):
     return value
 
 
-Dinero = Annotated[Decimal, BeforeValidator(dinero_cadena), Field(ge=0, max_digits=12, decimal_places=2)]
-Categoria = Literal["SERVICIOS_BASICOS", "MANTENIMIENTO_PREVENTIVO", "SEGURIDAD_Y_VIGILANCIA",
-                    "LIMPIEZA_Y_JARDINERIA", "GASTOS_ADMINISTRATIVOS", "IMPREVISTOS_Y_CONTINGENCIAS",
-                    "OBLIGACIONES_FINANCIADAS"]
+Dinero = Annotated[
+    Decimal, BeforeValidator(dinero_cadena), Field(ge=0, max_digits=12, decimal_places=2)
+]
+Categoria = Literal[
+    "SERVICIOS_BASICOS",
+    "MANTENIMIENTO_PREVENTIVO",
+    "SEGURIDAD_Y_VIGILANCIA",
+    "LIMPIEZA_Y_JARDINERIA",
+    "GASTOS_ADMINISTRATIVOS",
+    "IMPREVISTOS_Y_CONTINGENCIAS",
+    "OBLIGACIONES_FINANCIADAS",
+]
 
 
 def texto_admitido(value):
@@ -62,7 +70,9 @@ class ItemPresupuesto(BaseModel):
     tipo_movimiento: Literal["CARGO", "ABONO"] = "CARGO"
     monto_periodo: Dinero
     monto_cubierto_moras: Dinero = Decimal("0.00")
-    metodo_asignacion: Literal["POR_PISOS", "DIRECTO_EDIFICIO", "ASIGNACION_EXPLICITA"] = "POR_PISOS"
+    metodo_asignacion: Literal["POR_PISOS", "DIRECTO_EDIFICIO", "ASIGNACION_EXPLICITA"] = (
+        "POR_PISOS"
+    )
     metodo_unitario: Literal["EQUITATIVA", "POR_ALICUOTA"] = "EQUITATIVA"
     edificio_id: UUID | None = None
     asignaciones_explicitas: dict[UUID, Dinero] = Field(default_factory=dict)
@@ -86,12 +96,18 @@ class ItemPresupuesto(BaseModel):
 
     @model_validator(mode="after")
     def validar_asignacion(self):
-        if self.monto_cubierto_moras > self.monto_periodo or (self.tipo_movimiento == "ABONO" and self.monto_cubierto_moras):
+        if self.monto_cubierto_moras > self.monto_periodo or (
+            self.tipo_movimiento == "ABONO" and self.monto_cubierto_moras
+        ):
             raise ValueError("La cobertura no puede superar el cargo ni financiar un abono.")
         if (self.metodo_asignacion == "DIRECTO_EDIFICIO") != (self.edificio_id is not None):
             raise ValueError("Solo DIRECTO_EDIFICIO exige edificio_id.")
         if self.metodo_asignacion == "ASIGNACION_EXPLICITA":
-            if not self.asignaciones_explicitas or not self.motivo_asignacion.strip() or not self.referencia_documento.strip():
+            if (
+                not self.asignaciones_explicitas
+                or not self.motivo_asignacion.strip()
+                or not self.referencia_documento.strip()
+            ):
                 raise ValueError("La asignación explícita requiere importes, motivo y documento.")
             if sum(self.asignaciones_explicitas.values()) != self.monto_periodo:
                 raise ValueError("Las asignaciones deben sumar el importe del periodo.")
@@ -101,6 +117,9 @@ class ItemPresupuesto(BaseModel):
         if any(v is not None for v in financiacion):
             if any(v is None for v in financiacion) or not self.obligacion_referencia.strip():
                 raise ValueError("Complete referencia, cuota, total de cuotas y obligación total.")
-            if self.numero_cuota > self.total_cuotas or self.monto_periodo > self.monto_total_obligacion:
+            if (
+                self.numero_cuota > self.total_cuotas
+                or self.monto_periodo > self.monto_total_obligacion
+            ):
                 raise ValueError("Cronograma de financiación inválido.")
         return self

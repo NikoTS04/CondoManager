@@ -76,5 +76,7 @@ jobs:
         run: uv run --extra dev --with schemathesis==4.22.1 python -m pytest -q scripts/ci/verify_api_contract.py
       - name: Verificar respuestas y eventos contra CON-72
         env:
-          CON73_TEST_DATABASE_URL: postgresql+asyncpg://condo_user:condo_secret@localhost:5432/condomanager
+          # Los fixtures compartidos resuelven CON13_TEST_DATABASE_URL.
+          # CON73_TEST_DATABASE_URL omitía silenciosamente sus pruebas SQL.
+          CON13_TEST_DATABASE_URL: postgresql+asyncpg://condo_user:condo_secret@localhost:5432/condomanager
         run: uv run --extra dev python -m pytest -q src/tests/integration/test_convergencia_con72.py

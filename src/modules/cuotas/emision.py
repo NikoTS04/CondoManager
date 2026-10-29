@@ -87,15 +87,24 @@ class EmisionCuotasService:
             if presupuesto.prorrateo_snapshot is not None:
                 montos = montos_snapshot(presupuesto.prorrateo_snapshot)
                 edificios_aprobados = {
-                    d["id"]: e["id"] for e in presupuesto.prorrateo_snapshot["edificios"]
+                    d["id"]: e["id"]
+                    for e in presupuesto.prorrateo_snapshot["edificios"]
                     for d in e["departamentos"]
                 }
                 if set(montos) != {d.id for d in departamentos} or any(
                     edificios_aprobados[str(d.id)] != str(d.edificio_id) for d in departamentos
                 ):
-                    raise APIError(409, "PADRON_APROBADO_MODIFICADO", "El padrón activo no coincide con el aprobado.")
+                    raise APIError(
+                        409,
+                        "PADRON_APROBADO_MODIFICADO",
+                        "El padrón activo no coincide con el aprobado.",
+                    )
                 if sum(montos.values()) != presupuesto.monto_total:
-                    raise APIError(409, "PRESUPUESTO_DESCUADRADO", "El snapshot no coincide con el presupuesto.")
+                    raise APIError(
+                        409,
+                        "PRESUPUESTO_DESCUADRADO",
+                        "El snapshot no coincide con el presupuesto.",
+                    )
                 metodo = "JERARQUICA"
             else:
                 distribucion = await DistribucionService(
@@ -104,20 +113,24 @@ class EmisionCuotasService:
                 montos = cerrar_centavos(
                     calcular_distribucion(
                         presupuesto.monto_total, distribucion.departamentos, distribucion.metodo
-                    ), presupuesto.monto_total,
+                    ),
+                    presupuesto.monto_total,
                 )
                 metodo = distribucion.metodo.value
         except DistribucionError as exc:
             raise APIError(422, exc.error_code, exc.mensaje, exc.detalles) from exc
         ahora = datetime.now(UTC)
         responsables = {
-            v.departamento_id: v for v in await self.session.scalars(
+            v.departamento_id: v
+            for v in await self.session.scalars(
                 select(UsuarioDepartamento)
                 .join(Departamento, Departamento.responsable_pago_id == UsuarioDepartamento.id)
                 .join(Edificio, Departamento.edificio_id == Edificio.id)
-                .where(Edificio.condominio_id == cid,
-                       UsuarioDepartamento.departamento_id == Departamento.id,
-                       UsuarioDepartamento.es_activo.is_(True))
+                .where(
+                    Edificio.condominio_id == cid,
+                    UsuarioDepartamento.departamento_id == Departamento.id,
+                    UsuarioDepartamento.es_activo.is_(True),
+                )
             )
         }
         cubiertas = 0
@@ -146,7 +159,9 @@ class EmisionCuotasService:
                 estado="EMITIDA",
                 dias_gracia_aplicados=politica["dias_gracia"],
                 politica_mora_aplicada=politica,
-                detalle_prorrateo=detalle_por_departamento[str(departamento.id)] if presupuesto.prorrateo_snapshot is not None else None,
+                detalle_prorrateo=detalle_por_departamento[str(departamento.id)]
+                if presupuesto.prorrateo_snapshot is not None
+                else None,
             )
             self.session.add(cuota)
             await self.session.flush()

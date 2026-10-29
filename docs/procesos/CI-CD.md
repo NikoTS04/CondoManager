@@ -50,9 +50,11 @@ En **Settings → Branches** (o Rulesets), para `develop` y `main`:
 
 Cada deuda está marcada con `TODO` en el workflow correspondiente; al resolverla se retira el `continue-on-error`.
 
-- Los diagnósticos de drift con el entorno Alembic y con todos los modelos siguen siendo no bloqueantes. El sprint incorpora migraciones financieras, de identidad, reservas y notificaciones hasta `20261021_0015`; el diagnóstico no debe interpretarse como ausencia de esos módulos. Persisten diferencias ORM/esquema, como índices y comentarios, documentadas en las entregas.
+- Los diagnósticos de drift con el entorno Alembic y con todos los modelos siguen siendo no bloqueantes. El cierre original incorporó migraciones hasta `20261021_0015`; el candidato actual añade las financieras hasta `20261025_0020`. El diagnóstico no debe interpretarse como ausencia de esos módulos. Persisten diferencias ORM/esquema, como índices y comentarios, documentadas en las entregas.
 - El lint histórico no cumple `ruff format`; el check se aplica solo a los archivos cambiados.
-- La convergencia CON-72 retiró la excepción del reporte de pagos: Schemathesis ejecuta el contrato sin excluirlo y el job es bloqueante. El paso adicional de CON-72 configura solo `CON73_TEST_DATABASE_URL`; la entrega del equipo registra 1 prueba aprobada y 23 omitidas en ese entorno, frente a 24 aprobadas con base de pruebas configurada para sus fixtures. No presentar esas omisiones como cobertura completa del job.
+- La convergencia CON-72 retiró la excepción del reporte de pagos: Schemathesis ejecuta el contrato sin excluirlo y el job es bloqueante. El paso adicional configura ahora `CON13_TEST_DATABASE_URL`, reconocida por los fixtures compartidos. El resultado histórico con solo `CON73_TEST_DATABASE_URL` (1 prueba aprobada y 23 omitidas) no acredita cobertura SQL completa.
+- pytest se limita a `<9.1` por incompatibilidad de la API de fixtures usada por pytest-bdd; actualizar ese límite exige volver a ejecutar BDD y PostgreSQL. No se modifica el mínimo de cobertura del 80 %.
+- Dependency Review necesita Dependency Graph habilitado en el repositorio. Esa configuración requiere al administrador; no se elimina ni se convierte en no bloqueante el check para evitar ese requisito.
 - Hay vulnerabilidades conocidas en dependencias; el detalle aparece en el resumen de cada ejecución y en la pestaña Security.
 - El despliegue no tiene destino definido: faltan la infraestructura, las credenciales del environment y la estrategia de rollback.
 
@@ -60,6 +62,7 @@ Cada deuda está marcada con `TODO` en el workflow correspondiente; al resolverl
 
 La [entrega CON-75](../sprints/CON-75-entrega-sprint-2.md) consolida los resultados
 previamente reportados por el equipo, incluida la reproducción local de jobs
-documentada en el cierre de notificaciones. Por decisión de entrega no se repiten
-pruebas en la actualización documental; tampoco se deshabilitan workflows ni se
-presentan resultados históricos como checks del futuro PR hacia `main`.
+documentada en el cierre de notificaciones. Aquella actualización documental no repitió
+pruebas. La [validación del candidato actual](../sprints/SPRINT-2-VALIDACION-PR25.md)
+registra sus ejecuciones por separado; no presenta resultados históricos como checks
+de la revisión final hacia `main`.

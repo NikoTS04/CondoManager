@@ -6,6 +6,13 @@ Característica: Fondos conciliados y cobertura de gastos (0020)
     Cuando se concilia, solo el componente mora entra al fondo de su edificio
     Y reintentos o el devengo diario no duplican ni crean caja
 
+  Escenario: Conciliación legacy desde una aplicación recién iniciada
+    Dado un comprobante legacy con principal y mora pendientes
+    Cuando la junta lo aprueba desde un proceso nuevo de la aplicación
+    Entonces se persisten la imputación y el cobro antes del movimiento que los referencia
+    Y todo se confirma en una sola transacción, sin errores de clave foránea
+    Y repetir la aprobación conserva el mismo movimiento y no duplica el fondo
+
   Escenario: Reserva concurrente y cobertura íntegra
     Dado un fondo disponible y un gasto exclusivo de igual importe
     Cuando se reserva y aprueba su cobertura con versión y clave idempotente

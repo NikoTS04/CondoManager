@@ -30,6 +30,9 @@ GET del fondo reconoce caja en el periodo local de confirmación, no cambia la
 fecha bancaria del pago. Incluye disponible inicial/final, cobros netos, reservas,
 liberaciones, disponible/reservado actual, aplicado y mora pendiente separada.
 El reporte aprobado conserva solo ese resumen agregado, sin movimientos privados.
+Al conciliar, la imputación de origen (legacy o diaria) y el cobro deben persistirse
+antes del movimiento de fondo que los referencia, dentro de la misma transacción.
+Un fallo posterior revierte también esas escrituras; no se usan commits intermedios.
 Una corrección que dejaría disponibilidad negativa responde 409
 FONDOS_MORAS_COMPROMETIDOS y revierte pagos, cuotas, crédito, caja, auditoría y
 outbox. Puede resolverse liberando reservas o con nuevos cobros reales antes de

@@ -71,7 +71,7 @@ paths:
         '403': {description: Solo Junta/SuperAdmin del contexto}
         '404': {description: Condominio inexistente o inactivo}
         '409': {description: Código ya registrado en el condominio}
-        '422': {description: Código, categoría o descripción inválidos}
+        '422': {description: 'Código, categoría o descripción inválidos'}
   /presupuestos/{presupuesto_id}/prorrateo:
     parameters:
       - name: presupuesto_id

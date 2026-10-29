@@ -33,12 +33,19 @@ def politica_diaria(cuota):
     try:
         importe = Decimal(p["monto_diario"])
         gracia = p["dias_gracia"]
-        if (not importe.is_finite() or not CERO < importe <= MAX_MONEDA
-                or importe.as_tuple().exponent < -2 or type(gracia) is not int
-                or not 0 <= gracia <= 30 or p["zona_horaria"] != "America/Lima"):
+        if (
+            not importe.is_finite()
+            or not CERO < importe <= MAX_MONEDA
+            or importe.as_tuple().exponent < -2
+            or type(gracia) is not int
+            or not 0 <= gracia <= 30
+            or p["zona_horaria"] != "America/Lima"
+        ):
             raise ValueError
     except (InvalidOperation, KeyError, TypeError, ValueError) as exc:
-        raise APIError(409, "SNAPSHOT_DIARIO_INVALIDO", "Revise la política histórica de la cuota.") from exc
+        raise APIError(
+            409, "SNAPSHOT_DIARIO_INVALIDO", "Revise la política histórica de la cuota."
+        ) from exc
     return importe, gracia
 
 
@@ -62,10 +69,14 @@ def reconstruir(cuotas, pagos, hasta, limites=None, alcances=None):
             pagados[c.id].append(cubierto)
             resto -= cubierto
         if resto != CERO:
-            raise APIError(409, "BASE_FINANCIERA_INVALIDA", "Las amortizaciones históricas no cuadran.")
+            raise APIError(
+                409, "BASE_FINANCIERA_INVALIDA", "Las amortizaciones históricas no cuadran."
+            )
         if es_diaria(c):
             politicas[c.id] = politica_diaria(c)
-            cursores[c.id] = max(c.fecha_emision, c.fecha_vencimiento + timedelta(days=politicas[c.id][1] + 1))
+            cursores[c.id] = max(
+                c.fecha_emision, c.fecha_vencimiento + timedelta(days=politicas[c.id][1] + 1)
+            )
 
     def devengar(fecha):
         for c in cuotas:
@@ -86,11 +97,21 @@ def reconstruir(cuotas, pagos, hasta, limites=None, alcances=None):
 
     for p in sorted(pagos, key=lambda p: (p.fecha_operacion, p.id.int)):
         if p.fecha_operacion > hasta:
-            raise APIError(422, "FECHA_BANCARIA_FUTURA", "La fecha bancaria no puede ser futura en Lima.")
+            raise APIError(
+                422, "FECHA_BANCARIA_FUTURA", "La fecha bancaria no puede ser futura en Lima."
+            )
         devengar(p.fecha_operacion)
-        plan = plan_imputacion([c for c in cuotas if c.fecha_emision <= p.fecha_operacion
-                               and (alcances is None or c.id in alcances[p.id])],
-                              p.monto, p.fecha_operacion, pagados)
+        plan = plan_imputacion(
+            [
+                c
+                for c in cuotas
+                if c.fecha_emision <= p.fecha_operacion
+                and (alcances is None or c.id in alcances[p.id])
+            ],
+            p.monto,
+            p.fecha_operacion,
+            pagados,
+        )
         for cid, importes in plan["componentes"].items():
             for i, importe in enumerate(importes):
                 if importe:
@@ -99,6 +120,15 @@ def reconstruir(cuotas, pagos, hasta, limites=None, alcances=None):
         if plan["remanente"]:
             movimientos[p.id, None, "CREDITO"] = plan["remanente"]
     devengar(hasta)
-    return {"devengos": devengos, "movimientos": movimientos,
-            "cuotas": {c.id: {"mora": c.monto_mora, "total": c.monto_total_exigible,
-                              "pagado": sum(pagados[c.id], CERO)} for c in cuotas}}
+    return {
+        "devengos": devengos,
+        "movimientos": movimientos,
+        "cuotas": {
+            c.id: {
+                "mora": c.monto_mora,
+                "total": c.monto_total_exigible,
+                "pagado": sum(pagados[c.id], CERO),
+            }
+            for c in cuotas
+        },
+    }
