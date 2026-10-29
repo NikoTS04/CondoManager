@@ -47,7 +47,9 @@ class CondominiosService:
             "moneda": condominio.moneda,
             "regla_mora_tipo": condominio.regla_mora_tipo,
             "monto_mora_diario": (
-                str(condominio.monto_mora_diario) if condominio.monto_mora_diario is not None else None
+                str(condominio.monto_mora_diario)
+                if condominio.monto_mora_diario is not None
+                else None
             ),
             "politica_version": condominio.politica_version,
             "monto_mora_fijo": (
@@ -111,7 +113,9 @@ async def actualizar_politica_mora(
         if condominio is None or not condominio.activo:
             raise APIError(404, "CONDOMINIO_NO_ENCONTRADO", "No existe un condominio activo.")
         if request.version_esperada != condominio.politica_version:
-            raise APIError(409, "POLITICA_VERSION_OBSOLETA", "Recargue la política antes de editar.")
+            raise APIError(
+                409, "POLITICA_VERSION_OBSOLETA", "Recargue la política antes de editar."
+            )
         # Reutilizar validación monetaria de alta, incluida la moneda persistida.
         from pydantic import ValidationError
 
@@ -125,8 +129,12 @@ async def actualizar_politica_mora(
         except ValidationError as exc:
             raise APIError(422, "DATOS_CONDOMINIO_INVALIDOS", "Política de mora inválida.") from exc
         campos = (
-            "regla_mora_tipo", "monto_mora_diario", "monto_mora_fijo",
-            "tasa_mora_porcentaje", "dia_vencimiento", "dias_gracia",
+            "regla_mora_tipo",
+            "monto_mora_diario",
+            "monto_mora_fijo",
+            "tasa_mora_porcentaje",
+            "dia_vencimiento",
+            "dias_gracia",
         )
         if all(getattr(condominio, c) == getattr(datos, c) for c in campos):
             return condominio
@@ -142,17 +150,32 @@ async def actualizar_politica_mora(
             .limit(1)
         )
         payload = AuditoriaPayload(
-            condominio_id=str(cid), departamento_id=None,
-            accion_ejecutada="POLITICA_MORA_MODIFICADA", motivo=request.motivo,
-            resultado="EXITOSO", actor_tipo=usuario["rol"], actor_id=str(usuario["sub"]),
-            estado_anterior=anterior, estado_posterior=posterior, hash_previo=previo,
+            condominio_id=str(cid),
+            departamento_id=None,
+            accion_ejecutada="POLITICA_MORA_MODIFICADA",
+            motivo=request.motivo,
+            resultado="EXITOSO",
+            actor_tipo=usuario["rol"],
+            actor_id=str(usuario["sub"]),
+            estado_anterior=anterior,
+            estado_posterior=posterior,
+            hash_previo=previo,
         )
-        session.add(AuditoriaLogORM(
-            condominio_id=cid, departamento_id=None, timestamp=payload.timestamp,
-            accion_ejecutada=payload.accion_ejecutada, motivo=payload.motivo,
-            resultado=payload.resultado, actor_tipo=payload.actor_tipo, actor_id=payload.actor_id,
-            estado_anterior=anterior, estado_posterior=posterior, hash_previo=previo,
-            hash_actual=payload.calcular_hash(),
-        ))
+        session.add(
+            AuditoriaLogORM(
+                condominio_id=cid,
+                departamento_id=None,
+                timestamp=payload.timestamp,
+                accion_ejecutada=payload.accion_ejecutada,
+                motivo=payload.motivo,
+                resultado=payload.resultado,
+                actor_tipo=payload.actor_tipo,
+                actor_id=payload.actor_id,
+                estado_anterior=anterior,
+                estado_posterior=posterior,
+                hash_previo=previo,
+                hash_actual=payload.calcular_hash(),
+            )
+        )
         await session.flush()
         return condominio

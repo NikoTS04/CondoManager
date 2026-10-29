@@ -58,9 +58,19 @@ REVISIONES = (
     "20261025_0019_motor_mora_diaria",
     "20261025_0020_fondos_moras",
 )
-ADOPTADAS = (Reserva, CobroReserva, CancelacionReserva, EventoReservaOutbox,
-             BloqueoArea, Notificacion, IntentoNotificacion, EventoConsumido,
-             IncidenciaEvento, ArchivoVoucher, RevisionPago)
+ADOPTADAS = (
+    Reserva,
+    CobroReserva,
+    CancelacionReserva,
+    EventoReservaOutbox,
+    BloqueoArea,
+    Notificacion,
+    IntentoNotificacion,
+    EventoConsumido,
+    IncidenciaEvento,
+    ArchivoVoucher,
+    RevisionPago,
+)
 
 
 def verificar_copia(conn, antes):
@@ -89,14 +99,20 @@ def reconciliar(conn, respaldo):
     inspector = sa.inspect(conn)
     nombres = inspector.get_table_names()
     quote = conn.dialect.identifier_preparer.quote
-    conn.execute(sa.text("LOCK TABLE " + ",".join(quote(t) for t in sorted(nombres))
-                         + " IN SHARE ROW EXCLUSIVE MODE"))
+    conn.execute(
+        sa.text(
+            "LOCK TABLE "
+            + ",".join(quote(t) for t in sorted(nombres))
+            + " IN SHARE ROW EXCLUSIVE MODE"
+        )
+    )
     if list(conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalars()) != [ORIGEN]:
         raise RuntimeError("Se requiere exclusivamente el marcador 20261021_0013.")
     verificar_copia(conn, respaldo)
     if "notificaciones_alertas" in nombres or "devengos_mora" in nombres:
         raise RuntimeError("Adopción parcial posterior a 0013; requiere revisión.")
-    if conn.scalar(sa.text("""SELECT EXISTS (
+    if conn.scalar(
+        sa.text("""SELECT EXISTS (
         SELECT 1 FROM reservas r
         LEFT JOIN areas_comunes a ON a.id=r.area_id
         LEFT JOIN departamentos d ON d.id=r.departamento_id
@@ -109,28 +125,40 @@ def reconciliar(conn, respaldo):
               OR r.fecha_cancelacion IS DISTINCT FROM c.fecha_cancelacion
               OR r.cancelado_por IS DISTINCT FROM c.actor_id
               OR r.motivo_cancelacion IS DISTINCT FROM c.motivo))
-          OR (r.estado<>'CANCELADA' AND c.reserva_id IS NOT NULL))""")):
+          OR (r.estado<>'CANCELADA' AND c.reserva_id IS NOT NULL))""")
+    ):
         raise RuntimeError("Reservas sin contexto o evidencia verificable de cancelación.")
     # shortcut: no hay cobros de reserva en este incidente; otro estado exige nuevo ensayo financiero.
     if conn.scalar(sa.text("SELECT EXISTS (SELECT 1 FROM cobros_reserva)")):
         raise RuntimeError("Cobros de reserva presentes; requiere conciliación específica.")
-    if conn.scalar(sa.text("""SELECT EXISTS (SELECT 1 FROM eventos_reserva_outbox
+    if conn.scalar(
+        sa.text("""SELECT EXISTS (SELECT 1 FROM eventos_reserva_outbox
         WHERE tipo IS NULL OR tipo IS DISTINCT FROM payload->>'event_type')
-        OR EXISTS (SELECT 1 FROM eventos_reserva_outbox GROUP BY reserva_id,tipo HAVING count(*)>1)""")):
+        OR EXISTS (SELECT 1 FROM eventos_reserva_outbox GROUP BY reserva_id,tipo HAVING count(*)>1)""")
+    ):
         raise RuntimeError("Eventos sin tipo verificable o duplicados; no se reescribe historia.")
-    tablas = {t: [c["name"] for c in inspector.get_columns(t)]
-              for t in nombres if t != "alembic_version"}
+    tablas = {
+        t: [c["name"] for c in inspector.get_columns(t)] for t in nombres if t != "alembic_version"
+    }
     antes = huellas(conn, tablas)
-    rls = dict(conn.execute(sa.text("""SELECT c.relname,c.relrowsecurity FROM pg_class c
+    rls = dict(
+        conn.execute(
+            sa.text("""SELECT c.relname,c.relrowsecurity FROM pg_class c
         JOIN pg_namespace n ON n.oid=c.relnamespace
-        WHERE n.nspname=current_schema() AND c.relkind='r'""")).all())
-    conn.execute(sa.text("""ALTER TABLE eventos_reserva_outbox
+        WHERE n.nspname=current_schema() AND c.relkind='r'""")
+        ).all()
+    )
+    conn.execute(
+        sa.text("""ALTER TABLE eventos_reserva_outbox
         ALTER COLUMN tipo SET NOT NULL,
-        ALTER COLUMN tipo SET DEFAULT 'ReservaCanceladaEvent'"""))
+        ALTER COLUMN tipo SET DEFAULT 'ReservaCanceladaEvent'""")
+    )
     unicas = inspector.get_unique_constraints("eventos_reserva_outbox")
     if not any(c["column_names"] == ["reserva_id", "tipo"] for c in unicas):
-        conn.execute(sa.text("""ALTER TABLE eventos_reserva_outbox
-            ADD CONSTRAINT uq_evento_reserva_tipo UNIQUE (reserva_id,tipo)"""))
+        conn.execute(
+            sa.text("""ALTER TABLE eventos_reserva_outbox
+            ADD CONSTRAINT uq_evento_reserva_tipo UNIQUE (reserva_id,tipo)""")
+        )
     validar_modelos(conn, [m.__table__ for m in ADOPTADAS])
     with Operations.context(MigrationContext.configure(conn)):
         for nombre in REVISIONES:
@@ -141,12 +169,17 @@ def reconciliar(conn, respaldo):
     if antes != huellas(conn, tablas):
         raise RuntimeError("Cambió una columna histórica; reparación revertida.")
     for tabla, protegido in rls.items():
-        if protegido and not conn.scalar(sa.text("""SELECT c.relrowsecurity FROM pg_class c
+        if protegido and not conn.scalar(
+            sa.text("""SELECT c.relrowsecurity FROM pg_class c
             JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname=current_schema() AND c.relname=:tabla"""), {"tabla": tabla}):
+            WHERE n.nspname=current_schema() AND c.relname=:tabla"""),
+            {"tabla": tabla},
+        ):
             raise RuntimeError(f"Se perdió RLS: {tabla}")
-    conn.execute(sa.text("UPDATE alembic_version SET version_num=:head WHERE version_num=:origen"),
-                 {"head": HEAD, "origen": ORIGEN})
+    conn.execute(
+        sa.text("UPDATE alembic_version SET version_num=:head WHERE version_num=:origen"),
+        {"head": HEAD, "origen": ORIGEN},
+    )
     return {"revision": HEAD, "tablas_preservadas": len(tablas)}
 
 

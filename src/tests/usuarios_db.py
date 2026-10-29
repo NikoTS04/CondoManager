@@ -66,13 +66,22 @@ def copiar_demo_legacy(connection, esquema_origen):
 
     inspector = inspect(connection)
     quote = connection.dialect.identifier_preparer.quote_identifier
-    for tabla in ("condominios", "edificios", "departamentos", "usuarios",
-                  "usuario_roles", "usuario_departamentos", "areas_comunes"):
+    for tabla in (
+        "condominios",
+        "edificios",
+        "departamentos",
+        "usuarios",
+        "usuario_roles",
+        "usuario_departamentos",
+        "areas_comunes",
+    ):
         columnas = ", ".join(quote(c["name"]) for c in inspector.get_columns(tabla))
-        connection.execute(text(
-            f"INSERT INTO {quote(tabla)} ({columnas}) "
-            f"SELECT {columnas} FROM {quote(esquema_origen)}.{quote(tabla)}"
-        ))
+        connection.execute(
+            text(
+                f"INSERT INTO {quote(tabla)} ({columnas}) "
+                f"SELECT {columnas} FROM {quote(esquema_origen)}.{quote(tabla)}"
+            )
+        )
 
 
 @dataclass

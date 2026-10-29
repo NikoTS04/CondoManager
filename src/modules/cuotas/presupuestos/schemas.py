@@ -32,7 +32,8 @@ class DatosPresupuestoRequest(BaseModel):
     periodo: str = Field(pattern=PERIODO_PATTERN)
     moneda: MonedaPresupuesto
     monto_total: Decimal | None = Field(
-        default=None, ge=Decimal("0.00"),
+        default=None,
+        ge=Decimal("0.00"),
         max_digits=12,
         decimal_places=2,
     )
@@ -59,7 +60,14 @@ class DatosPresupuestoRequest(BaseModel):
         else:
             if len({i.id for i in self.items}) != len(self.items):
                 raise ValueError("Los identificadores de ítems no pueden repetirse.")
-            calculado = sum(((i.monto_periodo - i.monto_cubierto_moras) * (-1 if i.tipo_movimiento == "ABONO" else 1) for i in self.items), Decimal("0.00"))
+            calculado = sum(
+                (
+                    (i.monto_periodo - i.monto_cubierto_moras)
+                    * (-1 if i.tipo_movimiento == "ABONO" else 1)
+                    for i in self.items
+                ),
+                Decimal("0.00"),
+            )
             if not Decimal("0.00") <= calculado <= Decimal("9999999999.99"):
                 raise ValueError("Total distribuible fuera de rango.")
             if self.monto_total is not None and self.monto_total != calculado:

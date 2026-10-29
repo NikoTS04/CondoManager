@@ -57,11 +57,19 @@ def fotografiar_politica(condominio, vinculo):
     return {
         "version": condominio.politica_version,
         "modalidad": condominio.regla_mora_tipo,
-        "monto_diario": str(condominio.monto_mora_diario) if condominio.monto_mora_diario is not None else None,
-        "monto_fijo": str(condominio.monto_mora_fijo) if condominio.monto_mora_fijo is not None else None,
-        "tasa_porcentaje": str(condominio.tasa_mora_porcentaje) if condominio.tasa_mora_porcentaje is not None else None,
+        "monto_diario": str(condominio.monto_mora_diario)
+        if condominio.monto_mora_diario is not None
+        else None,
+        "monto_fijo": str(condominio.monto_mora_fijo)
+        if condominio.monto_mora_fijo is not None
+        else None,
+        "tasa_porcentaje": str(condominio.tasa_mora_porcentaje)
+        if condominio.tasa_mora_porcentaje is not None
+        else None,
         "dias_gracia": gracia_efectiva(condominio.dias_gracia, vinculo),
-        "responsable_vinculo_id": str(vinculo.id) if vinculo is not None and vinculo.es_activo else None,
+        "responsable_vinculo_id": str(vinculo.id)
+        if vinculo is not None and vinculo.es_activo
+        else None,
         "zona_horaria": "America/Lima",
     }
 
@@ -94,7 +102,8 @@ class CondicionesPagoService:
 
             def representar():
                 return CondicionesPagoResponse(
-                    departamento_id=did, version=depto.condiciones_pago_version,
+                    departamento_id=did,
+                    version=depto.condiciones_pago_version,
                     vinculo_responsable_id=vinculo.id if vinculo else None,
                     dias_gracia_override=vinculo.dias_gracia_override if vinculo else None,
                     dias_gracia_efectivos=gracia_efectiva(condominio.dias_gracia, vinculo),
@@ -103,13 +112,19 @@ class CondicionesPagoService:
             if request is None:
                 return representar()
             if request.version_esperada != depto.condiciones_pago_version:
-                raise APIError(409, "CONDICIONES_VERSION_OBSOLETA", "Recargue las condiciones de pago.")
+                raise APIError(
+                    409, "CONDICIONES_VERSION_OBSOLETA", "Recargue las condiciones de pago."
+                )
             anterior = representar().model_dump(mode="json")
             nuevo = await self._vinculo(request.vinculo_responsable_id, did)
             if request.vinculo_responsable_id is not None and nuevo is None:
-                raise APIError(422, "RESPONSABLE_INVALIDO", "Seleccione un vínculo activo de esta unidad.")
-            if (depto.responsable_pago_id == request.vinculo_responsable_id
-                    and (nuevo.dias_gracia_override if nuevo else None) == request.dias_gracia_override):
+                raise APIError(
+                    422, "RESPONSABLE_INVALIDO", "Seleccione un vínculo activo de esta unidad."
+                )
+            if (
+                depto.responsable_pago_id == request.vinculo_responsable_id
+                and (nuevo.dias_gracia_override if nuevo else None) == request.dias_gracia_override
+            ):
                 return representar()
             depto.responsable_pago_id = request.vinculo_responsable_id
             depto.condiciones_pago_version += 1
@@ -117,22 +132,36 @@ class CondicionesPagoService:
                 nuevo.dias_gracia_override = request.dias_gracia_override
             vinculo = nuevo
             posterior = representar()
-            await self.repo.auditar(actor, condominio.id, did, "CONDICIONES_PAGO_MODIFICADAS",
-                                    request.motivo, anterior, posterior.model_dump(mode="json"))
+            await self.repo.auditar(
+                actor,
+                condominio.id,
+                did,
+                "CONDICIONES_PAGO_MODIFICADAS",
+                request.motivo,
+                anterior,
+                posterior.model_dump(mode="json"),
+            )
             return posterior
 
 
-@router.get("/departamentos/{departamento_id}/condiciones-pago", response_model=CondicionesPagoResponse)
+@router.get(
+    "/departamentos/{departamento_id}/condiciones-pago", response_model=CondicionesPagoResponse
+)
 async def consultar_condiciones_pago(
-    departamento_id: UUID, actor: dict = Depends(get_current_user),
+    departamento_id: UUID,
+    actor: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session, use_cache=False),
 ):
     return await CondicionesPagoService(session).procesar(departamento_id, actor)
 
 
-@router.put("/departamentos/{departamento_id}/condiciones-pago", response_model=CondicionesPagoResponse)
+@router.put(
+    "/departamentos/{departamento_id}/condiciones-pago", response_model=CondicionesPagoResponse
+)
 async def configurar_condiciones_pago(
-    departamento_id: UUID, request: CondicionesPagoRequest, actor: dict = Depends(get_current_user),
+    departamento_id: UUID,
+    request: CondicionesPagoRequest,
+    actor: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session, use_cache=False),
 ):
     return await CondicionesPagoService(session).procesar(departamento_id, actor, request)

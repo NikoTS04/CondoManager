@@ -277,11 +277,18 @@ class PagosPersistentesService:
             anterior = {"estado": comprobante.estado, "saldo_a_favor": str(depto.saldo_a_favor)}
             total_aplicado, credito = CERO, CERO
             if request.decision == "APROBADO" and comprobante.fecha_operacion > hoy:
-                raise APIError(422, "FECHA_BANCARIA_FUTURA", "La fecha bancaria no puede ser futura en Lima.")
+                raise APIError(
+                    422, "FECHA_BANCARIA_FUTURA", "La fecha bancaria no puede ser futura en Lima."
+                )
             motor = await MoraDiariaService(self.session).reconstruir(
-                depto, condominio, cuotas, usuario, hoy,
+                depto,
+                condominio,
+                cuotas,
+                usuario,
+                hoy,
                 nuevo=comprobante if request.decision == "APROBADO" else None,
-                pausar_revision=False, ahora=ahora,
+                pausar_revision=False,
+                ahora=ahora,
             )
             if request.decision == "APROBADO":
                 if motor is not None:
@@ -292,7 +299,9 @@ class PagosPersistentesService:
                     credito = plan["remanente"]
                     if depto.saldo_a_favor + credito > MAX_MONEDA:
                         raise APIError(
-                            422, "SALDO_FUERA_DE_RANGO", "El saldo a favor excede el límite contable."
+                            422,
+                            "SALDO_FUERA_DE_RANGO",
+                            "El saldo a favor excede el límite contable.",
                         )
                     for cuota in cuotas:
                         aplicado = plan["aplicaciones"].get(cuota.id, CERO)
@@ -306,15 +315,30 @@ class PagosPersistentesService:
                         else:
                             cuota.estado = "PAGO_PARCIAL"
                         imputacion_id = uuid4()
-                        self.session.add(ImputacionPago(id=imputacion_id, comprobante_id=id,
-                                                        cuota_id=cuota.id, monto_aplicado=aplicado))
+                        self.session.add(
+                            ImputacionPago(
+                                id=imputacion_id,
+                                comprobante_id=id,
+                                cuota_id=cuota.id,
+                                monto_aplicado=aplicado,
+                            )
+                        )
                         imputaciones[id, cuota.id] = imputacion_id
                         total_aplicado += aplicado
                     depto.saldo_a_favor += credito
                     await FondosMorasService(self.session).registrar_cobros(
-                        depto, condominio, {}, {(id, cid, "MORA"): importes[0]
-                            for cid, importes in plan["componentes"].items() if importes[0]},
-                        {}, usuario, legacy=imputaciones)
+                        depto,
+                        condominio,
+                        {},
+                        {
+                            (id, cid, "MORA"): importes[0]
+                            for cid, importes in plan["componentes"].items()
+                            if importes[0]
+                        },
+                        {},
+                        usuario,
+                        legacy=imputaciones,
+                    )
                 depto.estado_financiero = (
                     "EN_MORA"
                     if saldo_en_mora(cuotas, condominio.dias_gracia, hoy) > CERO
@@ -332,9 +356,7 @@ class PagosPersistentesService:
                     (c.monto_total_exigible - c.monto_pagado for c in cuotas), CERO
                 ),
                 saldo_a_favor_generado=credito,
-                departamento_habilitado_reservas=saldo_en_mora(
-                    cuotas, condominio.dias_gracia, hoy
-                )
+                departamento_habilitado_reservas=saldo_en_mora(cuotas, condominio.dias_gracia, hoy)
                 == CERO,
                 motivo_rechazo=comprobante.motivo_rechazo,
             )
@@ -424,7 +446,10 @@ class PagosPersistentesService:
                 .where(RevisionPago.comprobante_id == id, ArchivoVoucher.comprobante_id == id)
                 .order_by(RevisionPago.creado_en.desc(), RevisionPago.id.desc())
             )
-            return [dict(evidencia_id=r.id, content_type=r.content_type, creado_en=r.creado_en) for r in rows]
+            return [
+                dict(evidencia_id=r.id, content_type=r.content_type, creado_en=r.creado_en)
+                for r in rows
+            ]
 
     async def voucher(self, id, usuario, evidencia_id=None):
         async with self.session.begin():
@@ -434,11 +459,16 @@ class PagosPersistentesService:
                 nombre = await self.session.scalar(
                     select(ArchivoVoucher.nombre)
                     .join(RevisionPago, RevisionPago.archivo_nombre == ArchivoVoucher.nombre)
-                    .where(RevisionPago.id == evidencia_id, RevisionPago.comprobante_id == id,
-                           ArchivoVoucher.comprobante_id == id)
+                    .where(
+                        RevisionPago.id == evidencia_id,
+                        RevisionPago.comprobante_id == id,
+                        ArchivoVoucher.comprobante_id == id,
+                    )
                 )
                 if nombre is None:
-                    raise APIError(404, "EVIDENCIA_NO_ENCONTRADA", "No existe evidencia autorizada.")
+                    raise APIError(
+                        404, "EVIDENCIA_NO_ENCONTRADA", "No existe evidencia autorizada."
+                    )
             ruta = await asyncio.to_thread(self.storage.ruta, nombre)
             return ruta, nombre
 

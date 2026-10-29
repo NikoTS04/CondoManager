@@ -20,7 +20,9 @@ from src.modules.pagos.fondos import FondosMorasService
 
 
 class PresupuestoRepository(Protocol):
-    async def preparar_detalle(self, condominio_id: UUID, items: list, presupuesto_id: UUID | None = None) -> dict: ...
+    async def preparar_detalle(
+        self, condominio_id: UUID, items: list, presupuesto_id: UUID | None = None
+    ) -> dict: ...
     async def confirmar_coberturas(self, presupuesto: PresupuestoMensual, actor) -> None: ...
     async def obtener_condominio(self, condominio_id: UUID) -> Condominio | None: ...
 
@@ -76,10 +78,16 @@ class SQLAlchemyPresupuestoRepository:
         if condominio_id is not None:
             consulta = consulta.where(PresupuestoMensual.condominio_id == condominio_id)
         if bloquear:
-            cid = await self._session.scalar(select(PresupuestoMensual.condominio_id).where(
-                PresupuestoMensual.id == presupuesto_id,
-                *([PresupuestoMensual.condominio_id == condominio_id] if condominio_id is not None else []),
-            ))
+            cid = await self._session.scalar(
+                select(PresupuestoMensual.condominio_id).where(
+                    PresupuestoMensual.id == presupuesto_id,
+                    *(
+                        [PresupuestoMensual.condominio_id == condominio_id]
+                        if condominio_id is not None
+                        else []
+                    ),
+                )
+            )
             if cid is None:
                 return None
             await self.obtener_condominio(cid)
@@ -88,11 +96,28 @@ class SQLAlchemyPresupuestoRepository:
         return resultado.scalar_one_or_none()
 
     async def preparar_detalle(self, condominio_id, items, presupuesto_id=None):
-        edificios = list(await self._session.scalars(select(Edificio).where(Edificio.condominio_id == condominio_id).order_by(Edificio.id)))
-        departamentos = list(await self._session.scalars(
-            select(Departamento).join(Edificio).where(Edificio.condominio_id == condominio_id, Departamento.activo.is_(True)).order_by(Departamento.id)
-        ))
-        conceptos = list(await self._session.scalars(select(ConceptoPresupuestal).where(ConceptoPresupuestal.condominio_id == condominio_id)))
+        edificios = list(
+            await self._session.scalars(
+                select(Edificio)
+                .where(Edificio.condominio_id == condominio_id)
+                .order_by(Edificio.id)
+            )
+        )
+        departamentos = list(
+            await self._session.scalars(
+                select(Departamento)
+                .join(Edificio)
+                .where(Edificio.condominio_id == condominio_id, Departamento.activo.is_(True))
+                .order_by(Departamento.id)
+            )
+        )
+        conceptos = list(
+            await self._session.scalars(
+                select(ConceptoPresupuestal).where(
+                    ConceptoPresupuestal.condominio_id == condominio_id
+                )
+            )
+        )
         fondos = FondosMorasService(self._session)
         aplicaciones = await fondos.coberturas(presupuesto_id)
         if any(str(a.item_id) not in {i["id"] for i in items} for a in aplicaciones):
@@ -100,8 +125,13 @@ class SQLAlchemyPresupuestoRepository:
         coberturas = defaultdict(lambda: Decimal("0.00"))
         for a in aplicaciones:
             coberturas[a.item_id, a.edificio_id] += a.monto
-        detalle = calcular_prorrateo([ItemPresupuesto.model_validate(i) for i in items], edificios,
-                                    departamentos, {c.id: c for c in conceptos}, coberturas)
+        detalle = calcular_prorrateo(
+            [ItemPresupuesto.model_validate(i) for i in items],
+            edificios,
+            departamentos,
+            {c.id: c for c in conceptos},
+            coberturas,
+        )
         if presupuesto_id:
             p = await self._session.get(PresupuestoMensual, presupuesto_id)
             detalle["fondos_moras"] = []
@@ -112,7 +142,9 @@ class SQLAlchemyPresupuestoRepository:
         return detalle
 
     async def confirmar_coberturas(self, presupuesto, actor):
-        await FondosMorasService(self._session).confirmar(presupuesto, {"sub": actor.id, "rol": actor.rol})
+        await FondosMorasService(self._session).confirmar(
+            presupuesto, {"sub": actor.id, "rol": actor.rol}
+        )
 
     async def obtener_por_condominio_periodo(
         self, condominio_id: UUID, periodo: str

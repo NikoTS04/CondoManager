@@ -11,17 +11,30 @@ from src.modules.pagos.calculo_diario import CuotaCalculo, reconstruir
 
 
 def cuota(**cambios):
-    datos = dict(id=UUID(int=1), periodo="2026-10", fecha_emision=date(2026, 10, 1),
-                 fecha_vencimiento=date(2026, 10, 10), monto_total_exigible=Decimal("100.00"),
-                 monto_extraordinario=Decimal("0.00"), monto_mora=Decimal("0.00"),
-                 monto_pagado=Decimal("0.00"), politica_mora_aplicada={
-                     "modalidad": "MONTO_DIARIO", "monto_diario": "1.00", "dias_gracia": 0,
-                     "zona_horaria": "America/Lima", "version": 1})
+    datos = dict(
+        id=UUID(int=1),
+        periodo="2026-10",
+        fecha_emision=date(2026, 10, 1),
+        fecha_vencimiento=date(2026, 10, 10),
+        monto_total_exigible=Decimal("100.00"),
+        monto_extraordinario=Decimal("0.00"),
+        monto_mora=Decimal("0.00"),
+        monto_pagado=Decimal("0.00"),
+        politica_mora_aplicada={
+            "modalidad": "MONTO_DIARIO",
+            "monto_diario": "1.00",
+            "dias_gracia": 0,
+            "zona_horaria": "America/Lima",
+            "version": 1,
+        },
+    )
     return CuotaCalculo(**(datos | cambios))
 
 
 def pago(dia, importe, id=10):
-    return SimpleNamespace(id=UUID(int=id), fecha_operacion=date(2026, 10, dia), monto=Decimal(importe))
+    return SimpleNamespace(
+        id=UUID(int=id), fecha_operacion=date(2026, 10, dia), monto=Decimal(importe)
+    )
 
 
 @pytest.mark.parametrize("dia,esperado", [(10, "0.00"), (11, "1.00"), (15, "5.00")])
@@ -35,7 +48,11 @@ def test_calendario_y_entradas_inmutables(dia, esperado):
 
 def test_por_cuota_y_gracia_historica():
     a = cuota()
-    b = cuota(id=UUID(int=2), politica_mora_aplicada=a.politica_mora_aplicada | {"dias_gracia": 2, "monto_diario": "2.50"})
+    b = cuota(
+        id=UUID(int=2),
+        politica_mora_aplicada=a.politica_mora_aplicada
+        | {"dias_gracia": 2, "monto_diario": "2.50"},
+    )
     r = reconstruir([a, b], [], date(2026, 10, 15))
     assert r["cuotas"][a.id]["mora"] == Decimal("5.00")
     assert r["cuotas"][b.id]["mora"] == Decimal("7.50")
@@ -61,7 +78,11 @@ def test_dia_bancario_inclusivo_y_cese_al_pagar_principal(p, esperado):
 def test_pago_parcial_no_reduce_cargo_fijo_ni_capitaliza():
     c = cuota()
     r = reconstruir([c], [pago(12, "50.00")], date(2026, 10, 20))
-    assert r["cuotas"][c.id] == {"mora": Decimal("10.00"), "total": Decimal("110.00"), "pagado": Decimal("50.00")}
+    assert r["cuotas"][c.id] == {
+        "mora": Decimal("10.00"),
+        "total": Decimal("110.00"),
+        "pagado": Decimal("50.00"),
+    }
     assert r["movimientos"][UUID(int=10), c.id, "MORA"] == Decimal("2.00")
     assert r["movimientos"][UUID(int=10), c.id, "ORDINARIA"] == Decimal("48.00")
 
@@ -98,9 +119,17 @@ def test_pausa_solo_limita_devengos_no_extingue_principal():
     assert len(r["devengos"]) == 2 and r["cuotas"][c.id]["pagado"] == 0
 
 
-@pytest.mark.parametrize("cambios", [{"monto_diario": "NaN"}, {"monto_diario": "0.00"},
-                                   {"monto_diario": "1.001"}, {"dias_gracia": True},
-                                   {"zona_horaria": "UTC"}, {"monto_diario": None}])
+@pytest.mark.parametrize(
+    "cambios",
+    [
+        {"monto_diario": "NaN"},
+        {"monto_diario": "0.00"},
+        {"monto_diario": "1.001"},
+        {"dias_gracia": True},
+        {"zona_horaria": "UTC"},
+        {"monto_diario": None},
+    ],
+)
 def test_snapshot_invalido_se_bloquea(cambios):
     c = cuota()
     c.politica_mora_aplicada.update(cambios)

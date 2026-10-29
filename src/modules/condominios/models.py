@@ -35,7 +35,9 @@ class Condominio(Base):
     regla_mora_tipo: Mapped[str] = mapped_column(String(20), nullable=False, default="MONTO_FIJO")
     monto_mora_fijo: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     monto_mora_diario: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    politica_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    politica_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     tasa_mora_porcentaje: Mapped[Decimal | None] = mapped_column(Numeric(7, 4), nullable=True)
     dia_vencimiento: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     dias_gracia: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -126,7 +128,9 @@ class Departamento(Base):
     )
     responsable_pago_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("usuario_departamentos.id", name="fk_departamento_responsable_pago", ondelete="SET NULL"),
+        ForeignKey(
+            "usuario_departamentos.id", name="fk_departamento_responsable_pago", ondelete="SET NULL"
+        ),
         nullable=True,
     )
     condiciones_pago_version: Mapped[int] = mapped_column(

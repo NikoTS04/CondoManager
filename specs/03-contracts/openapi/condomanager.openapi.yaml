@@ -1419,7 +1419,7 @@ components:
       if:
         required: [items]
         properties:
-          items: {type: array}
+          items: {type: array, items: {}}
       then: {}
       else:
         required: [monto_total]
@@ -1447,7 +1447,7 @@ components:
       if:
         required: [items]
         properties:
-          items: {type: array}
+          items: {type: array, items: {}}
       then:
         required: [version_esperada]
       else:

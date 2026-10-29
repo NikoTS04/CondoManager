@@ -4,7 +4,7 @@ Sistema de gestión de cuotas de mantenimiento, pagos y reservas para condominio
 
 ## Entrega del Sprint 2
 
-`develop` integra usuarios, pagos, reservas y notificaciones del Sprint 2 hasta el merge del PR #27 (`52b4512`). Esta documentación prepara su entrega mediante PR de `develop` a `main`; no declara que el merge, el tag o una publicación ya se hayan realizado.
+El candidato del [PR #25 (`develop` → `main`)](https://github.com/NikoTS04/CondoManager/pull/25) parte de `f49dc55`: incluye el Sprint 2 integrado en el PR #27 (`52b4512`) y la ampliación financiera del PR #28. Esta última incorpora gracia por responsable, prorrateo detallado, mora diaria y fondos por edificio, con migraciones hasta `20261025_0020`. La aprobación, el merge y cualquier publicación conservan su registro propio en GitHub.
 
 - [Alcance y criterios del Sprint 2](docs/sprints/SPRINT-2.md).
 - [Entrega consolidada CON-75: 20 elementos, evidencia y límites](docs/sprints/CON-75-entrega-sprint-2.md).
@@ -18,7 +18,7 @@ Sistema de gestión de cuotas de mantenimiento, pagos y reservas para condominio
 | Avisos desde operaciones confirmadas, reintentos y alertas | CON-32, CON-34, CON-36, CON-37 |
 | Contratos, persistencia, interfaz y documentación de entrega | CON-72, CON-73, CON-74, CON-75 |
 
-Las pruebas previas reportadas por el equipo se referencian en la entrega consolidada. La preparación documental no vuelve a ejecutarlas ni sustituye la aprobación del PR. El [Sprint 1](docs/sprints/SPRINT-1.md) se conserva como antecedente; CON-22 y CON-23 se completan e integran en este sprint.
+La [validación del candidato actual](docs/sprints/SPRINT-2-VALIDACION-PR25.md) distingue las nuevas ejecuciones de los resultados históricos de CON-75. La [guía financiera](specs/05-api/prorrateo-mora-reportes.md) explica el alcance prospectivo y los límites de la ampliación. El [Sprint 1](docs/sprints/SPRINT-1.md) se conserva como antecedente; CON-22 y CON-23 se completan e integran en el Sprint 2.
 
 ## Arranque local con Docker Desktop
 
@@ -117,4 +117,4 @@ El worker de cuotas puede emitir periodos pendientes desde el día UTC configura
 - [Uso de pagos y solvencia](docs/sprints/SPRINT-2-ANDERSON-USO.md), [convergencia de contratos](docs/sprints/CON-72-convergencia.md) y [notificaciones](docs/sprints/CON-32-34-36-37-notificaciones.md).
 - [CI/CD](docs/procesos/CI-CD.md), [guía de contribución](CONTRIBUTING.md) y [especificaciones](specs/README.md).
 
-Los comandos para repetir pruebas se conservan en las entregas técnicas enlazadas. Para este cierre documental se reutilizan los resultados reportados por el equipo, sin una nueva ejecución local. `main` recibe la entrega mediante PR revisado desde `develop`.
+Los comandos y resultados del corte actual se conservan en la [validación del PR #25](docs/sprints/SPRINT-2-VALIDACION-PR25.md); las entregas técnicas anteriores mantienen sus propios cortes. `main` recibe la entrega mediante PR revisado desde `develop`, con los checks aplicables y la aprobación de otro integrante.

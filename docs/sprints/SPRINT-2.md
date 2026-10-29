@@ -6,15 +6,21 @@ Entregar un prototipo integrado en el que los usuarios accedan según su rol y s
 
 El Sprint 2 contiene **20 elementos: 15 historias de usuario y 5 entregas técnicas**. Los puntos y la capacidad de la tabla conservan el registro de planificación original; esta consolidación no inventa estimaciones ni fechas de ejecución.
 
-## Estado de entrega — 21/10/2026
+## Estado del candidato de entrega — 28/10/2026
+
+El [PR #25](https://github.com/NikoTS04/CondoManager/pull/25), de `develop` a `main`, incluye la base `f49dc55`: el cierre del Sprint 2 y la ampliación financiera integrada en el PR #28. Esta ampliación añade política diaria, gracia por responsable, presupuesto por conceptos, prorrateo, conciliación diaria y fondos por edificio hasta la migración `20261025_0020`. No modifica retrospectivamente las asignaciones originales de la tabla ni declara completado el Sprint 3.
+
+La [validación del candidato](SPRINT-2-VALIDACION-PR25.md) identifica los cambios de CI, resultados nuevos y límites de esta revisión. La aceptación requiere los checks de la revisión final y la aprobación de otro integrante.
+
+### Antecedente de consolidación — 21/10/2026
 
 Las implementaciones del sprint están integradas en `develop` hasta el merge del
 PR #27 (`52b4512`). El [documento de entrega CON-75](CON-75-entrega-sprint-2.md)
 reúne los 20 elementos, los guiones y la evidencia reportada por sus responsables
 para preparar el PR de `develop` a `main`.
 
-Para esta preparación se reutilizan los resultados previos, sin repetir pruebas
-en esta actualización documental. Se conserva su procedencia y corte; no se
+En aquella preparación se reutilizaron los resultados previos, sin repetir pruebas
+en la actualización documental original. Se conserva su procedencia y corte; no se
 declara una nueva ejecución ni la aprobación del PR final. Las notas de pendientes
 de integración anteriores se actualizan según las entregas incorporadas.
 

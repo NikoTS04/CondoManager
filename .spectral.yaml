@@ -7,7 +7,8 @@ functions:
 
 # La estructura y referencias siguen siendo bloqueantes. La documentación
 # incompleta del contrato actual se publica como warnings, no se oculta.
-# Línea base: 20 warnings (contacto ausente, descripciones y tags de operaciones).
+# Advertencias documentales visibles (contacto, descripciones y tags); el corte
+# financiero añade operaciones a la línea base histórica de 20 warnings.
 # TODO: completar esa documentación en specs/ antes de exigir cero warnings.
 rules:
   info-contact: warn

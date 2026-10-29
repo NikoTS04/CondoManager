@@ -46,27 +46,48 @@ async def publicar_pendientes(redis, session_factory=AsyncSessionLocal):
 async def evaluar_moras_diarias(session_factory=AsyncSessionLocal, hoy=None, ahora=None):
     hoy = hoy or fecha_lima()
     async with session_factory() as session:
-        unidades = list((await session.execute(
-            select(Condominio.id, Departamento.id).select_from(Condominio).join(Edificio).join(Departamento)
-            .join(CuotaMantenimiento)
-            .where(Condominio.activo.is_(True),
-                   CuotaMantenimiento.politica_mora_aplicada["modalidad"].astext == "MONTO_DIARIO")
-            .distinct().order_by(Condominio.id, Departamento.id)
-        )).all())
+        unidades = list(
+            (
+                await session.execute(
+                    select(Condominio.id, Departamento.id)
+                    .select_from(Condominio)
+                    .join(Edificio)
+                    .join(Departamento)
+                    .join(CuotaMantenimiento)
+                    .where(
+                        Condominio.activo.is_(True),
+                        CuotaMantenimiento.politica_mora_aplicada["modalidad"].astext
+                        == "MONTO_DIARIO",
+                    )
+                    .distinct()
+                    .order_by(Condominio.id, Departamento.id)
+                )
+            ).all()
+        )
     for cid, did in unidades:
         try:
             async with session_factory() as session, session.begin():
-                condominio = await session.scalar(select(Condominio).where(Condominio.id == cid).with_for_update())
+                condominio = await session.scalar(
+                    select(Condominio).where(Condominio.id == cid).with_for_update()
+                )
                 if condominio is None or not condominio.activo:
                     continue
-                departamento = await session.scalar(select(Departamento).join(Edificio).where(
-                    Departamento.id == did, Edificio.condominio_id == cid).with_for_update(of=Departamento))
+                departamento = await session.scalar(
+                    select(Departamento)
+                    .join(Edificio)
+                    .where(Departamento.id == did, Edificio.condominio_id == cid)
+                    .with_for_update(of=Departamento)
+                )
                 if departamento is None:
                     continue
                 cuotas = await SQLAlchemyPagosRepository(session).cuotas(did, bloquear=True)
                 await MoraDiariaService(session).reconstruir(
-                    departamento, condominio, cuotas, {"sub": "MORA_DIARIA_WORKER", "rol": "SISTEMA_AUTOMATICO"},
-                    hoy, ahora=ahora,
+                    departamento,
+                    condominio,
+                    cuotas,
+                    {"sub": "MORA_DIARIA_WORKER", "rol": "SISTEMA_AUTOMATICO"},
+                    hoy,
+                    ahora=ahora,
                 )
         except Exception:
             logger.exception("Mora diaria pendiente: condominio=%s departamento=%s", cid, did)
@@ -118,8 +139,15 @@ async def main():
     logging.basicConfig(level=logging.INFO)
     redis = Redis.from_url(settings.REDIS_URL, socket_timeout=10, socket_connect_timeout=10)
     scheduler = AsyncIOScheduler(timezone="America/Lima")
-    scheduler.add_job(evaluar_moras_diarias, "cron", hour=0, minute=5,
-                      coalesce=True, max_instances=1, misfire_grace_time=3600)
+    scheduler.add_job(
+        evaluar_moras_diarias,
+        "cron",
+        hour=0,
+        minute=5,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
     scheduler.start()
     try:
         await evaluar_moras_diarias()

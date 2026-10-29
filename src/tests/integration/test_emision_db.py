@@ -85,11 +85,14 @@ async def preparar(factory, *, metodo="EQUITATIVA", estado="APROBADO", total="10
     cid = uuid4()
     async with factory() as session, session.begin():
         # Datos comunes a esquemas históricos y actuales; no insertar columnas futuras.
-        await session.execute(text(
-            "INSERT INTO condominios (id,nombre,direccion,moneda,regla_mora_tipo,"
-            "monto_mora_fijo,dia_vencimiento,dias_gracia) "
-            "VALUES (:id,'CON-11','Prueba','PEN','MONTO_FIJO',0,20,2)"
-        ), {"id": cid})
+        await session.execute(
+            text(
+                "INSERT INTO condominios (id,nombre,direccion,moneda,regla_mora_tipo,"
+                "monto_mora_fijo,dia_vencimiento,dias_gracia) "
+                "VALUES (:id,'CON-11','Prueba','PEN','MONTO_FIJO',0,20,2)"
+            ),
+            {"id": cid},
+        )
         await session.flush()
         eid = uuid4()
         session.add(Edificio(id=eid, condominio_id=cid, nombre_bloque="Norte", total_pisos=1))
@@ -97,19 +100,35 @@ async def preparar(factory, *, metodo="EQUITATIVA", estado="APROBADO", total="10
         # UUIDs reproducibles para verificar el desempate del centavo residual.
         ids = [UUID(int=i) for i in range(1, 5)]
         for i, id in enumerate(ids):
-            await session.execute(text(
-                "INSERT INTO departamentos (id,edificio_id,numero,piso,coeficiente_participacion,"
-                "saldo_a_favor,activo) VALUES (:id,:eid,:numero,1,:coeficiente,:saldo,:activo)"
-            ), {"id": id, "eid": eid, "numero": str(i + 1),
-                "coeficiente": Decimal("33.3334" if i == 0 else "33.3333"),
-                "saldo": Decimal("40.00" if i == 0 else "0.00"), "activo": i < 3})
-        await session.execute(text(
-            "INSERT INTO presupuestos_mensuales (id,condominio_id,periodo,moneda,monto_total,"
-            "fecha_vencimiento,estado,creado_por,aprobado_por,aprobado_en) "
-            "VALUES (:id,:cid,'2026-10','PEN',:total,'2026-10-20',:estado,'prueba',:actor,:fecha)"
-        ), {"id": uuid4(), "cid": cid, "total": Decimal(total), "estado": estado,
-            "actor": "prueba" if estado == "APROBADO" else None,
-            "fecha": datetime.now(UTC) if estado == "APROBADO" else None})
+            await session.execute(
+                text(
+                    "INSERT INTO departamentos (id,edificio_id,numero,piso,coeficiente_participacion,"
+                    "saldo_a_favor,activo) VALUES (:id,:eid,:numero,1,:coeficiente,:saldo,:activo)"
+                ),
+                {
+                    "id": id,
+                    "eid": eid,
+                    "numero": str(i + 1),
+                    "coeficiente": Decimal("33.3334" if i == 0 else "33.3333"),
+                    "saldo": Decimal("40.00" if i == 0 else "0.00"),
+                    "activo": i < 3,
+                },
+            )
+        await session.execute(
+            text(
+                "INSERT INTO presupuestos_mensuales (id,condominio_id,periodo,moneda,monto_total,"
+                "fecha_vencimiento,estado,creado_por,aprobado_por,aprobado_en) "
+                "VALUES (:id,:cid,'2026-10','PEN',:total,'2026-10-20',:estado,'prueba',:actor,:fecha)"
+            ),
+            {
+                "id": uuid4(),
+                "cid": cid,
+                "total": Decimal(total),
+                "estado": estado,
+                "actor": "prueba" if estado == "APROBADO" else None,
+                "fecha": datetime.now(UTC) if estado == "APROBADO" else None,
+            },
+        )
         session.add(
             ConfiguracionDistribucion(
                 id=uuid4(),

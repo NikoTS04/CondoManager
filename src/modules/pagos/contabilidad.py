@@ -16,9 +16,13 @@ def saldo_en_mora(cuotas: list[CuotaMantenimiento], dias_gracia: int, hoy: date)
             (
                 max(c.monto_total_exigible - c.monto_pagado, CERO)
                 for c in cuotas
-                if c.estado == "EN_MORA" or hoy > c.fecha_vencimiento + timedelta(
+                if c.estado == "EN_MORA"
+                or hoy
+                > c.fecha_vencimiento
+                + timedelta(
                     days=c.dias_gracia_aplicados
-                    if c.dias_gracia_aplicados is not None else dias_gracia
+                    if c.dias_gracia_aplicados is not None
+                    else dias_gracia
                 )
             ),
             CERO,
@@ -27,7 +31,9 @@ def saldo_en_mora(cuotas: list[CuotaMantenimiento], dias_gracia: int, hoy: date)
 
 
 def plan_imputacion(
-    cuotas: list[CuotaMantenimiento], monto: Decimal, hoy: date,
+    cuotas: list[CuotaMantenimiento],
+    monto: Decimal,
+    hoy: date,
     pagados_por_componente: dict | None = None,
 ) -> dict:
     """Agrupa la prelación por componente y consolida la imputación por cuota.

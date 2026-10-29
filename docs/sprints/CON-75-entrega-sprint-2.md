@@ -1,7 +1,13 @@
 # CON-75 — Entrega consolidada del Sprint 2
 
-Fecha de consolidación: 21/10/2026. Coordinación: Gerardo.
-Base integrada: `develop`, merge del PR #27 (`52b4512`). Destino de entrega: PR de `develop` a `main`.
+Consolidación original: 21/10/2026. Actualización del candidato: 28/10/2026. Coordinación: Gerardo.
+Base actual: `develop` en `f49dc55` (PR #28), que incorpora el corte original del PR #27 (`52b4512`). Destino de entrega: [PR #25 de `develop` a `main`](https://github.com/NikoTS04/CondoManager/pull/25).
+
+## Corte actual: Sprint 2 y ampliación financiera
+
+La matriz de 20 elementos conserva el alcance original del sprint. El candidato incluye además política de mora diaria, gracia por responsable, presupuesto por conceptos, prorrateo detallado y PDF/DOCX, conciliación por fecha bancaria y fondos por edificio, con cabeza `20261025_0020`. Sus contratos y límites están en [la guía financiera](../../specs/05-api/prorrateo-mora-reportes.md).
+
+Las correcciones de compatibilidad BDD, OpenAPI, formato y ejecución SQL de contratos, junto con los resultados del candidato, se registran en [SPRINT-2-VALIDACION-PR25.md](SPRINT-2-VALIDACION-PR25.md). La evidencia histórica siguiente no sustituye esa ejecución ni la aprobación del PR final. El correo real, invitaciones, devolución ejecutada y despliegue automático siguen fuera del alcance entregado.
 
 ## Alcance y criterio de este corte
 
@@ -104,7 +110,9 @@ UUID de usuario, unidad, comprobante, reserva y notificación del recorrido.
   corte. El CD conserva su destino de despliegue pendiente y el diagnóstico de
   drift/lint heredado sigue documentado en [CI/CD](../procesos/CI-CD.md).
 
-## Preparación del merge a main
+## Preparación documental original del merge — 21/10/2026
+
+Los pasos y la descripción de esta sección son el antecedente del corte original. Para el alcance y evidencia actuales se utiliza la validación del candidato enlazada al inicio; no se presenta la descripción histórica siguiente como el cuerpo vigente del PR #25.
 
 Integrar esta actualización documental en `develop` y abrir el PR hacia `main`
 con título sugerido `feat: entregar sprint 2 de usuarios pagos reservas y notificaciones`.
