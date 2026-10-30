@@ -31,7 +31,7 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 | Comunicar resultados | Crear aviso → seleccionar canal → ejecutar bot RPA → verificar persistencia → enviar → comprobar entrega → reintentar y reportar | NOT-01 a NOT-08 |
 | Reservar áreas | Consultar disponibilidad → validar solvencia → reservar → pagar/cancelar | RES-01 a RES-09 |
 | Administrar gastos | Registrar proveedor → contrato → egreso → pago → controlar vencimiento | EGR-01 a EGR-05 |
-| Atender incidencias | Reportar → clasificar → asignar → resolver → confirmar cierre | TIC-01 a TIC-05 |
+| Atender incidencias | Reportar → clasificar → asignar → resolver → confirmar cierre | TIC-01 a TIC-06 |
 | Supervisar la gestión | Consultar KPIs → cerrar periodo → generar balance → publicar reportes | REP-01 a REP-05 |
 | Controlar y recuperar | Auditar → impedir duplicados → gestionar excepciones → reintentar → monitorear | TRV-01 a TRV-06 |
 
@@ -94,15 +94,17 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 - No puede existir el mismo número de departamento dos veces dentro del mismo edificio o condominio.
 - El sistema informa las filas inválidas de una importación sin duplicar las válidas ya procesadas.
 
-## USR-03 — Crear e invitar usuarios
+## USR-03 — Crear usuarios y habilitar su acceso
 
-**Historia:** Como administrador, quiero crear usuarios y enviarles una invitación, para que puedan activar su cuenta y acceder al sistema.
+**Historia:** Como administrador, quiero crear usuarios con contraseña inicial, para que un SuperAdmin habilite su acceso al sistema desde la aplicación.
 
 **Criterios de aceptación:**
 
 - El correo y documento de identidad deben ser válidos y únicos según las reglas definidas.
-- Al crear el usuario, se genera un token de activación y se solicita a Notificaciones el envío de la invitación.
-- La cuenta permanece inactiva hasta que el usuario establezca su contraseña.
+- El administrador establece la contraseña inicial, almacenada exclusivamente mediante hash.
+- La cuenta se crea inactiva y solo SuperAdmin puede activar o desactivar su acceso.
+- Una cuenta inactiva no inicia sesión y su desactivación invalida las sesiones anteriores.
+- La invitación y verificación por correo se incorporarán en una evolución posterior. Contrato vigente: [alta administrativa](../../specs/02-domains/05-usuarios-rbac/alta-administrativa.md).
 
 ## USR-04 — Vincular usuarios con departamentos
 
@@ -113,6 +115,10 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 - Un propietario puede estar vinculado con uno o varios departamentos.
 - Un inquilino solo accede a los departamentos cuyo vínculo se encuentre vigente.
 - Cada departamento debe tener al menos un propietario titular registrado.
+- El primer vínculo activo es de titular; no se retira al último sin reemplazo.
+- Los vínculos se revocan sin eliminar su historial; los cambios reales invalidan
+  sesiones y quedan auditados. El portal utiliza departamentos SQL por UUID.
+- Contrato CON-05: [vínculos](../../specs/02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 ## USR-05 — Asignar roles y permisos
 
@@ -120,7 +126,12 @@ El mapa representa el recorrido principal del producto de izquierda a derecha.
 
 **Criterios de aceptación:**
 
-- Se admiten los roles SuperAdmin, Admin/Junta, Auditor, Propietario e Inquilino.
+- Roles canónicos: `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`. Propietario,
+  copropietario e inquilino son relaciones por departamento.
+- SuperAdmin administra roles contextuales; Junta solo Auditor/Residente de su
+  condominio, sin autoasignación ni elevación. La concesión global es independiente.
+- Revocar conserva la asignación y sus vínculos, invalida sesiones y queda auditado.
+- Contrato CON-06: [roles y permisos](../../specs/02-domains/05-usuarios-rbac/roles-y-permisos.md).
 - Cada operación protegida valida el rol y el condominio del usuario.
 - Un residente solo puede consultar y modificar información de sus departamentos vinculados.
 
@@ -451,6 +462,10 @@ Resultado general: COMPLETADO CON OBSERVACIONES
 
 ## RES-01 — Administrar el catálogo de áreas comunes
 
+Contrato CON-39: [catálogo persistente](../../specs/02-domains/04-reservas/catalogo-areas.md).
+Incluye administración contextual, edificio exclusivo, horario diario de Lima,
+duración máxima, tarifa decimal en la moneda del condominio y desactivación auditada.
+
 **Historia:** Como administrador, quiero configurar las áreas comunes, para publicar sus condiciones de uso y reserva.
 
 **Criterios de aceptación:**
@@ -651,6 +666,35 @@ Resultado general: COMPLETADO CON OBSERVACIONES
 - Al aceptar, el ticket cambia a CERRADO.
 - Si no está conforme, el ticket vuelve a EN_PROCESO con el motivo registrado.
 
+## TIC-06 — Clasificar y asignar incidencias con IA y RPA
+
+**Estado:** Propuesto como mejora futura. No forma parte de la implementación actual.
+
+**Historia:** Como administrador del condominio, quiero que una IA recomiende la categoría, prioridad y responsable de cada incidencia y que un bot RPA procese los casos normales, para reducir el tiempo de asignación sin delegar decisiones críticas ni responsabilidad humana.
+
+**Separación de responsabilidades:**
+
+- La IA analiza la descripción y evidencia, detecta posibles duplicados y devuelve categoría, prioridad, responsable recomendado y nivel de confianza.
+- RPA no interpreta libremente la incidencia: valida reglas predefinidas y ejecuta el registro, asignación, inicio del plazo, actualización de estado y auditoría.
+- El administrador conserva la decisión final en casos críticos, ambiguos, costosos o sin proveedor compatible.
+
+**Regla ECA principal:**
+
+> CUANDO un residente reporte una incidencia, SI la IA la clasifica con confianza suficiente, no detecta una situación crítica, no existe un duplicado confirmado y hay un proveedor compatible disponible, ENTONCES RPA crea y asigna el ticket, inicia el plazo de atención y registra la ejecución.
+
+**Criterios de aceptación:**
+
+- La recomendación de IA conserva categoría, prioridad, nivel de confianza, posibles coincidencias y versión del modelo o servicio utilizado.
+- El umbral de confianza es configurable; no se codifica como una cifra fija de negocio.
+- Una incidencia crítica, una recomendación bajo el umbral, datos incompletos, una contradicción relevante o la ausencia de proveedor compatible impiden la asignación desatendida y generan revisión humana.
+- Las reglas críticas determinísticas tienen precedencia sobre la recomendación de IA.
+- El administrador puede confirmar o corregir categoría, prioridad y responsable antes o después de la asignación, dejando trazabilidad de la corrección.
+- Cada ejecución RPA utiliza una clave de idempotencia; un reintento no crea tickets ni asignaciones duplicadas.
+- Al terminar, RPA verifica que el ticket exista, tenga estado, responsable y plazo coherentes, y que la auditoría se haya persistido.
+- Una ejecución incompleta queda en estado de excepción, conserva el paso fallido y puede reintentarse o continuar mediante intervención humana.
+- El proveedor no puede cerrar definitivamente el ticket; el residente confirma la solución o solicita su reapertura.
+- Se calculan, como mínimo, tiempo promedio de asignación, exactitud de clasificación confirmada y porcentaje de incidencias resueltas dentro del plazo.
+
 ---
 
 # ÉPICA REP — Reportes, indicadores y balances
@@ -783,4 +827,3 @@ Resultado general: COMPLETADO CON OBSERVACIONES
 4. Añadir subtareas técnicas únicamente después de crear la historia: backend, frontend, base de datos, pruebas y documentación.
 5. Priorizar primero las historias de la Entrega 1; las entregas 2 y 3 pueden permanecer en el backlog.
 6. No marcar una historia como terminada hasta que cumpla todos sus criterios de aceptación y sus pruebas relacionadas.
-

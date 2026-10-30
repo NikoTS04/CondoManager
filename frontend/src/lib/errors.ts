@@ -8,12 +8,33 @@ const MENSAJES: Record<string, string> = {
   TOKEN_EXPIRADO: "Tu sesión expiró. Ingresa nuevamente para continuar.",
   TOKEN_INVALIDO: "No pudimos validar tu sesión. Ingresa nuevamente.",
   ACCESO_DENEGADO: "No tienes permisos para realizar esta acción.",
-  CREDENCIALES_INVALIDAS: "El correo o la contraseña no son correctos.",
+  CREDENCIALES_INVALIDAS: "Revisa tus credenciales. Tu cuenta debe estar habilitada por un SuperAdmin.",
+  SESION_REVOCADA: "Tu cuenta o tus permisos cambiaron. Inicia sesión nuevamente.",
+  ROL_NO_ENCONTRADO: "El usuario no tiene una asignación en este condominio.",
+  DATOS_ROL_INVALIDOS: "Selecciona Admin/Junta, Auditor o Residente y verifica el UUID del usuario.",
+  TITULAR_REQUERIDO: "Registra otro propietario titular activo antes de retirar al último o de añadir un inquilino o copropietario.",
+  ROL_NO_VIGENTE: "Asigna un rol vigente al usuario en este condominio antes de vincularlo.",
+  VINCULO_NO_ENCONTRADO: "El usuario no tiene ese departamento vinculado.",
+  DATOS_VINCULO_INVALIDOS: "Selecciona una unidad y una relación de tenencia válidas.",
+  DEPARTAMENTO_INACTIVO: "Activa el departamento antes de crear o restaurar sus vínculos.",
+  DATOS_AREA_INVALIDOS: "Revisa el nombre, aforo, costo y horario del área común.",
+  DATOS_DISPONIBILIDAD_INVALIDOS: "Selecciona un área y una fecha válidas para consultar los horarios.",
+  FECHA_RESERVA_INVALIDA: "Elige hoy o una fecha futura y un turno que todavía no haya empezado en hora de Lima.",
+  DISPONIBILIDAD_NO_DISPONIBLE: "No pudimos consultar el calendario. Inténtalo de nuevo más tarde.",
+  AREA_INACTIVA: "El área está inactiva. Actualiza el catálogo y elige otra área.",
+  AREA_NO_ENCONTRADA: "No encontramos el área en el condominio seleccionado.",
+  HORARIO_INVALIDO: "El turno debe respetar la apertura, el cierre y la duración máxima del área.",
   DATOS_CONDOMINIO_INVALIDOS: "Algunos datos del condominio no son válidos. Revisa los campos marcados.",
   CONDOMINIO_NO_ENCONTRADO: "No encontramos el condominio solicitado.",
   VOUCHER_YA_CONCILIADO: "Este comprobante ya fue aprobado anteriormente. No necesitas reportarlo de nuevo.",
   VOUCHER_EN_EVALUACION: "Este comprobante ya fue reportado y está en revisión por la junta.",
-  DEUDA_MORA_ACTIVA: "Tienes cuotas vencidas. Reporta tu pago para poder reservar áreas comunes.",
+  VOUCHER_REQUIERE_SUBSANACION: "El comprobante está observado. Usa Subsanar voucher en tu historial para adjuntar una nueva imagen.",
+  VOUCHER_RECHAZADO: "La operación fue rechazada. Consulta el motivo y contacta con la administración.",
+  ARCHIVO_DEMASIADO_GRANDE: "El voucher supera 5 MiB. Adjunta un archivo más pequeño.",
+  FORMATO_VOUCHER_NO_SOPORTADO: "Adjunta un archivo PNG, JPEG o PDF.",
+  VOUCHER_INVALIDO: "No se pudo validar el archivo. Adjunta una imagen o PDF legible y sin protección.",
+  ESTADO_COMPROBANTE_INVALIDO: "El estado cambió. Actualiza el historial antes de continuar.",
+  DEUDA_MORA_ACTIVA: "Tienes deuda en mora. El permiso se recupera cuando un pago aprobado cancela esa deuda, no solo al reportarlo.",
   CONFLICTO_HORARIO: "El área ya está reservada en ese horario. Elige otra franja.",
   LOTE_YA_EMITIDO: "Las cuotas de este periodo ya fueron emitidas.",
   PRESUPUESTO_NO_APROBADO: "Primero aprueba el presupuesto del periodo para emitir las cuotas.",
@@ -37,6 +58,7 @@ export function mensajeParaCodigo(code: string | null | undefined, fallback?: st
 
 /** Extrae `{ code, message }` de cualquier forma de error que devuelve el backend. */
 export function parseApiError(data: unknown, fallback?: string): { code: string | null; message: string } {
+  if (data instanceof Error) return { code: null, message: data.message || fallback || MENSAJE_GENERICO };
   if (!data || typeof data !== "object") {
     return { code: null, message: fallback || MENSAJE_GENERICO };
   }

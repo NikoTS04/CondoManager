@@ -1,13 +1,11 @@
-/**
- * Cliente API para CondoManager con soporte híbrido:
- * 1. Conecta con el backend FastAPI en http://localhost:8000/api/v1.
- * 2. Si el backend está apagado o falla la red, recurre de forma transparente
- *    a un almacén local en memoria calibrado con los 139 departamentos de Villa Bonita 3.
- */
+/** Cliente autenticado: los fallos de red o autorización nunca generan éxitos simulados. */
+import type { SessionUser, TipoRelacion } from "./session";
 
 export interface Departamento {
-  id?: string;
+  id: string;
+  condominio_id?: string;
   edificio_id?: string;
+  edificio_nombre?: string;
   activo?: boolean;
   numero: string;
   piso: number;
@@ -62,24 +60,67 @@ export function departamentoParaPortal(departamento: DepartamentoRegistrado): De
 
 export interface AreaComun {
   id: string;
+  condominio_id: string;
   nombre: string;
-  descripcion: string;
+  descripcion: string | null;
   aforo_maximo: number;
   costo_reserva: string;
   esta_activa: boolean;
+  edificio_id: string | null;
+  edificio_nombre: string | null;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+  moneda: Moneda;
+  zona_horaria: "America/Lima";
+}
+
+export interface ConfigurarAreaPayload {
+  nombre: string;
+  descripcion: string | null;
+  edificio_id: string | null;
+  aforo_maximo: number;
+  costo_reserva: string;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+}
+
+function rutaAreas(condominioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/areas`;
+}
+
+export function listarCatalogoAreas(condominioId: string, activa?: boolean, limit = 50, offset = 0): Promise<AreaComun[]> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (activa !== undefined) params.set("esta_activa", String(activa));
+  return recursoRequest(`${rutaAreas(condominioId)}?${params}`);
+}
+
+export function registrarArea(condominioId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(rutaAreas(condominioId), { method: "POST", body: JSON.stringify(datos) });
+}
+
+export function configurarArea(condominioId: string, areaId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
+export function cambiarEstadoArea(condominioId: string, areaId: string, esta_activa: boolean): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}/estado`, { method: "PATCH", body: JSON.stringify({ esta_activa }) });
 }
 
 export interface Reserva {
   id: string;
   condominio_id: string;
   area_id: string;
-  area_nombre?: string;
+  area_nombre?: string | null;
   departamento_id: string;
   fecha_reserva: string;
   hora_inicio: string;
   hora_fin: string;
   costo_reserva: string;
-  estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA";
+  moneda: Moneda;
+  zona_horaria: "America/Lima" | "UTC";
+  estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA" | "RECHAZADA" | "COMPLETADA";
   creado_en: string;
 }
 
@@ -90,27 +131,36 @@ export interface ComprobantePago {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  estado: "EN_REVISION" | "CONCILIADO" | "RECHAZADO";
+  estado: "EN_REVISION" | "APROBADO" | "RECHAZADO" | "OBSERVADO";
   idempotency_hash: string;
-  url_voucher?: string;
-  motivo_rechazo?: string;
+  url_voucher: string;
+  motivo_rechazo: string | null;
 }
 
 export interface NotificacionLog {
   id: string;
-  departamento_id?: string;
+  condominio_id: string;
+  departamento_id: string | null;
+  usuario_destinatario_id: string | null;
+  evento_id: string | null;
   tipo_evento: string;
-  canal: string;
+  canal: "EMAIL" | "WHATSAPP" | "SMS" | "PUSH";
   destinatario: string;
-  asunto?: string;
-  cuerpo?: string;
-  estado: "ENTREGADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
+  asunto: string | null;
+  cuerpo: string;
+  estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
   intentos: number;
+  ciclo: number;
+  transporte: "SIMULADO" | "PROVEEDOR";
+  proximo_reintento: string | null;
+  error_mensaje: string | null;
+  proveedor_message_id: string | null;
   fecha_creacion: string;
+  fecha_actualizacion: string;
 }
 
 export type Moneda = "PEN" | "USD";
-export type ReglaMoraTipo = "MONTO_FIJO" | "PORCENTAJE_SALDO";
+export type ReglaMoraTipo = "MONTO_DIARIO" | "MONTO_FIJO" | "PORCENTAJE_SALDO";
 
 export interface CrearCondominioPayload {
   nombre: string;
@@ -118,12 +168,14 @@ export interface CrearCondominioPayload {
   moneda: Moneda;
   regla_mora_tipo: ReglaMoraTipo;
   monto_mora_fijo: string | null;
+  monto_mora_diario?: string | null;
   tasa_mora_porcentaje: string | null;
   dia_vencimiento: number;
   dias_gracia: number;
 }
 
 export interface Condominio extends CrearCondominioPayload {
+  politica_version: number;
   id: string;
   activo: boolean;
   creado_en: string;
@@ -136,6 +188,90 @@ export interface DatosPresupuestoPayload {
   moneda: Moneda;
   monto_total: string;
   fecha_vencimiento: string;
+  items?: ItemPresupuesto[] | null;
+  version_esperada?: number;
+}
+
+export interface ConceptoPresupuestal {
+  id: string; condominio_id: string; codigo: string; categoria: string; descripcion: string; activo: boolean;
+}
+
+export interface ItemPresupuesto {
+  id: string; concepto_id: string; monto_periodo: string; tipo_movimiento: "CARGO" | "ABONO";
+  seccion: "AACC" | "EDIFICIO" | "CRONOGRAMA_AACC";
+  metodo_asignacion: "POR_PISOS" | "DIRECTO_EDIFICIO" | "ASIGNACION_EXPLICITA";
+  metodo_unitario?: "EQUITATIVA" | "POR_ALICUOTA";
+  edificio_id?: string | null; descripcion?: string; codigo_origen?: string;
+  observacion_origen?: string; referencia_servicio?: string; referencia_documento?: string;
+  asignaciones_explicitas?: Record<string, string>; motivo_asignacion?: string;
+  monto_origen_condominio?: string | null; monto_origen_edificio?: string | null; monto_unitario_origen?: string | null;
+  obligacion_referencia?: string; numero_cuota?: number | null; total_cuotas?: number | null;
+  monto_total_obligacion?: string | null; monto_cubierto_moras?: string;
+}
+
+export function listarConceptosPresupuestales(cid: string): Promise<ConceptoPresupuestal[]> {
+  return recursoRequest(`/condominios/${encodeURIComponent(cid)}/conceptos-presupuestales`);
+}
+export function crearConceptoPresupuestal(cid: string, datos: { codigo: string; categoria: string; descripcion: string }): Promise<ConceptoPresupuestal> {
+  return recursoRequest(`/condominios/${encodeURIComponent(cid)}/conceptos-presupuestales`, { method: "POST", body: JSON.stringify(datos) });
+}
+export interface ReporteProrrateo {
+  version: number; estado: string; monto_total: string;
+  edificios: { id: string; nombre: string; pisos: number }[];
+  items: { id: string; codigo: string; descripcion: string; seccion: string; monto_periodo: string;
+    tipo_movimiento: string; metodo_asignacion: string;
+    asignaciones: { edificio_id: string; monto: string; monto_bruto?: string; monto_cubierto_moras?: string; unitario: string; unidades: number }[] }[];
+  fondos_moras?: ResumenFondoMoras[];
+}
+
+export interface ResumenFondoMoras {
+  edificio_id: string; periodo: string; moneda: Moneda; capturado_en: string;
+  saldo_disponible: string; saldo_reservado: string; total_aplicado: string;
+  saldo_disponible_inicial: string; cobros_netos_periodo: string; reservas_periodo: string;
+  cobros_confirmados_periodo: string; reversos_cobro_periodo: string; aplicaciones_confirmadas_periodo: string;
+  liberaciones_periodo: string; saldo_disponible_final: string; mora_pendiente_cobro: string;
+  movimientos?: { id: string; tipo: string; importe: string; fecha_local: string }[];
+}
+export interface AplicacionMoras {
+  id: string; presupuesto_id: string; item_id: string; edificio_id: string; monto: string;
+  motivo: string; estado: "RESERVADA" | "CONFIRMADA" | "LIBERADA"; creado_en: string;
+}
+export function consultarFondoMoras(eid: string, periodo: string): Promise<ResumenFondoMoras> {
+  return recursoRequest(`/edificios/${encodeURIComponent(eid)}/fondos-moras?periodo=${encodeURIComponent(periodo)}`);
+}
+export function listarAplicacionesMoras(id: string): Promise<AplicacionMoras[]> {
+  return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras`);
+}
+export async function reservarMoras(id: string, clave: string, payload: {
+  version_esperada: number; item_id: string; edificio_id: string; monto: string; motivo: string;
+}): Promise<AplicacionMoras> {
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras`, {
+    method: "POST", headers: { ...getAuthHeaders(), "Idempotency-Key": clave }, body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo reservar el fondo."));
+  return data as AplicacionMoras;
+}
+export async function liberarMoras(id: string, aplicacionId: string, version: number): Promise<void> {
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras/${encodeURIComponent(aplicacionId)}?version_esperada=${version}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(obtenerMensajeError(await response.json(), "No se pudo liberar la reserva."));
+}
+export function consultarProrrateo(id: string): Promise<ReporteProrrateo> {
+  return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/prorrateo`);
+}
+
+export async function exportarProrrateo(id: string, version: number, formato: "pdf" | "docx", edificioId: string): Promise<void> {
+  const query = new URLSearchParams({ version: String(version), formato, edificio_id: edificioId });
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/prorrateo/exportar?${query}`, { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error(obtenerMensajeError(await response.json(), "No se pudo generar el reporte."));
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `Prorrateo-${id}-${edificioId}-v${version}.${formato}`;
+  document.body.appendChild(enlace); enlace.click(); enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
@@ -143,6 +279,7 @@ export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
 }
 
 export interface PresupuestoMensual extends CrearPresupuestoPayload {
+  version: number;
   id: string;
   estado: EstadoPresupuesto;
   creado_por: string;
@@ -160,20 +297,130 @@ export interface PresupuestoApiResult {
   notFound?: boolean;
 }
 
-export interface AuthenticatedUser {
-  id: string;
-  email: string;
-  nombre: string;
-  apellido: string;
-  rol: "SUPERADMIN" | "ADMIN_JUNTA" | "AUDITOR" | "PROPIETARIO" | "INQUILINO";
-  condominio_id: string | null;
-  departamentos: string[];
-  tipo_relacion?: string;
-}
+export type AuthenticatedUser = SessionUser;
 
 export interface LoginResult {
   access_token: string;
   usuario: AuthenticatedUser;
+}
+
+export interface CuentaUsuario {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  telefono: string | null;
+  documento_identidad: string;
+  esta_activo: boolean;
+  creado_en: string;
+}
+
+export interface CrearUsuarioPayload {
+  email: string;
+  password: string;
+  nombre: string;
+  apellido: string;
+  telefono: string | null;
+  documento_identidad: string;
+}
+
+export type RolContextual = "ADMIN_JUNTA" | "AUDITOR" | "RESIDENTE";
+
+export interface AsignacionRol {
+  usuario_id: string;
+  condominio_id: string;
+  rol: RolContextual | "SUPERADMIN";
+  es_activo: boolean;
+}
+
+export interface CuentaUsuarioConRol extends CuentaUsuario {
+  rol: AsignacionRol["rol"];
+  rol_activo: boolean;
+  es_superadmin: boolean;
+}
+
+export interface VinculoUsuario {
+  id: string;
+  usuario_id: string;
+  condominio_id: string;
+  departamento_id: string;
+  numero: string;
+  edificio_id: string;
+  edificio_nombre: string;
+  tipo_relacion: TipoRelacion;
+  es_activo: boolean;
+  departamento_activo: boolean;
+}
+
+function rutaVinculos(condominioId: string, usuarioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/usuarios/${encodeURIComponent(usuarioId)}/departamentos`;
+}
+
+export interface CondicionesPago {
+  departamento_id: string;
+  version: number;
+  vinculo_responsable_id: string | null;
+  dias_gracia_override: number | null;
+  dias_gracia_efectivos: number;
+}
+
+export function consultarCondicionesPago(departamentoId: string): Promise<CondicionesPago> {
+  return recursoRequest(`/departamentos/${encodeURIComponent(departamentoId)}/condiciones-pago`);
+}
+
+export function guardarCondicionesPago(departamentoId: string, datos: {
+  vinculo_responsable_id: string | null; dias_gracia_override: number | null;
+  version_esperada: number; motivo: string;
+}): Promise<CondicionesPago> {
+  return recursoRequest(`/departamentos/${encodeURIComponent(departamentoId)}/condiciones-pago`, {
+    method: "PUT", body: JSON.stringify(datos),
+  });
+}
+
+export function listarVinculosUsuario(condominioId: string, usuarioId: string): Promise<VinculoUsuario[]> {
+  return recursoRequest(rutaVinculos(condominioId, usuarioId));
+}
+
+export function asignarVinculoUsuario(condominioId: string, usuarioId: string, departamentoId: string, tipo_relacion: TipoRelacion): Promise<VinculoUsuario> {
+  return recursoRequest(`${rutaVinculos(condominioId, usuarioId)}/${encodeURIComponent(departamentoId)}`, {
+    method: "PUT", body: JSON.stringify({ tipo_relacion }),
+  });
+}
+
+export function revocarVinculoUsuario(condominioId: string, usuarioId: string, departamentoId: string): Promise<VinculoUsuario> {
+  return recursoRequest(`${rutaVinculos(condominioId, usuarioId)}/${encodeURIComponent(departamentoId)}`, { method: "DELETE" });
+}
+
+function rutaRol(condominioId: string, usuarioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/usuarios/${encodeURIComponent(usuarioId)}/rol`;
+}
+
+export function consultarRolUsuario(condominioId: string, usuarioId: string): Promise<AsignacionRol> {
+  return recursoRequest(rutaRol(condominioId, usuarioId));
+}
+
+export function asignarRolUsuario(condominioId: string, usuarioId: string, rol: RolContextual): Promise<AsignacionRol> {
+  return recursoRequest(rutaRol(condominioId, usuarioId), { method: "PUT", body: JSON.stringify({ rol }) });
+}
+
+export function revocarRolUsuario(condominioId: string, usuarioId: string): Promise<AsignacionRol> {
+  return recursoRequest(rutaRol(condominioId, usuarioId), { method: "DELETE" });
+}
+
+export function listarUsuarios(condominioId: string, limit = 50, offset = 0): Promise<CuentaUsuarioConRol[]> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/usuarios?limit=${limit}&offset=${offset}`);
+}
+
+export function crearUsuario(condominioId: string, datos: CrearUsuarioPayload): Promise<CuentaUsuario> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/usuarios`, {
+    method: "POST", body: JSON.stringify(datos),
+  });
+}
+
+export function cambiarEstadoUsuario(condominioId: string, usuarioId: string, esta_activo: boolean): Promise<CuentaUsuario> {
+  return recursoRequest(`/usuarios/${encodeURIComponent(usuarioId)}/estado?condominio_id=${encodeURIComponent(condominioId)}`, {
+    method: "PATCH", body: JSON.stringify({ esta_activo }),
+  });
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -211,17 +458,51 @@ function obtenerCodigoError(data: unknown): string | undefined {
   return payload.error_code || payload.detail?.error_code;
 }
 
-export async function iniciarSesion(email: string, password: string): Promise<LoginResult> {
+export async function iniciarSesion(email: string, password: string, condominioId?: string): Promise<LoginResult> {
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, condominio_id: condominioId }),
   });
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(obtenerMensajeError(data, "No se pudo iniciar sesión."));
+    throw data;
   }
   return data as LoginResult;
+}
+
+export function obtenerSesion(): Promise<AuthenticatedUser> {
+  return recursoRequest("/auth/me");
+}
+
+async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response> {
+  const response = await fetch(`${API_BASE}${ruta}`, init);
+  if (response.status === 401 && typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new Event("condomanager:sesion-revocada"));
+  }
+  return response;
+}
+
+async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetchProtegido(ruta, { ...init, headers: getAuthHeaders() });
+  const data = await response.json();
+  if (!response.ok) {
+    const payload = data.detail && typeof data.detail === "object" ? data.detail : data;
+    throw new ApiError(obtenerMensajeError(data, "No se pudo completar la operación."),
+      response.status, obtenerCodigoError(data), payload.detalles);
+  }
+  return data as T;
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public errorCode?: string,
+    public detalles?: Record<string, unknown>) {
+    super(message);
+  }
+}
+
+function contextoQuery(condominioId?: string | null): string {
+  return condominioId ? `?condominio_id=${encodeURIComponent(condominioId)}` : "";
 }
 
 async function estructuraRequest<T>(condominioId: string, ruta: string, init: RequestInit = {}): Promise<T> {
@@ -229,7 +510,7 @@ async function estructuraRequest<T>(condominioId: string, ruta: string, init: Re
   if (init.body instanceof FormData) delete headers["Content-Type"];
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/condominios/${encodeURIComponent(condominioId)}${ruta}`, {
+    response = await fetchProtegido(`/condominios/${encodeURIComponent(condominioId)}${ruta}`, {
       ...init, headers,
     });
   } catch {
@@ -280,7 +561,7 @@ export async function crearCondominio(
   payload: CrearCondominioPayload
 ): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/condominios`, {
+    const response = await fetchProtegido(`/condominios`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -307,7 +588,7 @@ export async function listarCondominios(): Promise<{
   error?: string;
 }> {
   try {
-    const response = await fetch(`${API_BASE}/condominios`, {
+    const response = await fetchProtegido(`/condominios`, {
       headers: getAuthHeaders(),
     });
     const data = await response.json();
@@ -323,11 +604,25 @@ export async function listarCondominios(): Promise<{
   }
 }
 
+export async function actualizarPoliticaMora(condominio: Condominio, datos: CrearCondominioPayload, motivo: string): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
+  try {
+    const { nombre: _nombre, direccion: _direccion, moneda: _moneda, ...politica } = datos;
+    const response = await fetchProtegido(`/condominios/${encodeURIComponent(condominio.id)}/politica-mora`, {
+      method: "PUT", headers: getAuthHeaders(),
+      body: JSON.stringify({ ...politica, version_esperada: condominio.politica_version, motivo }),
+    });
+    const data = await response.json();
+    return response.ok ? { ok: true, data } : { ok: false, error: obtenerMensajeError(data, "No se pudo actualizar la política. Recargue si cambió la versión.") };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API. Recargue antes de reintentar." };
+  }
+}
+
 export async function obtenerCondominio(
   condominioId: string
 ): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/condominios/${condominioId}`, {
+    const response = await fetchProtegido(`/condominios/${condominioId}`, {
       headers: getAuthHeaders(),
     });
     const data = await response.json();
@@ -347,7 +642,7 @@ export async function crearPresupuesto(
   payload: CrearPresupuestoPayload
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetch(`${API_BASE}/presupuestos`, {
+    const response = await fetchProtegido(`/presupuestos`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -374,7 +669,7 @@ export async function actualizarPresupuesto(
   payload: DatosPresupuestoPayload
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetch(`${API_BASE}/presupuestos/${presupuestoId}`, {
+    const response = await fetchProtegido(`/presupuestos/${presupuestoId}`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -397,10 +692,10 @@ export async function actualizarPresupuesto(
 }
 
 export async function aprobarPresupuesto(
-  presupuestoId: string
+  presupuestoId: string, version?: number
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetch(`${API_BASE}/presupuestos/${presupuestoId}/aprobar`, {
+    const response = await fetchProtegido(`/presupuestos/${presupuestoId}/aprobar${version === undefined ? "" : `?version_esperada=${version}`}`, {
       method: "POST",
       headers: getAuthHeaders(),
     });
@@ -426,8 +721,8 @@ export async function obtenerPresupuestoPorPeriodo(
   periodo: string
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetch(
-      `${API_BASE}/condominios/${condominioId}/presupuestos/${encodeURIComponent(periodo)}`,
+    const response = await fetchProtegido(
+      `/condominios/${condominioId}/presupuestos/${encodeURIComponent(periodo)}`,
       { headers: getAuthHeaders() }
     );
     const data = await response.json();
@@ -448,150 +743,26 @@ export async function obtenerPresupuestoPorPeriodo(
   }
 }
 
-// ============================================================================
-// Datos Semilla en Memoria (Villa Bonita 3 - 139 Departamentos)
-// ============================================================================
-
-function generarDepartamentosPiloto(): Departamento[] {
-  const deptos: Departamento[] = [];
-  for (let piso = 1; piso <= 13; piso++) {
-    for (let cor = 1; cor <= 10; cor++) {
-      const num = `${piso}${cor.toString().padStart(2, "0")}`;
-      deptos.push({
-        numero: num,
-        piso,
-        coeficiente: cor % 2 !== 0 ? "0.6800" : "0.7400",
-        saldo_a_favor: num === "302" ? "200.00" : "0.00",
-        estado_financiero: num === "402" ? "EN_MORA" : num === "504" ? "OBSERVADO" : "AL_DIA",
-        deuda_vencida: num === "402" ? "170.00" : "0.00",
-      });
-    }
-  }
-  for (let cor = 1; cor <= 9; cor++) {
-    const num = `140${cor}`;
-    deptos.push({
-      numero: num,
-      piso: 14,
-      coeficiente: cor === 9 ? "0.8560" : "0.8555",
-      saldo_a_favor: "0.00",
-      estado_financiero: "AL_DIA",
-      deuda_vencida: "0.00",
-    });
-  }
-  return deptos;
+export function fetchDepartamentos(condominioId?: string | null): Promise<Departamento[]> {
+  return recursoRequest(`/cuotas/departamentos${contextoQuery(condominioId)}`);
 }
 
-const MOCK_AREAS: AreaComun[] = [
-  {
-    id: "11111111-1111-1111-1111-111111111101",
-    nombre: "Zona de Parrilla 1 (Terraza Piso 15)",
-    descripcion: "Parrilla de acero inoxidable con mesa para 12 comensales.",
-    aforo_maximo: 12,
-    costo_reserva: "25.00",
-    esta_activa: true,
-  },
-  {
-    id: "11111111-1111-1111-1111-111111111102",
-    nombre: "Zona de Parrilla 2 (Terraza Piso 15)",
-    descripcion: "Parrilla de acero inoxidable con mesa para 12 comensales.",
-    aforo_maximo: 12,
-    costo_reserva: "25.00",
-    esta_activa: true,
-  },
-  {
-    id: "11111111-1111-1111-1111-111111111103",
-    nombre: "Salón Social de Eventos (Piso 1)",
-    descripcion: "Salón climatizado para reuniones y cumpleaños con cocina de apoyo.",
-    aforo_maximo: 40,
-    costo_reserva: "100.00",
-    esta_activa: true,
-  },
-  {
-    id: "11111111-1111-1111-1111-111111111104",
-    nombre: "Sala Fitness / Gimnasio (Piso 1)",
-    descripcion: "Máquinas cardiovasculares y mancuernas para residentes.",
-    aforo_maximo: 8,
-    costo_reserva: "0.00",
-    esta_activa: true,
-  },
-];
-
-let mockDepartamentos = generarDepartamentosPiloto();
-let mockReservas: Reserva[] = [
-  {
-    id: "res-demo-1",
-    condominio_id: "vb3-condo",
-    area_id: "11111111-1111-1111-1111-111111111101",
-    area_nombre: "Zona de Parrilla 1 (Terraza Piso 15)",
-    departamento_id: "102",
-    fecha_reserva: "2026-10-25",
-    hora_inicio: "14:00",
-    hora_fin: "18:00",
-    costo_reserva: "25.00",
-    estado: "CONFIRMADA",
-    creado_en: new Date().toISOString(),
-  },
-];
-let mockComprobantes: ComprobantePago[] = [
-  {
-    id: "comp-demo-1",
-    departamento_id: "105",
-    banco: "YAPE",
-    numero_operacion: "88991122",
-    fecha_operacion: "2026-10-18",
-    monto: "150.00",
-    estado: "EN_REVISION",
-    idempotency_hash: "sha256-mock-hash-88991122",
-    url_voucher: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400",
-  },
-];
-let mockNotificaciones: NotificacionLog[] = [
-  {
-    id: "notif-1",
-    departamento_id: "102",
-    tipo_evento: "NOTIF_EMISION_CUOTA",
-    canal: "EMAIL",
-    destinatario: "residente102@gmail.com",
-    asunto: "CondoManager: Emisión de cuota de mantenimiento - Periodo 2026-10",
-    estado: "ENTREGADO",
-    intentos: 1,
-    fecha_creacion: new Date().toISOString(),
-  },
-];
-
-// ============================================================================
-// Funciones del Cliente API
-// ============================================================================
-
-export async function fetchDepartamentos(): Promise<Departamento[]> {
-  try {
-    const res = await fetch(`${API_BASE}/cuotas/departamentos`);
-    if (res.ok) return await res.json();
-  } catch {}
-  return mockDepartamentos;
+export function fetchAreasComunes(condominioId?: string | null): Promise<AreaComun[]> {
+  return recursoRequest(`/areas${contextoQuery(condominioId)}`);
 }
 
-export async function fetchAreasComunes(): Promise<AreaComun[]> {
-  try {
-    const res = await fetch(`${API_BASE}/areas`);
-    if (res.ok) return await res.json();
-  } catch {}
-  return MOCK_AREAS;
+export interface HorarioOcupado { hora_inicio: string; hora_fin: string }
+
+export function fetchDisponibilidad(areaId: string, fecha: string): Promise<HorarioOcupado[]> {
+  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`, { cache: "no-store" });
 }
 
-export async function fetchReservas(areaId?: string, fecha?: string): Promise<Reserva[]> {
-  try {
-    const params = new URLSearchParams();
-    if (areaId) params.append("area_id", areaId);
-    if (fecha) params.append("fecha", fecha);
-    const res = await fetch(`${API_BASE}/reservas?${params.toString()}`);
-    if (res.ok) return await res.json();
-  } catch {}
-  return mockReservas.filter((r) => {
-    if (areaId && r.area_id !== areaId) return false;
-    if (fecha && r.fecha_reserva !== fecha) return false;
-    return true;
-  });
+export function fetchReservas(areaId?: string, fecha?: string, condominioId?: string | null): Promise<Reserva[]> {
+  const params = new URLSearchParams();
+  if (areaId) params.set("area_id", areaId);
+  if (fecha) params.set("fecha", fecha);
+  if (condominioId) params.set("condominio_id", condominioId);
+  return recursoRequest(`/reservas?${params}`);
 }
 
 export async function crearReserva(payload: {
@@ -601,84 +772,43 @@ export async function crearReserva(payload: {
   fecha_reserva: string;
   hora_inicio: string;
   hora_fin: string;
-}): Promise<{ ok: boolean; data?: Reserva; error?: string }> {
+}): Promise<{ ok: boolean; data?: Reserva; error?: string; errorCode?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/reservas`, {
+    const data = await recursoRequest<Reserva>("/reservas", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (res.ok) {
-      mockReservas.push(data);
-      return { ok: true, data };
-    }
-    return { ok: false, error: data.detail?.mensaje || "Error al procesar reserva" };
-  } catch {
-    // Modo Mock Fallback
-    const depto = mockDepartamentos.find((d) => d.numero === payload.departamento_id);
-    if (depto && depto.estado_financiero === "EN_MORA") {
-      return {
-        ok: false,
-        error: `No es posible reservar: El departamento '${payload.departamento_id}' mantiene cuotas vencidas pendientes en mora (S/ 170.00).`,
-      };
-    }
-
-    const solapada = mockReservas.find(
-      (r) =>
-        r.area_id === payload.area_id &&
-        r.fecha_reserva === payload.fecha_reserva &&
-        r.estado === "CONFIRMADA" &&
-        payload.hora_inicio < r.hora_fin &&
-        payload.hora_fin > r.hora_inicio
-    );
-    if (solapada) {
-      return {
-        ok: false,
-        error: `Horario no disponible: Ya existe una reserva confirmada entre ${solapada.hora_inicio} y ${solapada.hora_fin}.`,
-      };
-    }
-
-    const area = MOCK_AREAS.find((a) => a.id === payload.area_id);
-    const nuevaReserva: Reserva = {
-      id: `res-${Date.now()}`,
-      condominio_id: payload.condominio_id,
-      area_id: payload.area_id,
-      area_nombre: area?.nombre,
-      departamento_id: payload.departamento_id,
-      fecha_reserva: payload.fecha_reserva,
-      hora_inicio: payload.hora_inicio,
-      hora_fin: payload.hora_fin,
-      costo_reserva: area?.costo_reserva || "0.00",
-      estado: "CONFIRMADA",
-      creado_en: new Date().toISOString(),
-    };
-    mockReservas.push(nuevaReserva);
-    return { ok: true, data: nuevaReserva };
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo crear la reserva.",
+      errorCode: error instanceof ApiError ? error.errorCode : undefined };
   }
 }
 
-export async function cancelarReserva(reservaId: string, esAdmin = false): Promise<{ ok: boolean; error?: string }> {
+export interface ReservaCancelada {
+  id: string;
+  estado: "CANCELADA";
+  mensaje: string;
+  fecha_cancelacion: string;
+  ajuste_economico: {
+    estado: "NO_APLICA" | "PENDIENTE" | "APLICADO";
+    monto: string;
+    referencia: string | null;
+  };
+}
+
+export async function cancelarReserva(
+  reservaId: string,
+  motivo = "Cancelación voluntaria",
+): Promise<{ ok: boolean; data?: ReservaCancelada; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/reservas/${reservaId}/cancelar`, {
+    const data = await recursoRequest<ReservaCancelada>(`/reservas/${encodeURIComponent(reservaId)}/cancelar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ motivo: "Cancelación voluntaria", es_admin: esAdmin }),
+      body: JSON.stringify({ motivo }),
     });
-    if (res.ok) {
-      const idx = mockReservas.findIndex((r) => r.id === reservaId);
-      if (idx !== -1) mockReservas[idx].estado = "CANCELADA";
-      return { ok: true };
-    }
-    const err = await res.json();
-    return { ok: false, error: err.detail?.mensaje };
-  } catch {
-    const idx = mockReservas.findIndex((r) => r.id === reservaId);
-    if (idx !== -1) {
-      mockReservas[idx].estado = "CANCELADA";
-      return { ok: true };
-    }
-    return { ok: false, error: "Reserva no encontrada." };
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo cancelar." };
   }
 }
 
@@ -688,74 +818,116 @@ export async function reportarPago(payload: {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  url_voucher?: string;
-}): Promise<{ ok: boolean; data?: ComprobantePago; error?: string }> {
+  archivo_voucher: File;
+}): Promise<{ ok: boolean; error?: string; errorCode?: string; duplicado?: boolean }> {
   try {
-    const res = await fetch(`${API_BASE}/pagos/reportar`, {
+    const form = new FormData();
+    for (const [campo, valor] of Object.entries(payload)) form.append(campo, valor);
+    const headers = getAuthHeaders();
+    delete headers["Content-Type"];
+    const response = await fetchProtegido("/pagos/reportar", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      headers,
+      body: form,
     });
-    const data = await res.json();
-    if (res.ok) {
-      mockComprobantes.push(data);
-      return { ok: true, data };
-    }
-    return { ok: false, error: data.detail?.mensaje };
-  } catch {
-    const nuevoComprobante: ComprobantePago = {
-      id: `comp-${Date.now()}`,
-      departamento_id: payload.departamento_id,
-      banco: payload.banco,
-      numero_operacion: payload.numero_operacion,
-      fecha_operacion: payload.fecha_operacion,
-      monto: payload.monto,
-      estado: "EN_REVISION",
-      idempotency_hash: `sha256-mock-${payload.numero_operacion}`,
-      url_voucher: payload.url_voucher || "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400",
-    };
-    mockComprobantes.push(nuevoComprobante);
-    return { ok: true, data: nuevoComprobante };
+    const data = await response.json();
+    const errorCode = obtenerCodigoError(data);
+    if (!response.ok) return { ok: false, error: obtenerMensajeError(data, "No se pudo reportar el pago."), errorCode };
+    return { ok: true, duplicado: data.codigo === "VOUCHER_EN_EVALUACION" };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
 }
 
-export async function fetchComprobantes(): Promise<ComprobantePago[]> {
-  return mockComprobantes;
+export async function subsanarVoucher(comprobanteId: string, archivo: File): Promise<void> {
+  const form = new FormData();
+  form.append("archivo_voucher", archivo);
+  const headers = getAuthHeaders();
+  delete headers["Content-Type"];
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher`, { method: "PUT", headers, body: form });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo subir el voucher."));
+}
+
+export interface EvidenciaVoucher {
+  evidencia_id: string;
+  content_type: string;
+  creado_en: string;
+}
+
+export async function listarEvidencias(comprobanteId: string, signal?: AbortSignal): Promise<EvidenciaVoucher[]> {
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/evidencias`, {
+    headers: getAuthHeaders(), signal,
+  });
+  if (!response.ok) throw new Error("No se pudo consultar el historial de evidencia.");
+  return response.json();
+}
+
+export async function visualizarVoucher(comprobanteId: string, evidenciaId: string, signal?: AbortSignal): Promise<Blob> {
+  const query = new URLSearchParams({ disposicion: "inline" });
+  if (evidenciaId) query.set("evidencia_id", evidenciaId);
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher?${query}`, {
+    headers: getAuthHeaders(), signal,
+  });
+  if (!response.ok) throw new Error("No se pudo visualizar la evidencia. Verifique su sesión y permisos.");
+  const blob = await response.blob();
+  if (!["image/png", "image/jpeg", "application/pdf"].includes(blob.type)) throw new Error("Formato de evidencia no admitido.");
+  return blob;
+}
+
+export async function descargarVoucher(comprobante: ComprobantePago): Promise<void> {
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobante.id)}/voucher`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(obtenerMensajeError(data, "No se pudo recuperar el voucher."));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  const extension = { "image/png": "png", "image/jpeg": "jpg", "application/pdf": "pdf" }[response.headers.get("Content-Type") || ""];
+  enlace.download = `voucher-${comprobante.id}${extension ? `.${extension}` : ""}`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  // URL exclusiva de descarga; nunca se envía al servidor ni se persiste.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export interface Solvencia {
+  departamento_id: string;
+  saldo_vencido: string;
+  habilitado_reservas: boolean;
+}
+
+export function fetchSolvencia(departamentoId: string): Promise<Solvencia> {
+  return recursoRequest(`/pagos/solvencia/${encodeURIComponent(departamentoId)}`);
+}
+
+export function fetchComprobantes(condominioId?: string | null): Promise<ComprobantePago[]> {
+  return recursoRequest(`/pagos/comprobantes${contextoQuery(condominioId)}`);
 }
 
 export async function conciliarComprobante(
   comprobanteId: string,
-  decision: "APROBADO" | "RECHAZADO",
+  decision: "APROBADO" | "RECHAZADO" | "OBSERVADO",
   motivo_rechazo?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/pagos/${comprobanteId}/conciliar`, {
+    await recursoRequest(`/pagos/${encodeURIComponent(comprobanteId)}/conciliar`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ decision, motivo_rechazo }),
     });
-    if (res.ok) return { ok: true };
-  } catch {}
-
-  const c = mockComprobantes.find((comp) => comp.id === comprobanteId);
-  if (c) {
-    c.estado = decision === "APROBADO" ? "CONCILIADO" : "RECHAZADO";
-    c.motivo_rechazo = motivo_rechazo;
-    if (decision === "APROBADO") {
-      const depto = mockDepartamentos.find((d) => d.numero === c.departamento_id);
-      if (depto) {
-        depto.estado_financiero = "AL_DIA";
-        depto.deuda_vencida = "0.00";
-      }
-    }
     return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo conciliar." };
   }
-  return { ok: false, error: "Comprobante no hallado." };
 }
 
 export async function emitirLoteCuotas(periodo: string, condominioId: string): Promise<{ ok: boolean; error?: string; total?: number }> {
   try {
-    const res = await fetch(`${API_BASE}/cuotas/emitir-lote`, {
+    const res = await fetchProtegido(`/cuotas/emitir-lote`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -774,42 +946,57 @@ export async function emitirLoteCuotas(periodo: string, condominioId: string): P
   }
 }
 
-export async function fetchNotificaciones(): Promise<NotificacionLog[]> {
-  try {
-    const res = await fetch(`${API_BASE}/notificaciones/logs`);
-    if (res.ok) return await res.json();
-  } catch {}
-  return mockNotificaciones;
+export function fetchNotificaciones(condominioId?: string | null): Promise<NotificacionLog[]> {
+  return recursoRequest(`/notificaciones/logs${contextoQuery(condominioId)}`);
 }
 
-export async function enviarComunicadoMasivo(titulo: string, mensaje: string): Promise<{ ok: boolean; generadas?: number }> {
+export type TipoAlertaNotificacion =
+  | "ERROR_DEFINITIVO" | "INTENTOS_AGOTADOS" | "ACEPTACION_INCIERTA"
+  | "DESTINATARIO_INVALIDO" | "PROVEEDOR_NO_CONFIGURADO";
+
+export interface AlertaNotificacion {
+  id: string;
+  notificacion_id: string;
+  condominio_id: string;
+  departamento_id: string;
+  departamento_numero: string;
+  tipo_evento: string;
+  ciclo: number;
+  tipo: TipoAlertaNotificacion;
+  mensaje: string;
+  estado: "ABIERTA" | "ATENDIDA";
+  creada_en: string;
+  atendida_en: string | null;
+  atendida_por: string | null;
+}
+
+export function listarAlertasNotificacion(condominioId?: string | null): Promise<AlertaNotificacion[]> {
+  return recursoRequest(`/notificaciones/alertas${contextoQuery(condominioId)}`);
+}
+
+export function atenderAlertaNotificacion(id: string): Promise<AlertaNotificacion> {
+  return recursoRequest(`/notificaciones/alertas/${encodeURIComponent(id)}/atender`, { method: "POST" });
+}
+
+export function reenviarNotificacion(id: string, nuevo_destinatario: string): Promise<NotificacionLog> {
+  return recursoRequest(`/notificaciones/reenviar/${encodeURIComponent(id)}`, {
+    method: "POST", body: JSON.stringify({ nuevo_destinatario }),
+  });
+}
+
+export async function enviarComunicadoMasivo(titulo: string, mensaje: string, condominioId: string): Promise<{ ok: boolean; generadas?: number }> {
   try {
-    const res = await fetch(`${API_BASE}/notificaciones/comunicado-masivo`, {
+    const data = await recursoRequest<{ generadas: number }>("/notificaciones/comunicado-masivo", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        condominio_id: "vb3-condo",
+        condominio_id: condominioId,
         titulo,
         mensaje,
         canal: "EMAIL",
       }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: true, generadas: data.notificaciones_generadas };
-    }
-  } catch {}
-
-  const nuevoLog: NotificacionLog = {
-    id: `notif-${Date.now()}`,
-    tipo_evento: "NOTIF_COMUNICADO_GENERAL",
-    canal: "EMAIL",
-    destinatario: "todos@condominio.pe (139 departamentos)",
-    asunto: `CondoManager Comunicado: ${titulo}`,
-    estado: "ENTREGADO",
-    intentos: 1,
-    fecha_creacion: new Date().toISOString(),
-  };
-  mockNotificaciones.unshift(nuevoLog);
-  return { ok: true, generadas: 139 };
+    return { ok: true, generadas: data.generadas };
+  } catch {
+    return { ok: false };
+  }
 }

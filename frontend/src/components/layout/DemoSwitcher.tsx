@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { DEMO_PERSONAS, useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
+import { portalInicial } from "@/lib/session";
 
 export default function DemoSwitcher() {
+  const router = useRouter();
   const { user, switchDemoPersona } = useAuth();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -34,7 +37,7 @@ export default function DemoSwitcher() {
     };
   }, [open, close]);
 
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === "false") return null;
+  if (process.env.NEXT_PUBLIC_DEMO_MODE !== "true") return null;
 
   return (
     <div className="relative" ref={root}>
@@ -59,8 +62,8 @@ export default function DemoSwitcher() {
               ref={index === 0 ? firstOption : undefined}
               type="button"
               key={persona.key}
-              onClick={() => {
-                void switchDemoPersona(persona.key);
+              onClick={async () => {
+                if (await switchDemoPersona(persona.key)) router.push(portalInicial(persona.rol));
                 close();
               }}
               className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"

@@ -6,11 +6,9 @@ import { MoneyAmount } from "@/components/domain/MoneyAmount";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/Dialog";
 import { Field, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { SkeletonList } from "@/components/ui/Feedback";
 import { ComunicadosSection } from "@/features/junta/ComunicadosSection";
 import { ConciliacionSection } from "@/features/junta/ConciliacionSection";
 import { CuotasSection } from "@/features/junta/CuotasSection";
@@ -22,6 +20,8 @@ import { MorasSection } from "@/features/junta/MorasSection";
 import { PresupuestoMensual, type PresupuestoAprobado } from "@/features/junta/PresupuestoMensual";
 import { ResumenSection } from "@/features/junta/ResumenSection";
 import ConfiguracionCondominio from "@/features/junta/ConfiguracionCondominio";
+import { UsuariosSection } from "@/features/junta/UsuariosSection";
+import { AreasSection } from "@/features/junta/AreasSection";
 import {
   conciliarComprobante,
   emitirLoteCuotas,
@@ -40,7 +40,7 @@ import { RefreshCw } from "lucide-react";
 
 type Confirmacion =
   | { kind: "emitir" }
-  | { kind: "comprobante"; id: string; decision: "APROBADO" | "RECHAZADO" }
+  | { kind: "comprobante"; id: string; decision: "APROBADO" | "RECHAZADO" | "OBSERVADO" }
   | { kind: "comunicado" };
 
 export default function JuntaPortal() {
@@ -63,7 +63,6 @@ export default function JuntaPortal() {
   const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const [motivo, setMotivo] = useState("");
   const [busy, setBusy] = useState(false);
-  const [morasFeedback, setMorasFeedback] = useState<string | null>(null);
   const cargaActual = useRef(0);
   const contextoActual = useRef(condominioActivoId);
   contextoActual.current = condominioActivoId;
@@ -76,9 +75,9 @@ export default function JuntaPortal() {
 
     try {
       const [nuevosComprobantes, nuevosDepartamentos, nuevasNotificaciones] = await Promise.all([
-        fetchComprobantes(),
+        condominioActivoId ? fetchComprobantes(condominioActivoId) : Promise.resolve([]),
         condominioActivoId ? listarDepartamentos(condominioActivoId) : Promise.resolve([]),
-        fetchNotificaciones(),
+        condominioActivoId ? fetchNotificaciones(condominioActivoId) : Promise.resolve([]),
       ]);
       if (solicitud !== cargaActual.current) return;
       setComprobantes(nuevosComprobantes);
@@ -100,6 +99,8 @@ export default function JuntaPortal() {
   const seleccionarCondominio = useCallback((condominioId: string | null) => {
     cargaActual.current++;
     setDepartamentosRegistrados([]);
+    setComprobantes([]);
+    setNotificaciones([]);
     setCondominioActivoId(condominioId);
     setPresupuesto(null);
     if (condominioId) {
@@ -184,10 +185,10 @@ export default function JuntaPortal() {
     if (!confirmacion) return;
     if (
       confirmacion.kind === "comprobante" &&
-      confirmacion.decision === "RECHAZADO" &&
+      confirmacion.decision !== "APROBADO" &&
       !motivo.trim()
     ) {
-      setFeedback("Indica el motivo para rechazar el comprobante.");
+      setFeedback("Indica el motivo para observar o rechazar el comprobante.");
       return;
     }
 
@@ -205,7 +206,7 @@ export default function JuntaPortal() {
         const resultado = await conciliarComprobante(
           confirmacion.id,
           confirmacion.decision,
-          confirmacion.decision === "RECHAZADO" ? motivo.trim() : undefined,
+          confirmacion.decision !== "APROBADO" ? motivo.trim() : undefined,
         );
         if (resultado.ok) {
           setFeedback("La conciliación del comprobante se actualizó correctamente.");
@@ -213,14 +214,14 @@ export default function JuntaPortal() {
         } else {
           setFeedback(resultado.error || "No se pudo procesar el comprobante.");
         }
-      } else if (confirmacion.kind === "comunicado") {
-        const resultado = await enviarComunicadoMasivo(titulo, mensaje);
+      } else if (confirmacion.kind === "comunicado" && condominioActivoId) {
+        const resultado = await enviarComunicadoMasivo(titulo, mensaje, condominioActivoId);
         if (resultado.ok) {
           const alcance = resultado.generadas ?? 0;
           setFeedback(
             alcance > 0
-              ? `Comunicado enviado a ${alcance} destinatarios.`
-              : "Comunicado enviado correctamente.",
+              ? `Comunicado en cola para ${alcance} destinatarios. La entrega aún no está confirmada.`
+              : "No hay destinatarios activos para este comunicado.",
           );
           setTitulo("");
           setMensaje("");
@@ -238,14 +239,6 @@ export default function JuntaPortal() {
     }
   }
 
-  function evaluarMorasSimuladas() {
-    setMorasFeedback(
-      "Simulación local: se aplicaron las reglas de gracia; " +
-      "una unidad permanece en mora y otra fue postergada por tener un comprobante en revisión. " +
-      "No se llamó al backend.",
-    );
-  }
-
   const seccionTitulo = navActual?.label ?? "Resumen";
   const comprobanteConfirmado = confirmacion?.kind === "comprobante"
     ? comprobantes.find((comprobante) => comprobante.id === confirmacion.id)
@@ -253,20 +246,6 @@ export default function JuntaPortal() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Portal de Junta"
-        description={`${condominioActivoId ? "Condominio seleccionado" : "Sin condominio seleccionado"} · ${seccionTitulo}`}
-        actions={(
-          <Button
-            variant="secondary"
-            onClick={() => void loadData()}
-            icon={<RefreshCw className="h-4 w-4" aria-hidden="true" />}
-          >
-            Actualizar
-          </Button>
-        )}
-      />
-
       {isAuditor && (
         <div className="rounded-xl border border-audit-200 bg-audit-50 p-4 text-audit-800">
           <Badge tone="audit">Solo lectura</Badge>
@@ -276,19 +255,26 @@ export default function JuntaPortal() {
         </div>
       )}
 
-      <div className="lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-6">
-        <aside className="mb-4 lg:mb-0">
-          <div className="lg:sticky lg:top-4">
+      <div className="md:grid md:grid-cols-[64px_minmax(0,1fr)] md:gap-6 lg:grid-cols-[216px_minmax(0,1fr)] lg:gap-8">
+        <aside className="mb-4 md:mb-0 md:border-r md:border-line md:pr-3 lg:pr-5">
+          <div className="md:sticky md:top-6">
+            <p className="mb-4 hidden px-3 text-sm font-semibold lg:block">{isAuditor ? "Consulta de auditoría" : "Administración"}</p>
             <JuntaNav
               section={section}
               isSuperAdmin={isSuperAdmin}
-              pendientes={pendientes.length}
+              isAuditor={isAuditor}
+              pendientes={loadError || loading ? 0 : pendientes.length}
               onNavigate={setSection}
             />
           </div>
         </aside>
 
         <div id="main-content" className="min-w-0 space-y-6">
+          <PageHeader
+            title={seccionTitulo}
+            description={condominioActivoId ? isSuperAdmin ? <span className="break-all text-xs">Condominio · {condominioActivoId}</span> : undefined : "Selecciona un condominio en Configuración para consultar sus datos."}
+            actions={<Button variant="secondary" loading={loading} onClick={() => void loadData()} icon={<RefreshCw className="h-4 w-4" aria-hidden />}>Actualizar</Button>}
+          />
           {loadError && (
             <Alert
               tone="danger"
@@ -312,10 +298,10 @@ export default function JuntaPortal() {
             </Alert>
           )}
 
-          {section === "resumen" && (
+          {section === "resumen" && !loadError && condominioActivoId && (
             <ResumenSection
               loading={loading}
-              departamentos={departamentosRegistrados.length}
+              departamentos={departamentosRegistrados}
               comprobantesPendientes={pendientes.length}
               presupuesto={presupuesto}
               onNavigate={setSection}
@@ -337,6 +323,12 @@ export default function JuntaPortal() {
               cargando={loading}
               onActualizar={loadData}
             />
+          )}
+          {section === "usuarios" && !isAuditor && (
+            <UsuariosSection key={condominioActivoId ?? "sin-condominio"} condominioId={condominioActivoId} esSuperAdmin={isSuperAdmin} usuarioActualId={user?.id ?? ""} />
+          )}
+          {section === "areas" && (
+            <AreasSection key={condominioActivoId ?? "sin-condominio"} condominioId={condominioActivoId} soloLectura={isAuditor} />
           )}
           {section === "presupuesto" && (
             <>
@@ -369,10 +361,11 @@ export default function JuntaPortal() {
               />
             </>
           )}
-          {section === "conciliacion" && (
+          {section === "conciliacion" && !loadError && condominioActivoId && (
             <ConciliacionSection
               loading={loading}
               comprobantes={comprobantes}
+              departamentos={departamentosRegistrados}
               isAuditor={isAuditor}
               onDecide={(id, decision) => {
                 setMotivo("");
@@ -380,23 +373,24 @@ export default function JuntaPortal() {
               }}
             />
           )}
-          {section === "moras" && (
+          {section === "moras" && !loadError && condominioActivoId && (
             <MorasSection
-              isAuditor={isAuditor}
-              feedback={morasFeedback}
-              onEvaluate={evaluarMorasSimuladas}
+              departamentos={departamentosRegistrados}
+              loading={loading}
             />
           )}
           {section === "comunicados" && (
             <ComunicadosSection
               loading={loading}
               notificaciones={notificaciones}
+              condominioId={condominioActivoId}
               isAuditor={isAuditor}
               titulo={titulo}
               mensaje={mensaje}
               onTituloChange={setTitulo}
               onMensajeChange={setMensaje}
               onSubmit={solicitarComunicado}
+              onActualizada={() => void loadData()}
             />
           )}
         </div>
@@ -426,13 +420,13 @@ export default function JuntaPortal() {
         {confirmacion?.kind === "comprobante" && (
           <div className="space-y-3">
             <p>
-              Comprobante del departamento {comprobanteConfirmado?.departamento_id}: {" "}
+              Comprobante del departamento {departamentosRegistrados.find((d) => d.id === comprobanteConfirmado?.departamento_id)?.numero ?? comprobanteConfirmado?.departamento_id}: {" "}
               {comprobanteConfirmado
                 ? <MoneyAmount value={comprobanteConfirmado.monto} />
                 : "—"}. La decisión actualizará su estado contable.
             </p>
-            {confirmacion.decision === "RECHAZADO" && (
-              <Field label="Motivo del rechazo" required>
+            {confirmacion.decision !== "APROBADO" && (
+              <Field label="Motivo de la observación o rechazo" required>
                 <Textarea
                   autoFocus
                   value={motivo}
@@ -457,12 +451,12 @@ function tituloConfirmacion(confirmacion: Confirmacion | null) {
   if (!confirmacion) return "Confirmar acción";
   if (confirmacion.kind === "emitir") return "Emitir cuotas";
   if (confirmacion.kind === "comunicado") return "Enviar comunicado masivo";
-  return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : "Rechazar comprobante";
+  return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : confirmacion.decision === "OBSERVADO" ? "Observar comprobante" : "Rechazar comprobante";
 }
 
 function etiquetaConfirmacion(confirmacion: Confirmacion | null) {
   if (!confirmacion) return "Confirmar";
   if (confirmacion.kind === "emitir") return "Emitir cuotas";
   if (confirmacion.kind === "comunicado") return "Enviar comunicado";
-  return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : "Rechazar comprobante";
+  return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : confirmacion.decision === "OBSERVADO" ? "Observar comprobante" : "Rechazar comprobante";
 }

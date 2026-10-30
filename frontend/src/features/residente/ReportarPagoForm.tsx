@@ -23,15 +23,14 @@ function getTodayLima(): string {
 }
 
 export interface ReportarPagoFormProps {
-  departamentoNumero: string;
+  departamentoId: string;
   onSuccess?: () => void;
   comprobantesExistentes?: ComprobantePago[];
 }
 
 export function ReportarPagoForm({
-  departamentoNumero,
+  departamentoId,
   onSuccess,
-  comprobantesExistentes = [],
 }: ReportarPagoFormProps) {
   const [banco, setBanco] = useState<string>("YAPE");
   const [numeroOperacion, setNumeroOperacion] = useState<string>("");
@@ -53,11 +52,13 @@ export function ReportarPagoForm({
     numeroOperacion?: string;
     monto?: string;
     fecha?: string;
+    voucher?: string;
   }>({});
 
   function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
     setAlertState(null);
+    if (!departamentoId) return;
     const errors: typeof fieldErrors = {};
 
     const cleanOp = numeroOperacion.trim();
@@ -72,40 +73,12 @@ export function ReportarPagoForm({
     if (!fechaOperacion) {
       errors.fecha = "Selecciona la fecha de la operación.";
     }
+    if (!voucherFile) errors.voucher = "Adjunta el voucher de tu pago.";
 
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    // Validación preventiva de duplicidad contra comprobantes existentes
-    const existente = comprobantesExistentes.find(
-      (c) =>
-        c.departamento_id === departamentoNumero &&
-        c.numero_operacion.trim().toLowerCase() === cleanOp.toLowerCase() &&
-        c.banco === banco,
-    );
-
-    if (existente) {
-      if (existente.estado === "CONCILIADO") {
-        setAlertState({
-          tone: "info",
-          title: "Comprobante ya conciliado",
-          message:
-            "Este comprobante ya fue aprobado anteriormente. No necesitas reportarlo de nuevo.",
-          code: "VOUCHER_YA_CONCILIADO",
-        });
-        return;
-      }
-      if (existente.estado === "EN_REVISION") {
-        setAlertState({
-          tone: "warning",
-          title: "Comprobante en evaluación",
-          message:
-            "Este comprobante ya fue reportado y está en revisión por la junta directiva.",
-          code: "VOUCHER_EN_EVALUACION",
-        });
-        return;
-      }
-    }
+    // La deduplicación autoritativa incluye fecha/monto y se hace en PostgreSQL.
 
     // Abre el diálogo de confirmación que repite el monto
     setConfirmOpen(true);
@@ -115,30 +88,26 @@ export function ReportarPagoForm({
     setIsSubmitting(true);
     setAlertState(null);
 
-    let voucherBlobUrl: string | undefined = undefined;
-    if (voucherFile) {
-      // TODO: Falta el endpoint de subida de archivos (upload). Se genera un Object URL temporal que se revoca tras el envío.
-      voucherBlobUrl = URL.createObjectURL(voucherFile);
-    }
-
     try {
+      if (!voucherFile) throw new Error("Adjunta el voucher de tu pago.");
       const res = await reportarPago({
-        departamento_id: departamentoNumero,
+        departamento_id: departamentoId,
         banco,
         numero_operacion: numeroOperacion.trim(),
         fecha_operacion: fechaOperacion,
         monto: montoPago,
-        url_voucher: voucherBlobUrl,
+        archivo_voucher: voucherFile,
       });
 
       setConfirmOpen(false);
 
       if (res.ok) {
         setAlertState({
-          tone: "success",
-          title: "Comprobante recibido",
-          message:
-            "Recibimos tu comprobante, estado: En revisión. La junta directiva conciliará el pago a la brevedad.",
+          tone: res.duplicado ? "info" : "success",
+          title: res.duplicado ? "Comprobante en evaluación" : "Comprobante recibido",
+          message: res.duplicado
+            ? "El comprobante ya estaba registrado. Conservamos el mismo reporte sin duplicarlo."
+            : "Recibimos tu comprobante en revisión. El reporte no cancela la deuda hasta su aprobación.",
         });
         setNumeroOperacion("");
         setMontoPago("");
@@ -146,7 +115,7 @@ export function ReportarPagoForm({
         setVoucherFile(null);
         if (onSuccess) onSuccess();
       } else {
-        const err = res.error || "";
+        const err = res.errorCode || res.error || "";
         if (err.includes("VOUCHER_EN_EVALUACION")) {
           setAlertState({
             tone: "warning",
@@ -168,15 +137,15 @@ export function ReportarPagoForm({
             tone: "danger",
             title: "No pudimos registrar tu comprobante",
             message:
-              err ||
+              res.error ||
               "Ocurrió un error inesperado al enviar el comprobante. Inténtalo de nuevo.",
           });
         }
       }
+    } catch (error) {
+      setConfirmOpen(false);
+      setAlertState({ tone: "danger", title: "No pudimos enviar el comprobante", message: error instanceof Error ? error.message : "Comprueba la conexión e inténtalo de nuevo." });
     } finally {
-      if (voucherBlobUrl) {
-        URL.revokeObjectURL(voucherBlobUrl);
-      }
       setIsSubmitting(false);
     }
   }
@@ -210,18 +179,21 @@ export function ReportarPagoForm({
                 <option value="BCP">BCP Transferencia / Depósito</option>
                 <option value="INTERBANK">Interbank</option>
                 <option value="BBVA">BBVA</option>
+                <option value="SCOTIABANK">Scotiabank</option>
               </Select>
             </Field>
 
             <Field
               label="Número de Operación Bancaria"
               required
-              hint="Se calcula una firma digital para verificar la autenticidad del comprobante."
+              hint="La operación, fecha e importe permiten detectar reportes duplicados."
               error={fieldErrors.numeroOperacion}
             >
               <Input
                 type="text"
                 placeholder="Ej. 0089214"
+                minLength={1}
+                maxLength={50}
                 value={numeroOperacion}
                 onChange={(e) => {
                   setNumeroOperacion(e.target.value);
@@ -275,7 +247,9 @@ export function ReportarPagoForm({
 
             <FileDropzone
               label="Comprobante de Pago (Voucher)"
+              required
               file={voucherFile}
+              error={fieldErrors.voucher}
               onFileChange={setVoucherFile}
               maxSizeMb={5}
             />
@@ -306,7 +280,7 @@ export function ReportarPagoForm({
           <strong className="text-brand-700">
             <MoneyAmount value={montoPago || "0.00"} moneda="PEN" />
           </strong>{" "}
-          para el departamento <strong>{departamentoNumero}</strong> en{" "}
+          para la <strong>unidad seleccionada</strong> en{" "}
           <strong>{banco}</strong> con el número de operación{" "}
           <strong className="tabular-nums">{numeroOperacion}</strong>.
         </p>

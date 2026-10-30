@@ -41,11 +41,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379/0
       - S3_ENDPOINT_URL=http://minio:9000
+      - VOUCHERS_DIR=/app/uploads/vouchers
       - CONDOMINIO_PILOTO_ID=${CONDOMINIO_PILOTO_ID:-}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - DEMO_MODE=${DEMO_MODE:-false}
     ports:
       - "8000:8000"
+    volumes:
+      - ./uploads/vouchers:/app/uploads/vouchers
     depends_on:
       redis:
         condition: service_healthy
@@ -55,8 +59,12 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["python", "-m", "src.modules.cuotas.worker"]
+    # Sin HTTP: sano mientras el proceso del worker sea el PID 1 del contenedor.
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-c", "import sys; sys.exit(b'src.modules.cuotas.worker' not in open('/proc/1/cmdline', 'rb').read())"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     environment:
       - DATABASE_URL=${DATABASE_URL}
@@ -68,15 +76,65 @@ services:
       redis:
         condition: service_healthy
 
+  # CON-70: relay propio, sin alterar el worker de cuotas de otro integrante.
+  pagos-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "src.modules.pagos.worker"]
+    # Sin HTTP: sano mientras el proceso del worker sea el PID 1 del contenedor.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(b'src.modules.pagos.worker' not in open('/proc/1/cmdline', 'rb').read())"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - VOUCHERS_DIR=/app/uploads/vouchers
+    volumes:
+      - ./uploads/vouchers:/app/uploads/vouchers
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  notificaciones-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "src.modules.notificaciones.worker"]
+    # Sin HTTP: sano mientras el proceso del worker sea el PID 1 del contenedor.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(b'src.modules.notificaciones.worker' not in open('/proc/1/cmdline', 'rb').read())"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # Frontend Web Next.js 14 (App Router)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+        NEXT_PUBLIC_DEMO_MODE: ${NEXT_PUBLIC_DEMO_MODE:-false}
     container_name: condomanager-frontend
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+      - NEXT_PUBLIC_DEMO_MODE=${NEXT_PUBLIC_DEMO_MODE:-false}
     ports:
       - "3000:3000"
     depends_on:

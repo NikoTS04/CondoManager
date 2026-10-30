@@ -1,18 +1,21 @@
 "use client";
 
 import { CreditCard, FileText } from "lucide-react";
+import { useState } from "react";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { SkeletonList, EmptyState } from "@/components/ui/Feedback";
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
 import { ComprobanteStatusChip } from "@/components/domain/ComprobanteStatusChip";
+import { VoucherDownloadButton } from "@/components/domain/VoucherDownloadButton";
 import { formatDate } from "@/lib/format";
-import type { ComprobantePago } from "@/lib/api";
+import { subsanarVoucher, type ComprobantePago } from "@/lib/api";
+import { FileDropzone } from "@/components/ui/FileDropzone";
 
 export interface ComprobantesListProps {
   comprobantes: ComprobantePago[];
-  departamentoNumero: string;
+  departamentoId: string;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -20,22 +23,43 @@ export interface ComprobantesListProps {
 
 export function ComprobantesList({
   comprobantes,
-  departamentoNumero,
+  departamentoId,
   loading = false,
   error = null,
   onRetry,
 }: ComprobantesListProps) {
-  const filtrados = comprobantes.filter((c) => c.departamento_id === departamentoNumero);
+  const filtrados = comprobantes.filter((c) => c.departamento_id === departamentoId);
+  const [seleccion, setSeleccion] = useState<string | null>(null);
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [fallo, setFallo] = useState<string | null>(null);
+
+  async function subsanar() {
+    if (!seleccion || !archivo) return;
+    setEnviando(true);
+    setFallo(null);
+    try {
+      await subsanarVoucher(seleccion, archivo);
+      setSeleccion(null);
+      setArchivo(null);
+      onRetry?.();
+    } catch (e) {
+      setFallo(e instanceof Error ? e.message : "No pudimos subsanar el comprobante.");
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   return (
     <Card>
       <CardHeader
-        title="Historial de Comprobantes Enviados"
-        description="Seguimiento en tiempo real de tus pagos reportados y su estado de conciliación."
+        title="Tus comprobantes"
+        description="Consulta la revisión de tus pagos y subsana los comprobantes observados."
         icon={<FileText className="h-5 w-5 text-brand-600" aria-hidden />}
       />
 
       <CardBody>
+        {fallo && <Alert tone="danger">{fallo}</Alert>}
         {loading ? (
           <SkeletonList rows={3} label="Cargando historial de comprobantes…" />
         ) : error ? (
@@ -83,10 +107,21 @@ export function ComprobantesList({
                       Motivo: {comp.motivo_rechazo}
                     </p>
                   )}
+                  {comp.estado === "OBSERVADO" && (seleccion === comp.id ? (
+                    <div className="space-y-2">
+                      <FileDropzone label="Nuevo voucher para subsanar" file={archivo} onFileChange={setArchivo} />
+                      <Button onClick={() => void subsanar()} disabled={!archivo || enviando} loading={enviando}>
+                        Enviar subsanación
+                      </Button>
+                    </div>
+                  ) : <Button variant="secondary" size="sm" disabled={enviando} onClick={() => {
+                    setSeleccion(comp.id); setArchivo(null); setFallo(null);
+                  }}>Subsanar voucher</Button>)}
                 </div>
 
                 <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                   <ComprobanteStatusChip status={comp.estado} />
+                  <VoucherDownloadButton comprobante={comp} />
                 </div>
               </div>
             ))}

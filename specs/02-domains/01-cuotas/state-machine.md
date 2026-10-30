@@ -30,7 +30,8 @@
 | `EMITIDA` | `AMORTIZAR_PARCIAL` | `PENDIENTE` | `0.00 < saldo_a_favor < monto_total_exigible` y bruto definitivo | Marca `monto_pagado = saldo_a_favor`, consume todo el crédito; pendiente = exigible - pagado; conserva bruto y descuento cero; registra aplicación y auditoría. |
 | `EMITIDA` | `PUBLICAR_CUOTA` | `PENDIENTE` | `saldo_a_favor = 0.00` y `monto_total_exigible > 0.00` | Registra aplicación cero y auditoría; publica la cuota sin alterar el bruto. |
 | `PENDIENTE` | `EXPIRAR_FECHA` | `VENCIDA` | `fecha_actual > fecha_vencimiento` | Marca cuota como vencida. Habilita cuenta regresiva de periodo de gracia. |
-| `VENCIDA` | `APLICAR_MORA` | `EN_MORA` | `dias_transcurridos > dias_gracia` Y `sin_pago_en_revision` | Genera recargo de mora, bloquea reservas de áreas comunes (PROC-04), emite log. |
+| `VENCIDA` | `APLICAR_MORA` | `EN_MORA` | Fecha local posterior a vencimiento + gracia histórica y principal impago | Devengo diario por cuota/fecha; default 1.00 PEN editable. Pausa de revisión no condona ni habilita reservas. |
+| `EN_MORA` / `PAGO_PARCIAL` | `DEVENGAR_DIA_MORA` | `EN_MORA` | Principal impago, fecha exigible no procesada, política histórica | Incrementa mora sin capitalización; reintentos no duplican; ajustes bancarios son compensatorios. |
 | `PENDIENTE` / `VENCIDA` / `EN_MORA` | `CONCILIAR_TOTAL` | `PAGADA` | `monto_imputado == monto_total_exigible` | Desbloquea reservas si no adeuda otras cuotas, emite `PagoConciliadoEvent`. |
 | `PENDIENTE` / `VENCIDA` / `EN_MORA` | `CONCILIAR_PARCIAL`| `PAGO_PARCIAL` | `0.00 < monto_imputado < monto_total_exigible`| Actualiza `monto_pagado`, recalcula `monto_total_exigible`. Mantiene restricción de mora. |
 

@@ -3,13 +3,12 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.security import HTTPAuthorizationCredentials
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
 from src.core.errors import APIError
-from src.core.security import decode_access_token, security_scheme
+from src.core.security import get_current_user
 from src.modules.condominios.estructura.importacion import MAX_BYTES
 from src.modules.condominios.estructura.repository import EstructuraRepository
 from src.modules.condominios.estructura.schemas import (
@@ -26,19 +25,8 @@ router = APIRouter(prefix="/condominios/{condominio_id}", tags=["Estructura inmo
 
 
 async def require_estructura_user(
-    auth: Annotated[HTTPAuthorizationCredentials | None, Depends(security_scheme)],
+    claims: Annotated[dict, Depends(get_current_user)],
 ) -> ActorEstructura:
-    if auth is None or not auth.credentials:
-        raise APIError(401, "NO_AUTENTICADO", "Se requiere un Bearer Token válido.")
-    try:
-        claims = decode_access_token(auth.credentials)
-    except HTTPException as exc:
-        detail = exc.detail if isinstance(exc.detail, dict) else {}
-        raise APIError(
-            exc.status_code,
-            detail.get("error_code", "TOKEN_INVALIDO"),
-            detail.get("mensaje", "Token inválido."),
-        ) from exc
     if not claims.get("sub") or not claims.get("rol"):
         raise APIError(401, "TOKEN_INVALIDO", "El token debe contener identidad y rol.")
     contexto = None

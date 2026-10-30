@@ -1,106 +1,82 @@
-"""Router FastAPI para el Dominio de Notificaciones (Alejandro - PROC-03)."""
+"""Comunicaciones persistidas y autorizadas por contexto y destinatario."""
 
-from typing import Dict, List, Optional
-import uuid
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends
 
-from scripts.seed_condominio_piloto import generar_datos_departamentos
+from src.core.security import get_current_user, require_role
+from src.modules.notificaciones.persistencia import get_notificaciones_service
 from src.modules.notificaciones.schemas import (
+    AlertaNotificacionDTO,
     CanalNotificacionEnum,
     DespacharNotificacionRequest,
     EnviarComunicadoMasivoRequest,
     EnviarComunicadoMasivoResponse,
+    EstadoAlertaEnum,
     EstadoNotificacionEnum,
     NotificacionLogDTO,
     ReenviarNotificacionRequest,
 )
-from src.modules.notificaciones.service import NotificacionesService
 
 router = APIRouter(prefix="/notificaciones", tags=["Notificaciones y Comunicaciones"])
+admin = require_role(["SUPERADMIN", "ADMIN_JUNTA"])
+consulta_alertas = require_role(["SUPERADMIN", "ADMIN_JUNTA", "AUDITOR"])
 
-# Almacén en memoria de bitácora para desarrollo local y pruebas
-NOTIFICACIONES_REGISTRADAS: Dict[uuid.UUID, NotificacionLogDTO] = {}
 
-
-@router.get(
-    "/logs",
-    response_model=List[NotificacionLogDTO],
-    status_code=status.HTTP_200_OK,
-    summary="Consultar bitácora de notificaciones despachadas",
-)
+@router.get("/logs", response_model=list[NotificacionLogDTO])
 async def listar_logs(
-    departamento_id: Optional[str] = Query(None, description="Filtrar por número de departamento"),
-    estado: Optional[EstadoNotificacionEnum] = Query(None, description="Filtrar por estado del envío"),
-    canal: Optional[CanalNotificacionEnum] = Query(None, description="Filtrar por canal"),
+    departamento_id: UUID | None = None,
+    estado: EstadoNotificacionEnum | None = None,
+    canal: CanalNotificacionEnum | None = None,
+    condominio_id: UUID | None = None,
+    user=Depends(get_current_user),
+    service=Depends(get_notificaciones_service),
 ):
-    """Retorna los registros de notificaciones aplicando filtros opcionales."""
-    resultados = list(NOTIFICACIONES_REGISTRADAS.values())
-
-    if departamento_id:
-        resultados = [r for r in resultados if r.departamento_id == departamento_id]
-    if estado:
-        resultados = [r for r in resultados if r.estado == estado]
-    if canal:
-        resultados = [r for r in resultados if r.canal == canal]
-
-    return resultados
+    return await service.listar(user, condominio_id, departamento_id, estado, canal)
 
 
-@router.post(
-    "/despachar",
-    response_model=NotificacionLogDTO,
-    status_code=status.HTTP_201_CREATED,
-    summary="Despachar una notificación individual",
-)
-async def despachar_notificacion(request: DespacharNotificacionRequest):
-    """Despacha una notificación renderizando la plantilla correspondiente y registrando la entrega."""
-    log = NotificacionesService.despachar_notificacion(request)
-    NOTIFICACIONES_REGISTRADAS[log.id] = log
-    return log
+@router.post("/despachar", response_model=NotificacionLogDTO, status_code=202)
+async def despachar_notificacion(
+    request: DespacharNotificacionRequest,
+    user=Depends(admin),
+    service=Depends(get_notificaciones_service),
+):
+    return await service.despachar(request, user)
 
 
-@router.post(
-    "/reenviar/{log_id}",
-    response_model=NotificacionLogDTO,
-    status_code=status.HTTP_200_OK,
-    summary="Reintentar o reenviar una notificación fallida",
-)
+@router.post("/reenviar/{log_id}", response_model=NotificacionLogDTO)
 async def reenviar_notificacion(
-    log_id: uuid.UUID,
-    request: Optional[ReenviarNotificacionRequest] = None,
+    log_id: UUID,
+    request: ReenviarNotificacionRequest | None = None,
+    user=Depends(admin),
+    service=Depends(get_notificaciones_service),
 ):
-    """Permite al Administrador reenviar una notificación rebotada, actualizando opcionalmente el destinatario."""
-    log = NOTIFICACIONES_REGISTRADAS.get(log_id)
-    if not log:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "NOTIFICACION_NO_HALLADA", "mensaje": "Registro de notificación no encontrado."},
-        )
-
-    nuevo_destinatario = request.nuevo_destinatario if request else None
-    log_actualizado = NotificacionesService.reenviar_notificacion_manual(
-        log=log,
-        nuevo_destinatario=nuevo_destinatario,
-    )
-    NOTIFICACIONES_REGISTRADAS[log_id] = log_actualizado
-    return log_actualizado
+    return await service.reenviar(log_id, request, user)
 
 
-@router.post(
-    "/comunicado-masivo",
-    response_model=EnviarComunicadoMasivoResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Despacho de comunicado oficial masivo a todos los departamentos",
-)
-async def despachar_comunicado_masivo(request: EnviarComunicadoMasivoRequest):
-    """Emite un comunicado extraordinario para todos los 139 departamentos de la comunidad."""
-    departamentos = generar_datos_departamentos()
-    respuesta, logs = NotificacionesService.despachar_comunicado_masivo(
-        request=request, departamentos=departamentos
-    )
+@router.post("/comunicado-masivo", response_model=EnviarComunicadoMasivoResponse, status_code=202)
+async def despachar_comunicado_masivo(
+    request: EnviarComunicadoMasivoRequest,
+    user=Depends(admin),
+    service=Depends(get_notificaciones_service),
+):
+    return await service.comunicado(request, user)
 
-    for l in logs:
-        NOTIFICACIONES_REGISTRADAS[l.id] = l
 
-    return respuesta
+@router.get("/alertas", response_model=list[AlertaNotificacionDTO])
+async def listar_alertas(
+    condominio_id: UUID | None = None,
+    estado: EstadoAlertaEnum = EstadoAlertaEnum.ABIERTA,
+    user=Depends(consulta_alertas),
+    service=Depends(get_notificaciones_service),
+):
+    return await service.listar_alertas(user, condominio_id, estado.value)
+
+
+@router.post("/alertas/{alerta_id}/atender", response_model=AlertaNotificacionDTO)
+async def atender_alerta(
+    alerta_id: UUID,
+    user=Depends(admin),
+    service=Depends(get_notificaciones_service),
+):
+    return await service.atender_alerta(alerta_id, user)

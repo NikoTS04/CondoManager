@@ -1,5 +1,10 @@
 # Matriz de Trazabilidad Integral (Traceability Matrix)
 
+Ampliación financiera objetivo 2026-10-24: ver [matriz canónica](00-core/traceability-matrix.md#extensión-financiera-objetivo-pendiente-de-implementación)
+y [dominio de prorrateo/mora diaria](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
+Incluye FIN-PRORRATEO, FIN-MORA-DIARIA, FIN-FONDOS-MORA y FIN-REPORTE;
+especificados, pendientes de código y automatización de aceptación.
+
 Esta matriz garantiza la cobertura total del ciclo de vida del software en **CondoManager**, vinculando cada requerimiento de negocio y directiva de automatización con su especificación técnica, modelo de datos, contrato API, criterios de prueba BDD, módulo de código fuente y responsable del equipo.
 
 ---
@@ -16,6 +21,7 @@ Esta matriz garantiza la cobertura total del ciclo de vida del software en **Con
 | **REQ-04** | Motor automático de mora y corte tras gracia | `proc-02-pagos-y-morosidad.md` | `cuotas_mantenimiento` | `POST /api/v1/moras/evaluar` (Cron) | `cuotas-y-moras.feature.md` (Esc. 2) | `src/modules/pagos/` | **Tarqui** |
 | **REQ-05** | Notificaciones automáticas de cuotas y vencimiento | `proc-03-notificaciones.md` | `notificaciones_logs` | `POST /api/v1/notificaciones/despachar` | `notificaciones.feature.md` (Esc. 1) | `src/modules/notificaciones/`| **Alejandro** |
 | **REQ-06** | Confirmación de pago y reintentos ante fallos | `proc-03-notificaciones.md` | `notificaciones_logs` | Worker asíncrono (Event-Driven) | `notificaciones.feature.md` (Esc. 2, 3) | `src/modules/notificaciones/`| **Alejandro** |
+| **REQ-06b / CON-37** | Alertas administrativas por fallo permanente y su atención | `delivery-policy.md` (dominio 03) | `GET /api/v1/notificaciones/alertas`, `POST .../alertas/{id}/atender` | `src/tests/integration/test_alertas_notificaciones_db.py` | `src/modules/notificaciones/`, `docs/sprints/CON-32-34-36-37-notificaciones.md` | **Alejandro** |
 | **REQ-07** | Catálogo y calendario de áreas comunes | `proc-04-reservas-areas-comunes.md` | `areas_comunes`, `reservas` | `GET /api/v1/areas` | `reservas-areas.feature.md` (Esc. 2) | `src/modules/reservas/` | **Brandon** |
 | **REQ-08** | Bloqueo automático de reserva por deuda en mora | `proc-04-reservas-areas-comunes.md` | `reservas`, `cuotas_mantenimiento`| `POST /api/v1/reservas` | `reservas-areas.feature.md` (Esc. 1) | `src/modules/reservas/` | **Brandon** |
 | **REQ-09** | Concurrencia y prevención de doble reserva | `proc-04-reservas-areas-comunes.md` | Bloqueo pesimista en DB | `POST /api/v1/reservas` | `reservas-areas.feature.md` (Esc. 4) | `src/modules/reservas/` | **Brandon** |

@@ -48,26 +48,35 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://condo_user:condo_secret@localhost:5432/condomanager
       REDIS_URL: redis://localhost:6379/0
       CONDOMINIO_PILOTO_ID: ''
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: condo_user
+          POSTGRES_PASSWORD: condo_secret
+          POSTGRES_DB: condomanager
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U condo_user -d condomanager"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - uses: astral-sh/setup-uv@v6
-      - name: Probar contrato generado contra FastAPI en modo ASGI
-        # No sustituye validación de respuestas ni flujos autenticados persistentes.
-        # Sin servicios: los rechazos de autenticación no acceden a Postgres/Redis;
-        # las rutas públicas actuales usan almacenes en memoria.
-        run: uv run --extra dev --with schemathesis==4.22.1 python -m pytest -q scripts/ci/verify_api_contract.py -k 'not reporte_pago'
-      - name: Detectar deuda de límites decimales al reportar pagos
-        id: reporte_pago
-        # TODO: quitar continue-on-error al rechazar monto=1e26 sin InvalidOperation.
-        # Solo esta operación es no bloqueante; las otras 23 siguen obligatorias.
-        continue-on-error: true
-        run: uv run --extra dev --with schemathesis==4.22.1 python -m pytest -q scripts/ci/verify_api_contract.py -k reporte_pago
-      - name: Publicar advertencia del contrato pendiente
-        if: steps.reporte_pago.outcome == 'failure'
+      - name: Preparar esquema persistente de autenticación
         run: |
-          echo '::warning::POST /api/v1/pagos/reportar falla con montos fuera de precisión (monto=1e26). Revisar el paso no bloqueante; TODO validar límites decimales en backend.'
-          echo '### Deuda de contrato API' >> "$GITHUB_STEP_SUMMARY"
-          echo 'POST /api/v1/pagos/reportar: pruebas no bloqueantes por InvalidOperation con monto=1e26. Las demás operaciones son bloqueantes.' >> "$GITHUB_STEP_SUMMARY"
+          uv run --extra dev alembic upgrade head
+          uv run --extra dev python -m scripts.seed_usuarios_demo
+          uv run --extra dev python -m scripts.seed_areas_demo
+      - name: Probar contrato generado contra FastAPI en modo ASGI
+        # No sustituye validación de respuestas ni flujos autenticados completos.
+        # El login consulta PostgreSQL; las rutas públicas siguen sin Redis.
+        run: uv run --extra dev --with schemathesis==4.22.1 python -m pytest -q scripts/ci/verify_api_contract.py
+      - name: Verificar respuestas y eventos contra CON-72
+        env:
+          # Los fixtures compartidos resuelven CON13_TEST_DATABASE_URL.
+          # CON73_TEST_DATABASE_URL omitía silenciosamente sus pruebas SQL.
+          CON13_TEST_DATABASE_URL: postgresql+asyncpg://condo_user:condo_secret@localhost:5432/condomanager
+        run: uv run --extra dev python -m pytest -q src/tests/integration/test_convergencia_con72.py

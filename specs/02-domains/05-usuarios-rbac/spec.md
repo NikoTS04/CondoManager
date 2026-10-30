@@ -1,7 +1,23 @@
 # Dominio 05: Condominios, Usuarios, Roles (RBAC) y Departamentos
 
+Extensión objetivo pendiente de código: [política diaria y gracia por
+responsable de pago](../01-cuotas/prorrateo-y-mora-diaria.md#1-calendario-y-política-de-mora).
+Un responsable activo por departamento, override nullable de gracia sobre el
+vínculo propietario/inquilino; no añade rol ni duplica obligación. Junta/SuperAdmin
+configuran dentro de su contexto; auditor solo consulta. Defaults: vence 10,
+gracia 0, MONTO_DIARIO editable a 1.00 PEN. Se conserva política histórica por cuota.
+
 La implementación de CON-3 / USR-02 y su columna `departamentos.activo` se define
 en [estructura-inmobiliaria.md](estructura-inmobiliaria.md).
+
+CON-04 / USR-03 se define en [alta-administrativa.md](alta-administrativa.md): alta
+inactiva, contraseña inicial administrativa, login SQL y estado editable por SuperAdmin.
+
+CON-06 / USR-05 se define en [roles-y-permisos.md](roles-y-permisos.md): asignación
+contextual, revocación lógica, autoridad administrativa y renovación de sesiones.
+
+CON-05 / USR-04 se define en [vinculos-departamentos.md](vinculos-departamentos.md):
+tenencia por unidad real, conservación de titulares y revocación del acceso por vínculo.
 
 ## 1. Ficha del Dominio
 
@@ -45,11 +61,12 @@ un cuerpo de solicitud sin comprobarlos contra la identidad autenticada.
 | `nombre` | Texto, 1-150 caracteres | Obligatorio después de eliminar espacios exteriores. |
 | `direccion` | Texto, 1-500 caracteres | Obligatoria después de eliminar espacios exteriores. |
 | `moneda` | Enum | Solo `PEN` o `USD`. |
-| `regla_mora_tipo` | Enum | `MONTO_FIJO` o `PORCENTAJE_SALDO`. |
+| `regla_mora_tipo` | Enum | `MONTO_DIARIO` por defecto; mantiene `MONTO_FIJO` y `PORCENTAJE_SALDO`. |
+| `monto_mora_diario` | Decimal `NUMERIC(12,2)` nullable | Positivo para MONTO_DIARIO, default 1.00 PEN; nulo en otras modalidades. |
 | `monto_mora_fijo` | Decimal `NUMERIC(12,2)` nullable | Obligatorio y mayor o igual que cero cuando la regla es `MONTO_FIJO`; nulo en caso contrario. |
 | `tasa_mora_porcentaje` | Decimal `NUMERIC(7,4)` nullable | Obligatoria entre `0.0000` y `100.0000` cuando la regla es `PORCENTAJE_SALDO`; nula en caso contrario. |
-| `dia_vencimiento` | Entero | Día calendario entre 1 y 28. Es el nombre canónico; reemplaza al ambiguo `dias_corte`. |
-| `dias_gracia` | Entero | Entre 0 y 30 días calendario. |
+| `dia_vencimiento` | Entero | Día calendario entre 1 y 28, default 10. Nombre canónico que reemplaza `dias_corte`. |
+| `dias_gracia` | Entero | Entre 0 y 30 días calendario, default 0. Override nullable por vínculo responsable. |
 
 Los importes y tasas se reciben y devuelven como cadenas decimales. Está prohibido
 usar `float` para validarlos, persistirlos o serializarlos.
@@ -77,7 +94,7 @@ usar `float` para validarlos, persistirlos o serializarlos.
 - Si contiene más de uno, el cliente exige una selección explícita y no asume el
   primero creado ni el más reciente.
 - Al crear un nuevo condominio, este se convierte en el contexto activo del cliente.
-- `ADMIN_JUNTA`, `AUDITOR`, `PROPIETARIO` e `INQUILINO` no utilizan el listado global:
+- `ADMIN_JUNTA`, `AUDITOR` y `RESIDENTE` no utilizan el listado global:
   su contexto se obtiene del claim `condominio_id` validado.
 
 ### 3.5 Aislamiento multi-condominio
@@ -117,8 +134,9 @@ La creación registra una entrada inmutable con:
   proveedores), sin permiso para crear otros condominios.
 - `AUDITOR`: Lectura de auditoría y estados financieros dentro de los condominios
   autorizados.
-- `PROPIETARIO`: Gestión de sus propiedades, consulta de cuentas y reserva de áreas.
-- `INQUILINO`: Reporte de pagos, tickets y reservas de su departamento arrendado.
+- `RESIDENTE`: Consulta de cuentas, reporte de pagos y reservas de sus vínculos activos.
+  `PROPIETARIO_TITULAR`, `COPROPIETARIO` e `INQUILINO` son relaciones por unidad,
+  no roles adicionales. Contrato: [identidad-y-alcances.md](identidad-y-alcances.md).
 
 ---
 

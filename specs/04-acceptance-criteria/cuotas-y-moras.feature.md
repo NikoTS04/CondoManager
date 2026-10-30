@@ -1,5 +1,9 @@
 # Criterios de Aceptación: Cuotas, Pagos y Moras (BDD / Gherkin)
 
+Ampliación objetivo pendiente de implementación y automatización:
+[prorrateo y mora diaria](prorrateo-mora-reportes.feature.md). Los escenarios de
+integración enlazados al final mantienen su contrato histórico hasta la adopción.
+
 ## Característica: Emisión, Conciliación y Aplicación Automática de Moras
 
 ### Escenario 1: Generación mensual de cuotas con alícuotas
@@ -9,29 +13,30 @@ Y el departamento 101 tiene un coeficiente de participación del 1.20%
 Cuando el sistema ejecuta el proceso programado el día 1 del mes a las 00:00 horas
 Entonces se genera una cuota ordinaria para el departamento 101 por un importe de S/ 180.00
 Y la cuota queda registrada en estado "PENDIENTE"
-Y la fecha de vencimiento se fija para el día 20 del mes a las 23:59:59.
+Y la fecha de vencimiento se fija para el día 10 del mes a las 23:59:59 de Lima.
 ```
 
 ### Escenario 2: Aplicación de mora tras vencer periodo de gracia sin pago
 ```gherkin
-Dado que el departamento 202 tiene una cuota de S/ 180.00 con vencimiento el día 20
-Y el condominio tiene configurado un periodo de gracia de 2 días y recargo por mora fijo de S/ 20.00
+Dado que el departamento 202 tiene una cuota de S/ 180.00 con vencimiento el día 10
+Y la cuota conserva gracia 0 y mora diaria de S/ 1.00
 Y el residente del departamento 202 no ha reportado ningún comprobante de pago
-Cuando el reloj del sistema avanza a las 00:01 horas del día 23
+Cuando el motor procesa el día 11 en hora de Lima
 Entonces el estado de la cuota cambia a "EN_MORA"
-Y se agrega un cargo por mora de S/ 20.00 a la cuenta del departamento 202
-Y el total de la deuda exigible pasa a ser de S/ 200.00
+Y se agrega un cargo por mora de S/ 1.00 a la cuenta del departamento 202
+Y el total de la deuda exigible pasa a ser de S/ 181.00
 Y se registra el evento en la bitácora de auditoría inmutable con los 7 campos obligatorios.
 ```
 
 ### Escenario 3: Postergación de mora si existe comprobante reportado pendiente de revisión
 ```gherkin
-Dado que el departamento 305 tiene una cuota vencida el día 20
-Y el periodo de gracia concluye el día 22 a las 23:59:59
-Y el residente reportó un comprobante de pago el día 21 a las 18:00 (en estado "EN_REVISION")
-Cuando el evaluador de moras corre el día 23 a las 00:01 horas
+Dado que el departamento 305 tiene una cuota vencida el día 10 sin gracia
+Y el residente reportó un comprobante de pago el día 10 a las 18:00 (en estado "EN_REVISION")
+Cuando el evaluador de moras corre el día 11 a las 00:05 en Lima
 Entonces el sistema detecta el comprobante pendiente de conciliar
 Y pospone la aplicación de la penalidad por 24 horas para permitir la revisión del administrador
+Y la pausa no condona días ni se renueva indefinidamente al reprocesar
+Y al aprobar se usa la fecha bancaria validada y al rechazar se recuperan días exigibles
 Y notifica a la junta directiva que existe un comprobante pendiente de validación para evitar moras injustificadas.
 ```
 
@@ -50,3 +55,8 @@ Los escenarios ejecutables del lote persistente se encuentran en
 `src/tests/bdd/test_emision_bdd.py`. Cubren presupuesto aprobado, cuotas activas,
 amortización de crédito, cierre contable, idempotencia y reversión completa.
 Las pruebas de integración añaden concurrencia API/worker, autorización y outbox.
+# Integración Sprint 2 — CON-22 y CON-70
+
+Los escenarios ejecutables de reporte local, revisión e idempotencia están en
+`specs/02-domains/02-pagos-y-moras/features/sprint_2_anderson.feature`.
+Se verifican con PostgreSQL, archivos temporales reales y nuevas sesiones.

@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Building2, LogOut, Search, ShieldCheck, UserRound } from "lucide-react";
 import { ROLE_LABELS, useAuth } from "@/context/AuthContext";
 import DemoSwitcher from "@/components/layout/DemoSwitcher";
+import { etiquetaResidente } from "@/lib/session";
 
 export default function TopBar() {
   const { user, logout, activeDepartment } = useAuth();
+  const pathname = usePathname();
   const role = user?.rol;
-  const resident = role && ["PROPIETARIO", "INQUILINO", "ADMIN_JUNTA", "SUPERADMIN"].includes(role);
+  const resident = role && ["RESIDENTE", "ADMIN_JUNTA", "SUPERADMIN"].includes(role);
   const junta = role && ["ADMIN_JUNTA", "SUPERADMIN", "AUDITOR"].includes(role);
   return (
     <header className="border-b border-line bg-surface">
@@ -18,22 +21,20 @@ export default function TopBar() {
             <Building2 className="h-5 w-5 text-brand-600" aria-hidden />
             <span>CondoManager</span>
           </Link>
-          <span className="hidden border-l border-line pl-3 text-sm text-muted sm:inline">
-            Villa Bonita 3
-          </span>
         </div>
-        <nav aria-label="Portales" className="flex items-center gap-1">
+        {resident && junta && <nav aria-label="Portales" className="order-3 flex w-full items-center gap-1 sm:order-none sm:w-auto">
           {resident && (
             <Link
-              className="min-h-11 rounded-lg px-3 py-2 text-sm hover:bg-canvas"
-              href={`/residente?dpto=${activeDepartment}`}
+              className={`flex min-h-11 items-center rounded-lg px-3 py-2 text-sm ${pathname === "/residente" ? "bg-brand-50 font-semibold text-brand-800" : "hover:bg-canvas"}`}
+              aria-current={pathname === "/residente" ? "page" : undefined}
+              href={activeDepartment ? `/residente?dpto=${activeDepartment}` : "/residente"}
             >
               <UserRound className="mr-1 inline h-4 w-4" aria-hidden />
               Residente
             </Link>
           )}
           {junta && (
-            <Link className="min-h-11 rounded-lg px-3 py-2 text-sm hover:bg-canvas" href="/junta">
+            <Link className={`flex min-h-11 items-center rounded-lg px-3 py-2 text-sm ${pathname === "/junta" ? "bg-brand-50 font-semibold text-brand-800" : "hover:bg-canvas"}`} aria-current={pathname === "/junta" ? "page" : undefined} href="/junta">
               {role === "AUDITOR" ? (
                 <Search className="mr-1 inline h-4 w-4" aria-hidden />
               ) : (
@@ -42,12 +43,12 @@ export default function TopBar() {
               {role === "AUDITOR" ? "Auditoría" : "Junta"}
             </Link>
           )}
-        </nav>
+        </nav>}
         <div className="flex items-center gap-2">
           {user ? (
-            <span className="hidden text-right text-xs sm:block">
+            <span className="text-right text-xs">
               <span className="block font-medium text-ink">{user.nombre}</span>
-              <span className="text-muted">{role ? ROLE_LABELS[role] : ""}</span>
+              <span className="text-muted">{role === "RESIDENTE" ? etiquetaResidente(user, activeDepartment) : role ? ROLE_LABELS[role] : ""}</span>
             </span>
           ) : (
             <Link href="/login" className="rounded-lg px-3 py-2 text-sm text-brand-700">
@@ -66,6 +67,7 @@ export default function TopBar() {
             </button>
           )}
         </div>
+        {user && <p className="w-full break-all border-t border-line pt-2 text-xs text-muted">{user.condominio_id ? `Condominio · ${user.condominio_id}` : "Administración global · selecciona un condominio en Junta"}</p>}
       </div>
     </header>
   );

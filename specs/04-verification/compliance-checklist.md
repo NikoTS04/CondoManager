@@ -5,6 +5,9 @@ Utilice esta lista de verificación durante la revisión de código (Peer Review
 ---
 
 ## 1. Alineación con las Especificaciones
+- [ ] Para la ampliación financiera: ¿se verifica la [aceptación objetivo](../04-acceptance-criteria/prorrateo-mora-reportes.feature.md) sin confundir escenarios documentales con pruebas ya implementadas?
+- [ ] ¿Cierran ítems/edificios/cuotas, devengos por cuota/fecha y fondos cobrados sin duplicar gastos ni usar caja inexistente?
+- [ ] ¿PDF/DOCX usan la misma versión y el visor de comprobantes mantiene permisos e historial privados?
 - [ ] ¿Existe una carpeta de dominio en `specs/02-domains/` vinculada al cambio?
 - [ ] ¿Se actualizó la máquina de estados si se agregó un nuevo estado o transición?
 - [ ] ¿Se actualizaron o añadieron los archivos `.feature` de prueba en Gherkin?

@@ -3,26 +3,26 @@
 Cumple estrictamente con las especificaciones de OpenAPI 3.1 y SDD.
 """
 
+import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Dict, Optional
-import uuid
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from src.modules.reservas.areas.schemas import AreaComunDTO as AreaComunDTO
 
 
-class AreaComunDTO(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class HorarioOcupado(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    condominio_id: uuid.UUID
-    nombre: str
-    descripcion: Optional[str] = None
-    aforo_maximo: int = Field(gt=0, description="Aforo máximo de personas permitidas")
-    costo_reserva: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"), description="Costo por turno de uso en PEN")
-    esta_activa: bool = True
+    hora_inicio: str = Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]:00$")
+    hora_fin: str = Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]:00$")
 
 
 class CrearReservaRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     condominio_id: uuid.UUID
     area_id: uuid.UUID
     departamento_id: uuid.UUID
@@ -43,19 +43,39 @@ class ReservaResponseDTO(BaseModel):
     hora_inicio: time
     hora_fin: time
     costo_reserva: Decimal
+    moneda: Literal["PEN", "USD"] = "PEN"
+    zona_horaria: Literal["America/Lima", "UTC"] = "America/Lima"
     estado: str  # SOLICITADA, CONFIRMADA, RECHAZADA, CANCELADA, COMPLETADA
     creado_en: datetime
 
 
 class CancelarReservaRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     motivo: str = Field(
         default="Cancelación voluntaria por residente",
-        description="Motivo explicativo de la cancelación"
+        min_length=1,
+        max_length=500,
+        description="Motivo explicativo de la cancelación",
     )
     es_admin: bool = Field(
         default=False,
-        description="Indica si la cancelación es forzada por un administrador de la Junta"
+        description="Compatibilidad histórica: se ignora; el permiso procede de la sesión.",
     )
+
+    @field_validator("motivo")
+    @classmethod
+    def normalizar_motivo(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Indique un motivo de cancelación.")
+        return value
+
+
+class AjusteCancelacion(BaseModel):
+    estado: Literal["NO_APLICA", "PENDIENTE", "APLICADO"] = "NO_APLICA"
+    monto: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=12, decimal_places=2)
+    referencia: uuid.UUID | None = None
 
 
 class CancelarReservaResponse(BaseModel):
@@ -63,6 +83,7 @@ class CancelarReservaResponse(BaseModel):
     estado: str = "CANCELADA"
     mensaje: str
     fecha_cancelacion: datetime
+    ajuste_economico: AjusteCancelacion = Field(default_factory=AjusteCancelacion)
 
 
 class ErrorResponse(BaseModel):

@@ -1,20 +1,39 @@
 # Contratos de API y Especificación OpenAPI (API Contracts)
 
+Ampliación financiera, estado de implementación al 2026-10-25:
+[prorrateo, mora diaria editable, fondos, PDF/DOCX y visor](prorrateo-mora-reportes.md).
+Prevalece sobre ejemplos previos de día 20, gracia 2 o descarga exclusivamente
+como adjunto. Configuración de política y excepciones, visor privado, catálogo,
+presupuesto detallado versionado, aprobación con snapshot, emisión jerárquica y
+reporte PDF/DOCX implementados; migración 0018 aún no aplicada a la base de la
+aplicación. Mora diaria persistente y conciliación retroactiva prospectiva se
+integran en 0019; fondos por edificio y cobertura de gastos se integran en 0020.
+Los contratos del prorrateo se publican en OpenAPI 2.2.0 y sus fragmentos
+`prorrateo.paths.yaml` / `prorrateo.schemas.yaml`; la emisión detallada publica
+`CuotasEmitidasEvent` v2, manteniendo intacto el evento legacy.
+
+Base de implementación del Sprint 2: [CON-72 — contratos por historia](sprint-2-contratos.md). La guía reúne los acuerdos y enlaza OpenAPI y eventos. El OpenAPI describe el contrato objetivo y distingue operaciones pendientes/parciales; su publicación no implica que los endpoints estén implementados.
+
+La [convergencia implementada](../../docs/sprints/CON-72-convergencia.md) sustituye
+el upload en dos pasos y el alias CONCILIADO de la primera integración. El contrato
+vigente usa multipart único, APROBADO y subsanación versionada.
+
 ## 1. Filosofía de Contratos en SDD
 
 En el Desarrollo Guiado por Especificaciones (SDD), los contratos de API sirven como el **acuerdo formal desacoplado** entre el Frontend (Next.js/TypeScript) y el Backend (FastAPI/Python), así como entre los diferentes módulos desarrollados por los integrantes del equipo (Anderson, Tarqui, Alejandro, Brandon).
 
-Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con las siguientes convenciones:
+Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y respuesta binaria para su descarga. Convenciones:
 - **Prefijo base:** `/api/v1`
-- **Formatos de fecha:** ISO-8601 en UTC (`YYYY-MM-DDTHH:MM:SSZ`)
-- **Formatos monetarios:** Cadenas de texto o números decimales con 2 dígitos (`"150.00"` / `150.00`) validados estrictamente por Pydantic.
+- **Fechas y horas:** calendario `America/Lima`, fechas `YYYY-MM-DD`, configuración del catálogo `HH:MM` y nuevas reservas `HH:MM:00`; instantes de auditoría/eventos en UTC. Intervalos `[inicio, fin)`; históricos sin marca local conservan interpretación UTC.
+- **Importes:** respuestas/eventos con dos decimales (`"150.00"`), dentro de `NUMERIC(12,2)`; cálculos con `Decimal`. La configuración CON-39 acepta cadenas con hasta dos decimales y normaliza su salida. Los nuevos contratos rechazan números JSON, exponentes y precisión adicional.
+- **Errores:** objeto en raíz; `detalles` opcional es un objeto, con validaciones en `detalles.errores`. No incluir valores sensibles.
 - **Manejo de errores estándar:**
   ```json
   {
     "error_code": "DEUDA_MORA_ACTIVA",
     "mensaje": "Su departamento mantiene cuotas vencidas pendientes. Regularice su situación antes de reservar.",
     "detalles": {
-      "departamento_id": "dpto-501",
+      "departamento_id": "6c78c3b5-1efb-4d0b-a5f8-78fc17364083",
       "saldo_vencido": "170.00"
     }
   }
@@ -23,6 +42,116 @@ Todas las peticiones y respuestas siguen el estándar **JSON:API / REST** con la
 ---
 
 ## 2. Contratos Principales por Módulo
+
+### Fondos de moras cobradas (0020)
+
+GET `/edificios/{id}/fondos-moras?periodo=YYYY-MM` entrega saldos, resumen mensual
+y movimientos privados de caja reconocida en Lima. Solo administración/auditor
+del contexto. GET `/presupuestos/{id}/aplicaciones-moras` lista coberturas.
+POST exige `Idempotency-Key`, `version_esperada`, `item_id`, `edificio_id`, `monto`
+como cadena positiva y `motivo`. Misma clave/payload devuelve la aplicación
+original; otro payload, versión obsoleta o saldo insuficiente: 409. DELETE
+`/presupuestos/{id}/aplicaciones-moras/{aplicacion_id}?version_esperada=N` libera
+solo una reserva; repetir liberación es no-op. Confirmadas no se eliminan.
+Reservar/liberar incrementa versión y recalcula monto_total/coverage por servidor.
+PUT valida la cobertura contra reservas existentes, no acepta coberturas ficticias.
+409 FONDOS_MORAS_COMPROMETIDOS bloquea un retroactivo sin financiación suficiente.
+Ledger, auditoría, presupuesto y eventos FondosMorasActualizadosEvent v1 se
+confirman juntos. No se importa efectivo histórico ni se crean egresos bancarios
+por aplicar una cobertura. Los reportes aprobados siguen siendo inmutables.
+
+### Mora diaria y conciliación bancaria (0019)
+
+Nuevas emisiones MONTO_DIARIO habilitadas con snapshot, devengos persistentes y
+reconstrucción de pagos nuevos en orden `(fecha_operacion, comprobante_id)`.
+No hay endpoint público para ejecutar el cron ni recibir importes de mora del
+cliente. Aprobación valida la fecha bancaria ya reportada (no futura) y conserva
+el request de conciliación. 422 `FECHA_BANCARIA_FUTURA` si es posterior a hoy en
+Lima; 409 `CREDITO_RETROACTIVO_CONSUMIDO` si la reconstrucción requiere saldo ya
+utilizado. Todo se revierte ante error. Recibos, resultados idempotentes de
+revisión e imputaciones originales se conservan; las correcciones posteriores
+constan en ledger por componente y auditoría. No se reconstruyen pagos históricos
+anteriores a esta adopción ni se convierten cuotas legacy a políticas actuales.
+MoraAplicadaEvent y MoraAjustadaEvent v2 usan outbox independiente y consumidor
+compatible; 0020 integra el fondo de cobros y las reservas sin caja histórica.
+
+### Pagos persistentes y solvencia (CON-22 / CON-70 / CON-42)
+
+Contrato canónico: [integración financiera Sprint 2](../02-domains/02-pagos-y-moras/sprint-2-anderson.md).
+La excepción temporal a S3 usa carpeta local privada y solo nombre en `url_voucher`.
+`POST /pagos/vouchers` recibe multipart `departamento_id` y `voucher_file` (PNG/JPG/PDF,
+máximo 5 MiB); devuelve 201 con nombre, MIME y tamaño. `POST /pagos/reportar` mantiene
+su JSON y devuelve 202 para creación, 200 `VOUCHER_EN_EVALUACION` para duplicado
+propio en revisión o 409 para reutilización inválida. El hash no sustituye permisos.
+`GET /pagos/comprobantes` conserva CONCILIADO como alias público de APROBADO.
+`GET /pagos/{id}/voucher` descarga privada; `GET /pagos/{id}/resultado` consulta el
+resultado persistido de revisión. `POST /pagos/{id}/conciliar` admite aprobación,
+observación y rechazo; solo administración autorizada, con motivo obligatorio para
+las dos últimas. Los estados terminales no se vuelven a aplicar.
+Errores controlados: 401 sin sesión, 403 fuera de alcance o AUDITOR escribiendo,
+404 recurso inexistente/archivo histórico no local, 413 archivo mayor a 5 MiB,
+422 archivo/contenido/datos inválidos y 503 almacenamiento local no disponible.
+CON-42 aporta guard y `GET /pagos/solvencia/{departamento_id}`; devuelve
+`departamento_id`, `saldo_vencido`, `habilitado_reservas`. Una reserva bloqueada
+conserva 403 `DEUDA_MORA_ACTIVA` con saldo autorizado y no ocupa el horario.
+
+### Usuarios y autenticación persistente (CON-04 / PROC-05)
+
+Contrato canónico: [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
+`POST /condominios/{cid}/usuarios` registra contraseña inicial y devuelve una cuenta
+inactiva (`201`); `GET` lista las cuentas del contexto. Solo SuperAdmin ejecuta
+`PATCH /usuarios/{id}/estado?condominio_id={cid}` con `{"esta_activo": true|false}`.
+El estado es global a la identidad y no acredita verificación de correo.
+Login consulta PostgreSQL; cuentas inactivas reciben `401 CREDENCIALES_INVALIDAS`.
+El JWT conserva el perfil v2 y añade `auth_revision`, comprobada en todas las rutas
+protegidas. Una modificación real del estado invalida sesiones anteriores.
+El login acepta `condominio_id` opcional para múltiples asignaciones; sin selección
+devuelve `409 CONTEXTO_REQUERIDO` con los contextos autorizados tras validar credenciales.
+Alta/estado y auditoría se confirman antes de responder. El correo y documento
+normalizados tienen unicidad durable; duplicados responden `409 USUARIO_DUPLICADO`.
+Las respuestas y errores nunca incluyen contraseña o hash. Invitaciones por correo
+se difieren a una evolución posterior.
+
+### Asignaciones de roles (CON-06 / PROC-05)
+
+Contrato: [roles y permisos](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
+`GET|PUT|DELETE /condominios/{cid}/usuarios/{uid}/rol` consulta, asigna/reactiva
+o revoca lógicamente. PUT recibe únicamente `rol` (ADMIN_JUNTA/AUDITOR/RESIDENTE).
+Todos devuelven 200 con `usuario_id`, `condominio_id`, `rol`, `es_activo`.
+SuperAdmin gestiona cualquier contexto activo; Junta solo roles Auditor/Residente
+de identidades ya asignadas a su contexto. La propia asignación, los SuperAdmin
+globales y la elevación por Junta están protegidos (403). Sin asignación: 404
+`ROL_NO_ENCONTRADO`; cuerpo inválido: 422 `DATOS_ROL_INVALIDOS`.
+Cambios y auditoría son atómicos e invalidan sesiones anteriores; los no-op no.
+El listado administrativo añade `rol`, `rol_activo`, `es_superadmin` e incluye
+asignaciones revocadas. La concesión global de SuperAdmin continúa mediante CLI.
+
+### Vínculos con departamentos (CON-05 / PROC-05)
+
+Contrato: [vínculos](../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
+`GET /condominios/{cid}/usuarios/{uid}/departamentos` lista relaciones del contexto,
+incluidas las revocadas. `PUT|DELETE` sobre esa ruta más `/{departamento_id}`
+asigna/cambia/restaura o revoca (200). PUT solo recibe `tipo_relacion`.
+Administración autorizada, rol contextual vigente para asignar y unidad activa.
+Primer vínculo de titular; retirar/cambiar al último titular responde
+`409 TITULAR_REQUERIDO`. Repeticiones idénticas no cambian revisión ni auditoría.
+Un cambio real invalida JWT anteriores y registra el departamento en auditoría.
+`GET /cuotas/departamentos` y lectura de unidades en pagos/reservas usan SQL real;
+el portal añade edificio para distinguir números de unidad repetidos.
+
+### Catálogo de áreas comunes (CON-39 / PROC-04)
+
+Contrato: [catálogo de áreas](../02-domains/04-reservas/catalogo-areas.md).
+`GET|POST /condominios/{cid}/areas`, `GET|PUT /condominios/{cid}/areas/{aid}` y
+`PATCH /condominios/{cid}/areas/{aid}/estado`. Administración contextual; Auditor
+solo lee. Configuración completa: nombre, descripción, edificio opcional, aforo,
+costo decimal como cadena, apertura/cierre `HH:MM` y duración máxima entera.
+POST devuelve 201; consultas, PUT y estado 200. No-op sin nueva auditoría.
+El portal `GET /areas` usa SQL activo y edificio autorizado, con moneda del
+condominio y `zona_horaria=America/Lima`. Nuevas reservas leen esas condiciones:
+409 AREA_INACTIVA, 400 HORARIO_INVALIDO o 403 por edificio/contexto no autorizado.
+Cambios y auditoría son atómicos; no hay borrado físico. Validaciones de catálogo:
+422 DATOS_AREA_INVALIDOS. Pertenencia desconocida: 404, sin filtrar datos ajenos.
 
 ### Distribución de cuotas (CON-10)
 
@@ -82,14 +211,17 @@ distinto responde `403 ACCESO_DENEGADO`.
       "nombre": "Villa Bonita 3",
       "direccion": "Av. Principal 123, Lima",
       "moneda": "PEN",
-      "regla_mora_tipo": "MONTO_FIJO",
-      "monto_mora_fijo": "20.00",
+      "regla_mora_tipo": "MONTO_DIARIO",
+      "monto_mora_diario": "1.00",
+      "monto_mora_fijo": null,
       "tasa_mora_porcentaje": null,
-      "dia_vencimiento": 20,
-      "dias_gracia": 2
+      "dia_vencimiento": 10,
+      "dias_gracia": 0
     }
     ```
   - *Reglas condicionales:*
+    - `MONTO_DIARIO` (objetivo predeterminado): monto diario positivo editable,
+      default 1.00 PEN, demás campos de mora nulos. Día 10 y gracia 0 por defecto.
     - `MONTO_FIJO`: `monto_mora_fijo` es obligatorio y
       `tasa_mora_porcentaje` debe ser `null`.
     - `PORCENTAJE_SALDO`: `tasa_mora_porcentaje` es obligatoria y
@@ -103,11 +235,12 @@ distinto responde `403 ACCESO_DENEGADO`.
       "nombre": "Villa Bonita 3",
       "direccion": "Av. Principal 123, Lima",
       "moneda": "PEN",
-      "regla_mora_tipo": "MONTO_FIJO",
-      "monto_mora_fijo": "20.00",
+      "regla_mora_tipo": "MONTO_DIARIO",
+      "monto_mora_diario": "1.00",
+      "monto_mora_fijo": null,
       "tasa_mora_porcentaje": null,
-      "dia_vencimiento": 20,
-      "dias_gracia": 2,
+      "dia_vencimiento": 10,
+      "dias_gracia": 0,
       "activo": true,
       "creado_en": "2026-10-08T15:30:00Z"
     }
@@ -148,7 +281,7 @@ su condominio. Los demás roles y todo cruce de contexto reciben
       "periodo": "2026-10",
       "moneda": "PEN",
       "monto_total": "20000.00",
-      "fecha_vencimiento": "2026-10-20"
+      "fecha_vencimiento": "2026-10-10"
     }
     ```
   - *Response (201 Created):* Devuelve `PresupuestoResponse` con UUID, estado,
@@ -165,7 +298,7 @@ su condominio. Los demás roles y todo cruce de contexto reciben
       "periodo": "2026-10",
       "moneda": "PEN",
       "monto_total": "20500.00",
-      "fecha_vencimiento": "2026-10-20"
+      "fecha_vencimiento": "2026-10-10"
     }
     ```
   - *Response (200 OK):* Devuelve el borrador actualizado.
@@ -188,7 +321,7 @@ su condominio. Los demás roles y todo cruce de contexto reciben
       "periodo": "2026-10",
       "moneda": "PEN",
       "monto_total": "20000.00",
-      "fecha_vencimiento": "2026-10-20",
+      "fecha_vencimiento": "2026-10-10",
       "estado": "APROBADO",
       "creado_por": "6a4a78de-c704-44fb-a8b1-9d387ff67c92",
       "creado_en": "2026-10-08T15:30:00Z",
@@ -235,7 +368,7 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
       "periodo": "2026-10",
       "cuotas_cubiertas_saldo_favor": 4,
       "fecha_emision": "2026-10-01T00:00:00Z",
-      "fecha_vencimiento": "2026-10-20"
+      "fecha_vencimiento": "2026-10-10"
     }
     ```
 
@@ -246,80 +379,56 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
     `422` padrón/configuración inválidos o condominio inactivo.
   - Transacción única con CON-10 y CON-13; evento durable en outbox.
 
-### 2.4 Módulo de Pagos y Moras (Tarqui)
-- **`POST /api/v1/pagos/reportar`**
-  - *Descripción:* El residente carga un comprobante de pago bancario (Yape/CCI).
-  - *Request Body (Multipart/Form-Data):*
-    - `departamento_id`: UUID
-    - `banco_origen`: `"BCP"` | `"INTERBANK"` | `"BBVA"` | `"YAPE"` | `"PLIN"`
-    - `numero_operacion`: `"00984123"`
-    - `fecha_operacion`: `"2026-10-15"`
-    - `monto`: `"170.00"`
-    - `archivo_voucher`: File (PNG / JPG / PDF)
-  - *Response (202 Accepted):*
-    ```json
-    {
-      "comprobante_id": "7b8a1c9e-1234-4567-89ab-cdef01234567",
-      "estado": "EN_REVISION",
-      "mensaje": "Comprobante recibido. En proceso de conciliación por la Junta Directiva."
-    }
-    ```
+### 2.4 Pagos — Anderson / CON-22 y CON-70; Brandon / CON-23
 
-- **`POST /api/v1/pagos/{id}/conciliar`**
-  - *Descripción:* La Junta aprueba o rechaza el comprobante.
-  - *Request Body:*
-    ```json
-    {
-      "decision": "APROBADO",
-      "motivo_rechazo": null,
-      "notas_internas": "Validado en extracto de cuenta BCP"
-    }
-    ```
-  - *Response (200 OK):* Retorna la liquidación e imputación a cuotas y el nuevo saldo del departamento.
+Contrato completo, estados y errores: [pagos del Sprint 2](sprint-2-contratos.md#5-pagos--anderson-y-brandon-persistencia-con-70). Esquemas y campos obligatorios: [sprint-2.schemas.yaml](../03-contracts/openapi/sprint-2.schemas.yaml).
 
-### 2.5 Módulo de Reservas (Brandon)
-- **`POST /api/v1/reservas`**
-  - *Descripción:* El residente solicita el uso de un área común.
-  - *Request Body:*
-    ```json
-    {
-      "area_id": "parrilla-01",
-      "departamento_id": "dpto-302",
-      "fecha": "2026-10-25",
-      "hora_inicio": "19:00",
-      "hora_fin": "22:00"
-    }
-    ```
-  - *Response (201 Created) - Residente Solvente:*
-    ```json
-    {
-      "reserva_id": "res-9988-aabb",
-      "estado": "CONFIRMADA",
-      "area": "Zona de Parrilla 1",
-      "fecha": "2026-10-25",
-      "horario": "19:00 - 22:00"
-    }
-    ```
-  - *Response (403 Forbidden) - Residente con Deuda en Mora:*
-    ```json
-    {
-      "error_code": "DEUDA_MORA_ACTIVA",
-      "mensaje": "No es posible reservar: Su departamento mantiene cuotas vencidas pendientes."
-    }
-    ```
-  - *Response (409 Conflict) - Horario Ocupado:*
-    ```json
-    {
-      "error_code": "HORARIO_NO_DISPONIBLE",
-      "mensaje": "El área común ya se encuentra reservada en el horario solicitado."
-    }
-    ```
+| Operación | Entrada / resultado |
+|---|---|
+| `POST /pagos/reportar` | Multipart: UUID de departamento, `banco`, `numero_operacion`, `fecha_operacion`, `monto`, `archivo_voucher`. PNG/JPEG/PDF hasta 5 MiB. `202` nuevo o `200` reintento propio en revisión, con UUID, estado, código, mensaje y hash. |
+| `GET /pagos/comprobantes` | Registros autorizados con estado `EN_REVISION`, `APROBADO`, `OBSERVADO` o `RECHAZADO`; descarga privada mediante ruta generada por servidor. |
+| `GET /pagos/{comprobante_id}/voucher` | Archivo binario con autorización de recurso y `Cache-Control: no-store`. |
+| `PUT /pagos/{comprobante_id}/voucher` | Multipart de archivo para subsanar un observado; preserva metadatos/hash, versiona el archivo y vuelve a revisión; `202`. |
+| `POST /pagos/{comprobante_id}/conciliar` | Administración decide aprobación, observación o rechazo; motivo para los dos últimos; `200` con resultado financiero real persistido. |
 
-### 2.6 Módulo de Notificaciones (Alejandro)
-- **`POST /api/v1/notificaciones/despachar`**
-  - *Descripción:* Envío manual o por webhook interno de comunicaciones masivas o alertas.
+No se acepta `url_voucher` del cliente como prueba de carga. La recepción no cancela deuda. Una aprobación previa o reutilización en otra unidad responde `409`; las respuestas nunca revelan datos de una unidad ajena. Normalización, unicidad y subsanación se definen en la guía del Sprint 2 enlazada arriba.
+
+### 2.5 Catálogo, disponibilidad y reservas
+
+Contrato completo: [reservas del Sprint 2](sprint-2-contratos.md#4-catálogo-disponibilidad-y-reservas). Catálogo CON-39 de Jerson; disponibilidad CON-40 y cancelación CON-46 de Gerardo; creación y concurrencia CON-41/43 de Brandon; deuda CON-42 de Anderson; persistencia CON-73 de Nicolás.
+
+| Operación | Contrato |
+|---|---|
+| `GET /areas` | Catálogo SQL activo del portal, filtrado por contexto y edificio, con apertura/cierre diarios, duración máxima y moneda. |
+| `GET|POST /condominios/{cid}/areas`, `GET|PUT /condominios/{cid}/areas/{aid}`, `PATCH .../{aid}/estado` | Gestión CON-39 ya integrada; consulta administrativa incluye inactivas, Auditor solo lee y las mutaciones conservan historial. |
+| `GET /areas/{area_id}/disponibilidad?fecha=YYYY-MM-DD` | Arreglo de intervalos ocupados sin datos personales; se cruza con el horario del catálogo. |
+| `GET /reservas` | Reservas autorizadas, no calendario general de otras unidades. |
+| `POST /reservas` | UUID de condominio, área y departamento; `fecha_reserva`, `hora_inicio`, `hora_fin`. `201` tras commit, `403 DEUDA_MORA_ACTIVA`, `409 HORARIO_NO_DISPONIBLE`. |
+| `POST /reservas/{reserva_id}/cancelar` | Motivo opcional, permiso desde sesión; `200` idempotente con fecha original y estado real del ajuste económico. |
+
+La respuesta de creación es `Reserva`: `id`, `condominio_id`, `area_id`, `area_nombre` opcional, `departamento_id`, fecha, horas, `zona_horaria`, `costo_reserva`, `moneda`, `estado` y `creado_en`. Nuevas reservas usan horas `HH:MM:00` en America/Lima; las históricas sin marca local conservan interpretación UTC. Intervalos `[inicio, fin)`; cancelación voluntaria con `>= 24h` tras convertir el inicio según su zona. `es_admin` del cliente no concede privilegios. Se conservan `400 HORARIO_INVALIDO` y `409 AREA_INACTIVA` de CON-39.
+
+### 2.6 Notificaciones — Alejandro
+
+Contrato y reglas de entrega/reintento: [comunicaciones del Sprint 2](sprint-2-contratos.md#6-notificaciones--alejandro-persistencia-con-73). Los eventos confirmados producen avisos automáticos; las rutas de despacho/reenviar/comunicado son administrativas.
+
+`GET /notificaciones/logs` filtra contexto y destinatario autorizado; `POST /notificaciones/despachar` y `/comunicado-masivo` confirman registros en cola con `202`; `/reenviar/{log_id}` devuelve `200` sin duplicar avisos entregados o aceptados por proveedor. `EN_COLA`, `ENVIADO`, `ENTREGADO`, `REINTENTANDO` y `FALLIDO_PERMANENTE` distinguen persistencia, aceptación y confirmación. El log identifica transporte simulado o real y conserva ciclos/intentos.
 
 ### 2.7 Módulo de Autenticación y RBAC (PROC-05)
+
+Roles canónicos: `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`. Los tres
+endpoints de autenticación usan el contrato v2 descrito en
+[identidad-y-alcances.md](../02-domains/05-usuarios-rbac/identidad-y-alcances.md).
+`departamentos` contiene vínculos `{departamento_id: UUID, numero, tipo_relacion,
+es_activo}`. No existe una relación global de usuario; los administrativos sin
+tenencia devuelven `[]`. JWT con `session_version: 2`; tokens anteriores o roles
+antiguos/desconocidos reciben `401 SESION_DESACTUALIZADA` y requieren login.
+El JWT incorpora además `auth_revision`, validada contra PostgreSQL. `GET /auth/demo-users` devuelve perfiles persistidos solo con `DEMO_MODE=true`; en otro caso responde `404`. La creación, estado, selección de contexto y revocación se rigen por [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
+
+Pagos, reservas y notificaciones requieren Bearer. Las listas se filtran por contexto
+y vínculo activo; UUID de unidad ajena o condominio distinto responde `403`.
+`GET /pagos/comprobantes` sustituye el listado local de comprobantes y
+`GET /cuotas/departamentos` devuelve el padrón del portal ya autorizado.
 - **`POST /api/v1/auth/login`**
   - *Descripción:* Autentica a un usuario y genera su token de acceso JWT con sus claims y permisos.
   - *Request Body:*
@@ -334,14 +443,14 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
     {
       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
       "token_type": "bearer",
-      "expires_in": 3600,
+      "expires_in": 86400,
       "usuario": {
         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "email": "admin@villabonita3.pe",
         "nombre": "Carlos",
         "apellido": "Mendoza",
         "rol": "ADMIN_JUNTA",
-        "condominio_id": "vb3-condo",
+       "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "departamentos": []
       }
     }
@@ -364,9 +473,9 @@ reemplazar `monto_total` ni `fecha_vencimiento` durante la emisión.
       "email": "residente102@villabonita3.pe",
       "nombre": "Ana",
       "apellido": "Gómez",
-      "rol": "PROPIETARIO",
-      "condominio_id": "vb3-condo",
-      "departamentos": ["102"]
+       "rol": "RESIDENTE",
+       "condominio_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+       "departamentos": [{"departamento_id": "48c8c328-8a14-59b6-bc14-c905db21e630", "numero": "102", "tipo_relacion": "PROPIETARIO_TITULAR", "es_activo": true}]
     }
     ```
 # Estructura inmobiliaria (CON-3 / USR-02)
@@ -387,3 +496,21 @@ Importación devuelve `total_filas`, `nuevas`, `creadas`, `ya_existentes`, `rech
 y `filas`, cada una con `fila`, `numero`, `piso`, `edificio`, `coeficiente`,
 `total_pisos`, `estado` y `errores`. Máximo 2 MiB / 5000 filas. Errores de estructura
 usan el sobre `error_code`, `mensaje`, `detalles` opcional; estados 401/403/404/409/422.
+# Integración CON-73/74
+
+Reservas y notificaciones adoptan los contratos de CON-72 mediante PostgreSQL;
+véase [persistencia integrada](../02-domains/04-reservas/persistencia-sprint-2.md).
+`POST /notificaciones/despachar` confirma cola con 202; `GET /notificaciones/logs`
+admite residentes solo para sus destinatarios/unidades vigentes. Reintentar un
+aviso aceptado no vuelve a enviarlo. La interfaz usa el upload real de CON-70
+en dos pasos mientras su migración al multipart único de CON-72 esté pendiente.
+# Convergencia CON-72
+
+La adopción coordinada usa [sprint-2-contratos.md](sprint-2-contratos.md): multipart
+en `/pagos/reportar`, subsanación en `PUT /pagos/{id}/voucher`, estado APROBADO,
+campo codigo en recepción, motivo_rechazo en resultados y descarga autenticada.
+Se retira `/pagos/vouchers` y el reporte JSON con url_voucher: los consumidores
+del repositorio cambian conjuntamente. Clientes externos requieren actualización
+antes del despliegue. El endpoint existente de resultado sigue disponible y
+devuelve únicamente la revisión de la evidencia vigente. No hay doble publicación:
+productores canónicos y lector compatible con eventos históricos persistidos.

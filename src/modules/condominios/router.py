@@ -3,41 +3,39 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
 from src.core.errors import APIError
-from src.core.security import decode_access_token, security_scheme
+from src.core.security import get_current_user
 from src.modules.condominios.repository import (
     CondominioRepository,
     SQLAlchemyCondominioRepository,
 )
-from src.modules.condominios.schemas import CondominioResponse, CrearCondominioRequest
-from src.modules.condominios.service import CondominiosService
+from src.modules.condominios.schemas import (
+    ActualizarPoliticaMoraRequest,
+    CondominioResponse,
+    CrearCondominioRequest,
+)
+from src.modules.condominios.service import CondominiosService, actualizar_politica_mora
 
 router = APIRouter(prefix="/condominios", tags=["Condominios"])
 
 
+@router.put("/{condominio_id}/politica-mora", response_model=CondominioResponse)
+async def editar_politica_mora(
+    condominio_id: UUID,
+    request: ActualizarPoliticaMoraRequest,
+    usuario: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session, use_cache=False),
+):
+    return await actualizar_politica_mora(session, condominio_id, request, usuario)
+
+
 async def require_superadmin(
-    auth: Annotated[HTTPAuthorizationCredentials | None, Depends(security_scheme)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
 ) -> dict[str, Any]:
-    if auth is None or not auth.credentials:
-        raise APIError(
-            status.HTTP_401_UNAUTHORIZED,
-            "NO_AUTENTICADO",
-            "Se requiere un Bearer Token válido.",
-        )
-    try:
-        current_user = decode_access_token(auth.credentials)
-    except HTTPException as exc:
-        detail = exc.detail if isinstance(exc.detail, dict) else {}
-        raise APIError(
-            exc.status_code,
-            str(detail.get("error_code", "TOKEN_INVALIDO")),
-            str(detail.get("mensaje", "Token de autenticación inválido.")),
-        ) from exc
     if current_user.get("rol") != "SUPERADMIN":
         raise APIError(
             status.HTTP_403_FORBIDDEN,

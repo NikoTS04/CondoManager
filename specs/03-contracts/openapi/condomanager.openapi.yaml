@@ -1,15 +1,515 @@
 openapi: 3.1.0
 info:
   title: CondoManager API
-  description: API formal para el Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD).
-  version: 1.2.0
+  description: Contrato objetivo del Sprint 2 acordado en CON-72. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
+  version: 2.4.0
+x-contract-baseline: CON-72-2026-10-20
+x-contract-guide: ../../05-api/sprint-2-contratos.md
+x-financial-extension:
+  status: implementado-prospectivo
+  guide: ../../05-api/prorrateo-mora-reportes.md
+  domain: ../../02-domains/01-cuotas/prorrateo-y-mora-diaria.md
+  note: Configuración, visor, prorrateo, exportación, motor diario, conciliación y fondos por edificio implementados prospectivamente. Sin adopción automática de caja histórica ni edición de cuotas aprobadas; ver guía de límites.
+x-payments-implementation-note: CON-72 es la base normativa implementada por pagos. x-core-implementation conserva únicamente una instantánea histórica anterior a la convergencia; no define API adicionales vigentes.
+security: [{ bearerAuth: [] }]
 servers:
   - url: http://localhost:8000/api/v1
     description: Servidor de desarrollo local
 tags:
+  - name: Catálogo de áreas
+    description: Condiciones persistentes y administración contextual de áreas comunes.
+  - name: Usuarios y permisos
+    description: Asignaciones contextuales y revocación de permisos.
   - name: Cuotas de Mantenimiento
     description: Presupuestos y emisión mensual de cuotas.
+  - name: Pagos y Conciliación
+    description: Evidencia privada, revisión financiera y solvencia persistentes.
+  - name: Notificaciones y Comunicaciones
+    description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /edificios/{edificio_id}/fondos-moras:
+    $ref: './fondos-moras.paths.yaml#/paths/~1edificios~1%7Bedificio_id%7D~1fondos-moras'
+  /presupuestos/{presupuesto_id}/aplicaciones-moras:
+    $ref: './fondos-moras.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1aplicaciones-moras'
+  /presupuestos/{presupuesto_id}/aplicaciones-moras/{aplicacion_id}:
+    $ref: './fondos-moras.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1aplicaciones-moras~1%7Baplicacion_id%7D'
+  /presupuestos/{presupuesto_id}/prorrateo/exportar:
+    $ref: './prorrateo.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1prorrateo~1exportar'
+  /condominios/{condominio_id}/conceptos-presupuestales:
+    $ref: './prorrateo.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1conceptos-presupuestales'
+  /presupuestos/{presupuesto_id}/prorrateo:
+    $ref: './prorrateo.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1prorrateo'
+  /departamentos/{departamento_id}/condiciones-pago:
+    parameters:
+      - name: departamento_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: consultarCondicionesPago
+      summary: Consultar responsable vigente, gracia efectiva y versión de la unidad
+      x-implementation-status: implementado
+      responses:
+        '200':
+          description: Consulta administrativa; auditor solo lectura.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CondicionesPagoResponse'}
+        '403': {description: Rol o condominio no autorizado}
+        '404': {description: Departamento inexistente}
+    put:
+      operationId: configurarCondicionesPago
+      summary: Designar responsable y gracia individual para nuevas emisiones
+      x-implementation-status: implementado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CondicionesPagoRequest'}
+      responses:
+        '200':
+          description: Cambio auditado o no-op; no modifica cuotas emitidas.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CondicionesPagoResponse'}
+        '403': {description: Solo Junta o SuperAdmin del contexto}
+        '404': {description: Departamento inexistente}
+        '409': {description: Versión de condiciones obsoleta}
+        '422': {description: Vínculo ajeno/inactivo o valores inválidos}
+  /condominios/{condominio_id}/politica-mora:
+    put:
+      operationId: actualizarPoliticaMora
+      summary: Editar política financiera sin recalcular cuotas históricas
+      x-implementation-status: implementado
+      parameters:
+        - name: condominio_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ActualizarPoliticaMoraRequest'}
+      responses:
+        '200':
+          description: Política actualizada o no-op con la misma versión; auditoría atómica para cambios.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CondominioResponse'}
+        '403': {description: Rol o contexto no autorizado}
+        '404': {description: Condominio inexistente o inactivo}
+        '409': {description: Versión obsoleta}
+        '422': {description: Configuración inválida}
+  /pagos/{comprobante_id}/evidencias:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1evidencias'
+  /auth/login:
+    post:
+      operationId: iniciarSesion
+      summary: Autenticación persistente de cuentas activas y sesión v2
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, maxLength: 120 }
+                password: { type: string, format: password, maxLength: 128 }
+                condominio_id: { type: [string, 'null'], format: uuid }
+              additionalProperties: false
+      responses:
+        '200':
+          description: JWT con session_version 2 y perfil con roles SQL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in, usuario]
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, const: bearer }
+                  expires_in: { type: integer, const: 86400 }
+                  usuario: { $ref: '#/components/schemas/UsuarioDTO' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '409':
+          description: Seleccione un contexto de detalles.condominios tras validar las credenciales
+        '422': { description: 'DATOS_USUARIO_INVALIDOS, sin incluir contraseñas en el error' }
+  /auth/me:
+    get:
+      operationId: contextoSesion
+      summary: Perfil y vínculos activos de la sesión autenticada
+      responses:
+        '200':
+          description: Perfil coherente con el login; nombres completos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsuarioDTO' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /auth/demo-users:
+    get:
+      operationId: listarUsuariosDemo
+      summary: Perfiles demo persistidos disponibles exclusivamente en DEMO_MODE
+      security: []
+      responses:
+        '200':
+          description: Perfiles sin contraseñas ni tokens
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/UsuarioDTO' } }
+        '404': { description: Modo demo deshabilitado }
+  /condominios/{condominio_id}/usuarios:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listarUsuariosCondominio
+      summary: Listar cuentas activas e inactivas del contexto administrativo
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Cuentas del condominio sin secretos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/CuentaUsuarioConRol' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio no encontrado }
+        '422': { description: Parámetros de consulta inválidos }
+    post:
+      operationId: crearUsuarioInactivo
+      summary: Registrar cuenta inactiva con contraseña inicial y rol RESIDENTE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearUsuario' }
+      responses:
+        '201':
+          description: Cuenta y auditoría confirmadas; esta_activo es false
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CuentaUsuario' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio no encontrado }
+        '409': { description: 'USUARIO_DUPLICADO, correo o documento ya registrado' }
+        '422': { description: 'DATOS_USUARIO_INVALIDOS, sin incluir contraseñas en el error' }
+  /condominios/{condominio_id}/usuarios/{usuario_id}/rol:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: usuario_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: consultarRolUsuario
+      summary: Consultar la asignación contextual vigente o revocada
+      description: Administración autorizada; no revela identidades ajenas a Junta.
+      tags: [Usuarios y permisos]
+      responses:
+        '200':
+          description: Asignación persistida
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsignacionRol' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Contexto o asignación no encontrados }
+        '422': { description: DATOS_ROL_INVALIDOS }
+    put:
+      operationId: asignarRolUsuario
+      summary: Crear, cambiar o reactivar un rol contextual
+      description: SuperAdmin gestiona los tres roles; Junta solo Auditor/Residente de su condominio. Prohíbe autoasignación y cambios de concesión global. Un cambio real revoca sesiones y audita atómicamente.
+      tags: [Usuarios y permisos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [rol]
+              properties:
+                rol: { $ref: '#/components/schemas/RolContextual' }
+      responses:
+        '200':
+          description: Asignación activa; repetir el rol vigente es un no-op
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsignacionRol' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Contexto o usuario no encontrados o asignación ajena a Junta }
+        '422': { description: DATOS_ROL_INVALIDOS }
+    delete:
+      operationId: revocarRolUsuario
+      summary: Revocar lógicamente una asignación conservando su historial
+      description: Aplica la misma autoridad que PUT. La revocación repetida es un no-op. No modifica el estado global de cuenta ni los vínculos de departamentos.
+      tags: [Usuarios y permisos]
+      responses:
+        '200':
+          description: Asignación con es_activo false
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsignacionRol' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Contexto o asignación no encontrados }
+        '422': { description: DATOS_ROL_INVALIDOS }
+  /condominios/{condominio_id}/usuarios/{usuario_id}/departamentos:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: usuario_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listarVinculosUsuario
+      summary: Consultar vínculos activos e inactivos de una identidad en el condominio
+      description: Solo administración autorizada. La identidad debe estar asignada al contexto; no devuelve vínculos ajenos.
+      tags: [Usuarios y permisos]
+      responses:
+        '200':
+          description: Relaciones persistidas con su unidad y edificio
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/VinculoUsuario' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o usuario no encontrados en el contexto }
+        '422': { description: DATOS_VINCULO_INVALIDOS }
+  /condominios/{condominio_id}/usuarios/{usuario_id}/departamentos/{departamento_id}:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: usuario_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: departamento_id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: asignarVinculoUsuario
+      summary: Crear, cambiar o restaurar una relación de tenencia
+      description: Exige rol contextual vigente y unidad activa. No permite inquilino/copropietario sin titular ni retirar al último titular. Confirma vínculo, revisión de sesión y auditoría atómicamente.
+      tags: [Usuarios y permisos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tipo_relacion]
+              properties:
+                tipo_relacion: { $ref: '#/components/schemas/TipoRelacion' }
+      responses:
+        '200':
+          description: Vínculo activo; repetir la relación vigente es un no-op
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VinculoUsuario' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Usuario o unidad no encontrados en el contexto }
+        '409': { description: TITULAR_REQUERIDO o ROL_NO_VIGENTE o DEPARTAMENTO_INACTIVO o VINCULO_DUPLICADO }
+        '422': { description: DATOS_VINCULO_INVALIDOS }
+    delete:
+      operationId: revocarVinculoUsuario
+      summary: Desactivar un vínculo conservando su UUID e historial
+      description: No permite retirar al último titular activo. Repetir una revocación es un no-op. Un cambio real invalida las sesiones anteriores.
+      tags: [Usuarios y permisos]
+      responses:
+        '200':
+          description: Vínculo con es_activo false
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VinculoUsuario' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Usuario o unidad o vínculo no encontrados en el contexto }
+        '409': { description: TITULAR_REQUERIDO }
+        '422': { description: DATOS_VINCULO_INVALIDOS }
+  /usuarios/{usuario_id}/estado:
+    patch:
+      operationId: cambiarEstadoUsuario
+      summary: SuperAdmin habilita o deshabilita la cuenta global e invalida sus sesiones
+      parameters:
+        - { name: usuario_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: condominio_id, in: query, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [esta_activo]
+              properties:
+                esta_activo: { type: boolean }
+      responses:
+        '200':
+          description: Cuenta persistida; repetir el estado no produce efectos adicionales
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CuentaUsuario' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Usuario no encontrado en el contexto seleccionado }
+        '422': { description: DATOS_USUARIO_INVALIDOS }
+  /cuotas/departamentos:
+    get:
+      operationId: departamentosDelPortal
+      summary: Unidades reales autorizadas del padrón SQL
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+      responses:
+        '200':
+          description: Unidades del contexto; RESIDENTE solo recibe vínculos activos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DepartamentoPortal' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /pagos/comprobantes:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1comprobantes'
+  /condominios/{condominio_id}/areas:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listarCatalogoAdministrativo
+      tags: [Catálogo de áreas]
+      summary: Consultar áreas activas e inactivas del condominio
+      description: SuperAdmin y Junta administran su contexto; Auditor solo consulta.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: esta_activa, in: query, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Catálogo contextual persistido
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AreaCatalogo' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: CONDOMINIO_NO_ENCONTRADO }
+        '422': { description: DATOS_AREA_INVALIDOS }
+    post:
+      operationId: crearAreaComun
+      tags: [Catálogo de áreas]
+      summary: Registrar un área activa y sus condiciones
+      description: Administración autorizada; valida edificio y registra auditoría en la misma transacción.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfigurarArea' }
+      responses:
+        '201': { $ref: '#/components/responses/AreaCatalogoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Condominio o edificio no encontrados en el contexto }
+        '422': { description: DATOS_AREA_INVALIDOS }
+  /condominios/{condominio_id}/areas/{area_id}:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: area_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: consultarAreaComun
+      tags: [Catálogo de áreas]
+      summary: Consultar la configuración administrativa de un área
+      description: Incluye áreas inactivas sin mezclar condominios.
+      responses:
+        '200': { $ref: '#/components/responses/AreaCatalogoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: AREA_NO_ENCONTRADA o CONDOMINIO_NO_ENCONTRADO }
+        '422': { description: DATOS_AREA_INVALIDOS }
+    put:
+      operationId: configurarAreaComun
+      tags: [Catálogo de áreas]
+      summary: Reemplazar condiciones conservando identidad y estado
+      description: No cambia reservas anteriores; configuración idéntica no duplica auditoría.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfigurarArea' }
+      responses:
+        '200': { $ref: '#/components/responses/AreaCatalogoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: Área o edificio o condominio no encontrados en el contexto }
+        '422': { description: DATOS_AREA_INVALIDOS }
+  /condominios/{condominio_id}/areas/{area_id}/estado:
+    parameters:
+      - { name: condominio_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: area_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: cambiarEstadoAreaComun
+      tags: [Catálogo de áreas]
+      summary: Activar o desactivar un área sin borrarla
+      description: Una desactivación confirmada impide nuevas reservas y conserva el historial.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [esta_activa]
+              properties:
+                esta_activa: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/AreaCatalogoResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { description: AREA_NO_ENCONTRADA o CONDOMINIO_NO_ENCONTRADO }
+        '422': { description: DATOS_AREA_INVALIDOS }
+  /areas:
+    get:
+      operationId: listarAreas
+      summary: Áreas comunes activas del contexto autorizado
+      parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+      responses:
+        '200':
+          description: Catálogo SQL activo autorizado por contexto y edificio
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AreaCatalogo' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /areas/{area_id}/disponibilidad:
+    $ref: './sprint-2.paths.yaml#/paths/~1areas~1%7Barea_id%7D~1disponibilidad'
+  /reservas/{reserva_id}/cancelar:
+    $ref: './sprint-2.paths.yaml#/paths/~1reservas~1%7Breserva_id%7D~1cancelar'
+  /moras/evaluar:
+    post:
+      operationId: evaluarMoras
+      summary: Simular evaluación de moras; solo administración del contexto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [condominio_id]
+              properties:
+                condominio_id: { type: string, format: uuid }
+                fecha_corte: { type: string, format: date }
+      responses:
+        '200': { description: Resultado de evaluación piloto }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /notificaciones/logs:
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1logs'
+  /notificaciones/despachar:
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1despachar'
+  /notificaciones/reenviar/{log_id}:
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1reenviar~1%7Blog_id%7D'
+  /notificaciones/alertas:
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1alertas'
+  /notificaciones/alertas/{alerta_id}/atender:
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1alertas~1%7Balerta_id%7D~1atender'
+  /notificaciones/comunicado-masivo:
+    $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1comunicado-masivo'
   /condominios/{condominio_id}/edificios:
     parameters:
       - $ref: '#/components/parameters/ContextoEstructura'
@@ -217,6 +717,7 @@ paths:
           description: DATOS_DISTRIBUCION_INVALIDOS por UUID inválido
   /health:
     get:
+      security: []
       summary: Comprobación de estado del servicio
       operationId: healthCheck
       responses:
@@ -387,6 +888,10 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: version_esperada
+          in: query
+          description: Obligatoria para presupuesto detallado; conflicto o ausencia responde 409.
+          schema: {type: integer, minimum: 1}
         - name: id
           in: path
           required: true
@@ -486,107 +991,55 @@ paths:
         '422':
           $ref: '#/components/responses/Error422'
 
-  /pagos/reportar:
-    post:
-      summary: Reporte de comprobante de pago bancario por residente
-      operationId: reportarPago
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [departamento_id, banco, numero_operacion, fecha_operacion, monto]
-              properties:
-                departamento_id: { type: string, format: uuid }
-                banco: { type: string, enum: [YAPE, PLIN, BCP, INTERBANK, BBVA, SCOTIABANK] }
-                numero_operacion: { type: string, minLength: 4, maxLength: 30 }
-                fecha_operacion: { type: string, format: date }
-                monto: { type: string, pattern: '^[0-9]+(\\.[0-9]{2})?$' }
-      responses:
-        '202':
-          description: Comprobante recibido y encolado para revisión
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ComprobanteRecibidoResponse'
-        '409':
-          description: Comprobante ya registrado o conciliado previamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /pagos/{id}/conciliar:
-    post:
-      summary: Aprobación o rechazo de comprobante por la Junta Directiva
-      operationId: conciliarPago
+  /pagos/solvencia/{departamento_id}:
+    get:
+      x-implementation-status: implementado
+      x-contract-role: extension-compatible-CORE
+      tags: [Pagos y Conciliación]
+      description: Evalúa cuotas persistidas y gracia UTC, independientemente por unidad.
+      summary: Consultar deuda en mora desde cuotas persistidas
+      operationId: consultarSolvencia
       parameters:
-        - name: id
+        - name: departamento_id
           in: path
           required: true
           schema: { type: string, format: uuid }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConciliarPagoRequest'
       responses:
         '200':
-          description: Conciliación procesada exitosamente
+          description: Solvencia individual del departamento autorizado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConciliacionResultResponse'
+                type: object
+                required: [departamento_id, saldo_vencido, habilitado_reservas]
+                properties:
+                  departamento_id: { type: string, format: uuid }
+                  saldo_vencido: { type: string, example: '170.00' }
+                  habilitado_reservas: { type: boolean }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
 
+  /pagos/{comprobante_id}/voucher:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1voucher'
+  /pagos/{comprobante_id}/resultado:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1resultado'
+
+  /pagos/reportar:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1reportar'
+  /pagos/{comprobante_id}/conciliar:
+    $ref: './sprint-2.paths.yaml#/paths/~1pagos~1%7Bcomprobante_id%7D~1conciliar'
   /reservas:
-    get:
-      summary: Consultar reservas y disponibilidad de áreas comunes
-      operationId: listarReservas
-      parameters:
-        - name: area_id
-          in: query
-          required: true
-          schema: { type: string, format: uuid }
-        - name: fecha
-          in: query
-          required: true
-          schema: { type: string, format: date }
-      responses:
-        '200':
-          description: Lista de reservas existentes para el área y fecha
-    post:
-      summary: Solicitud de reserva de área común (con validación de solvencia)
-      operationId: crearReserva
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CrearReservaRequest'
-      responses:
-        '201':
-          description: Reserva confirmada exitosamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReservaConfirmadaResponse'
-        '403':
-          description: Denegado por mora activa en cuotas vencidas
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: Horario solicitado ocupado por otra reserva
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+    $ref: './sprint-2.paths.yaml#/paths/~1reservas'
 
 components:
   parameters:
+    ContextoConsulta:
+      name: condominio_id
+      in: query
+      required: false
+      description: Para SUPERADMIN selecciona el contexto; para los demás debe coincidir con su JWT
+      schema: { type: string, format: uuid }
     ContextoEstructura:
       name: condominio_id
       in: path
@@ -612,6 +1065,149 @@ components:
       bearerFormat: JWT
 
   schemas:
+    ConfigurarArea:
+      type: object
+      additionalProperties: false
+      required: [nombre, aforo_maximo, costo_reserva, hora_apertura, hora_cierre, tiempo_maximo_horas]
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 100 }
+        descripcion: { type: [string, 'null'], maxLength: 4000 }
+        edificio_id: { type: [string, 'null'], format: uuid }
+        aforo_maximo: { type: integer, minimum: 1, maximum: 2147483647 }
+        costo_reserva: { type: string, pattern: '^[0-9]{1,10}(?:\.[0-9]{1,2})?$' }
+        hora_apertura: { type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$' }
+        hora_cierre: { type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$' }
+        tiempo_maximo_horas: { type: integer, minimum: 1, maximum: 24 }
+    AreaCatalogo:
+      type: object
+      additionalProperties: false
+      required: [id, condominio_id, edificio_id, edificio_nombre, nombre, descripcion, aforo_maximo, costo_reserva, hora_apertura, hora_cierre, tiempo_maximo_horas, esta_activa, moneda, zona_horaria]
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        edificio_id: { type: [string, 'null'], format: uuid }
+        edificio_nombre: { type: [string, 'null'] }
+        nombre: { type: string }
+        descripcion: { type: [string, 'null'] }
+        aforo_maximo: { type: integer, minimum: 1 }
+        costo_reserva: { type: string, pattern: '^\d+\.\d{2}$' }
+        hora_apertura: { type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$' }
+        hora_cierre: { type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$' }
+        tiempo_maximo_horas: { type: integer, minimum: 1 }
+        esta_activa: { type: boolean }
+        moneda: { type: string, enum: [PEN, USD], readOnly: true }
+        zona_horaria: { type: string, const: America/Lima, readOnly: true }
+    CrearUsuario:
+      type: object
+      additionalProperties: false
+      required: [email, password, nombre, apellido, documento_identidad]
+      properties:
+        email: { type: string, format: email, maxLength: 120 }
+        password: { type: string, format: password, minLength: 8, maxLength: 128, writeOnly: true }
+        nombre: { type: string, minLength: 1, maxLength: 80 }
+        apellido: { type: string, minLength: 1, maxLength: 80 }
+        documento_identidad: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9-]{5,19}$' }
+        telefono: { type: [string, 'null'], maxLength: 20 }
+    CuentaUsuario:
+      type: object
+      additionalProperties: false
+      required: [id, email, nombre, apellido, telefono, documento_identidad, esta_activo, creado_en]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        nombre: { type: string }
+        apellido: { type: string }
+        telefono: { type: [string, 'null'] }
+        documento_identidad: { type: string }
+        esta_activo: { type: boolean }
+        creado_en: { type: string, format: date-time }
+    RolUsuario:
+      type: string
+      enum: [SUPERADMIN, ADMIN_JUNTA, AUDITOR, RESIDENTE]
+    RolContextual:
+      type: string
+      enum: [ADMIN_JUNTA, AUDITOR, RESIDENTE]
+    AsignacionRol:
+      type: object
+      additionalProperties: false
+      required: [usuario_id, condominio_id, rol, es_activo]
+      properties:
+        usuario_id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        rol: { $ref: '#/components/schemas/RolUsuario' }
+        es_activo: { type: boolean }
+    CuentaUsuarioConRol:
+      type: object
+      additionalProperties: false
+      required: [id, email, nombre, apellido, telefono, documento_identidad, esta_activo, creado_en, rol, rol_activo, es_superadmin]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        nombre: { type: string }
+        apellido: { type: string }
+        telefono: { type: [string, 'null'] }
+        documento_identidad: { type: string }
+        esta_activo: { type: boolean }
+        creado_en: { type: string, format: date-time }
+        rol: { $ref: '#/components/schemas/RolUsuario' }
+        rol_activo: { type: boolean }
+        es_superadmin: { type: boolean, readOnly: true }
+    VinculoDepartamento:
+      type: object
+      additionalProperties: false
+      required: [departamento_id, numero, tipo_relacion, es_activo]
+      properties:
+        departamento_id: { type: string, format: uuid }
+        numero: { type: string }
+        tipo_relacion: { type: string, enum: [PROPIETARIO_TITULAR, COPROPIETARIO, INQUILINO] }
+        es_activo: { type: boolean }
+    UsuarioDTO:
+      type: object
+      required: [id, email, nombre, apellido, rol, condominio_id, departamentos]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        nombre: { type: string }
+        apellido: { type: string }
+        rol: { $ref: '#/components/schemas/RolUsuario' }
+        condominio_id: { type: [string, 'null'], format: uuid }
+        departamentos: { type: array, items: { $ref: '#/components/schemas/VinculoDepartamento' } }
+    TipoRelacion:
+      type: string
+      enum: [PROPIETARIO_TITULAR, COPROPIETARIO, INQUILINO]
+    VinculoUsuario:
+      type: object
+      additionalProperties: false
+      required: [id, usuario_id, condominio_id, departamento_id, numero, edificio_id, edificio_nombre, tipo_relacion, es_activo, departamento_activo]
+      properties:
+        id: { type: string, format: uuid }
+        usuario_id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        departamento_id: { type: string, format: uuid }
+        numero: { type: string }
+        edificio_id: { type: string, format: uuid }
+        edificio_nombre: { type: string }
+        tipo_relacion: { $ref: '#/components/schemas/TipoRelacion' }
+        es_activo: { type: boolean }
+        departamento_activo: { type: boolean }
+    DepartamentoPortal:
+      type: object
+      required: [id, condominio_id, edificio_id, edificio_nombre, numero, piso, coeficiente, saldo_a_favor, estado_financiero, activo, deuda_vencida]
+      properties:
+        id: { type: string, format: uuid }
+        condominio_id: { type: string, format: uuid }
+        numero: { type: string }
+        piso: { type: integer }
+        coeficiente: { type: string }
+        saldo_a_favor: { type: string }
+        estado_financiero: { type: string, enum: [AL_DIA, OBSERVADO, EN_MORA] }
+        activo: { type: boolean }
+        deuda_vencida: { type: string }
+        edificio_id: { type: string, format: uuid }
+        edificio_nombre: { type: string }
+    ComprobantePagoDTO:
+      $ref: './sprint-2.schemas.yaml#/schemas/Comprobante'
+
     CrearEdificioRequest:
       type: object
       additionalProperties: false
@@ -695,19 +1291,22 @@ components:
         actualizado_en: { type: string, format: date-time }
     CrearCondominioRequest:
       type: object
+      x-implementation-status: parcial-extension-financiera-pendiente
       additionalProperties: false
       required:
         - nombre
         - direccion
         - moneda
-        - regla_mora_tipo
-        - dia_vencimiento
-        - dias_gracia
       properties:
         nombre: { type: string, minLength: 1, maxLength: 150, example: "Villa Bonita 3" }
         direccion: { type: string, minLength: 1, maxLength: 500, example: "Av. Principal 123, Lima" }
         moneda: { type: string, enum: [PEN, USD] }
-        regla_mora_tipo: { type: string, enum: [MONTO_FIJO, PORCENTAJE_SALDO] }
+        regla_mora_tipo: { type: string, enum: [MONTO_DIARIO, MONTO_FIJO, PORCENTAJE_SALDO], default: MONTO_DIARIO }
+        monto_mora_diario:
+          type: [string, 'null']
+          pattern: '^(?!0+\.00$)[0-9]{1,10}\.[0-9]{2}$'
+          default: '1.00'
+          description: Importe diario por cuota mensual vencida. Default 1.00 solo para PEN; en otras monedas debe ser explícito. Solo MONTO_DIARIO; null en otras modalidades.
         monto_mora_fijo:
           type: [string, 'null']
           pattern: '^[0-9]+(\.[0-9]{2})$'
@@ -716,22 +1315,75 @@ components:
           type: [string, 'null']
           pattern: '^(100\.0000|[0-9]{1,2}\.[0-9]{4})$'
           example: null
-        dia_vencimiento: { type: integer, minimum: 1, maximum: 28, example: 20 }
-        dias_gracia: { type: integer, minimum: 0, maximum: 30, example: 2 }
+        dia_vencimiento: { type: integer, minimum: 1, maximum: 28, default: 10, example: 10 }
+        dias_gracia: { type: integer, minimum: 0, maximum: 30, default: 0, example: 0 }
       oneOf:
+        - title: Mora diaria editable por cuota
+          properties:
+            regla_mora_tipo: { const: MONTO_DIARIO }
+            monto_mora_diario: { type: string }
+            monto_mora_fijo: { type: 'null' }
+            tasa_mora_porcentaje: { type: 'null' }
         - title: Mora por monto fijo
           properties:
             regla_mora_tipo: { const: MONTO_FIJO }
+            monto_mora_diario: { type: 'null' }
             monto_mora_fijo: { type: string }
             tasa_mora_porcentaje: { type: 'null' }
-          required: [monto_mora_fijo]
+          required: [regla_mora_tipo, monto_mora_fijo]
         - title: Mora porcentual sobre saldo
           properties:
             regla_mora_tipo: { const: PORCENTAJE_SALDO }
+            monto_mora_diario: { type: 'null' }
             monto_mora_fijo: { type: 'null' }
             tasa_mora_porcentaje: { type: string }
-          required: [tasa_mora_porcentaje]
+          required: [regla_mora_tipo, tasa_mora_porcentaje]
+      allOf:
+        - if:
+            properties:
+              moneda: { const: USD }
+              regla_mora_tipo: { const: MONTO_DIARIO }
+          then:
+            required: [monto_mora_diario]
 
+    CondicionesPagoRequest:
+      type: object
+      additionalProperties: false
+      required: [vinculo_responsable_id, dias_gracia_override, version_esperada, motivo]
+      properties:
+        vinculo_responsable_id: {type: [string, 'null'], format: uuid}
+        dias_gracia_override: {type: [integer, 'null'], minimum: 0, maximum: 30}
+        version_esperada: {type: integer, minimum: 1}
+        motivo: {type: string, minLength: 1, maxLength: 1000}
+      if:
+        properties:
+          vinculo_responsable_id: {type: 'null'}
+      then:
+        properties:
+          dias_gracia_override: {type: 'null'}
+    CondicionesPagoResponse:
+      type: object
+      additionalProperties: false
+      required: [departamento_id, version, vinculo_responsable_id, dias_gracia_override, dias_gracia_efectivos]
+      properties:
+        departamento_id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        vinculo_responsable_id: {type: [string, 'null'], format: uuid}
+        dias_gracia_override: {type: [integer, 'null'], minimum: 0, maximum: 30}
+        dias_gracia_efectivos: {type: integer, minimum: 0, maximum: 30}
+    ActualizarPoliticaMoraRequest:
+      type: object
+      additionalProperties: false
+      required: [regla_mora_tipo, dia_vencimiento, dias_gracia, version_esperada, motivo]
+      properties:
+        regla_mora_tipo: {type: string, enum: [MONTO_DIARIO, MONTO_FIJO, PORCENTAJE_SALDO]}
+        monto_mora_diario: {type: [string, 'null'], pattern: '^(?!0+\.00$)[0-9]{1,10}\.[0-9]{2}$'}
+        monto_mora_fijo: {type: [string, 'null']}
+        tasa_mora_porcentaje: {type: [string, 'null']}
+        dia_vencimiento: {type: integer, minimum: 1, maximum: 28}
+        dias_gracia: {type: integer, minimum: 0, maximum: 30}
+        version_esperada: {type: integer, minimum: 1}
+        motivo: {type: string, minLength: 1, maxLength: 1000}
     CondominioResponse:
       type: object
       additionalProperties: false
@@ -750,7 +1402,9 @@ components:
         nombre: { type: string }
         direccion: { type: string }
         moneda: { type: string, enum: [PEN, USD] }
-        regla_mora_tipo: { type: string, enum: [MONTO_FIJO, PORCENTAJE_SALDO] }
+        regla_mora_tipo: { type: string, enum: [MONTO_DIARIO, MONTO_FIJO, PORCENTAJE_SALDO] }
+        monto_mora_diario: { type: [string, 'null'], example: '1.00', description: Importe diario fotografiado en nuevas cuotas; motor persistente implementado en 0019. }
+        politica_version: {type: integer, minimum: 1, example: 1}
         monto_mora_fijo: { type: [string, 'null'], example: "20.00" }
         tasa_mora_porcentaje: { type: [string, 'null'], example: null }
         dia_vencimiento: { type: integer, minimum: 1, maximum: 28 }
@@ -761,7 +1415,16 @@ components:
     CrearPresupuestoRequest:
       type: object
       additionalProperties: false
-      required: [condominio_id, periodo, moneda, monto_total, fecha_vencimiento]
+      required: [condominio_id, periodo, moneda, fecha_vencimiento]
+      if:
+        required: [items]
+        properties:
+          items: {type: array, items: {}}
+      then: {}
+      else:
+        required: [monto_total]
+        properties:
+          monto_total: {not: {const: '0.00'}}
       properties:
         condominio_id: { type: string, format: uuid }
         periodo:
@@ -772,14 +1435,25 @@ components:
         monto_total:
           type: string
           pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
-          not: { const: '0.00' }
           example: '20000.00'
-        fecha_vencimiento: { type: string, format: date, example: '2026-10-20' }
+        fecha_vencimiento: { type: string, format: date, example: '2026-10-10' }
+        items: {$ref: './prorrateo.schemas.yaml#/schemas/Items'}
+        version_esperada: {type: integer, minimum: 1}
 
     ActualizarPresupuestoRequest:
       type: object
       additionalProperties: false
-      required: [periodo, moneda, monto_total, fecha_vencimiento]
+      required: [periodo, moneda, fecha_vencimiento]
+      if:
+        required: [items]
+        properties:
+          items: {type: array, items: {}}
+      then:
+        required: [version_esperada]
+      else:
+        required: [monto_total]
+        properties:
+          monto_total: {not: {const: '0.00'}}
       properties:
         periodo:
           type: string
@@ -789,9 +1463,10 @@ components:
         monto_total:
           type: string
           pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
-          not: { const: '0.00' }
           example: '20500.00'
-        fecha_vencimiento: { type: string, format: date, example: '2026-10-20' }
+        fecha_vencimiento: { type: string, format: date, example: '2026-10-10' }
+        items: {$ref: './prorrateo.schemas.yaml#/schemas/Items'}
+        version_esperada: {type: integer, minimum: 1}
 
     PresupuestoResponse:
       type: object
@@ -809,6 +1484,8 @@ components:
         - aprobado_por
         - aprobado_en
         - actualizado_en
+        - version
+        - items
       properties:
         id: { type: string, format: uuid }
         condominio_id: { type: string, format: uuid }
@@ -822,6 +1499,8 @@ components:
         aprobado_por: { type: [string, 'null'] }
         aprobado_en: { type: [string, 'null'], format: date-time }
         actualizado_en: { type: string, format: date-time }
+        version: {type: integer, minimum: 1}
+        items: {$ref: './prorrateo.schemas.yaml#/schemas/Items'}
 
     EmitirLoteCuotasRequest:
       type: object
@@ -843,58 +1522,29 @@ components:
         fecha_vencimiento: { type: string, format: date }
 
     ComprobanteRecibidoResponse:
-      type: object
-      properties:
-        comprobante_id: { type: string, format: uuid }
-        estado: { type: string, example: "EN_REVISION" }
-        mensaje: { type: string }
+      $ref: './sprint-2.schemas.yaml#/schemas/ComprobanteRecibido'
 
     ConciliarPagoRequest:
-      type: object
-      required: [decision]
-      properties:
-        decision: { type: string, enum: [APROBADO, RECHAZADO, OBSERVADO] }
-        motivo_rechazo: { type: string, nullable: true }
-        notas_internas: { type: string, nullable: true }
+      $ref: './sprint-2.schemas.yaml#/schemas/ConciliarPago'
 
     ConciliacionResultResponse:
-      type: object
-      properties:
-        comprobante_id: { type: string, format: uuid }
-        estado_final: { type: string, example: "APROBADO" }
-        monto_imputado: { type: string }
-        nuevo_saldo_departamento: { type: string }
+      $ref: './sprint-2.schemas.yaml#/schemas/ResultadoRevision'
 
     CrearReservaRequest:
-      type: object
-      required: [condominio_id, area_id, departamento_id, fecha_reserva, hora_inicio, hora_fin]
-      properties:
-        condominio_id: { type: string, format: uuid }
-        area_id: { type: string, format: uuid }
-        departamento_id: { type: string, format: uuid }
-        fecha_reserva: { type: string, format: date }
-        hora_inicio: { type: string, example: "19:00" }
-        hora_fin: { type: string, example: "22:00" }
+      $ref: './sprint-2.schemas.yaml#/schemas/CrearReserva'
 
     ReservaConfirmadaResponse:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        estado: { type: string, example: "CONFIRMADA" }
-        area_id: { type: string, format: uuid }
-        fecha_reserva: { type: string, format: date }
-        hora_inicio: { type: string }
-        hora_fin: { type: string }
+      $ref: './sprint-2.schemas.yaml#/schemas/ReservaConfirmada'
 
     ErrorResponse:
-      type: object
-      required: [error_code, mensaje]
-      properties:
-        error_code: { type: string, example: "DEUDA_MORA_ACTIVA" }
-        mensaje: { type: string, example: "No es posible reservar: Su departamento mantiene cuotas vencidas pendientes." }
-        detalles: { type: object }
+      $ref: './sprint-2.schemas.yaml#/schemas/Error'
 
   responses:
+    AreaCatalogoResponse:
+      description: Condiciones persistidas del área
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AreaCatalogo' }
     Error400:
       description: Solicitud mal formada o parámetros inválidos
       content:
@@ -903,7 +1553,7 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
 
     Error401:
-      description: Bearer Token ausente, inválido o expirado
+      description: Bearer ausente, inválido, expirado o SESION_DESACTUALIZADA (requiere login v2)
       content:
         application/json:
           schema:
@@ -993,3 +1643,405 @@ components:
           example:
             error_code: DATOS_PRESUPUESTO_INVALIDOS
             mensaje: El vencimiento debe pertenecer al periodo y la moneda debe coincidir con el condominio.
+
+x-core-implementation:
+  description: Instantánea histórica de CORE/CON-70 anterior a CON-72; no registra
+    operaciones actuales ni exige mantener el upload separado o el alias CONCILIADO.
+    Consultar paths y los fragmentos normativos para el contrato vigente.
+  paths:
+    /pagos/comprobantes:
+      get:
+        tags:
+        - Pagos y Conciliación
+        description: Consulta PostgreSQL; conserva CONCILIADO como alias público de
+          APROBADO.
+        summary: Comprobantes de unidades autorizadas en el contexto
+        parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+        responses:
+          '200':
+            description: Comprobantes autorizados; nunca datos de otra unidad para
+              residentes
+            content:
+              application/json:
+                schema:
+                  type: array
+                  items:
+                    $ref: '#/x-core-implementation/schemas/ComprobantePagoDTO'
+          '401':
+            $ref: '#/components/responses/Error401'
+          '403':
+            $ref: '#/components/responses/Error403'
+    /pagos/reportar:
+      post:
+        tags:
+        - Pagos y Conciliación
+        description: Vincula una subida local propia a un comprobante EN_REVISION
+          sin aplicar saldos.
+        summary: Reporte de comprobante de pago bancario por residente
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - departamento_id
+                - banco
+                - numero_operacion
+                - fecha_operacion
+                - monto
+                - url_voucher
+                properties:
+                  departamento_id:
+                    type: string
+                    format: uuid
+                  banco:
+                    type: string
+                    enum:
+                    - YAPE
+                    - PLIN
+                    - BCP
+                    - INTERBANK
+                    - BBVA
+                    - SCOTIABANK
+                  numero_operacion:
+                    type: string
+                    minLength: 4
+                    maxLength: 50
+                  fecha_operacion:
+                    type: string
+                    format: date
+                  monto:
+                    type: string
+                    pattern: ^[0-9]{1,10}(\.[0-9]{1,2})?$
+                    description: Importe positivo dentro de NUMERIC(12,2)
+                  url_voucher:
+                    type: string
+                    description: Nombre de una subida local propia y del mismo departamento
+                    example: 8ac169e4-3928-4e52-b75d-84a2781e44fa.jpg
+        responses:
+          '200':
+            description: Comprobante propio EN_REVISION reutilizado sin duplicar
+            content:
+              application/json:
+                schema:
+                  $ref: '#/x-core-implementation/schemas/ComprobanteRecibidoResponse'
+          '202':
+            description: Comprobante recibido y encolado para revisión
+            content:
+              application/json:
+                schema:
+                  $ref: '#/x-core-implementation/schemas/ComprobanteRecibidoResponse'
+          '409':
+            description: Comprobante ya registrado o conciliado previamente
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorResponse'
+    /pagos/{id}/voucher:
+      get:
+        tags:
+        - Pagos y Conciliación
+        description: Descarga adjunta y autorizada, sin publicar rutas ni seguir URLs
+          históricas.
+        summary: Descargar evidencia de un comprobante autorizado
+        parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        responses:
+          '200':
+            description: Adjunto privado, sin caché compartida
+            content:
+              application/octet-stream:
+                schema:
+                  type: string
+                  format: binary
+          '401':
+            $ref: '#/components/responses/Error401'
+          '403':
+            $ref: '#/components/responses/Error403'
+          '404':
+            $ref: '#/components/responses/Error404'
+    /pagos/{id}/conciliar:
+      post:
+        tags:
+        - Pagos y Conciliación
+        description: Revisión administrativa atómica con imputaciones, auditoría y
+          evento persistido.
+        summary: Aprobación, observación o rechazo persistente por la Junta Directiva
+        parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/x-core-implementation/schemas/ConciliarPagoRequest'
+        responses:
+          '200':
+            description: Conciliación procesada exitosamente
+            content:
+              application/json:
+                schema:
+                  $ref: '#/x-core-implementation/schemas/ConciliacionResultResponse'
+    /reservas:
+      get:
+        summary: Consultar reservas de unidades autorizadas
+        parameters:
+        - $ref: '#/components/parameters/ContextoConsulta'
+        - name: area_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: fecha
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        responses:
+          '200':
+            description: Lista de reservas existentes para el área y fecha
+            content:
+              application/json:
+                schema:
+                  type: array
+                  items:
+                    $ref: '#/x-core-implementation/schemas/ReservaConfirmadaResponse'
+      post:
+        summary: Solicitud de reserva de área común (con validación de solvencia)
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/x-core-implementation/schemas/CrearReservaRequest'
+        responses:
+          '201':
+            description: Reserva confirmada exitosamente
+            content:
+              application/json:
+                schema:
+                  $ref: '#/x-core-implementation/schemas/ReservaConfirmadaResponse'
+          '403':
+            description: Denegado por mora o por contexto o edificio o unidad no autorizados
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorResponse'
+          '409':
+            description: Horario ocupado o área inactiva
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ComprobantePagoDTO:
+      type: object
+      required:
+      - id
+      - departamento_id
+      - banco
+      - numero_operacion
+      - fecha_operacion
+      - monto
+      - estado
+      - idempotency_hash
+      - url_voucher
+      properties:
+        id:
+          type: string
+          format: uuid
+        departamento_id:
+          type: string
+          format: uuid
+        banco:
+          type: string
+        numero_operacion:
+          type: string
+        fecha_operacion:
+          type: string
+          format: date
+        monto:
+          type: string
+        estado:
+          type: string
+          enum:
+          - EN_REVISION
+          - CONCILIADO
+          - RECHAZADO
+        idempotency_hash:
+          type: string
+        url_voucher:
+          type: string
+        motivo_rechazo:
+          type:
+          - string
+          - 'null'
+    ComprobanteRecibidoResponse:
+      type: object
+      required:
+      - comprobante_id
+      - estado
+      - mensaje
+      - idempotency_hash
+      properties:
+        comprobante_id:
+          type: string
+          format: uuid
+        estado:
+          type: string
+          example: EN_REVISION
+        mensaje:
+          type: string
+        idempotency_hash:
+          type: string
+          minLength: 64
+          maxLength: 64
+        error_code:
+          type:
+          - string
+          - 'null'
+    ConciliarPagoRequest:
+      type: object
+      required:
+      - decision
+      properties:
+        decision:
+          type: string
+          enum:
+          - APROBADO
+          - RECHAZADO
+          - OBSERVADO
+        motivo_rechazo:
+          type: string
+          nullable: true
+        notas_internas:
+          type: string
+          nullable: true
+    ConciliacionResultResponse:
+      type: object
+      required:
+      - comprobante_id
+      - estado_final
+      - monto_imputado
+      - nuevo_saldo_departamento
+      - saldo_a_favor_generado
+      - departamento_habilitado_reservas
+      properties:
+        comprobante_id:
+          type: string
+          format: uuid
+        estado_final:
+          type: string
+          example: APROBADO
+        monto_imputado:
+          type: string
+        nuevo_saldo_departamento:
+          type: string
+        saldo_a_favor_generado:
+          type: string
+        departamento_habilitado_reservas:
+          type: boolean
+    CrearReservaRequest:
+      type: object
+      required:
+      - condominio_id
+      - area_id
+      - departamento_id
+      - fecha_reserva
+      - hora_inicio
+      - hora_fin
+      properties:
+        condominio_id:
+          type: string
+          format: uuid
+        area_id:
+          type: string
+          format: uuid
+        departamento_id:
+          type: string
+          format: uuid
+        fecha_reserva:
+          type: string
+          format: date
+        hora_inicio:
+          type: string
+          example: '19:00'
+        hora_fin:
+          type: string
+          example: '22:00'
+    ReservaConfirmadaResponse:
+      type: object
+      required:
+      - id
+      - condominio_id
+      - area_id
+      - departamento_id
+      - fecha_reserva
+      - hora_inicio
+      - hora_fin
+      - costo_reserva
+      - moneda
+      - estado
+      - creado_en
+      properties:
+        id:
+          type: string
+          format: uuid
+        condominio_id:
+          type: string
+          format: uuid
+        departamento_id:
+          type: string
+          format: uuid
+        estado:
+          type: string
+          example: CONFIRMADA
+        area_id:
+          type: string
+          format: uuid
+        area_nombre:
+          type:
+          - string
+          - 'null'
+        fecha_reserva:
+          type: string
+          format: date
+        hora_inicio:
+          type: string
+        hora_fin:
+          type: string
+        costo_reserva:
+          type: string
+        moneda:
+          type: string
+          enum:
+          - PEN
+          - USD
+        creado_en:
+          type: string
+          format: date-time
+  route-resolution:
+    /pagos/vouchers: 'Retirada al converger a multipart único; actualizar clientes antes del despliegue.'
+    /pagos/solvencia/{departamento_id}: 'Conservada como extension compatible implementada:
+      deuda persistida y gracia UTC por unidad. No depende de eventos ni permisos
+      globales.'
+    /pagos/{comprobante_id}/voucher: GET privado y PUT de subsanación implementados; archivos anteriores conservados.
+    /pagos/{comprobante_id}/resultado: Resultado de la evidencia vigente con motivo público, sin notas internas.
+    /pagos/{comprobante_id}/conciliar: Revisión EN_REVISION e idempotencia del resultado vigente; contrato canónico.
+    /pagos/reportar: Multipart único con codigo normativo; no admite url_voucher del cliente.
+    /pagos/comprobantes: Estado APROBADO y enlaces autenticados; no publica CONCILIADO.
+    /reservas: Persistencia y autorización CON-73; respuestas contrastadas con CON-72.

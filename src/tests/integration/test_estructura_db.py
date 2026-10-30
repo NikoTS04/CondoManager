@@ -23,6 +23,9 @@ from src.main import app
 from src.modules.condominios.estructura.repository import EstructuraRepository
 from src.modules.condominios.models import Departamento
 from src.modules.cuotas.distribucion.repository import SQLAlchemyDistribucionRepository
+from src.tests.usuarios_db import REVISIONES_API
+
+pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
 
 REVISIONES = (
     "20261008_0001_crear_condominios_y_auditoria",
@@ -59,8 +62,7 @@ async def connection():
 
 @pytest_asyncio.fixture
 async def api(connection):
-    await connection.run_sync(migrar)
-    await connection.run_sync(lambda c: migrar(c, ("20261019_0006_emision_cuotas",)))
+    await connection.run_sync(lambda c: migrar(c, REVISIONES_API))
 
     async def db():
         async with AsyncSession(
@@ -391,7 +393,7 @@ async def test_importaciones_concurrentes_no_duplican_y_conservan_cadena():
     async with administrador.begin() as conn:
         await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
         await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
-        await conn.run_sync(migrar)
+        await conn.run_sync(lambda c: migrar(c, REVISIONES_API))
     engine = create_async_engine(url, connect_args={"server_settings": {"search_path": esquema}})
 
     async def db():

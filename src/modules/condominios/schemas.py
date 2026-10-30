@@ -14,6 +14,7 @@ class Moneda(str, Enum):
 
 
 class ReglaMoraTipo(str, Enum):
+    MONTO_DIARIO = "MONTO_DIARIO"
     MONTO_FIJO = "MONTO_FIJO"
     PORCENTAJE_SALDO = "PORCENTAJE_SALDO"
 
@@ -26,7 +27,10 @@ class CrearCondominioRequest(BaseModel):
     nombre: str = Field(min_length=1, max_length=150)
     direccion: str = Field(min_length=1, max_length=500)
     moneda: Moneda
-    regla_mora_tipo: ReglaMoraTipo
+    regla_mora_tipo: ReglaMoraTipo = ReglaMoraTipo.MONTO_DIARIO
+    monto_mora_diario: Decimal | None = Field(
+        default=None, gt=Decimal("0.00"), max_digits=12, decimal_places=2
+    )
     monto_mora_fijo: Decimal | None = Field(
         default=None, ge=Decimal("0.00"), max_digits=12, decimal_places=2
     )
@@ -37,8 +41,8 @@ class CrearCondominioRequest(BaseModel):
         max_digits=7,
         decimal_places=4,
     )
-    dia_vencimiento: int = Field(ge=1, le=28)
-    dias_gracia: int = Field(ge=0, le=30)
+    dia_vencimiento: int = Field(default=10, ge=1, le=28)
+    dias_gracia: int = Field(default=0, ge=0, le=30)
 
     @field_validator("nombre", "direccion")
     @classmethod
@@ -48,7 +52,7 @@ class CrearCondominioRequest(BaseModel):
             raise ValueError("El valor no puede quedar vacío.")
         return normalizado
 
-    @field_validator("monto_mora_fijo", "tasa_mora_porcentaje", mode="before")
+    @field_validator("monto_mora_fijo", "tasa_mora_porcentaje", "monto_mora_diario", mode="before")
     @classmethod
     def exigir_cadena_decimal(cls, value: object) -> object:
         if value is not None and not isinstance(value, str):
@@ -57,6 +61,16 @@ class CrearCondominioRequest(BaseModel):
 
     @model_validator(mode="after")
     def validar_configuracion_mora(self) -> "CrearCondominioRequest":
+        if self.regla_mora_tipo is ReglaMoraTipo.MONTO_DIARIO:
+            if self.monto_mora_fijo is not None or self.tasa_mora_porcentaje is not None:
+                raise ValueError("MONTO_DIARIO prohíbe monto fijo y tasa porcentual.")
+            if "monto_mora_diario" not in self.model_fields_set and self.moneda is Moneda.PEN:
+                self.monto_mora_diario = Decimal("1.00")
+            if self.monto_mora_diario is None:
+                raise ValueError("Indique el importe diario en la moneda del condominio.")
+            return self
+        if self.monto_mora_diario is not None:
+            raise ValueError("El importe diario solo corresponde a MONTO_DIARIO.")
         if self.regla_mora_tipo is ReglaMoraTipo.MONTO_FIJO:
             if self.monto_mora_fijo is None or self.tasa_mora_porcentaje is not None:
                 raise ValueError("MONTO_FIJO exige monto_mora_fijo y prohíbe tasa_mora_porcentaje.")
@@ -77,9 +91,31 @@ class CondominioResponse(BaseModel):
     direccion: str
     moneda: Moneda
     regla_mora_tipo: ReglaMoraTipo
+    monto_mora_diario: Decimal | None = None
+    politica_version: int = 1
     monto_mora_fijo: Decimal | None
     tasa_mora_porcentaje: Decimal | None
     dia_vencimiento: int
     dias_gracia: int
     activo: bool
     creado_en: datetime
+
+
+class ActualizarPoliticaMoraRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    regla_mora_tipo: ReglaMoraTipo
+    monto_mora_diario: str | None = None
+    monto_mora_fijo: str | None = None
+    tasa_mora_porcentaje: str | None = None
+    dia_vencimiento: int = Field(ge=1, le=28)
+    dias_gracia: int = Field(ge=0, le=30)
+    version_esperada: int = Field(gt=0, strict=True)
+    motivo: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("motivo")
+    @classmethod
+    def motivo_no_vacio(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Indique el motivo del cambio.")
+        return value.strip()

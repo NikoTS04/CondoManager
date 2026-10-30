@@ -1,4 +1,6 @@
 # language: es
+# Fixtures explícitos de modalidades anteriores siguen válidos por compatibilidad.
+# Defaults MONTO_DIARIO/día 10/gracia 0: aceptación objetivo en ../../../04-acceptance-criteria/prorrateo-mora-reportes.feature.md
 Característica: Configuración y aislamiento de condominios
   Como superadministrador
   Quiero registrar la configuración raíz de un condominio

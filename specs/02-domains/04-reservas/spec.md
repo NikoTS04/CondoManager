@@ -1,5 +1,8 @@
 # Dominio 04: Reservas de Áreas Comunes y Control de Solvencia (Brandon)
 
+CON-39 / RES-01: [catálogo persistente](catalogo-areas.md), autoridad contextual,
+condiciones de uso, dinero Decimal y coordinación de persistencia con CON-73.
+
 ## 1. Ficha del Dominio
 - **Identificador:** DOM-04 / PROC-04
 - **Responsable:** **Brandon**
@@ -10,6 +13,12 @@
 ---
 
 ## 2. Propósito y Límites del Dominio
+Ampliación financiera objetivo: [mora diaria y solvencia](../01-cuotas/prorrateo-y-mora-diaria.md).
+Fecha local de Lima, gracia efectiva histórica de la cuota (default 0), no solo
+configuración global vigente. Deuda después del día 10 restringe desde el 11 sin
+esperar al cron. Principal pagado con mora residual también bloquea; EN_REVISION
+no es pago ni solvencia. Pendiente de implementación coordinada con pagos.
+
 El dominio de Reservas es responsable de:
 1. Publicar el catálogo de áreas comunes activas (parrillas, salones sociales, gimnasio, zonas recreativas) con aforos, horarios permitidos y costos asociados.
 2. Gestionar la disponibilidad en calendario en tiempo real mediante transacciones atómicas con bloqueo pesimista (`SELECT FOR UPDATE`).
@@ -20,6 +29,12 @@ El dominio de Reservas es responsable de:
 ---
 
 ## 3. Invariante Innegociable de Solvencia Financiera
+
+CON-42 proporciona un guard transaccional sobre cuotas y departamentos PostgreSQL,
+según [integración financiera Sprint 2](../02-pagos-y-moras/sprint-2-anderson.md).
+CON-41 debe usarlo antes de ocupar el horario, sin sustituir deuda real por datos
+piloto ni asumir solvencia para unidades inexistentes. La persistencia del calendario
+y la exclusión horaria continúan bajo sus responsables originales.
 
 $$\forall\ d \in \text{Departamentos},\ \text{DeudaMora}(d) > 0.00 \implies \text{AccesoReservas}(d) = \text{DENEGADO}$$
 

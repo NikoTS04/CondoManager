@@ -1,23 +1,27 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import RoleGuard from "@/components/RoleGuard";
+import { seleccionarUnidad } from "@/lib/session";
 import {
   type AreaComun,
   type Departamento,
   type Reserva,
   type ComprobantePago,
+  type Solvencia,
   fetchAreasComunes,
   fetchDepartamentos,
   fetchReservas,
   fetchComprobantes,
 } from "@/lib/api";
 import { SolvenciaBanner } from "@/components/domain/SolvenciaBanner";
-import { Spinner } from "@/components/ui/Feedback";
+import { SkeletonList, Spinner } from "@/components/ui/Feedback";
+import { TabPanel } from "@/components/ui/Tabs";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { AvisosList } from "@/features/residente/AvisosList";
 import {
   ResidenteNav,
   type ResidenteTab,
@@ -31,14 +35,18 @@ import {
 
 function ResidenteContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const dptoParam = searchParams.get("dpto");
   const { user, activeDepartment, setActiveDepartment } = useAuth();
 
-  const [departamentoNumero, setDepartamentoNumero] = useState(
-    dptoParam || activeDepartment || "102",
-  );
-  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
-  const [activeTab, setActiveTab] = useState<ResidenteTab>("reservas");
+  const [departamentosRecibidos, setDepartamentos] = useState<Departamento[]>([]);
+  const departamentos = useMemo(() => departamentosRecibidos.filter((d) => d.activo !== false &&
+    (user?.rol !== "RESIDENTE" || user.departamentos.some((v) => v.es_activo && v.departamento_id === d.id))),
+    [departamentosRecibidos, user]);
+  const departamentoId = user ? seleccionarUnidad(user, dptoParam, activeDepartment, departamentos.map((d) => d.id)) : "";
+  const [contextoId] = useState(() => user?.condominio_id ||
+    (user?.rol === "SUPERADMIN" ? localStorage.getItem("condo_active_id") : null));
+  const [activeTab, setActiveTab] = useState<ResidenteTab>("cuenta");
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
@@ -49,6 +57,7 @@ function ResidenteContent() {
   const [loadingReservas, setLoadingReservas] = useState(false);
   const [loadingComprobantes, setLoadingComprobantes] = useState(false);
   const [loadingAreas, setLoadingAreas] = useState(false);
+  const [revisionCalendario, setRevisionCalendario] = useState(0);
 
   const [errorDeptos, setErrorDeptos] = useState<string | null>(null);
   const [errorAreas, setErrorAreas] = useState<string | null>(null);
@@ -61,12 +70,21 @@ function ResidenteContent() {
     setErrorAreas(null);
     setErrorReservas(null);
     setErrorComprobantes(null);
+    setDepartamentos([]);
+    setAreas([]);
+    setReservas([]);
+    setComprobantes([]);
+    if (!contextoId) {
+      setErrorDeptos("Selecciona primero un condominio en el portal de Junta.");
+      setLoadingInitial(false);
+      return;
+    }
 
     const [deptosRes, areasRes, reservasRes, compsRes] = await Promise.allSettled([
-      fetchDepartamentos(),
-      fetchAreasComunes(),
-      fetchReservas(),
-      fetchComprobantes(),
+      fetchDepartamentos(contextoId),
+      fetchAreasComunes(contextoId),
+      fetchReservas(undefined, undefined, contextoId),
+      fetchComprobantes(contextoId),
     ]);
 
     if (isCancelled && isCancelled()) return;
@@ -96,46 +114,47 @@ function ResidenteContent() {
     }
 
     setLoadingInitial(false);
-  }, []);
+  }, [contextoId]);
 
   const reloadReservas = useCallback(async () => {
+    setRevisionCalendario((r) => r + 1);
     setLoadingReservas(true);
     setErrorReservas(null);
     try {
-      const data = await fetchReservas();
+      const data = await fetchReservas(undefined, undefined, contextoId);
       setReservas(data);
     } catch {
       setErrorReservas("No pudimos actualizar las reservas.");
     } finally {
       setLoadingReservas(false);
     }
-  }, []);
+  }, [contextoId]);
 
   const reloadComprobantes = useCallback(async () => {
     setLoadingComprobantes(true);
     setErrorComprobantes(null);
     try {
-      const data = await fetchComprobantes();
+      const data = await fetchComprobantes(contextoId);
       setComprobantes(data);
     } catch {
       setErrorComprobantes("No pudimos actualizar los comprobantes.");
     } finally {
       setLoadingComprobantes(false);
     }
-  }, []);
+  }, [contextoId]);
 
   const reloadAreas = useCallback(async () => {
     setLoadingAreas(true);
     setErrorAreas(null);
     try {
-      const data = await fetchAreasComunes();
+      const data = await fetchAreasComunes(contextoId);
       setAreas(data);
     } catch {
       setErrorAreas("No pudimos actualizar los espacios comunes.");
     } finally {
       setLoadingAreas(false);
     }
-  }, []);
+  }, [contextoId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,33 +165,26 @@ function ResidenteContent() {
   }, [loadData]);
 
   useEffect(() => {
-    if (dptoParam) {
-      setDepartamentoNumero(dptoParam);
-      setActiveDepartment(dptoParam);
+    if (departamentoId) {
+      if (departamentoId !== activeDepartment) setActiveDepartment(departamentoId);
+      if (dptoParam && dptoParam !== departamentoId) router.replace(`/residente?dpto=${departamentoId}`);
     }
-  }, [dptoParam, setActiveDepartment]);
+  }, [departamentoId, activeDepartment, dptoParam, setActiveDepartment, router]);
 
-  // Si los departamentos cargaron y el número actual no existe en ellos, sincroniza con el primero
-  useEffect(() => {
-    if (
-      departamentos.length > 0 &&
-      !departamentos.some((d) => d.numero === departamentoNumero)
-    ) {
-      const defaultNumero = departamentos[0].numero;
-      setDepartamentoNumero(defaultNumero);
-      setActiveDepartment(defaultNumero);
-    }
-  }, [departamentos, departamentoNumero, setActiveDepartment]);
-
-  function handleSelectDepartamento(num: string) {
-    setDepartamentoNumero(num);
-    setActiveDepartment(num);
+  function handleSelectDepartamento(id: string) {
+    if (!user || seleccionarUnidad(user, id, null, departamentos.map((d) => d.id)) !== id) return;
+    router.replace(`/residente?dpto=${id}`);
   }
 
   const deptoActual =
-    departamentos.find((d) => d.numero === departamentoNumero) ?? null;
+    departamentos.find((d) => d.id === departamentoId) ?? null;
 
   const estaEnMora = deptoActual?.estado_financiero === "EN_MORA";
+  const actualizarSolvencia = useCallback((solvencia: Solvencia) => {
+    setDepartamentos((actuales) => actuales.map((depto) => depto.id === solvencia.departamento_id
+      ? { ...depto, deuda_vencida: solvencia.saldo_vencido, estado_financiero: solvencia.habilitado_reservas ? "AL_DIA" : "EN_MORA" }
+      : depto));
+  }, []);
 
   return (
     <div className="space-y-6 pb-24 sm:pb-8">
@@ -185,6 +197,11 @@ function ResidenteContent() {
       />
 
       {/* Error de departamentos si falló la carga */}
+      {!loadingInitial && !errorDeptos && departamentos.length === 0 && (
+        <Alert tone="info" title="Sin departamentos vinculados">
+          La administración debe registrar un vínculo activo para que puedas consultar tu unidad y realizar operaciones.
+        </Alert>
+      )}
       {errorDeptos && (
         <Alert
           tone="danger"
@@ -204,7 +221,7 @@ function ResidenteContent() {
       )}
 
       {/* Solo mostrar SolvenciaBanner si el departamento está confirmado por backend */}
-      {deptoActual && !loadingInitial && !errorDeptos && (
+      {activeTab !== "cuenta" && deptoActual && !loadingInitial && !errorDeptos && deptoActual.estado_financiero !== "OBSERVADO" && (
         <SolvenciaBanner
           solvente={deptoActual.estado_financiero === "AL_DIA"}
           deudaVencida={deptoActual.deuda_vencida}
@@ -215,27 +232,33 @@ function ResidenteContent() {
       {/* Navegación responsiva: Tabs en sm+ y barra inferior fija en móvil */}
       <ResidenteNav activeTab={activeTab} onChangeTab={setActiveTab} />
 
+      <TabPanel idPrefix="residente" id={activeTab}>
       {/* Contenido según la pestaña activa */}
       {activeTab === "reservas" && (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
+            {loadingInitial ? <Spinner label="Cargando formulario de reserva…" /> : (
             <ReservarAreaForm
+              key={departamentoId}
+              revisionExterna={revisionCalendario}
               areas={areas}
-              condominioId={user?.condominio_id}
-              departamentoNumero={departamentoNumero}
+              condominioId={contextoId}
+              departamentoId={departamentoId}
               estaEnMora={estaEnMora}
               deudaVencida={deptoActual?.deuda_vencida}
               errorAreas={errorAreas}
               onRetryAreas={reloadAreas}
               onSuccess={reloadReservas}
               onGoToPagos={() => setActiveTab("pagos")}
+              onSolvenciaActualizada={actualizarSolvencia}
             />
+            )}
           </div>
           <div className="lg:col-span-2">
             <MisReservasList
-              reservas={reservas}
+              reservas={reservas.filter((r) => r.departamento_id === departamentoId)}
               areas={areas}
-              departamentoNumero={departamentoNumero}
+              departamentoId={departamentoId}
               loading={loadingInitial || loadingReservas || loadingAreas}
               error={errorReservas}
               errorAreas={errorAreas}
@@ -250,22 +273,29 @@ function ResidenteContent() {
       {activeTab === "pagos" && (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
+            {loadingInitial ? <Spinner label="Cargando formulario de pago…" /> : (
             <ReportarPagoForm
-              departamentoNumero={departamentoNumero}
+              key={departamentoId}
+              departamentoId={departamentoId}
               onSuccess={reloadComprobantes}
               comprobantesExistentes={comprobantes}
             />
+            )}
           </div>
           <div className="lg:col-span-2">
             <ComprobantesList
               comprobantes={comprobantes}
-              departamentoNumero={departamentoNumero}
+              departamentoId={departamentoId}
               loading={loadingInitial || loadingComprobantes}
               error={errorComprobantes}
               onRetry={reloadComprobantes}
             />
           </div>
         </div>
+      )}
+
+      {activeTab === "avisos" && contextoId && departamentoId && (
+        <AvisosList condominioId={contextoId} departamentoId={departamentoId} />
       )}
 
       {activeTab === "cuenta" && (
@@ -276,8 +306,10 @@ function ResidenteContent() {
               loading={loadingInitial}
               error={errorDeptos}
               onRetry={() => void loadData()}
+              onReportarPago={() => setActiveTab("pagos")}
+              onReservar={() => setActiveTab("reservas")}
             />
-          ) : (
+          ) : loadingInitial ? <SkeletonList rows={3} label="Cargando tu cuenta…" /> : (
             <Alert
               tone="warning"
               title="Información de cuenta no disponible"
@@ -296,13 +328,14 @@ function ResidenteContent() {
           )}
         </>
       )}
+      </TabPanel>
     </div>
   );
 }
 
 export default function ResidentePage() {
   return (
-    <RoleGuard allowedRoles={["PROPIETARIO", "INQUILINO", "ADMIN_JUNTA", "SUPERADMIN"]}>
+    <RoleGuard allowedRoles={["RESIDENTE", "ADMIN_JUNTA", "SUPERADMIN"]}>
       <Suspense
         fallback={
           <div className="flex min-h-64 items-center justify-center p-8">

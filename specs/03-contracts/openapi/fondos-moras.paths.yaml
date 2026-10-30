@@ -1,0 +1,72 @@
+paths:
+  /edificios/{edificio_id}/fondos-moras:
+    parameters:
+      - {name: edificio_id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: consultarFondoMoras
+      x-implementation-status: implementado
+      description: Administración/auditor del contexto. Saldo actual y movimientos del periodo reconocido al conciliar en Lima; no se importan cobros históricos ni se incluyen moras sin cobrar.
+      parameters:
+        - {name: periodo, in: query, schema: {type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'}, description: Mes actual de Lima si se omite; año mayor que cero.}
+      responses:
+        '200':
+          description: Saldo disponible/reservado, aplicado, resumen del periodo y movimientos privados.
+          content:
+            application/json:
+              schema: {$ref: './fondos-moras.schemas.yaml#/schemas/Resumen'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /presupuestos/{presupuesto_id}/aplicaciones-moras:
+    parameters:
+      - {name: presupuesto_id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listarAplicacionesMoras
+      x-implementation-status: implementado
+      description: Solo administración/auditor; conserva aplicaciones liberadas y confirmadas.
+      responses:
+        '200':
+          description: Aplicaciones del presupuesto autorizado.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: './fondos-moras.schemas.yaml#/schemas/Aplicacion'}}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+    post:
+      operationId: reservarMoras
+      x-implementation-status: implementado
+      description: Junta/SuperAdmin. Reserva caja, recalcula el neto e incrementa versión. Misma clave y payload devuelve la misma aplicación; payload distinto o saldo/versión insuficiente responde 409. No se cubren abonos ni gastos de otro edificio.
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,100}$'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './fondos-moras.schemas.yaml#/schemas/ReservaRequest'}
+      responses:
+        '201':
+          description: Aplicación reservada o previamente identificada por esa clave; no duplica el cargo.
+          content:
+            application/json:
+              schema: {$ref: './fondos-moras.schemas.yaml#/schemas/Aplicacion'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /presupuestos/{presupuesto_id}/aplicaciones-moras/{aplicacion_id}:
+    parameters:
+      - {name: presupuesto_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: aplicacion_id, in: path, required: true, schema: {type: string, format: uuid}}
+    delete:
+      operationId: liberarMoras
+      x-implementation-status: implementado
+      description: Libera solo una reserva del borrador, recalcula neto y versión. Repetir una liberación devuelve 204 sin mutación; no elimina historia ni aplicaciones confirmadas.
+      parameters:
+        - {name: version_esperada, in: query, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '204': {description: Reserva liberada o ya liberada.}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
