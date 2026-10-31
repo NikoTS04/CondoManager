@@ -9,6 +9,11 @@
 
 Las especificaciones técnicas y funcionales detalladas se mantienen en [`specs/`](../specs/).
 
+## Planificación del Sprint 3
+
+- [Sprint 3 — Usuarios y seguridad: reparto, dependencias, orden y criterios de cierre](sprints/SPRINT-3.md).
+- [Revisión de preparación: contraste de Jira con implementación y evidencia](sprints/SPRINT-3-REVISION.md).
+
 ## Entrega del Sprint 2
 
 - [Alcance y criterios](sprints/SPRINT-2.md).
