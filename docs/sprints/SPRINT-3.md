@@ -233,6 +233,8 @@ CON-81: ambiente desde el inicio; cierre con despliegue y recuperación finales.
 
 **Trazabilidad:** [dominio de cuotas](../../specs/02-domains/01-cuotas/spec.md), [contrato financiero vigente](../../specs/05-api/prorrateo-mora-reportes.md), `frontend/src/features/residente/ResumenCuenta.tsx` y `src/modules/usuarios/departamentos.py`.
 
+Implementación y verificación de CON-14: [estado de cuenta por departamento](CON-14-estado-cuenta.md).
+
 ### CON-24 — Bandeja de conciliación · Brandon
 
 **Base:** tabla de comprobantes con voucher, banco, operación, fecha, importe, estado y acciones.

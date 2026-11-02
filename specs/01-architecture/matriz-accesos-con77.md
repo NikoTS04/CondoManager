@@ -44,6 +44,7 @@ o la ampliación CON-77; su presencia no equivale a una ejecución aprobada.
 | PUT `/condominios/{condominio_id}/politica-mora` | G E | C E | — | — | CON-77 |
 | GET/PUT `/departamentos/{departamento_id}/condiciones-pago` | G L/E | C L/E | C L | — | CON-77 |
 | GET `/cuotas/departamentos` | G L | C L | C L | U L | CON-77 |
+| GET `/cuotas/departamentos/{departamento_id}/estado-cuenta` | G L | C L | C L | U L | CON-14: `test_estado_cuenta_db.py`, `test_estado_cuenta_bdd.py` |
 | GET/PUT `/condominios/{condominio_id}/distribucion` | G L/E | C L/E | C L | — | `test_distribucion_api.py` |
 | POST `/presupuestos`; PUT `/presupuestos/{id}`; POST `/presupuestos/{id}/aprobar` | G E | C E | — | — | `test_presupuestos_api.py` |
 | GET `/condominios/{condominio_id}/presupuestos/{periodo}` | G L | C L | C L | — | CON-77 |
