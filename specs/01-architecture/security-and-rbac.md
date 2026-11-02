@@ -21,7 +21,7 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Consultar unidades del portal, comprobantes y reservas | Contexto seleccionado | Su condominio | Su condominio | Sus vínculos activos |
 | Reportar pagos, crear/cancelar reservas | Soporte | Soporte de su condominio | No | Sus vínculos activos |
 | Conciliar pagos, evaluar moras y enviar/reintentar comunicados | Sí | Su condominio | No | No |
-| Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | No |
+| Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | Solo avisos dirigidos a su identidad y vínculos activos |
 | Asignar/revocar ADMIN_JUNTA | Sí, excepto propia asignación o identidad global | No | No | No |
 | Asignar/revocar AUDITOR y RESIDENTE | Sí | Su condominio, sin modificar Junta ni su propia asignación | No | No |
 | Crear/cambiar/revocar vínculos de departamentos | Contexto seleccionado | Su condominio | No | No |
@@ -57,6 +57,9 @@ sus vínculos; repetir el rol/estado no modifica revisión ni auditoría. Contra
 [roles y permisos](../02-domains/05-usuarios-rbac/roles-y-permisos.md).
 
 ## 4. Aislamiento y reglas de negocio
+
+Inventario transversal, criterios y suites de CON-77:
+[matriz de accesos por operación](matriz-accesos-con77.md).
 
 El condominio recibido en ruta, query o body selecciona un recurso, pero no concede
 permisos. Salvo `SUPERADMIN`, debe coincidir con el contexto firmado del usuario.

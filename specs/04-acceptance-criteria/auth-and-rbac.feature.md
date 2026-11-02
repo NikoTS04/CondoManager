@@ -1,5 +1,39 @@
 # Criterios de Aceptación: Autenticación y Control de Acceso (RBAC) (BDD / Gherkin)
 
+## CON-77 — Aislamiento transversal
+
+Contrato: [matriz de accesos](../01-architecture/matriz-accesos-con77.md).
+
+```gherkin
+Característica: Aislamiento de recursos por condominio y unidad
+  Escenario: Identificadores ajenos no conceden acceso
+    Dado dos condominios A y B con departamentos 102 de UUID distintos
+    Y una sesión vigente de Junta, Auditor o Residente de A
+    Cuando solicita recursos de B por ruta, query o body
+    Entonces no recibe datos de B ni modifica recursos de B
+    Y saldos, versiones, archivos y eventos de negocio permanecen intactos
+
+  Escenario: Acceso legítimo sin confundir departamentos del mismo número
+    Dado un residente vinculado al departamento 102 de A
+    Cuando consulta sus unidades, pagos y reservas
+    Entonces recibe únicamente los recursos autorizados de A
+    Y la Junta y el Auditor de A conservan su lectura contextual
+    Y el SuperAdmin puede seleccionar A o B sin mezclar los resultados
+
+  Escenario: Solo lectura y revocación sobre los endpoints financieros
+    Dado un Auditor con acceso de lectura a A
+    Cuando intenta modificar condiciones, fondos o pagos de A
+    Entonces se deniega la escritura sin efectos parciales
+    Cuando su asignación se revoca
+    Entonces el token anterior ya no permite consultar recursos de A
+
+  Escenario: Cambio de sesión y contexto en el navegador
+    Dado una pantalla con datos y acciones pendientes de A
+    Cuando cambia la identidad, el rol o el condominio activo
+    Entonces se descartan los datos y las confirmaciones del contexto anterior
+    Y una respuesta tardía de A no reemplaza los datos de B
+```
+
 ## CON-04 — Alta inactiva y habilitación manual
 
 Contrato: [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
