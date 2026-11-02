@@ -64,6 +64,7 @@ export default function JuntaPortal() {
   const [motivo, setMotivo] = useState("");
   const [busy, setBusy] = useState(false);
   const cargaActual = useRef(0);
+  const revisionContexto = useRef(0);
   const contextoActual = useRef(condominioActivoId);
   contextoActual.current = condominioActivoId;
 
@@ -97,12 +98,21 @@ export default function JuntaPortal() {
   }, [loadData]);
 
   const seleccionarCondominio = useCallback((condominioId: string | null) => {
+    if (contextoActual.current === condominioId) return;
+    contextoActual.current = condominioId;
+    revisionContexto.current++;
     cargaActual.current++;
     setDepartamentosRegistrados([]);
     setComprobantes([]);
     setNotificaciones([]);
     setCondominioActivoId(condominioId);
     setPresupuesto(null);
+    setConfirmacion(null);
+    setMotivo("");
+    setFeedback(null);
+    setTitulo("");
+    setMensaje("");
+    setBusy(false);
     if (condominioId) {
       localStorage.setItem("condo_active_id", condominioId);
     } else {
@@ -152,14 +162,17 @@ export default function JuntaPortal() {
   );
   const navActual = JUNTA_NAV_ITEMS.find((item) => item.id === section);
 
+  const revisionPresupuesto = revisionContexto.current;
   const manejarPresupuestoAprobado = useCallback((nuevoPresupuesto: PresupuestoAprobado | null) => {
+    if (revisionContexto.current !== revisionPresupuesto || contextoActual.current !== condominioActivoId) return;
+    if (nuevoPresupuesto && nuevoPresupuesto.condominioId !== condominioActivoId) return;
     setPresupuesto(nuevoPresupuesto);
     setFeedback(null);
-  }, []);
+  }, [condominioActivoId, revisionPresupuesto]);
 
   function solicitarEmision(event: FormEvent) {
     event.preventDefault();
-    if (!presupuestoActual) {
+    if (!presupuestoActual || presupuestoActual.condominioId !== condominioActivoId) {
       setFeedback("Aprueba el presupuesto antes de emitir las cuotas.");
       return;
     }
@@ -182,7 +195,9 @@ export default function JuntaPortal() {
   }
 
   async function confirmarAccion() {
-    if (!confirmacion) return;
+    if (!confirmacion || !condominioActivoId || contextoActual.current !== condominioActivoId) return;
+    const revisionAccion = revisionContexto.current;
+    const sigueEnContexto = () => revisionContexto.current === revisionAccion;
     if (
       confirmacion.kind === "comprobante" &&
       confirmacion.decision !== "APROBADO" &&
@@ -199,6 +214,7 @@ export default function JuntaPortal() {
           presupuestoActual.periodo,
           presupuestoActual.condominioId,
         );
+        if (!sigueEnContexto()) return;
         setFeedback(resultado.ok
           ? `Emisión de ${presupuestoActual.periodo} completada para ${resultado.total} departamentos.`
           : `No se pudo emitir: ${resultado.error}`);
@@ -208,6 +224,7 @@ export default function JuntaPortal() {
           confirmacion.decision,
           confirmacion.decision !== "APROBADO" ? motivo.trim() : undefined,
         );
+        if (!sigueEnContexto()) return;
         if (resultado.ok) {
           setFeedback("La conciliación del comprobante se actualizó correctamente.");
           await loadData();
@@ -216,6 +233,7 @@ export default function JuntaPortal() {
         }
       } else if (confirmacion.kind === "comunicado" && condominioActivoId) {
         const resultado = await enviarComunicadoMasivo(titulo, mensaje, condominioActivoId);
+        if (!sigueEnContexto()) return;
         if (resultado.ok) {
           const alcance = resultado.generadas ?? 0;
           setFeedback(
@@ -231,11 +249,13 @@ export default function JuntaPortal() {
         }
       }
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "No se pudo completar la acción.");
+      if (sigueEnContexto()) setFeedback(error instanceof Error ? error.message : "No se pudo completar la acción.");
     } finally {
-      setBusy(false);
-      setConfirmacion(null);
-      setMotivo("");
+      if (sigueEnContexto()) {
+        setBusy(false);
+        setConfirmacion(null);
+        setMotivo("");
+      }
     }
   }
 
@@ -338,6 +358,7 @@ export default function JuntaPortal() {
                 distribucionAprobada={alicuotasValidas}
               />
               <PresupuestoMensual
+                key={condominioActivoId ?? "sin-condominio"}
                 condominioId={condominioActivoId}
                 puedeEditar={user?.rol === "ADMIN_JUNTA" || user?.rol === "SUPERADMIN"}
                 onCambioAprobado={manejarPresupuestoAprobado}
@@ -381,6 +402,7 @@ export default function JuntaPortal() {
           )}
           {section === "comunicados" && (
             <ComunicadosSection
+              key={condominioActivoId ?? "sin-condominio"}
               loading={loading}
               notificaciones={notificaciones}
               condominioId={condominioActivoId}
