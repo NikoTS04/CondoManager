@@ -1,0 +1,45 @@
+paths:
+  /cuotas/departamentos/{departamento_id}/estado-cuenta:
+    get:
+      operationId: consultarEstadoCuenta
+      tags: [Cuotas de Mantenimiento]
+      summary: Consultar movimientos y saldos del departamento autorizado
+      description: >-
+        Solo lectura por fecha de registro en Lima. Saldos de todo el rango,
+        página estable de movimientos, pagos en revisión separados y base histórica
+        explícita. Las fechas bancaria y de devengo se muestran aparte. No recalcula
+        mora ni reescribe movimientos. Contrato en specs/05-api/estado-de-cuenta.md.
+      x-implementation-status: implementado
+      parameters:
+        - name: departamento_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: desde
+          in: query
+          description: Inicio inclusivo de registro en Lima; enviar junto con hasta.
+          schema: {type: string, format: date}
+        - name: hasta
+          in: query
+          description: Fin inclusivo; máximo 366 días. Sin ambas fechas, mes actual de Lima.
+          schema: {type: string, format: date}
+        - name: limite
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200':
+          description: Movimientos privados y saldos exactos sin duplicar crédito ni recibos históricos.
+          headers:
+            Cache-Control: {schema: {type: string, const: 'private, no-store'}}
+            Vary: {schema: {type: string, const: Authorization}}
+          content:
+            application/json:
+              schema: {$ref: './estado-cuenta.schemas.yaml#/schemas/EstadoCuentaResponse'}
+        '401': {description: Sesión ausente o revocada}
+        '403': {description: Departamento o condominio no autorizado}
+        '404': {description: Departamento inexistente}
+        '409': {description: El historial no concilia con las fuentes persistidas}
+        '422': {description: 'Rango incompleto, invertido o mayor a 366 días; paginación inválida'}

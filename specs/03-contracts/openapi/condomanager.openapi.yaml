@@ -2,9 +2,10 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: Contrato objetivo del Sprint 2 acordado en CON-72. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
-  version: 2.4.0
+  version: 2.5.0
 x-contract-baseline: CON-72-2026-10-20
 x-contract-guide: ../../05-api/sprint-2-contratos.md
+x-account-statement-guide: ../../05-api/estado-de-cuenta.md
 x-financial-extension:
   status: implementado-prospectivo
   guide: ../../05-api/prorrateo-mora-reportes.md
@@ -27,6 +28,8 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /cuotas/departamentos/{departamento_id}/estado-cuenta:
+    $ref: './estado-cuenta.paths.yaml#/paths/~1cuotas~1departamentos~1%7Bdepartamento_id%7D~1estado-cuenta'
   /edificios/{edificio_id}/fondos-moras:
     $ref: './fondos-moras.paths.yaml#/paths/~1edificios~1%7Bedificio_id%7D~1fondos-moras'
   /presupuestos/{presupuesto_id}/aplicaciones-moras:
