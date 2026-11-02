@@ -13,6 +13,7 @@ Las especificaciones técnicas y funcionales detalladas se mantienen en [`specs/
 
 - [Sprint 3 — Usuarios y seguridad: reparto, dependencias, orden y criterios de cierre](sprints/SPRINT-3.md).
 - [Revisión de preparación: contraste de Jira con implementación y evidencia](sprints/SPRINT-3-REVISION.md).
+- [CON-77: aislamiento por condominio, verificaciones locales y pendientes de integración](sprints/CON-77-aislamiento.md).
 
 ## Entrega del Sprint 2
 
