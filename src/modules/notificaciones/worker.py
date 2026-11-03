@@ -25,6 +25,7 @@ from src.modules.notificaciones.service import (
     INTERVALOS_REINTENTO_SEGUNDOS,
     NotificacionesService,
 )
+from src.modules.notificaciones.transporte_smtp import transporte_proveedor
 from src.modules.pagos.models_persistencia import EventoPagoOutbox
 from src.modules.reservas.models import EventoReservaOutbox
 
@@ -121,12 +122,21 @@ def transporte_simulado(log, clave):
     return {"status": 200, "message_id": f"simulado-{clave}"}
 
 
+PROVEEDOR_ENTORNO = object()
+
+
 async def procesar_uno(
     session_factory=AsyncSessionLocal,
     transport=transporte_simulado,
     ahora=None,
     jitter=random.randint,
+    proveedor=PROVEEDOR_ENTORNO,
 ):
+    """`transport` atiende filas SIMULADO; `proveedor` las filas PROVEEDOR.
+
+    Por omisión el proveedor se construye desde la configuración (CON-78); `None`
+    equivale a un proveedor no configurado.
+    """
     reloj_fijo = ahora
     ahora = ahora or datetime.now(UTC)
     async with session_factory() as db, db.begin():
@@ -165,12 +175,16 @@ async def procesar_uno(
             log.proximo_reintento = None
             await crear_alerta(db, log, "DESTINATARIO_INVALIDO", ahora)
             return True
-        # El prototipo no configura un proveedor sin reconciliación idempotente.
+        # CON-78: el transporte se fijó al encolar; un mensaje del proveedor nunca se
+        # acredita con el simulado aunque falte la configuración del worker.
+        envio = transport
         if log.transporte != "SIMULADO":
-            log.estado = "FALLIDO_PERMANENTE"
-            log.error_mensaje = "PROVEEDOR_NO_CONFIGURADO"
-            await crear_alerta(db, log, "PROVEEDOR_NO_CONFIGURADO", ahora)
-            return True
+            envio = transporte_proveedor(settings) if proveedor is PROVEEDOR_ENTORNO else proveedor
+            if envio is None:
+                log.estado = "FALLIDO_PERMANENTE"
+                log.error_mensaje = "PROVEEDOR_NO_CONFIGURADO"
+                await crear_alerta(db, log, "PROVEEDOR_NO_CONFIGURADO", ahora)
+                return True
         log.intentos += 1
         # Cambiar la fila impide adquirirla desde una instantánea anterior al commit.
         log.bloqueado_hasta = ahora + timedelta(minutes=5)
@@ -187,7 +201,7 @@ async def procesar_uno(
         clave = f"{lid}-{log.ciclo}-{log.intentos}"
     # El intento ya es durable antes del efecto externo. No mantener locks de SQL en red.
     try:
-        resultado = await asyncio.to_thread(transport, log, clave)
+        resultado = await asyncio.to_thread(envio, log, clave)
     except Exception:
         resultado = {"status": 500, "error": "FALLO_TRANSPORTE"}
     ahora = reloj_fijo or datetime.now(UTC)
@@ -200,7 +214,14 @@ async def procesar_uno(
         log.bloqueado_hasta = None
         log.fecha_actualizacion = ahora
         status = resultado.get("status", 500)
-        if 200 <= status < 300:
+        if resultado.get("incierto"):
+            # El contenido salió sin confirmación: reenviar podría duplicar el correo.
+            intento.error = "ACEPTACION_INCIERTA"
+            log.estado = "FALLIDO_PERMANENTE"
+            log.error_mensaje = "ACEPTACION_INCIERTA_REQUIERE_REVISION"
+            log.proximo_reintento = None
+            await crear_alerta(db, log, "ACEPTACION_INCIERTA", ahora)
+        elif 200 <= status < 300:
             log.estado = "ENVIADO"
             log.proveedor_message_id = str(resultado.get("message_id") or clave)
             intento.proveedor_message_id = log.proveedor_message_id

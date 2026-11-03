@@ -6,10 +6,20 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from src.core.authorization import contexto_consulta, vinculos_activos
+from src.core.config import settings
 from src.modules.condominios.models import Departamento, Edificio
 from src.modules.notificaciones.models import Notificacion
 from src.modules.notificaciones.templates import PlantillasService
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol
+
+
+def transporte_de_canal(canal):
+    """CON-78: solo EMAIL tiene proveedor real; otros canales siguen simulados.
+
+    El transporte se fija al encolar, de modo que un mensaje simulado nunca se
+    acredita como envío real aunque después cambie la configuración del worker.
+    """
+    return "PROVEEDOR" if canal == "EMAIL" and settings.EMAIL_TRANSPORTE == "SMTP" else "SIMULADO"
 
 
 class NotificacionesRepository:
@@ -64,7 +74,7 @@ class NotificacionesRepository:
                 asunto=asunto,
                 cuerpo=cuerpo,
                 estado="EN_COLA",
-                transporte="SIMULADO",
+                transporte=transporte_de_canal(canal),
                 ciclo=1,
                 intentos=0,
             )

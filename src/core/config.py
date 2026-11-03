@@ -1,5 +1,7 @@
 """Configuración centralizada de la aplicación mediante Pydantic Settings."""
 
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,6 +26,17 @@ class Settings(BaseSettings):
 
     # CON-22: evidencia privada local durante el prototipo (ruta relativa al proyecto).
     VOUCHERS_DIR: str = "uploads/vouchers"
+
+    # CON-78: correo transaccional. SIMULADO no sale a la red; SMTP exige host y remitente.
+    EMAIL_TRANSPORTE: Literal["SIMULADO", "SMTP"] = "SIMULADO"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = Field(default=587, ge=1, le=65535)
+    SMTP_USUARIO: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_SEGURIDAD: Literal["STARTTLS", "SSL", "NINGUNA"] = "STARTTLS"
+    SMTP_REMITENTE: str = ""
+    SMTP_NOMBRE_REMITENTE: str = "CondoManager"
+    SMTP_TIMEOUT_SEGUNDOS: float = Field(default=15.0, gt=0, le=120)
 
     # JWT y Seguridad
     JWT_SECRET: str = "super_secret_condo_manager_jwt_key_development_only_2026_xyz"
