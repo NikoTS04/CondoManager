@@ -49,14 +49,36 @@ class FinanzasContrato:
             and puede_ver_departamento(usuario, d["id"])
         ]
 
-    async def listar(self, usuario, cid=None):
+    async def listar(
+        self,
+        usuario,
+        cid=None,
+        fecha_desde=None,
+        fecha_hasta=None,
+        departamento_id=None,
+        banco=None,
+        estado=None,
+        limit=50,
+        offset=0,
+    ):
         cid = contexto_consulta(usuario, cid)
-        return [
+        items = [
             {**c, "banco": c["banco_origen"]}
             for c in self.comprobantes.values()
             if str(c["condominio_id"]) == str(cid)
             and puede_ver_departamento(usuario, c["departamento_id"])
         ]
+        if departamento_id is not None:
+            items = [c for c in items if str(c["departamento_id"]) == str(departamento_id)]
+        if fecha_desde is not None:
+            items = [c for c in items if c["fecha_operacion"] >= fecha_desde]
+        if fecha_hasta is not None:
+            items = [c for c in items if c["fecha_operacion"] <= fecha_hasta]
+        if banco is not None and banco.strip():
+            items = [c for c in items if c["banco"].strip().lower() == banco.strip().lower()]
+        if estado is not None and estado.strip():
+            items = [c for c in items if c["estado"] == estado.strip().upper()]
+        return items[offset : offset + limit]
 
     async def reportar(self, request, archivo, usuario):
         d = self.departamento(request.departamento_id, usuario, True)

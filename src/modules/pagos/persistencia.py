@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import Depends, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.authorization import contexto_consulta, puede_ver_departamento
+from src.core.authorization import contexto_consulta, puede_ver_departamento, vinculos_activos
 from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.modules.condominios.models import Condominio, Departamento, Edificio
@@ -52,7 +52,18 @@ class PagosPersistentesService:
             motivo_rechazo=c.motivo_rechazo,
         )
 
-    async def listar(self, usuario, condominio_id=None):
+    async def listar(
+        self,
+        usuario,
+        condominio_id=None,
+        fecha_desde=None,
+        fecha_hasta=None,
+        departamento_id=None,
+        banco=None,
+        estado=None,
+        limit=50,
+        offset=0,
+    ):
         cid = contexto_consulta(usuario, condominio_id)
         async with self.session.begin():
             query = (
@@ -60,8 +71,46 @@ class PagosPersistentesService:
                 .join(Departamento, ComprobantePago.departamento_id == Departamento.id)
                 .join(Edificio, Departamento.edificio_id == Edificio.id)
                 .where(Edificio.condominio_id == cid)
-                .order_by(ComprobantePago.creado_en.desc(), ComprobantePago.id)
             )
+            if usuario.get("rol") == "RESIDENTE":
+                vinculos = [UUID(vid) for vid in vinculos_activos(usuario)]
+                if not vinculos:
+                    return []
+                if departamento_id is not None:
+                    if departamento_id not in vinculos:
+                        raise APIError(
+                            403,
+                            "ACCESO_DENEGADO",
+                            "El departamento no pertenece a sus vínculos activos.",
+                        )
+                    query = query.where(ComprobantePago.departamento_id == departamento_id)
+                else:
+                    query = query.where(ComprobantePago.departamento_id.in_(vinculos))
+            else:
+                if departamento_id is not None:
+                    query = query.where(ComprobantePago.departamento_id == departamento_id)
+
+            if fecha_desde is not None:
+                query = query.where(ComprobantePago.fecha_operacion >= fecha_desde)
+            if fecha_hasta is not None:
+                query = query.where(ComprobantePago.fecha_operacion <= fecha_hasta)
+            if banco is not None and banco.strip():
+                query = query.where(
+                    func.lower(ComprobantePago.banco_origen) == banco.strip().lower()
+                )
+            if estado is not None and estado.strip():
+                query = query.where(ComprobantePago.estado == estado.strip().upper())
+
+            query = (
+                query.order_by(
+                    ComprobantePago.fecha_operacion.desc(),
+                    ComprobantePago.creado_en.desc(),
+                    ComprobantePago.id.desc(),
+                )
+                .limit(limit)
+                .offset(offset)
+            )
+
             return [
                 self.dto(c)
                 for c in await self.session.scalars(query)
