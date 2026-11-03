@@ -954,8 +954,32 @@ export function fetchEstadoCuenta(departamentoId: string, desde: string, hasta: 
   return recursoRequest(`/cuotas/departamentos/${encodeURIComponent(departamentoId)}/estado-cuenta?${query}`, { signal, cache: "no-store" });
 }
 
-export function fetchComprobantes(condominioId?: string | null): Promise<ComprobantePago[]> {
-  return recursoRequest(`/pagos/comprobantes${contextoQuery(condominioId)}`);
+export interface FiltrosComprobantes {
+  departamentoId?: string;
+  banco?: string;
+  estado?: string;
+  fechaDesde?: string;
+  fechaHasta?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export function fetchComprobantes(
+  condominioId?: string | null,
+  filtros?: FiltrosComprobantes
+): Promise<ComprobantePago[]> {
+  const params = new URLSearchParams();
+  if (condominioId) params.append("condominio_id", condominioId);
+  if (filtros?.departamentoId && filtros.departamentoId !== "TODOS") params.append("departamento_id", filtros.departamentoId);
+  if (filtros?.banco && filtros.banco.trim()) params.append("banco", filtros.banco.trim());
+  if (filtros?.estado && filtros.estado !== "TODOS") params.append("estado", filtros.estado);
+  if (filtros?.fechaDesde) params.append("fecha_desde", filtros.fechaDesde);
+  if (filtros?.fechaHasta) params.append("fecha_hasta", filtros.fechaHasta);
+  if (filtros?.limit) params.append("limit", String(filtros.limit));
+  if (filtros?.offset) params.append("offset", String(filtros.offset));
+
+  const qs = params.toString();
+  return recursoRequest(`/pagos/comprobantes${qs ? `?${qs}` : ""}`);
 }
 
 export async function conciliarComprobante(
