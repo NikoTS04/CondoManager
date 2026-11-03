@@ -54,7 +54,47 @@ atiende en la misma transacción las alertas abiertas de esa notificación.
 
 ## 4. Transporte Simulado Determinista
 
-Mientras no exista proveedor real, el transporte `SIMULADO` interpreta el destinatario:
+Con `EMAIL_TRANSPORTE=SIMULADO` (y siempre para WhatsApp, SMS y Push), el transporte `SIMULADO` interpreta el destinatario:
 `usuario+falla{n}@dominio` responde 503 mientras los intentos acumulados sean menores
 o iguales que `n`, y `usuario+rebote@dominio` responde 550. Solo acredita `ENVIADO`.
 Entrega y resultados: [CON-32/34/36/37](../../../docs/sprints/CON-32-34-36-37-notificaciones.md).
+
+## 5. Transporte SMTP real (CON-78)
+
+Implementación: `src/modules/notificaciones/transporte_smtp.py`. Configuración por
+entorno (`.env.example`): `EMAIL_TRANSPORTE=SMTP`, `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_SEGURIDAD` (`STARTTLS`, `SSL` o `NINGUNA`), `SMTP_USUARIO`/`SMTP_PASSWORD`
+(ambos o ninguno), `SMTP_REMITENTE`, `SMTP_NOMBRE_REMITENTE` y `SMTP_TIMEOUT_SEGUNDOS`.
+
+**Selección del transporte.** Se fija al encolar en `notificaciones_logs.transporte`:
+`PROVEEDOR` solo para `EMAIL` cuando `EMAIL_TRANSPORTE=SMTP`; el resto queda `SIMULADO`.
+El worker atiende cada fila con su transporte registrado. Una fila `PROVEEDOR` con el
+worker sin configuración completa pasa a `FALLIDO_PERMANENTE` con alerta
+`PROVEEDOR_NO_CONFIGURADO`; nunca se acredita con el transporte simulado.
+
+**Resultado normalizado.** SMTP solo acredita aceptación del servidor: el éxito es
+`ENVIADO`, no `ENTREGADO` (este último requiere evidencia posterior del proveedor,
+fuera de esta entrega).
+
+| Fase / respuesta | Resultado | Efecto en la cola |
+| :--- | :--- | :--- |
+| 250 tras el contenido | `ENVIADO` | Guarda el `Message-ID` en log e intento. |
+| Conexión, TLS, autenticación, `MAIL FROM` o timeout antes de `DATA` | `FALLO_TEMPORAL` (503) | Reintento según §1; si persiste, `INTENTOS_AGOTADOS`. |
+| `RCPT TO` 5xx | `550` | `FALLIDO_PERMANENTE` + `ERROR_DEFINITIVO`. |
+| `RCPT TO`, `DATA` o respuesta final 4xx | `FALLO_TEMPORAL` | Reintento. |
+| `DATA` o respuesta final 5xx | `FALLO_DEFINITIVO` (422) | `FALLIDO_PERMANENTE` + `ERROR_DEFINITIVO`. |
+| Desconexión o timeout después de transmitir el contenido | `ACEPTACION_INCIERTA` | `FALLIDO_PERMANENTE` + alerta `ACEPTACION_INCIERTA`; **no se reenvía solo**. |
+
+Los errores registrados son códigos normalizados: no se guardan textos del servidor,
+que pueden repetir direcciones o credenciales.
+
+**Idempotencia y reconciliación.** SMTP no ofrece claves de idempotencia. Cada intento
+envía `Message-ID: <{log_id}-{ciclo}-{intento}@{dominio del remitente}>` y la cabecera
+`X-CondoManager-Notificacion` con la misma clave. Ante una aceptación incierta, la Junta
+puede buscar ese identificador en los registros del proveedor antes de decidir un
+reenvío manual (nuevo ciclo). Un intento sin terminar por caída del worker se resuelve
+igual mediante `recuperar_inciertos` (§3).
+
+**Desarrollo y demo.** Docker Compose usa por omisión Mailpit (`mailpit:1025`, interfaz
+en `http://localhost:8025`), que captura los correos sin reenviarlos. El ambiente demo
+define el proveedor real en `.env` y envía solo a cuentas de prueba autorizadas.
