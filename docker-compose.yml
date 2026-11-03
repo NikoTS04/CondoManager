@@ -46,6 +46,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - DEMO_MODE=${DEMO_MODE:-false}
+      # CON-78: fija el transporte de los correos que la API encola (debe coincidir con el worker).
+      - EMAIL_TRANSPORTE=${EMAIL_TRANSPORTE:-SMTP}
     ports:
       - "8000:8000"
     volumes:
@@ -116,11 +118,31 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379/0
+      # CON-78: por omisión el correo de desarrollo se captura en Mailpit (http://localhost:8025).
+      # En el ambiente demo, definir en .env el proveedor real y sus credenciales.
+      - EMAIL_TRANSPORTE=${EMAIL_TRANSPORTE:-SMTP}
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_SEGURIDAD=${SMTP_SEGURIDAD:-NINGUNA}
+      - SMTP_USUARIO=${SMTP_USUARIO:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_REMITENTE=${SMTP_REMITENTE:-avisos@condomanager.local}
+      - SMTP_NOMBRE_REMITENTE=${SMTP_NOMBRE_REMITENTE:-CondoManager}
+      - SMTP_TIMEOUT_SEGUNDOS=${SMTP_TIMEOUT_SEGUNDOS:-15}
     depends_on:
       backend:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  # CON-78: buzón SMTP local de desarrollo. No reenvía correos a Internet.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "8025:8025"
+    restart: unless-stopped
 
   # Frontend Web Next.js 14 (App Router)
   frontend:
