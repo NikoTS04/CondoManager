@@ -905,6 +905,55 @@ export function fetchSolvencia(departamentoId: string): Promise<Solvencia> {
   return recursoRequest(`/pagos/solvencia/${encodeURIComponent(departamentoId)}`);
 }
 
+export interface MovimientoCuenta {
+  id: string;
+  fecha: string;
+  registrado_en: string;
+  fecha_operacion: string | null;
+  tipo: "EMISION_CUOTA" | "DEVENGO_MORA" | "AJUSTE_MORA" | "PAGO_APROBADO" | "APLICACION_CREDITO" | "DISTRIBUCION_PAGO";
+  descripcion: string;
+  importe: string;
+  cargo: string;
+  abono: string;
+  saldo: string;
+  cuota_id: string | null;
+  comprobante_id: string | null;
+  origen_id: string;
+  periodo_cuota: string | null;
+}
+
+export interface EstadoCuenta {
+  departamento_id: string;
+  condominio_id: string;
+  moneda: Moneda;
+  desde: string;
+  hasta: string;
+  generado_en: string;
+  historial_desde: string | null;
+  base_historica_sin_fecha: boolean;
+  credito_inicial_sin_desglose: string;
+  abonos_historicos_sin_desglose: string;
+  saldo_base_historico: string;
+  saldo_inicial: string;
+  cargos_periodo: string;
+  abonos_periodo: string;
+  saldo_final: string;
+  deuda_actual: string;
+  deuda_vencida_actual: string;
+  saldo_a_favor_actual: string;
+  saldo_neto_actual: string;
+  total_movimientos: number;
+  limite: number;
+  offset: number;
+  movimientos: MovimientoCuenta[];
+  pagos_en_revision: { id: string; fecha_reporte: string; fecha_operacion: string; banco: string; numero_operacion: string; monto: string }[];
+}
+
+export function fetchEstadoCuenta(departamentoId: string, desde: string, hasta: string, offset = 0, signal?: AbortSignal): Promise<EstadoCuenta> {
+  const query = new URLSearchParams({ desde, hasta, offset: String(offset), limite: "50" });
+  return recursoRequest(`/cuotas/departamentos/${encodeURIComponent(departamentoId)}/estado-cuenta?${query}`, { signal, cache: "no-store" });
+}
+
 export function fetchComprobantes(condominioId?: string | null): Promise<ComprobantePago[]> {
   return recursoRequest(`/pagos/comprobantes${contextoQuery(condominioId)}`);
 }
