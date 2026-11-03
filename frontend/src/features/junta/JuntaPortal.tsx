@@ -426,6 +426,7 @@ export default function JuntaPortal() {
             <ConciliacionSection
               loading={loading}
               comprobantes={comprobantes}
+              condominioId={condominioActivoId}
               departamentos={departamentosRegistrados}
               isAuditor={isAuditor}
               busy={busy}

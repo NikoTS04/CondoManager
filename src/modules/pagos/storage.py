@@ -17,9 +17,7 @@ from src.core.errors import APIError
 
 MAX_BYTES = 5 * 1024 * 1024
 NOMBRE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|pdf)")
-NOMBRE_DOCUMENTO = re.compile(
-    r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|pdf|docx)"
-)
+NOMBRE_DOCUMENTO = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|pdf|docx)")
 MIME = {
     "png": "image/png",
     "jpg": "image/jpeg",
@@ -89,22 +87,35 @@ class VoucherStorage:
                 try:
                     pdf = PdfReader(io.BytesIO(datos), strict=True)
                     if pdf.is_encrypted or not 1 <= len(pdf.pages) <= 500:
-                        raise APIError(422, "DOCUMENTO_INVALIDO", "PDF protegido o fuera de límites.")
+                        raise APIError(
+                            422, "DOCUMENTO_INVALIDO", "PDF protegido o fuera de límites."
+                        )
                     return "pdf", MIME["pdf"]
                 except Exception as exc:
-                    raise APIError(422, "DOCUMENTO_INVALIDO", "No se pudo validar el archivo PDF.") from exc
+                    raise APIError(
+                        422, "DOCUMENTO_INVALIDO", "No se pudo validar el archivo PDF."
+                    ) from exc
 
             if datos.startswith(b"PK\x03\x04"):
                 try:
                     with zipfile.ZipFile(io.BytesIO(datos)) as zf:
                         nombres = set(zf.namelist())
-                        if "[Content_Types].xml" not in nombres or "word/document.xml" not in nombres:
-                            raise APIError(422, "DOCUMENTO_INVALIDO", "El archivo DOCX no es válido.")
+                        if (
+                            "[Content_Types].xml" not in nombres
+                            or "word/document.xml" not in nombres
+                        ):
+                            raise APIError(
+                                422, "DOCUMENTO_INVALIDO", "El archivo DOCX no es válido."
+                            )
                     return "docx", MIME["docx"]
                 except zipfile.BadZipFile as exc:
-                    raise APIError(422, "DOCUMENTO_INVALIDO", "El archivo DOCX está dañado.") from exc
+                    raise APIError(
+                        422, "DOCUMENTO_INVALIDO", "El archivo DOCX está dañado."
+                    ) from exc
 
-            raise APIError(415, "FORMATO_NO_SOPORTADO", "Formato no soportado para prorrateo. Use PDF o DOCX.")
+            raise APIError(
+                415, "FORMATO_NO_SOPORTADO", "Formato no soportado para prorrateo. Use PDF o DOCX."
+            )
 
         # Por defecto validación de VOUCHER
         try:
@@ -170,16 +181,23 @@ class VoucherStorage:
             )
         # Prevención estricta de Path Traversal
         if ".." in nombre or "/" in nombre or "\\" in nombre:
-            raise APIError(
-                404, "VOUCHER_NO_DISPONIBLE", "Ruta de archivo no autorizada."
-            )
+            raise APIError(404, "VOUCHER_NO_DISPONIBLE", "Ruta de archivo no autorizada.")
         ruta = self.directorio / nombre
-        if ruta.is_symlink() or ruta.resolve().parent != self.directorio.resolve() or not ruta.is_file():
+        if (
+            ruta.is_symlink()
+            or ruta.resolve().parent != self.directorio.resolve()
+            or not ruta.is_file()
+        ):
             raise APIError(404, "VOUCHER_NO_DISPONIBLE", "La evidencia local no está disponible.")
         return ruta
 
     def eliminar(self, nombre: str):
-        if NOMBRE_DOCUMENTO.fullmatch(nombre) and ".." not in nombre and "/" not in nombre and "\\" not in nombre:
+        if (
+            NOMBRE_DOCUMENTO.fullmatch(nombre)
+            and ".." not in nombre
+            and "/" not in nombre
+            and "\\" not in nombre
+        ):
             ruta = self.directorio / nombre
             if not ruta.is_symlink():
                 ruta.unlink(missing_ok=True)
