@@ -32,8 +32,8 @@
 | `PENDIENTE` | `EXPIRAR_FECHA` | `VENCIDA` | `fecha_actual > fecha_vencimiento` | Marca cuota como vencida. Habilita cuenta regresiva de periodo de gracia. |
 | `VENCIDA` | `APLICAR_MORA` | `EN_MORA` | Fecha local posterior a vencimiento + gracia histórica y principal impago | Devengo diario por cuota/fecha; default 1.00 PEN editable. Pausa de revisión no condona ni habilita reservas. |
 | `EN_MORA` / `PAGO_PARCIAL` | `DEVENGAR_DIA_MORA` | `EN_MORA` | Principal impago, fecha exigible no procesada, política histórica | Incrementa mora sin capitalización; reintentos no duplican; ajustes bancarios son compensatorios. |
-| `PENDIENTE` / `VENCIDA` / `EN_MORA` | `CONCILIAR_TOTAL` | `PAGADA` | `monto_imputado == monto_total_exigible` | Desbloquea reservas si no adeuda otras cuotas, emite `PagoConciliadoEvent`. |
-| `PENDIENTE` / `VENCIDA` / `EN_MORA` | `CONCILIAR_PARCIAL`| `PAGO_PARCIAL` | `0.00 < monto_imputado < monto_total_exigible`| Actualiza `monto_pagado`, recalcula `monto_total_exigible`. Mantiene restricción de mora. |
+| `PENDIENTE` / `VENCIDA` / `EN_MORA` / `PAGO_PARCIAL` | `CONCILIAR_TOTAL` | `PAGADA` | Pagado acumulado igual al exigible vigente | Desbloquea reservas solo si no hay otra deuda vencida; emite `PagoConciliadoEvent`. |
+| `PENDIENTE` / `VENCIDA` / `EN_MORA` / `PAGO_PARCIAL` | `CONCILIAR_PARCIAL` | `EN_MORA` o `PAGO_PARCIAL` | `0.00 < monto_pagado < monto_total_exigible` | CON-27: conserva EN_MORA si queda deuda vencida; fuera de mora, PAGO_PARCIAL. El abono no reduce el bruto; los ajustes de mora se contabilizan aparte. |
 
 CON-13: las tres transiciones de emisión son atómicas bajo bloqueo condominio
 → departamento → cuota; el primero serializa la cadena de auditoría.

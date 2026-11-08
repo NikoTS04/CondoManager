@@ -189,8 +189,12 @@ schemas:
       comprobante_id: {$ref: '#/schemas/UUID'}
       estado_final: {type: string, enum: [APROBADO, RECHAZADO, OBSERVADO]}
       monto_imputado: {$ref: '#/schemas/Dinero'}
-      nuevo_saldo_departamento: {$ref: '#/schemas/Dinero'}
-      saldo_a_favor_generado: {$ref: '#/schemas/Dinero'}
+      nuevo_saldo_departamento:
+        $ref: '#/schemas/Dinero'
+        description: Deuda al confirmar esta revisión; es un recibo histórico, no el saldo actual.
+      saldo_a_favor_generado:
+        $ref: '#/schemas/Dinero'
+        description: Crédito atribuible a este comprobante al revisarlo; no necesariamente la variación global del crédito tras un retroactivo.
       departamento_habilitado_reservas: {type: boolean}
       motivo_rechazo: {type: [string, 'null']}
   Notificacion:
