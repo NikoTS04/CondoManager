@@ -83,11 +83,14 @@ test("el recibo de excedente no convierte el crédito en otro pago", () => {
 });
 
 test("observación y rechazo muestran instrucciones distintas y escapan el motivo", () => {
-  const observado = render(ResultadoPago, { resultado: { ...recibo, estado_final: "OBSERVADO",
-    motivo_rechazo: "<script>ilegible</script>" } });
-  assert.match(observado, /Subsanar voucher/);
-  assert.match(observado, /&lt;script&gt;/);
-  assert.doesNotMatch(observado, /<script>/);
+  // Comprueba el escape de HTML con ambas variantes de mayúsculas del marcador.
+  for (const motivo of ["<script>ilegible</script>", "<SCRIPT>ilegible</SCRIPT>"]) {
+    const observado = render(ResultadoPago, { resultado: { ...recibo, estado_final: "OBSERVADO",
+      motivo_rechazo: motivo } });
+    assert.match(observado, /Subsanar voucher/);
+    assert.match(observado, /&lt;script&gt;/i);
+    assert.doesNotMatch(observado, /<script\b/i);
+  }
   const rechazado = render(ResultadoPago, { resultado: { ...recibo, estado_final: "RECHAZADO", motivo_rechazo: "No acreditado" } });
   assert.match(rechazado, /decisión es definitiva/);
   assert.doesNotMatch(rechazado, /Subsanar voucher/);
