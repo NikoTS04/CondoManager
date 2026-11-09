@@ -1,7 +1,8 @@
 # CON-25–28 — Conciliación de Anderson, Sprint 3
 
-Base: `aa2ee99`, rama `feat/CON-25-conciliacion-pagos`. Cambios locales sin commit.
-Este documento no cambia Jira ni acredita revisión de pares o despliegue compartido.
+Base original: `aa2ee99`, rama `feat/CON-25-conciliacion-pagos`.
+Entrega publicada en [PR #37](https://github.com/NikoTS04/CondoManager/pull/37) para revisión hacia `develop`.
+Este documento no cambia Jira ni acredita revisión de pares, aceptación completa o despliegue compartido.
 
 ## Alcance implementado
 
@@ -36,7 +37,13 @@ BDD: `sprint_3_anderson.feature` y `test_pagos_sprint3_bdd.py`.
 
 ## Verificación local
 
-Resultados finales y rutas de evidencia se completan al finalizar la ejecución.
+Los resultados finales del incremento están documentados en los informes
+[de Fase B](CON-25-28-fase-b.md), [Fase C](CON-25-28-fase-c.md) y
+[Fase D](CON-25-28-fase-d.md). Fase C acreditó 734 pruebas backend sin fallos,
+92,37 % de cobertura y 31 pruebas frontend aprobadas. Fase D acreditó 18
+capturas, 16 fotografías SQL y 20/20 comprobaciones psql; los tres recorridos
+complementarios con API interceptada se reportan separadamente.
+Los artefactos detallados permanecen en `tmp/` y no forman parte del PR.
 No deben interpretarse las corridas históricas de Sprint 2 como resultado nuevo.
 
 Los casos nuevos se ejecutan con fábrica `autoflush=False`, fechas fijas y una
@@ -107,6 +114,10 @@ logs y cobertura del runner quedan en `tmp/sprint3/`, ignorado por Git.
   actual solo es SIMULADO y rechaza PROVEEDOR no configurado. No se implementó
   trabajo de Alejandro ni se informó una entrega ficticia.
 - Aceptación en ambiente compartido, revisión de otro integrante y actualización
-  de Jira continúan pendientes. No se hicieron commits, pushes o cambios de rama.
+  de Jira continúan pendientes. El código se publicó en la rama del
+  [PR #37](https://github.com/NikoTS04/CondoManager/pull/37) hacia `develop`,
+  pero el PR no está fusionado ni supone aprobación funcional definitiva.
+- La regla de fecha bancaria frente a emisión de cuotas requiere acuerdo
+  funcional con el equipo antes del cierre.
 - La protección SQL adicional de auditorías/recibos y los timeouts globales son
   endurecimientos transversales; no se alteraron en este incremento.
