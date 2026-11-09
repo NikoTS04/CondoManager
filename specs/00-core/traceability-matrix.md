@@ -6,6 +6,24 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 ## Matriz de Trazabilidad de Extremo a Extremo (End-to-End)
 
+### Consolidación de pagos Sprint 3 — Anderson
+
+Contrato común: [CON-25–28](../05-api/pagos-sprint-3.md). Se reutilizan las tablas
+y motores financieros integrados. No sustituye CON-14, los filtros CON-24 ni el
+transporte de correo CON-78. Aceptación del equipo y entrega real de correo se
+acreditan por separado de las pruebas locales.
+
+| Historia | Regla / contrato existente | BDD ejecutable | Verificación adicional |
+|---|---|---|---|
+| CON-25 / PAG-04 | Aprobar e imputar atómicamente, recibo recuperable, prelación y fecha bancaria | `02-pagos-y-moras/features/sprint_3_anderson.feature` → `src/tests/bdd/test_pagos_sprint3_bdd.py` | `test_pagos_sprint3_db.py`, `test_mora_diaria_db.py`, `test_fondos_moras_db.py` |
+| CON-26 / PAG-05 | Motivo, observación/subsanación versionada, rechazo definitivo, evento sin acreditar comprobante | Mismo feature, escenario CON-26 | `test_convergencia_con72.py`, `test_notificaciones_pagos_db.py` |
+| CON-27 / PAG-06 | Abono y saldo restante; EN_MORA mientras quede deuda vencida | Mismo feature, escenario CON-27 | `test_pagos_sprint3_db.py`, `test_estado_cuenta_db.py` y solvencia SQL |
+| CON-28 / PAG-07 | Crédito con origen y consumo único en CON-13 | Mismo feature, escenario CON-28 | `test_pagos_sprint3_db.py`, `test_emision_db.py`, `test_saldos_favor_db.py` |
+
+Los features de la tabla residen en `specs/02-domains/`. La evidencia real de
+navegador se reproduce con `scripts/evidencia_pagos_sprint3.py`; los bordes de UI
+con API interceptada están separados en `frontend/e2e/pagos_sprint3.py`.
+
 ### Extensión financiera objetivo (pendiente de implementación)
 
 | Código documental | Regla | Dominio / decisión | Contrato | Aceptación |

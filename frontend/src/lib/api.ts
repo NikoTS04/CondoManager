@@ -905,23 +905,116 @@ export function fetchSolvencia(departamentoId: string): Promise<Solvencia> {
   return recursoRequest(`/pagos/solvencia/${encodeURIComponent(departamentoId)}`);
 }
 
+export interface MovimientoCuenta {
+  id: string;
+  fecha: string;
+  registrado_en: string;
+  fecha_operacion: string | null;
+  tipo: "EMISION_CUOTA" | "DEVENGO_MORA" | "AJUSTE_MORA" | "PAGO_APROBADO" | "APLICACION_CREDITO" | "DISTRIBUCION_PAGO";
+  descripcion: string;
+  importe: string;
+  cargo: string;
+  abono: string;
+  saldo: string;
+  cuota_id: string | null;
+  comprobante_id: string | null;
+  origen_id: string;
+  periodo_cuota: string | null;
+}
+
+export interface EstadoCuenta {
+  departamento_id: string;
+  condominio_id: string;
+  moneda: Moneda;
+  desde: string;
+  hasta: string;
+  generado_en: string;
+  historial_desde: string | null;
+  base_historica_sin_fecha: boolean;
+  credito_inicial_sin_desglose: string;
+  abonos_historicos_sin_desglose: string;
+  saldo_base_historico: string;
+  saldo_inicial: string;
+  cargos_periodo: string;
+  abonos_periodo: string;
+  saldo_final: string;
+  deuda_actual: string;
+  deuda_vencida_actual: string;
+  saldo_a_favor_actual: string;
+  saldo_neto_actual: string;
+  total_movimientos: number;
+  limite: number;
+  offset: number;
+  movimientos: MovimientoCuenta[];
+  pagos_en_revision: { id: string; fecha_reporte: string; fecha_operacion: string; banco: string; numero_operacion: string; monto: string }[];
+}
+
+export function fetchEstadoCuenta(departamentoId: string, desde: string, hasta: string, offset = 0, signal?: AbortSignal): Promise<EstadoCuenta> {
+  const query = new URLSearchParams({ desde, hasta, offset: String(offset), limite: "50" });
+  return recursoRequest(`/cuotas/departamentos/${encodeURIComponent(departamentoId)}/estado-cuenta?${query}`, { signal, cache: "no-store" });
+}
+
 export function fetchComprobantes(condominioId?: string | null): Promise<ComprobantePago[]> {
   return recursoRequest(`/pagos/comprobantes${contextoQuery(condominioId)}`);
 }
 
+export type DecisionPago = "APROBADO" | "RECHAZADO" | "OBSERVADO";
+
+/** Recibo histórico. No representa necesariamente los saldos actuales de CON-14. */
+export interface ResultadoRevisionPago {
+  comprobante_id: string;
+  estado_final: DecisionPago;
+  monto_imputado: string;
+  nuevo_saldo_departamento: string;
+  saldo_a_favor_generado: string;
+  departamento_habilitado_reservas: boolean;
+  motivo_rechazo: string | null;
+}
+
+function validarResultadoPago(data: ResultadoRevisionPago, id: string): ResultadoRevisionPago {
+  if (!data || data.comprobante_id !== id ||
+      !["APROBADO", "OBSERVADO", "RECHAZADO"].includes(data.estado_final) ||
+      ![data.monto_imputado, data.nuevo_saldo_departamento, data.saldo_a_favor_generado]
+        .every((v) => typeof v === "string" && /^\d+\.\d{2}$/.test(v)) ||
+      typeof data.departamento_habilitado_reservas !== "boolean" ||
+      (data.motivo_rechazo !== null && typeof data.motivo_rechazo !== "string")) {
+    throw new Error("No se pudo verificar el recibo. Consulta el resultado antes de volver a decidir.");
+  }
+  return data;
+}
+
+export async function fetchResultadoPago(comprobanteId: string, signal?: AbortSignal): Promise<ResultadoRevisionPago> {
+  const data = await recursoRequest<ResultadoRevisionPago>(`/pagos/${encodeURIComponent(comprobanteId)}/resultado`, {
+    signal, cache: "no-store",
+  });
+  return validarResultadoPago(data, comprobanteId);
+}
+
+export type RespuestaRevisionPago =
+  | { ok: true; data: ResultadoRevisionPago }
+  | { ok: false; error: string; errorCode?: string; status?: number; incierto: boolean };
+
 export async function conciliarComprobante(
   comprobanteId: string,
-  decision: "APROBADO" | "RECHAZADO" | "OBSERVADO",
-  motivo_rechazo?: string
-): Promise<{ ok: boolean; error?: string }> {
+  decision: DecisionPago,
+  motivo_rechazo?: string,
+  notas_internas?: string,
+): Promise<RespuestaRevisionPago> {
   try {
-    await recursoRequest(`/pagos/${encodeURIComponent(comprobanteId)}/conciliar`, {
+    const data = await recursoRequest<ResultadoRevisionPago>(`/pagos/${encodeURIComponent(comprobanteId)}/conciliar`, {
       method: "POST",
-      body: JSON.stringify({ decision, motivo_rechazo }),
+      body: JSON.stringify({ decision, motivo_rechazo, notas_internas }),
     });
-    return { ok: true };
+    const resultado = validarResultadoPago(data, comprobanteId);
+    if (resultado.estado_final !== decision) throw new Error("La respuesta no corresponde a la decisión solicitada. Consulta el resultado.");
+    return { ok: true, data: resultado };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "No se pudo conciliar." };
+    return {
+      ok: false, error: error instanceof Error ? error.message : "No se pudo conciliar.",
+      errorCode: error instanceof ApiError ? error.errorCode : undefined,
+      status: error instanceof ApiError ? error.status : undefined,
+      incierto: !(error instanceof ApiError) || error.status >= 500 || error.status === 408,
+    };
   }
 }
 

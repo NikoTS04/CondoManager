@@ -8,7 +8,12 @@ from sqlalchemy import select
 
 from src.core.errors import APIError
 from src.modules.pagos.calculo_diario import CuotaCalculo, es_diaria, reconstruir
-from src.modules.pagos.contabilidad import CERO, MAX_MONEDA, saldo_en_mora
+from src.modules.pagos.contabilidad import (
+    CERO,
+    MAX_MONEDA,
+    saldo_en_mora,
+    validar_conservacion_pago,
+)
 from src.modules.pagos.fondos import FondosMorasService
 from src.modules.pagos.models import ComprobantePago, ImputacionPago
 from src.modules.pagos.models_mora import (
@@ -131,6 +136,19 @@ class MoraDiariaService:
         )
         calculo = reconstruir(bases, pagos, hasta, limites, alcances)
         movimientos = calculo["movimientos"]
+        for pago in pagos:
+            validar_conservacion_pago(
+                pago.monto,
+                sum(
+                    (
+                        v
+                        for (pid, _, tipo), v in movimientos.items()
+                        if pid == pago.id and tipo != "CREDITO"
+                    ),
+                    CERO,
+                ),
+                movimientos.get((pago.id, None, "CREDITO"), CERO),
+            )
         credito_previo = sum((v for k, v in anteriores.items() if k[2] == "CREDITO"), CERO)
         credito_actual = sum((v for k, v in movimientos.items() if k[2] == "CREDITO"), CERO)
         saldo = departamento.saldo_a_favor + credito_actual - credito_previo

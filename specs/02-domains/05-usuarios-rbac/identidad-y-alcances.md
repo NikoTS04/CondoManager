@@ -56,7 +56,8 @@ El JWT transporta el mismo arreglo, el identificador de usuario como `sub` y
 - `GET /areas` y `GET /areas/{area_id}/disponibilidad?fecha=YYYY-MM-DD`:
   catálogo contextual y horarios ocupados sin revelar propietarios ni unidades.
 - Notificaciones: consulta para administrativos/auditor de su condominio;
-  despacho, reenvío y envío masivo solo para `SUPERADMIN`/`ADMIN_JUNTA`.
+  un residente consulta solo avisos dirigidos a su identidad y a sus vínculos activos.
+  Despacho, reenvío y envío masivo solo para `SUPERADMIN`/`ADMIN_JUNTA`.
 - `AUDITOR` no escribe; `RESIDENTE` no accede a operaciones administrativas.
 - Los clientes no sustituyen errores de autorización/red por éxitos o datos mock.
 

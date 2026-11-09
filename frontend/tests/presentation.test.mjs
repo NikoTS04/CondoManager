@@ -26,6 +26,7 @@ function loadComponent(path) {
 const { ResumenCuenta } = loadComponent("features/residente/ResumenCuenta");
 const { ResumenSection } = loadComponent("features/junta/ResumenSection");
 const { MorasSection } = loadComponent("features/junta/MorasSection");
+const { ResultadoPago } = loadComponent("components/domain/ResultadoPago");
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 const depto = { id: "unidad-a", numero: "402", piso: 4, coeficiente: "0.6800", saldo_a_favor: "25.50", deuda_vencida: "123.45", estado_financiero: "EN_MORA", activo: true };
 
@@ -58,4 +59,39 @@ test("la carga no muestra un vacío ni saldos como si la consulta hubiera termin
   const html = render(MorasSection, { loading: true, departamentos: [] });
   assert.match(html, /Cargando/);
   assert.doesNotMatch(html, /Sin unidades activas en mora/);
+});
+
+const recibo = { comprobante_id: "pago-prueba", estado_final: "APROBADO", monto_imputado: "40.00",
+  nuevo_saldo_departamento: "60.00", saldo_a_favor_generado: "0.00",
+  departamento_habilitado_reservas: false, motivo_rechazo: null };
+
+test("el recibo parcial distingue abono, deuda histórica y bloqueo sin inventar moneda", () => {
+  const html = render(ResultadoPago, { resultado: recibo });
+  assert.match(html, /40\.00/);
+  assert.match(html, /60\.00/);
+  assert.match(html, /Deuda al revisar/);
+  assert.match(html, /no elimina el bloqueo/);
+  assert.doesNotMatch(html, /S\/|USD|saldo actual/i);
+});
+
+test("el recibo de excedente no convierte el crédito en otro pago", () => {
+  const html = render(ResultadoPago, { resultado: { ...recibo, monto_imputado: "100.00",
+    nuevo_saldo_departamento: "0.00", saldo_a_favor_generado: "20.00", departamento_habilitado_reservas: true } });
+  assert.match(html, /Crédito de este pago/);
+  assert.match(html, /20\.00/);
+  assert.match(html, /vuelve a comprobar la solvencia actual/);
+});
+
+test("observación y rechazo muestran instrucciones distintas y escapan el motivo", () => {
+  // Comprueba el escape de HTML con ambas variantes de mayúsculas del marcador.
+  for (const motivo of ["<script>ilegible</script>", "<SCRIPT>ilegible</SCRIPT>"]) {
+    const observado = render(ResultadoPago, { resultado: { ...recibo, estado_final: "OBSERVADO",
+      motivo_rechazo: motivo } });
+    assert.match(observado, /Subsanar voucher/);
+    assert.match(observado, /&lt;script&gt;/i);
+    assert.doesNotMatch(observado, /<script\b/i);
+  }
+  const rechazado = render(ResultadoPago, { resultado: { ...recibo, estado_final: "RECHAZADO", motivo_rechazo: "No acreditado" } });
+  assert.match(rechazado, /decisión es definitiva/);
+  assert.doesNotMatch(rechazado, /Subsanar voucher/);
 });

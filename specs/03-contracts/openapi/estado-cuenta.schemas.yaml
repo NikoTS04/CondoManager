@@ -1,0 +1,250 @@
+schemas:
+  MovimientoCuenta:
+    additionalProperties: false
+    properties:
+      id:
+        title: Id
+        type: string
+      fecha:
+        format: date
+        title: Fecha
+        type: string
+      registrado_en:
+        format: date-time
+        title: Registrado En
+        type: string
+      fecha_operacion:
+        anyOf:
+        - format: date
+          type: string
+        - type: 'null'
+        title: Fecha Operacion
+      tipo:
+        enum:
+        - EMISION_CUOTA
+        - DEVENGO_MORA
+        - AJUSTE_MORA
+        - PAGO_APROBADO
+        - APLICACION_CREDITO
+        - DISTRIBUCION_PAGO
+        title: Tipo
+        type: string
+      descripcion:
+        title: Descripcion
+        type: string
+      importe:
+        pattern: ^-?\d+\.\d{2}$
+        title: Importe
+        type: string
+      cargo:
+        pattern: ^-?\d+\.\d{2}$
+        title: Cargo
+        type: string
+      abono:
+        pattern: ^-?\d+\.\d{2}$
+        title: Abono
+        type: string
+      saldo:
+        pattern: ^-?\d+\.\d{2}$
+        title: Saldo
+        type: string
+      cuota_id:
+        anyOf:
+        - format: uuid
+          type: string
+        - type: 'null'
+        title: Cuota Id
+      comprobante_id:
+        anyOf:
+        - format: uuid
+          type: string
+        - type: 'null'
+        title: Comprobante Id
+      origen_id:
+        format: uuid
+        title: Origen Id
+        type: string
+      periodo_cuota:
+        anyOf:
+        - type: string
+        - type: 'null'
+        title: Periodo Cuota
+    required:
+    - id
+    - fecha
+    - registrado_en
+    - fecha_operacion
+    - tipo
+    - descripcion
+    - importe
+    - cargo
+    - abono
+    - saldo
+    - cuota_id
+    - comprobante_id
+    - origen_id
+    - periodo_cuota
+    title: MovimientoCuenta
+    type: object
+  PagoEnRevision:
+    additionalProperties: false
+    properties:
+      id:
+        format: uuid
+        title: Id
+        type: string
+      fecha_reporte:
+        format: date
+        title: Fecha Reporte
+        type: string
+      fecha_operacion:
+        format: date
+        title: Fecha Operacion
+        type: string
+      banco:
+        title: Banco
+        type: string
+      numero_operacion:
+        title: Numero Operacion
+        type: string
+      monto:
+        pattern: ^-?\d+\.\d{2}$
+        title: Monto
+        type: string
+    required:
+    - id
+    - fecha_reporte
+    - fecha_operacion
+    - banco
+    - numero_operacion
+    - monto
+    title: PagoEnRevision
+    type: object
+  EstadoCuentaResponse:
+    additionalProperties: false
+    properties:
+      departamento_id:
+        format: uuid
+        title: Departamento Id
+        type: string
+      condominio_id:
+        format: uuid
+        title: Condominio Id
+        type: string
+      moneda:
+        enum:
+        - PEN
+        - USD
+        title: Moneda
+        type: string
+      desde:
+        format: date
+        title: Desde
+        type: string
+      hasta:
+        format: date
+        title: Hasta
+        type: string
+      generado_en:
+        format: date-time
+        title: Generado En
+        type: string
+      historial_desde:
+        anyOf:
+        - format: date
+          type: string
+        - type: 'null'
+        title: Historial Desde
+      base_historica_sin_fecha:
+        title: Base Historica Sin Fecha
+        type: boolean
+      credito_inicial_sin_desglose:
+        pattern: ^-?\d+\.\d{2}$
+        title: Credito Inicial Sin Desglose
+        type: string
+      abonos_historicos_sin_desglose:
+        pattern: ^-?\d+\.\d{2}$
+        title: Abonos Historicos Sin Desglose
+        type: string
+      saldo_base_historico:
+        pattern: ^-?\d+\.\d{2}$
+        title: Saldo Base Historico
+        type: string
+      saldo_inicial:
+        pattern: ^-?\d+\.\d{2}$
+        title: Saldo Inicial
+        type: string
+      cargos_periodo:
+        pattern: ^-?\d+\.\d{2}$
+        title: Cargos Periodo
+        type: string
+      abonos_periodo:
+        pattern: ^-?\d+\.\d{2}$
+        title: Abonos Periodo
+        type: string
+      saldo_final:
+        pattern: ^-?\d+\.\d{2}$
+        title: Saldo Final
+        type: string
+      deuda_actual:
+        pattern: ^-?\d+\.\d{2}$
+        title: Deuda Actual
+        type: string
+      deuda_vencida_actual:
+        pattern: ^-?\d+\.\d{2}$
+        title: Deuda Vencida Actual
+        type: string
+      saldo_a_favor_actual:
+        pattern: ^-?\d+\.\d{2}$
+        title: Saldo A Favor Actual
+        type: string
+      saldo_neto_actual:
+        pattern: ^-?\d+\.\d{2}$
+        title: Saldo Neto Actual
+        type: string
+      total_movimientos:
+        title: Total Movimientos
+        type: integer
+      limite:
+        title: Limite
+        type: integer
+      offset:
+        title: Offset
+        type: integer
+      movimientos:
+        items:
+          $ref: '#/schemas/MovimientoCuenta'
+        title: Movimientos
+        type: array
+      pagos_en_revision:
+        items:
+          $ref: '#/schemas/PagoEnRevision'
+        title: Pagos En Revision
+        type: array
+    required:
+    - departamento_id
+    - condominio_id
+    - moneda
+    - desde
+    - hasta
+    - generado_en
+    - historial_desde
+    - base_historica_sin_fecha
+    - credito_inicial_sin_desglose
+    - abonos_historicos_sin_desglose
+    - saldo_base_historico
+    - saldo_inicial
+    - cargos_periodo
+    - abonos_periodo
+    - saldo_final
+    - deuda_actual
+    - deuda_vencida_actual
+    - saldo_a_favor_actual
+    - saldo_neto_actual
+    - total_movimientos
+    - limite
+    - offset
+    - movimientos
+    - pagos_en_revision
+    title: EstadoCuentaResponse
+    type: object

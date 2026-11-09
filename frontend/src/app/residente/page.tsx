@@ -22,6 +22,7 @@ import { TabPanel } from "@/components/ui/Tabs";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { AvisosList } from "@/features/residente/AvisosList";
+import { EstadoCuenta } from "@/features/residente/EstadoCuenta";
 import {
   ResidenteNav,
   type ResidenteTab,
@@ -301,6 +302,7 @@ function ResidenteContent() {
       {activeTab === "cuenta" && (
         <>
           {deptoActual ? (
+            <div className="space-y-6">
             <ResumenCuenta
               depto={deptoActual}
               loading={loadingInitial}
@@ -309,6 +311,8 @@ function ResidenteContent() {
               onReportarPago={() => setActiveTab("pagos")}
               onReservar={() => setActiveTab("reservas")}
             />
+            {!loadingInitial && !errorDeptos && <EstadoCuenta key={departamentoId} departamentoId={departamentoId} />}
+            </div>
           ) : loadingInitial ? <SkeletonList rows={3} label="Cargando tu cuenta…" /> : (
             <Alert
               tone="warning"
