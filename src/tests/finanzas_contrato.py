@@ -52,6 +52,7 @@ class FinanzasContrato:
     async def listar(
         self,
         usuario,
+        condominio_id=None,
         cid=None,
         fecha_desde=None,
         fecha_hasta=None,
@@ -60,8 +61,9 @@ class FinanzasContrato:
         estado=None,
         limit=50,
         offset=0,
+        **kwargs,
     ):
-        cid = contexto_consulta(usuario, cid)
+        cid = contexto_consulta(usuario, condominio_id or cid)
         items = [
             {**c, "banco": c["banco_origen"]}
             for c in self.comprobantes.values()
