@@ -10,6 +10,11 @@
 ---
 
 ## 2. Propósito y Límites del Dominio
+
+CON-14 añade la [consulta privada de estado de cuenta](../../05-api/estado-de-cuenta.md)
+por fecha de registro y unidad autorizada. Reutiliza fuentes financieras persistidas,
+conserva compensaciones y separa pagos en revisión; no cambia el motor de conciliación.
+
 Ampliación objetivo (pendiente de implementación):
 [prorrateo jerárquico y mora diaria](prorrateo-y-mora-diaria.md). El detalle por
 concepto/edificio determina el total distribuible y la cuota; no se reparte otra

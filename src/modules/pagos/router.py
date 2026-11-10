@@ -1,13 +1,14 @@
 """API compatible de pagos con PostgreSQL y evidencia local privada."""
 
+from datetime import date
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Response
+from fastapi import APIRouter, Depends, Form, Query, Response
 from fastapi.responses import FileResponse
 
 from src.core.authorization import autorizar_condominio
-from src.core.errors import ErrorResponse
+from src.core.errors import APIError, ErrorResponse
 from src.core.security import get_current_user, require_role
 from src.modules.pagos.moras_service import MotorMorasService
 from src.modules.pagos.persistencia import get_pagos_service
@@ -26,14 +27,48 @@ from src.modules.pagos.solvencia import get_solvencia_service
 
 router = APIRouter(tags=["Pagos y Conciliación"])
 
+ESTADOS_COMPROBANTE_VALIDOS = {"EN_REVISION", "APROBADO", "OBSERVADO", "RECHAZADO"}
+
 
 @router.get("/pagos/comprobantes", response_model=list[ComprobantePagoDTO])
 async def listar_comprobantes(
     user: dict = Depends(get_current_user),
     condominio_id: UUID | None = None,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+    departamento_id: UUID | None = None,
+    banco: str | None = None,
+    estado: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     service=Depends(get_pagos_service),
 ):
-    return await service.listar(user, condominio_id)
+    if fecha_desde is not None and fecha_hasta is not None and fecha_desde > fecha_hasta:
+        raise APIError(
+            422,
+            "RANGO_FECHAS_INVALIDO",
+            "La fecha_desde no puede ser posterior a fecha_hasta.",
+        )
+    if estado is not None:
+        estado_normalizado = estado.strip().upper()
+        if estado_normalizado not in ESTADOS_COMPROBANTE_VALIDOS:
+            raise APIError(
+                422,
+                "ESTADO_INVALIDO",
+                f"El estado debe ser uno de: {', '.join(sorted(ESTADOS_COMPROBANTE_VALIDOS))}.",
+            )
+        estado = estado_normalizado
+    return await service.listar(
+        user,
+        condominio_id=condominio_id,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        departamento_id=departamento_id,
+        banco=banco,
+        estado=estado,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/pagos/solvencia/{departamento_id}", response_model=SolvenciaResponse)

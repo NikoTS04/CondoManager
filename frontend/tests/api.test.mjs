@@ -247,3 +247,27 @@ test("las alertas de entrega usan la ruta y el método correctos y propagan erro
   await assert.rejects(api.listarAlertasNotificacion(cid), /Acceso denegado/);
   await assert.rejects(api.atenderAlertaNotificacion("alerta"), /Acceso denegado/);
 });
+test("estado de cuenta transmite unidad, rango y página y conserva dinero decimal", async (t) => {
+  const unidad = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const controller = new AbortController();
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    const parsed = new URL(url);
+    assert.equal(parsed.pathname, `/api/v1/cuotas/departamentos/${unidad}/estado-cuenta`);
+    assert.equal(parsed.searchParams.get("desde"), "2026-10-01");
+    assert.equal(parsed.searchParams.get("hasta"), "2026-10-31");
+    assert.equal(parsed.searchParams.get("offset"), "50");
+    assert.equal(init.signal, controller.signal);
+    assert.equal(init.cache, "no-store");
+    return new Response(JSON.stringify({ saldo_final: "-20.00", abonos_periodo: "120.00" }));
+  });
+  const data = await api.fetchEstadoCuenta(unidad, "2026-10-01", "2026-10-31", 50, controller.signal);
+  assert.equal(data.saldo_final, "-20.00");
+});
+
+test("estado de cuenta propaga denegación y no fabrica saldos", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    error_code: "ACCESO_DENEGADO", mensaje: "Unidad ajena",
+  }), { status: 403 }));
+  await assert.rejects(api.fetchEstadoCuenta("ajena", "2026-10-01", "2026-10-31"),
+    (e) => e.status === 403 && e.errorCode === "ACCESO_DENEGADO");
+});

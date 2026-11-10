@@ -514,3 +514,6 @@ del repositorio cambian conjuntamente. Clientes externos requieren actualizació
 antes del despliegue. El endpoint existente de resultado sigue disponible y
 devuelve únicamente la revisión de la evidencia vigente. No hay doble publicación:
 productores canónicos y lector compatible con eventos históricos persistidos.
+## CON-14 — Estado de cuenta
+
+Contrato y criterios de lectura: [estado de cuenta por unidad y periodo](estado-de-cuenta.md).
