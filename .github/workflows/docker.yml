@@ -19,17 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
       - name: Construir API sin publicar
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
       - name: Construir web sin publicar
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           push: false
@@ -45,7 +45,7 @@ jobs:
       COMPOSE_FILE: docker-compose.yml:docker-compose.ci.yml
       COMPOSE_PROJECT_NAME: condomanager-ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Generar credenciales efímeras sin .env
         run: |
           db_password=$(openssl rand -hex 24)
@@ -54,9 +54,9 @@ jobs:
           echo "::add-mask::$jwt_secret"
           echo "CI_DB_PASSWORD=$db_password" >> "$GITHUB_ENV"
           echo "CI_JWT_SECRET=$jwt_secret" >> "$GITHUB_ENV"
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - name: Cargar imagen API desde caché
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -64,7 +64,7 @@ jobs:
           tags: condomanager-api:ci
           cache-from: type=gha,scope=api
       - name: Cargar imagen web desde caché
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           load: true
