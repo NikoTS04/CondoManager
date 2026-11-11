@@ -122,10 +122,10 @@ class ConciliarPagoRequest(BaseModel):
 
 class ConciliacionResultResponse(RespuestaMonetaria):
     comprobante_id: uuid.UUID
-    estado_final: str
-    monto_imputado: Decimal
-    nuevo_saldo_departamento: Decimal
-    saldo_a_favor_generado: Decimal
+    estado_final: Literal["APROBADO", "OBSERVADO", "RECHAZADO"]
+    monto_imputado: Decimal = Field(ge=0)
+    nuevo_saldo_departamento: Decimal = Field(ge=0)
+    saldo_a_favor_generado: Decimal = Field(ge=0)
     departamento_habilitado_reservas: bool
     motivo_rechazo: Optional[str] = None
 

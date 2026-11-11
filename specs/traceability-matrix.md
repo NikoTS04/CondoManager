@@ -1,5 +1,9 @@
 # Matriz de Trazabilidad Integral (Traceability Matrix)
 
+CON-25/26/27/28: ver la [trazabilidad canónica de pagos Sprint 3](00-core/traceability-matrix.md#consolidación-de-pagos-sprint-3--anderson)
+y su [contrato compatible](05-api/pagos-sprint-3.md). La verificación local no
+declara integradas las dependencias de correo real ni cambia estados de Jira.
+
 Ampliación financiera objetivo 2026-10-24: ver [matriz canónica](00-core/traceability-matrix.md#extensión-financiera-objetivo-pendiente-de-implementación)
 y [dominio de prorrateo/mora diaria](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 Incluye FIN-PRORRATEO, FIN-MORA-DIARIA, FIN-FONDOS-MORA y FIN-REPORTE;
