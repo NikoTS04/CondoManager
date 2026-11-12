@@ -1,0 +1,384 @@
+<?xml version='1.0' encoding='utf-8'?>
+<bpmn:definitions xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="CON_3_Definitions" targetNamespace="https://condomanager.local/bpmn/jerson" exporter="CondoManager — diagramas de Jerson" exporterVersion="1.0">
+  <bpmn:process id="CON_3_Process" name="Registrar edificios y departamentos" isExecutable="false">
+    <bpmn:documentation>Responsable de la historia: Jerson. PROC-05 · Sprint 1 · Registro manual e importación CSV con resultados por fila
+Escritura: SuperAdmin o Junta del condominio. Edificio y número normalizado identifican una unidad; se utiliza UUID para operar.
+CSV: previsualizar no guarda datos. Confirmar revalida, crea filas válidas y reporta errores; los reintentos idénticos no duplican unidades.
+Coeficientes con Decimal y cuatro decimales. Persistencia y auditoría atómicas; un fallo inesperado revierte toda la solicitud.
+Fuente: specs/02-domains/05-usuarios-rbac/estructura-inmobiliaria.md</bpmn:documentation>
+    <bpmn:laneSet id="CON_3_LaneSet">
+      <bpmn:lane id="CON_3_Lane_0" name="Administración">
+        <bpmn:flowNodeRef>CON_3_inicio</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_solicitud</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_modalidad</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_manual</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_corregir</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_csv</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_revisar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_confirmar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_cancelar</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="CON_3_Lane_1" name="Sistema CondoManager">
+        <bpmn:flowNodeRef>CON_3_autorizar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_permiso</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_rechazar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_sin_permiso</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_validar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_valido</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_guardar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_fin_manual</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_previsualizar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_importar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_reporte</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_3_fin_csv</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="CON_3_inicio" name="Necesidad de registro">
+      <bpmn:outgoing>CON_3_Flow_0</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="CON_3_solicitud" name="Seleccionar condominio y solicitar registro">
+      <bpmn:incoming>CON_3_Flow_0</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_1</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_3_autorizar" name="Validar identidad, permisos y condominio activo">
+      <bpmn:incoming>CON_3_Flow_1</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_3_permiso" name="¿Acceso autorizado?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_3_Flow_2</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>CON_3_Flow_5</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="CON_3_rechazar" name="Rechazar solicitud y mostrar motivo">
+      <bpmn:incoming>CON_3_Flow_3</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_3_sin_permiso" name="Solicitud rechazada">
+      <bpmn:incoming>CON_3_Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="CON_3_modalidad" name="¿Modalidad de registro?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_3_Flow_5</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_6</bpmn:outgoing>
+      <bpmn:outgoing>CON_3_Flow_7</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="CON_3_manual" name="Ingresar edificio o departamento">
+      <bpmn:incoming>CON_3_Flow_6</bpmn:incoming>
+      <bpmn:incoming>CON_3_Flow_11</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_8</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_3_validar" name="Validar datos, piso, coeficiente y duplicados">
+      <bpmn:incoming>CON_3_Flow_8</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_9</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_3_valido" name="¿Datos válidos y únicos?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_3_Flow_9</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_10</bpmn:outgoing>
+      <bpmn:outgoing>CON_3_Flow_12</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="CON_3_corregir" name="Corregir datos informados">
+      <bpmn:incoming>CON_3_Flow_10</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_11</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_3_guardar" name="Guardar registro y auditoría en una transacción">
+      <bpmn:incoming>CON_3_Flow_12</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_13</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_3_fin_manual" name="Estructura registrada">
+      <bpmn:incoming>CON_3_Flow_13</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="CON_3_csv" name="Seleccionar y cargar archivo CSV">
+      <bpmn:incoming>CON_3_Flow_7</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_14</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_3_previsualizar" name="Validar CSV y previsualizar resultados sin guardar">
+      <bpmn:incoming>CON_3_Flow_14</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_15</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="CON_3_revisar" name="Revisar vista previa y errores por fila">
+      <bpmn:incoming>CON_3_Flow_15</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_16</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="CON_3_confirmar" name="¿Confirmar importación?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_3_Flow_16</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_17</bpmn:outgoing>
+      <bpmn:outgoing>CON_3_Flow_18</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="CON_3_cancelar" name="Importación cancelada">
+      <bpmn:incoming>CON_3_Flow_17</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="CON_3_importar" name="Revalidar y guardar filas válidas con auditoría">
+      <bpmn:incoming>CON_3_Flow_18</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_19</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="CON_3_reporte" name="Mostrar filas creadas, existentes y con error">
+      <bpmn:incoming>CON_3_Flow_19</bpmn:incoming>
+      <bpmn:outgoing>CON_3_Flow_20</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_3_fin_csv" name="Importación procesada">
+      <bpmn:incoming>CON_3_Flow_20</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="CON_3_Flow_0" sourceRef="CON_3_inicio" targetRef="CON_3_solicitud" />
+    <bpmn:sequenceFlow id="CON_3_Flow_1" sourceRef="CON_3_solicitud" targetRef="CON_3_autorizar" />
+    <bpmn:sequenceFlow id="CON_3_Flow_2" sourceRef="CON_3_autorizar" targetRef="CON_3_permiso" />
+    <bpmn:sequenceFlow id="CON_3_Flow_3" sourceRef="CON_3_permiso" targetRef="CON_3_rechazar" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_3_Flow_4" sourceRef="CON_3_rechazar" targetRef="CON_3_sin_permiso" />
+    <bpmn:sequenceFlow id="CON_3_Flow_5" sourceRef="CON_3_permiso" targetRef="CON_3_modalidad" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_3_Flow_6" sourceRef="CON_3_modalidad" targetRef="CON_3_manual" name="Manual">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Manual</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_3_Flow_7" sourceRef="CON_3_modalidad" targetRef="CON_3_csv" name="CSV">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">CSV</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_3_Flow_8" sourceRef="CON_3_manual" targetRef="CON_3_validar" />
+    <bpmn:sequenceFlow id="CON_3_Flow_9" sourceRef="CON_3_validar" targetRef="CON_3_valido" />
+    <bpmn:sequenceFlow id="CON_3_Flow_10" sourceRef="CON_3_valido" targetRef="CON_3_corregir" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_3_Flow_11" sourceRef="CON_3_corregir" targetRef="CON_3_manual" />
+    <bpmn:sequenceFlow id="CON_3_Flow_12" sourceRef="CON_3_valido" targetRef="CON_3_guardar" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_3_Flow_13" sourceRef="CON_3_guardar" targetRef="CON_3_fin_manual" />
+    <bpmn:sequenceFlow id="CON_3_Flow_14" sourceRef="CON_3_csv" targetRef="CON_3_previsualizar" />
+    <bpmn:sequenceFlow id="CON_3_Flow_15" sourceRef="CON_3_previsualizar" targetRef="CON_3_revisar" />
+    <bpmn:sequenceFlow id="CON_3_Flow_16" sourceRef="CON_3_revisar" targetRef="CON_3_confirmar" />
+    <bpmn:sequenceFlow id="CON_3_Flow_17" sourceRef="CON_3_confirmar" targetRef="CON_3_cancelar" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_3_Flow_18" sourceRef="CON_3_confirmar" targetRef="CON_3_importar" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_3_Flow_19" sourceRef="CON_3_importar" targetRef="CON_3_reporte" />
+    <bpmn:sequenceFlow id="CON_3_Flow_20" sourceRef="CON_3_reporte" targetRef="CON_3_fin_csv" />
+  </bpmn:process>
+  <bpmn:collaboration id="CON_3_Collaboration">
+    <bpmn:participant id="CON_3_Participant" name="CondoManager · CON-3" processRef="CON_3_Process" />
+  </bpmn:collaboration>
+  <bpmndi:BPMNDiagram id="CON_3_Diagram" name="Registrar edificios y departamentos">
+    <bpmndi:BPMNPlane id="CON_3_Plane" bpmnElement="CON_3_Collaboration">
+      <bpmndi:BPMNShape id="CON_3_Participant_di" bpmnElement="CON_3_Participant" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#66788c">
+        <dc:Bounds x="24" y="24" width="2872" height="970" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_Lane_0_di" bpmnElement="CON_3_Lane_0" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="24" width="2842" height="360" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_Lane_1_di" bpmnElement="CON_3_Lane_1" isHorizontal="true" bioc:fill="#f7faff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="384" width="2842" height="610" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_inicio_di" bpmnElement="CON_3_inicio" bioc:fill="#e9f8ee" bioc:stroke="#24824b">
+        <dc:Bounds x="141" y="131" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="84" y="178" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_solicitud_di" bpmnElement="CON_3_solicitud" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="255" y="102" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_autorizar_di" bpmnElement="CON_3_autorizar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="475" y="442" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_permiso_di" bpmnElement="CON_3_permiso" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="753" y="463" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="704" y="402" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_rechazar_di" bpmnElement="CON_3_rechazar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="685" y="712" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_sin_permiso_di" bpmnElement="CON_3_sin_permiso" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="961" y="741" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="904" y="788" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_modalidad_di" bpmnElement="CON_3_modalidad" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="893" y="223" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="844" y="162" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_manual_di" bpmnElement="CON_3_manual" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="1045" y="102" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_validar_di" bpmnElement="CON_3_validar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1295" y="442" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_valido_di" bpmnElement="CON_3_valido" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1593" y="463" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1544" y="402" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_corregir_di" bpmnElement="CON_3_corregir" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="1525" y="102" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_guardar_di" bpmnElement="CON_3_guardar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1755" y="442" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_fin_manual_di" bpmnElement="CON_3_fin_manual" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="2051" y="471" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1994" y="518" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_csv_di" bpmnElement="CON_3_csv" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="1045" y="272" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_previsualizar_di" bpmnElement="CON_3_previsualizar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1295" y="712" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_revisar_di" bpmnElement="CON_3_revisar" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="2085" y="272" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_confirmar_di" bpmnElement="CON_3_confirmar" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="2373" y="293" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2324" y="232" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_cancelar_di" bpmnElement="CON_3_cancelar" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="2611" y="301" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2554" y="348" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_importar_di" bpmnElement="CON_3_importar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="2305" y="712" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_reporte_di" bpmnElement="CON_3_reporte" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="2545" y="712" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_3_fin_csv_di" bpmnElement="CON_3_fin_csv" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="2821" y="741" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2764" y="788" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="CON_3_Flow_0_di" bpmnElement="CON_3_Flow_0" bioc:stroke="#475b70">
+        <di:waypoint x="179" y="150" />
+        <di:waypoint x="255" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_1_di" bpmnElement="CON_3_Flow_1" bioc:stroke="#475b70">
+        <di:waypoint x="350" y="198" />
+        <di:waypoint x="350" y="320" />
+        <di:waypoint x="570" y="320" />
+        <di:waypoint x="570" y="442" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_2_di" bpmnElement="CON_3_Flow_2" bioc:stroke="#475b70">
+        <di:waypoint x="665" y="490" />
+        <di:waypoint x="753" y="490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_3_di" bpmnElement="CON_3_Flow_3" bioc:stroke="#475b70">
+        <di:waypoint x="780" y="517" />
+        <di:waypoint x="780" y="712" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="760" y="610" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_4_di" bpmnElement="CON_3_Flow_4" bioc:stroke="#475b70">
+        <di:waypoint x="875" y="760" />
+        <di:waypoint x="961" y="760" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_5_di" bpmnElement="CON_3_Flow_5" bioc:stroke="#475b70">
+        <di:waypoint x="780" y="463" />
+        <di:waypoint x="780" y="250" />
+        <di:waypoint x="893" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="760" y="340" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_6_di" bpmnElement="CON_3_Flow_6" bioc:stroke="#475b70">
+        <di:waypoint x="920" y="223" />
+        <di:waypoint x="920" y="150" />
+        <di:waypoint x="1045" y="150" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="930" y="116" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_7_di" bpmnElement="CON_3_Flow_7" bioc:stroke="#475b70">
+        <di:waypoint x="920" y="277" />
+        <di:waypoint x="920" y="320" />
+        <di:waypoint x="1045" y="320" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="930" y="290" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_8_di" bpmnElement="CON_3_Flow_8" bioc:stroke="#475b70">
+        <di:waypoint x="1235" y="150" />
+        <di:waypoint x="1390" y="150" />
+        <di:waypoint x="1390" y="442" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_9_di" bpmnElement="CON_3_Flow_9" bioc:stroke="#475b70">
+        <di:waypoint x="1485" y="490" />
+        <di:waypoint x="1593" y="490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_10_di" bpmnElement="CON_3_Flow_10" bioc:stroke="#475b70">
+        <di:waypoint x="1620" y="463" />
+        <di:waypoint x="1620" y="198" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1600" y="300" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_11_di" bpmnElement="CON_3_Flow_11" bioc:stroke="#475b70">
+        <di:waypoint x="1620" y="102" />
+        <di:waypoint x="1620" y="70" />
+        <di:waypoint x="1140" y="70" />
+        <di:waypoint x="1140" y="102" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_12_di" bpmnElement="CON_3_Flow_12" bioc:stroke="#475b70">
+        <di:waypoint x="1647" y="490" />
+        <di:waypoint x="1755" y="490" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1655" y="456" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_13_di" bpmnElement="CON_3_Flow_13" bioc:stroke="#475b70">
+        <di:waypoint x="1945" y="490" />
+        <di:waypoint x="2051" y="490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_14_di" bpmnElement="CON_3_Flow_14" bioc:stroke="#475b70">
+        <di:waypoint x="1140" y="368" />
+        <di:waypoint x="1140" y="760" />
+        <di:waypoint x="1295" y="760" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_15_di" bpmnElement="CON_3_Flow_15" bioc:stroke="#475b70">
+        <di:waypoint x="1485" y="760" />
+        <di:waypoint x="1510" y="760" />
+        <di:waypoint x="1510" y="910" />
+        <di:waypoint x="2180" y="910" />
+        <di:waypoint x="2180" y="368" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_16_di" bpmnElement="CON_3_Flow_16" bioc:stroke="#475b70">
+        <di:waypoint x="2275" y="320" />
+        <di:waypoint x="2373" y="320" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_17_di" bpmnElement="CON_3_Flow_17" bioc:stroke="#475b70">
+        <di:waypoint x="2427" y="320" />
+        <di:waypoint x="2611" y="320" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2420" y="286" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_18_di" bpmnElement="CON_3_Flow_18" bioc:stroke="#475b70">
+        <di:waypoint x="2400" y="347" />
+        <di:waypoint x="2400" y="712" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2380" y="520" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_19_di" bpmnElement="CON_3_Flow_19" bioc:stroke="#475b70">
+        <di:waypoint x="2495" y="760" />
+        <di:waypoint x="2545" y="760" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_3_Flow_20_di" bpmnElement="CON_3_Flow_20" bioc:stroke="#475b70">
+        <di:waypoint x="2735" y="760" />
+        <di:waypoint x="2821" y="760" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

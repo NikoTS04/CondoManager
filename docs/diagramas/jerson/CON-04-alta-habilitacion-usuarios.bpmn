@@ -1,0 +1,337 @@
+<?xml version='1.0' encoding='utf-8'?>
+<bpmn:definitions xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="CON_04_Definitions" targetNamespace="https://condomanager.local/bpmn/jerson" exporter="CondoManager — diagramas de Jerson" exporterVersion="1.0">
+  <bpmn:process id="CON_04_Process" name="Crear usuarios y habilitar su acceso" isExecutable="false">
+    <bpmn:documentation>Responsable de la historia: Jerson. PROC-05 · Sprint 2 · Alta administrativa, activación y autenticación persistente
+Alta: correo y documento únicos; contraseña inicial almacenada con hash. La cuenta nace INACTIVA con rol contextual RESIDENTE y sin vínculos.
+Solo SuperAdmin habilita o deshabilita la identidad. Cada cambio real de estado audita e invalida sesiones; reactivar exige nuevo login.
+Login verifica credenciales, cuenta activa y asignaciones vigentes. Si hay varios condominios, el usuario selecciona contexto antes de recibir el JWT.
+Fuente: specs/02-domains/05-usuarios-rbac/alta-administrativa.md</bpmn:documentation>
+    <bpmn:laneSet id="CON_04_LaneSet">
+      <bpmn:lane id="CON_04_Lane_0" name="Administración">
+        <bpmn:flowNodeRef>CON_04_inicio</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_formulario</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="CON_04_Lane_1" name="Sistema CondoManager">
+        <bpmn:flowNodeRef>CON_04_validar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_valido</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_rechazar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_sin_alta</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_crear</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_activar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_credenciales</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_acceso</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_denegar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_sin_acceso</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_sesion</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="CON_04_Lane_2" name="SuperAdmin">
+        <bpmn:flowNodeRef>CON_04_revisar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_habilitar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_inactiva</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="CON_04_Lane_3" name="Usuario">
+        <bpmn:flowNodeRef>CON_04_login</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_04_fin</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="CON_04_inicio" name="Solicitud de alta">
+      <bpmn:outgoing>CON_04_Flow_0</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="CON_04_formulario" name="Ingresar identidad y contraseña inicial">
+      <bpmn:incoming>CON_04_Flow_0</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_1</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_04_validar" name="Validar actor, contexto, datos y unicidad">
+      <bpmn:incoming>CON_04_Flow_1</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_04_valido" name="¿Alta válida y autorizada?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_04_Flow_2</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>CON_04_Flow_5</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="CON_04_rechazar" name="Informar permiso insuficiente o datos inválidos">
+      <bpmn:incoming>CON_04_Flow_3</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_04_sin_alta" name="Alta no realizada">
+      <bpmn:incoming>CON_04_Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="CON_04_crear" name="Crear cuenta INACTIVA, hash, rol RESIDENTE y auditoría">
+      <bpmn:incoming>CON_04_Flow_5</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_6</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="CON_04_revisar" name="Revisar cuenta y decidir su habilitación">
+      <bpmn:incoming>CON_04_Flow_6</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_7</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="CON_04_habilitar" name="¿Habilitar acceso?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_04_Flow_7</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_8</bpmn:outgoing>
+      <bpmn:outgoing>CON_04_Flow_9</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="CON_04_inactiva" name="Cuenta permanece inactiva">
+      <bpmn:incoming>CON_04_Flow_8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="CON_04_activar" name="Activar cuenta; guardar revisión y auditoría atómicas">
+      <bpmn:incoming>CON_04_Flow_9</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_10</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="CON_04_login" name="Ingresar correo y contraseña para iniciar sesión">
+      <bpmn:incoming>CON_04_Flow_10</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_11</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_04_credenciales" name="Verificar credenciales, cuenta activa y roles vigentes">
+      <bpmn:incoming>CON_04_Flow_11</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_12</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_04_acceso" name="¿Autenticación válida?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_04_Flow_12</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_13</bpmn:outgoing>
+      <bpmn:outgoing>CON_04_Flow_15</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="CON_04_denegar" name="Denegar acceso con error de autenticación">
+      <bpmn:incoming>CON_04_Flow_13</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_14</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_04_sin_acceso" name="Login rechazado">
+      <bpmn:incoming>CON_04_Flow_14</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="CON_04_sesion" name="Resolver contexto y emitir JWT con perfil vigente">
+      <bpmn:incoming>CON_04_Flow_15</bpmn:incoming>
+      <bpmn:outgoing>CON_04_Flow_16</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_04_fin" name="Acceso habilitado">
+      <bpmn:incoming>CON_04_Flow_16</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="CON_04_Flow_0" sourceRef="CON_04_inicio" targetRef="CON_04_formulario" />
+    <bpmn:sequenceFlow id="CON_04_Flow_1" sourceRef="CON_04_formulario" targetRef="CON_04_validar" />
+    <bpmn:sequenceFlow id="CON_04_Flow_2" sourceRef="CON_04_validar" targetRef="CON_04_valido" />
+    <bpmn:sequenceFlow id="CON_04_Flow_3" sourceRef="CON_04_valido" targetRef="CON_04_rechazar" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_04_Flow_4" sourceRef="CON_04_rechazar" targetRef="CON_04_sin_alta" />
+    <bpmn:sequenceFlow id="CON_04_Flow_5" sourceRef="CON_04_valido" targetRef="CON_04_crear" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_04_Flow_6" sourceRef="CON_04_crear" targetRef="CON_04_revisar" />
+    <bpmn:sequenceFlow id="CON_04_Flow_7" sourceRef="CON_04_revisar" targetRef="CON_04_habilitar" />
+    <bpmn:sequenceFlow id="CON_04_Flow_8" sourceRef="CON_04_habilitar" targetRef="CON_04_inactiva" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_04_Flow_9" sourceRef="CON_04_habilitar" targetRef="CON_04_activar" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_04_Flow_10" sourceRef="CON_04_activar" targetRef="CON_04_login" />
+    <bpmn:sequenceFlow id="CON_04_Flow_11" sourceRef="CON_04_login" targetRef="CON_04_credenciales" />
+    <bpmn:sequenceFlow id="CON_04_Flow_12" sourceRef="CON_04_credenciales" targetRef="CON_04_acceso" />
+    <bpmn:sequenceFlow id="CON_04_Flow_13" sourceRef="CON_04_acceso" targetRef="CON_04_denegar" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_04_Flow_14" sourceRef="CON_04_denegar" targetRef="CON_04_sin_acceso" />
+    <bpmn:sequenceFlow id="CON_04_Flow_15" sourceRef="CON_04_acceso" targetRef="CON_04_sesion" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_04_Flow_16" sourceRef="CON_04_sesion" targetRef="CON_04_fin" />
+  </bpmn:process>
+  <bpmn:collaboration id="CON_04_Collaboration">
+    <bpmn:participant id="CON_04_Participant" name="CondoManager · CON-04" processRef="CON_04_Process" />
+  </bpmn:collaboration>
+  <bpmndi:BPMNDiagram id="CON_04_Diagram" name="Crear usuarios y habilitar su acceso">
+    <bpmndi:BPMNPlane id="CON_04_Plane" bpmnElement="CON_04_Collaboration">
+      <bpmndi:BPMNShape id="CON_04_Participant_di" bpmnElement="CON_04_Participant" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#66788c">
+        <dc:Bounds x="24" y="24" width="2872" height="1010" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_Lane_0_di" bpmnElement="CON_04_Lane_0" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="24" width="2842" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_Lane_1_di" bpmnElement="CON_04_Lane_1" isHorizontal="true" bioc:fill="#f7faff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="224" width="2842" height="430" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_Lane_2_di" bpmnElement="CON_04_Lane_2" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="654" width="2842" height="180" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_Lane_3_di" bpmnElement="CON_04_Lane_3" isHorizontal="true" bioc:fill="#f7faff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="834" width="2842" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_inicio_di" bpmnElement="CON_04_inicio" bioc:fill="#e9f8ee" bioc:stroke="#24824b">
+        <dc:Bounds x="141" y="106" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="84" y="153" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_formulario_di" bpmnElement="CON_04_formulario" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="255" y="77" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_validar_di" bpmnElement="CON_04_validar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="475" y="282" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_valido_di" bpmnElement="CON_04_valido" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="763" y="303" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="714" y="242" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_rechazar_di" bpmnElement="CON_04_rechazar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="695" y="502" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_sin_alta_di" bpmnElement="CON_04_sin_alta" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="991" y="531" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="934" y="578" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_crear_di" bpmnElement="CON_04_crear" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="935" y="282" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_revisar_di" bpmnElement="CON_04_revisar" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="1165" y="697" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_habilitar_di" bpmnElement="CON_04_habilitar" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1453" y="718" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1404" y="657" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_inactiva_di" bpmnElement="CON_04_inactiva" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="1671" y="726" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1614" y="773" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_activar_di" bpmnElement="CON_04_activar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1625" y="282" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_login_di" bpmnElement="CON_04_login" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="1855" y="877" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_credenciales_di" bpmnElement="CON_04_credenciales" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="2075" y="282" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_acceso_di" bpmnElement="CON_04_acceso" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="2363" y="303" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2314" y="242" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_denegar_di" bpmnElement="CON_04_denegar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="2295" y="502" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_sin_acceso_di" bpmnElement="CON_04_sin_acceso" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="2591" y="531" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2534" y="578" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_sesion_di" bpmnElement="CON_04_sesion" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="2545" y="282" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_04_fin_di" bpmnElement="CON_04_fin" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="2801" y="906" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2744" y="953" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="CON_04_Flow_0_di" bpmnElement="CON_04_Flow_0" bioc:stroke="#475b70">
+        <di:waypoint x="179" y="125" />
+        <di:waypoint x="255" y="125" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_1_di" bpmnElement="CON_04_Flow_1" bioc:stroke="#475b70">
+        <di:waypoint x="350" y="173" />
+        <di:waypoint x="350" y="227" />
+        <di:waypoint x="570" y="227" />
+        <di:waypoint x="570" y="282" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_2_di" bpmnElement="CON_04_Flow_2" bioc:stroke="#475b70">
+        <di:waypoint x="665" y="330" />
+        <di:waypoint x="763" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_3_di" bpmnElement="CON_04_Flow_3" bioc:stroke="#475b70">
+        <di:waypoint x="790" y="357" />
+        <di:waypoint x="790" y="502" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="770" y="425" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_4_di" bpmnElement="CON_04_Flow_4" bioc:stroke="#475b70">
+        <di:waypoint x="885" y="550" />
+        <di:waypoint x="991" y="550" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_5_di" bpmnElement="CON_04_Flow_5" bioc:stroke="#475b70">
+        <di:waypoint x="817" y="330" />
+        <di:waypoint x="935" y="330" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="815" y="296" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_6_di" bpmnElement="CON_04_Flow_6" bioc:stroke="#475b70">
+        <di:waypoint x="1030" y="378" />
+        <di:waypoint x="1030" y="460" />
+        <di:waypoint x="1140" y="460" />
+        <di:waypoint x="1140" y="650" />
+        <di:waypoint x="1260" y="650" />
+        <di:waypoint x="1260" y="697" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_7_di" bpmnElement="CON_04_Flow_7" bioc:stroke="#475b70">
+        <di:waypoint x="1355" y="745" />
+        <di:waypoint x="1453" y="745" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_8_di" bpmnElement="CON_04_Flow_8" bioc:stroke="#475b70">
+        <di:waypoint x="1507" y="745" />
+        <di:waypoint x="1671" y="745" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1485" y="710" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_9_di" bpmnElement="CON_04_Flow_9" bioc:stroke="#475b70">
+        <di:waypoint x="1480" y="718" />
+        <di:waypoint x="1480" y="330" />
+        <di:waypoint x="1625" y="330" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1460" y="500" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_10_di" bpmnElement="CON_04_Flow_10" bioc:stroke="#475b70">
+        <di:waypoint x="1720" y="378" />
+        <di:waypoint x="1835" y="378" />
+        <di:waypoint x="1835" y="850" />
+        <di:waypoint x="1950" y="850" />
+        <di:waypoint x="1950" y="877" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_11_di" bpmnElement="CON_04_Flow_11" bioc:stroke="#475b70">
+        <di:waypoint x="2045" y="925" />
+        <di:waypoint x="2080" y="925" />
+        <di:waypoint x="2080" y="420" />
+        <di:waypoint x="2170" y="420" />
+        <di:waypoint x="2170" y="378" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_12_di" bpmnElement="CON_04_Flow_12" bioc:stroke="#475b70">
+        <di:waypoint x="2265" y="330" />
+        <di:waypoint x="2363" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_13_di" bpmnElement="CON_04_Flow_13" bioc:stroke="#475b70">
+        <di:waypoint x="2390" y="357" />
+        <di:waypoint x="2390" y="502" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2370" y="425" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_14_di" bpmnElement="CON_04_Flow_14" bioc:stroke="#475b70">
+        <di:waypoint x="2485" y="550" />
+        <di:waypoint x="2591" y="550" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_15_di" bpmnElement="CON_04_Flow_15" bioc:stroke="#475b70">
+        <di:waypoint x="2417" y="330" />
+        <di:waypoint x="2545" y="330" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2415" y="296" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_04_Flow_16_di" bpmnElement="CON_04_Flow_16" bioc:stroke="#475b70">
+        <di:waypoint x="2735" y="330" />
+        <di:waypoint x="2820" y="330" />
+        <di:waypoint x="2820" y="906" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
