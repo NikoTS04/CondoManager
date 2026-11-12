@@ -1,5 +1,9 @@
 # PROC-04: Gestión de Reservas de Áreas Comunes y Control de Solvencia
 
+CON-42 integra la evaluación de deuda persistida mediante el
+[contrato financiero Sprint 2](../02-domains/02-pagos-y-moras/sprint-2-anderson.md).
+No altera el catálogo, la cancelación ni la política de intervalos de otros tickets.
+
 ## 1. Ficha del Proceso
 - **Identificador:** PROC-04
 - **Responsable del Módulo:** **Brandon**
@@ -25,7 +29,22 @@ El módulo garantiza la equidad en el uso de los espacios comunes, evita solapam
 
 ## 4. Reglas de Negocio
 
+### CON-39 — Catálogo administrativo persistente
+
+Contrato vigente: [catálogo de áreas](../02-domains/04-reservas/catalogo-areas.md).
+SuperAdmin/Junta configuran áreas de su contexto; Auditor consulta. Edificio
+opcional, aforo, costo por turno y duración máxima se guardan junto con apertura/
+cierre diarios en hora de Lima. Cambios y auditoría son atómicos. Desactivar no
+cancela ni borra reservas anteriores y bloquea nuevas solicitudes. Las reservas
+leen condiciones SQL y respetan horario, duración y edificio autorizado.
+
 ### 4.1 Validación Cruzada de Solvencia Financiera
+La gracia efectiva se toma de la cuota (global o excepción del responsable), no
+de una constante ni de la configuración global actual. Con default 0, vence el
+10 y restringe desde el 11 en Lima. Mora pendiente también bloquea, aunque el
+principal esté pagado. Se consulta deuda, sin depender de que el cron haya corrido.
+Ver [regla financiera objetivo](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
+
 Antes de evaluar la disponibilidad física de un espacio, el motor consulta el estado financiero del departamento solicitante:
 - **Condición de Rechazo Automático:** Si el departamento posee al menos una cuota en estado `EN_MORA` o con vencimiento superado tras el periodo de gracia:
   $$\text{Deuda Exigible}(d) > 0 \implies \text{Bloqueo Inmediato de Reserva}$$
@@ -98,3 +117,8 @@ Escenario: Rechazo automático de reserva por cuota en mora
   Y muestra el mensaje "No es posible reservar: Su departamento mantiene cuotas vencidas pendientes"
   Y no altera el calendario de disponibilidad del área común.
 ```
+# Persistencia CON-73
+
+La transacción y adopción de históricos se rigen por
+[persistencia Sprint 2](../02-domains/04-reservas/persistencia-sprint-2.md).
+Crear/cancelar conservan auditoría y outbox atómicos con la solvencia de CON-42.

@@ -1,21 +1,16 @@
-"""Pagos piloto con autorización por rol, condominio y unidad activa."""
+"""API compatible de pagos con PostgreSQL y evidencia local privada."""
 
-from datetime import date
-from decimal import Decimal
-from typing import Dict
-from uuid import UUID, uuid4
+from typing import Annotated, Literal
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Form, Response
+from fastapi.responses import FileResponse
 
-from src.core.authorization import (
-    autorizar_condominio,
-    autorizar_departamento,
-    contexto_consulta,
-    denegar,
-    puede_ver_departamento,
-)
+from src.core.authorization import autorizar_condominio
+from src.core.errors import ErrorResponse
 from src.core.security import get_current_user, require_role
 from src.modules.pagos.moras_service import MotorMorasService
+from src.modules.pagos.persistencia import get_pagos_service
 from src.modules.pagos.schemas import (
     ComprobantePagoDTO,
     ComprobanteRecibidoResponse,
@@ -23,98 +18,139 @@ from src.modules.pagos.schemas import (
     ConciliarPagoRequest,
     EvaluarMorasRequest,
     EvaluarMorasResponse,
-    ReportarPagoRequest,
+    ReportarPagoFormulario,
+    SolvenciaResponse,
+    SubsanarVoucherRequest,
 )
-from src.modules.pagos.service import PagosService, VoucherDuplicadoException
-from src.modules.usuarios.departamentos import get_departamentos_portal_repository
+from src.modules.pagos.solvencia import get_solvencia_service
 
 router = APIRouter(tags=["Pagos y Conciliación"])
-COMPROBANTES_REGISTRADOS: Dict[str, Dict] = {}
-
-
-async def _departamento(usuario, departamento_id, repository, *, escritura=False):
-    if not puede_ver_departamento(usuario, departamento_id):
-        denegar("El departamento no pertenece a sus vínculos activos.")
-    depto = await repository.obtener(departamento_id)
-    if not depto:
-        raise HTTPException(404, detail={"error_code": "DEPARTAMENTO_NO_ENCONTRADO"})
-    autorizar_departamento(usuario, departamento_id, depto["condominio_id"], escritura=escritura)
-    if escritura and not depto["activo"]:
-        denegar("El departamento se encuentra inactivo.")
-    return depto
 
 
 @router.get("/pagos/comprobantes", response_model=list[ComprobantePagoDTO])
 async def listar_comprobantes(
-    user: dict = Depends(get_current_user), condominio_id: UUID | None = None
-):
-    cid = contexto_consulta(user, condominio_id)
-    return [
-        {
-            **c,
-            "banco": c["banco_origen"],
-            "estado": "CONCILIADO" if c["estado"] == "APROBADO" else c["estado"],
-        }
-        for c in COMPROBANTES_REGISTRADOS.values()
-        if str(c["condominio_id"]) == str(cid)
-        and puede_ver_departamento(user, c["departamento_id"])
-    ]
-
-
-@router.post("/pagos/reportar", response_model=ComprobanteRecibidoResponse, status_code=202)
-async def reportar_pago(
-    request: ReportarPagoRequest,
     user: dict = Depends(get_current_user),
-    repository=Depends(get_departamentos_portal_repository),
+    condominio_id: UUID | None = None,
+    service=Depends(get_pagos_service),
 ):
-    depto = await _departamento(user, request.departamento_id, repository, escritura=True)
+    return await service.listar(user, condominio_id)
+
+
+@router.get("/pagos/solvencia/{departamento_id}", response_model=SolvenciaResponse)
+async def consultar_solvencia(
+    departamento_id: UUID,
+    user: dict = Depends(get_current_user),
+    service=Depends(get_solvencia_service),
+):
+    return await service.consultar(departamento_id, user)
+
+
+@router.post(
+    "/pagos/reportar",
+    response_model=ComprobanteRecibidoResponse,
+    status_code=202,
+    responses={200: {"model": ComprobanteRecibidoResponse}, 503: {"model": ErrorResponse}},
+)
+async def reportar_pago(
+    request: Annotated[ReportarPagoFormulario, Form(media_type="multipart/form-data")],
+    response: Response,
+    user: dict = Depends(get_current_user),
+    service=Depends(get_pagos_service),
+):
     try:
-        return PagosService.procesar_reporte_pago(
-            request=request,
-            condominio_id=str(depto["condominio_id"]),
-            comprobantes_existentes=COMPROBANTES_REGISTRADOS,
-        )
-    except VoucherDuplicadoException as exc:
-        raise HTTPException(409, detail={"error_code": exc.error_code, "mensaje": exc.mensaje})
+        resultado, creado = await service.reportar(request, request.archivo_voucher, user)
+        response.status_code = 202 if creado else 200
+        return resultado
+    finally:
+        await request.archivo_voucher.close()
+
+
+@router.put(
+    "/pagos/{comprobante_id}/voucher",
+    response_model=ComprobanteRecibidoResponse,
+    status_code=202,
+    responses={503: {"model": ErrorResponse}},
+)
+async def subsanar_voucher(
+    comprobante_id: UUID,
+    request: Annotated[SubsanarVoucherRequest, Form(media_type="multipart/form-data")],
+    user: dict = Depends(get_current_user),
+    service=Depends(get_pagos_service),
+):
+    try:
+        return await service.subsanar(comprobante_id, request.archivo_voucher, user)
+    finally:
+        await request.archivo_voucher.close()
+
+
+@router.get(
+    "/pagos/{comprobante_id}/voucher",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "description": "Evidencia privada de la unidad autorizada",
+            "headers": {"Cache-Control": {"schema": {"type": "string", "const": "no-store"}}},
+            "content": {
+                mime: {"schema": {"type": "string", "format": "binary"}}
+                for mime in ("image/png", "image/jpeg", "application/pdf")
+            },
+        },
+    },
+)
+async def descargar_voucher(
+    comprobante_id: UUID,
+    user: dict = Depends(get_current_user),
+    service=Depends(get_pagos_service),
+    disposicion: Literal["inline", "attachment"] = "attachment",
+    evidencia_id: UUID | None = None,
+):
+    if evidencia_id is None:
+        ruta, nombre = await service.voucher(comprobante_id, user)
+    else:
+        ruta, nombre = await service.voucher(comprobante_id, user, evidencia_id)
+    return FileResponse(
+        ruta,
+        filename=nombre,
+        content_disposition_type=disposicion,
+        media_type={".png": "image/png", ".jpg": "image/jpeg", ".pdf": "application/pdf"}[
+            ruta.suffix
+        ],
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.get("/pagos/{comprobante_id}/evidencias")
+async def listar_evidencias(
+    comprobante_id: UUID,
+    user: dict = Depends(get_current_user),
+    service=Depends(get_pagos_service),
+):
+    return await service.evidencias(comprobante_id, user)
+
+
+@router.get("/pagos/{comprobante_id}/resultado", response_model=ConciliacionResultResponse)
+async def consultar_resultado(
+    comprobante_id: UUID,
+    response: Response,
+    user: dict = Depends(get_current_user),
+    service=Depends(get_pagos_service),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "Authorization"
+    return await service.resultado(comprobante_id, user)
 
 
 @router.post("/pagos/{comprobante_id}/conciliar", response_model=ConciliacionResultResponse)
 async def conciliar_pago(
     comprobante_id: UUID,
     request: ConciliarPagoRequest,
+    response: Response,
     user: dict = Depends(require_role(["ADMIN_JUNTA", "SUPERADMIN"])),
-    repository=Depends(get_departamentos_portal_repository),
+    service=Depends(get_pagos_service),
 ):
-    comprobante = next(
-        (c for c in COMPROBANTES_REGISTRADOS.values() if c["id"] == comprobante_id), None
-    )
-    if not comprobante:
-        raise HTTPException(404, detail={"error_code": "COMPROBANTE_NO_ENCONTRADO"})
-    autorizar_condominio(user, comprobante["condominio_id"], escritura=True)
-    depto = await _departamento(user, comprobante["departamento_id"], repository, escritura=True)
-    # La conciliación sigue siendo una simulación; no modifica las cuotas SQL.
-    cuotas_mock = [
-        {
-            "id": uuid4(),
-            "fecha_vencimiento": date(2026, 9, 20),
-            "monto_total_exigible": comprobante["monto"],
-            "monto_pagado": Decimal("0.00"),
-            "estado": "PENDIENTE",
-        }
-    ]
-    try:
-        result = PagosService.conciliar_comprobante(
-            comprobante=comprobante,
-            decision=request.decision,
-            cuotas_pendientes=cuotas_mock,
-            departamento=depto,
-            motivo_rechazo=request.motivo_rechazo,
-        )
-        if result.departamento_habilitado_reservas:
-            depto["deuda_vencida"] = Decimal("0.00")
-        return result
-    except ValueError as exc:
-        raise HTTPException(422, detail=str(exc))
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "Authorization"
+    return await service.revisar(comprobante_id, request, user)
 
 
 @router.post("/moras/evaluar", response_model=EvaluarMorasResponse)

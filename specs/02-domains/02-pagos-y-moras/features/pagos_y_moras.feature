@@ -1,4 +1,6 @@
 # language: es
+# Escenario fijo con gracia explícita conservado como compatibilidad, no política piloto.
+# Mora diaria objetivo: ../../../04-acceptance-criteria/prorrateo-mora-reportes.feature.md (pendiente de automatización).
 Característica: Conciliación de pagos bancarios y aplicación de moras
   Como tesorero de la junta directiva
   Quiero conciliar los comprobantes bancarios y que el sistema gestione las moras

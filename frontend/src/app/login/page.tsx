@@ -102,7 +102,7 @@ export default function LoginPage() {
           Iniciar sesión
         </Button>
       </form>
-      {process.env.NEXT_PUBLIC_DEMO_MODE !== "false" && (
+      {process.env.NEXT_PUBLIC_DEMO_MODE === "true" && (
         <section className="space-y-3" aria-labelledby="demos-title">
           <div>
             <h2 id="demos-title" className="text-lg font-semibold">Perfiles de demostración</h2>

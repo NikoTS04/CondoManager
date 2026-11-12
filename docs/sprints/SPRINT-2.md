@@ -4,7 +4,30 @@
 
 Entregar un prototipo integrado en el que los usuarios accedan según su rol y sus departamentos vinculados, reporten comprobantes sin duplicarlos, consulten y reserven áreas comunes según su solvencia y reciban comunicaciones trazables. Los datos y las operaciones del flujo deben persistirse y poder comprobarse después de reiniciar los servicios.
 
-El Sprint 2 contiene **20 elementos: 15 historias de usuario y 5 entregas técnicas**. Los puntos nuevos, las fechas y la capacidad del sprint quedan por definir durante la planificación del equipo.
+El Sprint 2 contiene **20 elementos: 15 historias de usuario y 5 entregas técnicas**. Los puntos y la capacidad de la tabla conservan el registro de planificación original; esta consolidación no inventa estimaciones ni fechas de ejecución.
+
+## Estado del candidato de entrega — 28/10/2026
+
+El [PR #25](https://github.com/NikoTS04/CondoManager/pull/25), de `develop` a `main`, incluye la base `f49dc55`: el cierre del Sprint 2 y la ampliación financiera integrada en el PR #28. Esta ampliación añade política diaria, gracia por responsable, presupuesto por conceptos, prorrateo, conciliación diaria y fondos por edificio hasta la migración `20261025_0020`. No modifica retrospectivamente las asignaciones originales de la tabla ni declara completado el Sprint 3.
+
+La [validación del candidato](SPRINT-2-VALIDACION-PR25.md) identifica los cambios de CI, resultados nuevos y límites de esta revisión. La aceptación requiere los checks de la revisión final y la aprobación de otro integrante.
+
+### Antecedente de consolidación — 21/10/2026
+
+Las implementaciones del sprint están integradas en `develop` hasta el merge del
+PR #27 (`52b4512`). El [documento de entrega CON-75](CON-75-entrega-sprint-2.md)
+reúne los 20 elementos, los guiones y la evidencia reportada por sus responsables
+para preparar el PR de `develop` a `main`.
+
+En aquella preparación se reutilizaron los resultados previos, sin repetir pruebas
+en la actualización documental original. Se conserva su procedencia y corte; no se
+declara una nueva ejecución ni la aprobación del PR final. Las notas de pendientes
+de integración anteriores se actualizan según las entregas incorporadas.
+
+El prototipo mantiene vouchers privados locales, habilitación manual de usuarios
+y transporte de notificaciones `SIMULADO`, que acredita `ENVIADO`, no entrega
+externa. La revisión y los checks del PR se registran en GitHub conforme a la
+Definición de Terminado.
 
 ## Alcance y asignación
 
@@ -17,7 +40,7 @@ El Sprint 2 contiene **20 elementos: 15 historias de usuario y 5 entregas técni
 | **CON-23** | Evitar comprobantes duplicados | PAG-02 | 5 | **Brandon** | Contratos de CON-22, CON-70 y CON-72 |
 | **CON-32** | Notificar la emisión de una cuota | NOT-01 | Por estimar | **Alejandro** | CON-05 y CON-11; CON-72 y CON-73 |
 | **CON-34** | Comunicar el resultado de un pago | NOT-03 | Por estimar | **Alejandro** | CON-05 y CON-22; resultado persistente de revisión en CON-70; CON-72 y CON-73 |
-| **CON-36** | Notificar reservas y otras operaciones | NOT-05 | Por estimar | **Alejandro** | Eventos de CON-04, CON-41 y CON-46; CON-72 y CON-73 |
+| **CON-36** | Notificar reservas y otras operaciones | NOT-05 | Por estimar | **Alejandro** | Eventos de CON-41 y CON-46; CON-72 y CON-73; invitaciones de CON-04 diferidas |
 | **CON-37** | Reintentar notificaciones fallidas | NOT-06 | Por estimar | **Alejandro** | Contratos de notificaciones de CON-32, CON-34 y CON-36; CON-73 |
 | **CON-39** | Administrar el catálogo de áreas comunes | RES-01 | Por estimar | **Jerson** | CON-2 y CON-06; contrato de persistencia de CON-73 |
 | **CON-40** | Consultar disponibilidad | RES-02 | Por estimar | **Gerardo** | CON-39; contrato de reservas persistentes de CON-73 |
@@ -70,7 +93,7 @@ exclusión de horarios (CON-43) y persistencia (CON-73).
 
 CON-11 ------------------> CON-32 --+
 CON-22 / CON-70 ----------> CON-34 --+--> CON-37
-CON-04 / CON-41 / CON-46 -> CON-36 --+
+CON-41 / CON-46 ----------> CON-36 --+
 
 CON-72: contratos API y eventos acordados desde el inicio para todas las líneas
 CON-73: persistencia de catálogo, reservas y notificaciones durante su desarrollo
@@ -151,7 +174,7 @@ Guion y resultados: [entrega CON-05](CON-05-vinculos-departamentos.md).
 
 ## CON-06 — Asignar roles y permisos
 
-Contrato implementable: [roles y permisos](../../specs/02-domains/05-usuarios-rbac/roles-y-permisos.md).
+Contrato integrado: [roles y permisos](../../specs/02-domains/05-usuarios-rbac/roles-y-permisos.md).
 Gestión por SuperAdmin y Junta según autoridad; revocación lógica de asignaciones,
 auditoría atómica y renovación obligatoria de sesiones. SuperAdmin global sigue
 provisionado por CLI. BDD: `roles_permisos.feature`.
@@ -181,7 +204,7 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 - Departamento autorizado, banco, número de operación, fecha, monto y voucher obligatorio.
 - Carga de PNG, JPG o PDF mediante un contrato de subida de archivo acordado en CON-72, con tamaño máximo documentado y validación efectiva del contenido.
-- Almacenamiento del archivo en el servicio de objetos y persistencia de una referencia recuperable por los usuarios autorizados.
+- **Excepción temporal acordada:** almacenamiento privado en `uploads/vouchers/` y persistencia únicamente del nombre generado en `comprobantes_pago.url_voucher`; recuperación autenticada por comprobante. S3/MinIO se difiere para esta entrega. Véase el [contrato de integración de Anderson](../../specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md).
 - Creación del comprobante en `EN_REVISION`, integrado con la deduplicación de CON-23.
 - Ninguna modificación de saldos o solvencia por el solo hecho de reportar el comprobante.
 - Respuesta `202 Accepted` para una recepción nueva, con identificador persistido, estado y mensaje coherentes con la interfaz.
@@ -211,6 +234,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-32 — Notificar la emisión de una cuota
 
+Guion y resultados: [entrega CON-32/34/36/37](CON-32-34-36-37-notificaciones.md).
+
 **Historia:** Como residente, quiero recibir el aviso de una nueva cuota, para conocer el monto y la fecha límite de pago.
 
 **Debe incluir:**
@@ -227,6 +252,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 **Trazabilidad:** [NOT-01 del backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#not-01--notificar-la-emisión-de-una-cuota), [dominio de notificaciones](../../specs/02-domains/03-notificaciones/spec.md), [PROC-03](../../specs/02-processes-and-automations/proc-03-notificaciones.md), [catálogo de eventos](../../specs/03-contracts/events/domain-events-catalog.md), [entrega de CON-11](SPRINT-1.md#entrega-técnica-con-11--nicolás).
 
 ## CON-34 — Comunicar el resultado de un pago
+
+Guion y resultados: [entrega CON-32/34/36/37](CON-32-34-36-37-notificaciones.md).
 
 **Historia:** Como residente, quiero recibir el resultado de la revisión de mi comprobante, para saber si fue aprobado, observado o rechazado.
 
@@ -245,6 +272,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-36 — Notificar reservas y otras operaciones
 
+Guion y resultados: [entrega CON-32/34/36/37](CON-32-34-36-37-notificaciones.md).
+
 **Historia:** Como usuario, quiero recibir confirmaciones de reservas, cancelaciones, invitaciones y otras operaciones relevantes, para disponer de evidencia de lo ocurrido.
 
 **Debe incluir:**
@@ -261,6 +290,8 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 **Trazabilidad:** [NOT-05 del backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#not-05--notificar-reservas-y-otras-operaciones), [dominio de notificaciones](../../specs/02-domains/03-notificaciones/spec.md), [PROC-03](../../specs/02-processes-and-automations/proc-03-notificaciones.md), [PROC-04](../../specs/02-processes-and-automations/proc-04-reservas-areas-comunes.md), [PROC-05](../../specs/02-processes-and-automations/proc-05-gestion-usuarios.md).
 
 ## CON-37 — Reintentar notificaciones fallidas
+
+Guion y resultados: [entrega CON-32/34/36/37](CON-32-34-36-37-notificaciones.md).
 
 **Historia:** Como administrador, quiero que los envíos fallidos se reintenten automáticamente, para recuperar comunicaciones afectadas por interrupciones temporales.
 
@@ -279,6 +310,12 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-39 — Administrar el catálogo de áreas comunes
 
+Contrato: [catálogo persistente](../../specs/02-domains/04-reservas/catalogo-areas.md).
+Configuración contextual de áreas, horarios diarios en Lima, duración, aforo y costo
+Decimal; conservación de estado/historial y validación del edificio exclusivo.
+El catálogo SQL se implementa aquí como base compartida para CON-73.
+Guion y resultados: [entrega CON-39](CON-39-catalogo-areas.md).
+
 **Historia:** Como administrador, quiero configurar las áreas comunes, para publicar sus condiciones de uso y reserva.
 
 **Debe incluir:**
@@ -296,6 +333,10 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 **Trazabilidad:** [RES-01 del backlog](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#res-01--administrar-el-catálogo-de-áreas-comunes), [dominio de reservas](../../specs/02-domains/04-reservas/spec.md), [PROC-04](../../specs/02-processes-and-automations/proc-04-reservas-areas-comunes.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [seguridad y RBAC](../../specs/01-architecture/security-and-rbac.md).
 
 ## CON-40 — Consultar disponibilidad
+
+Avance de implementación y recorrido manual: [entrega CON-40](CON-40-disponibilidad.md).
+La persistencia y la lectura de bloqueos operativos están integradas con CON-73;
+el calendario y la creación utilizan las ocupaciones SQL compartidas.
 
 **Historia:** Como residente, quiero consultar fechas y horarios disponibles, para escoger una opción antes de solicitar la reserva.
 
@@ -367,6 +408,12 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-46 — Cancelar una reserva
 
+Implementación y guion manual: [entrega CON-46](CON-46-cancelacion-reservas.md).
+Cancelación SQL y outbox integrados con la creación persistente de CON-41/43,
+los bloqueos de CON-73 y el consumo idempotente de CON-36. El transporte de
+notificaciones es simulado; un ajuste `PENDIENTE` registra una solicitud de
+compensación y no una devolución ya ejecutada.
+
 **Historia:** Como residente, quiero cancelar una reserva dentro del plazo permitido, para liberar el horario cuando ya no vaya a utilizarlo.
 
 **Debe incluir:**
@@ -397,20 +444,32 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 - Migraciones reproducibles que validen las tablas preexistentes y conserven sus datos al adoptar el esquema actual.
 - Pruebas de rollback, consulta desde una nueva sesión, recuperación tras reinicio e idempotencia concurrente.
 
-**Se considera terminada cuando:** el recorrido de cuotas y pagos del prototipo puede reconstruirse desde PostgreSQL y almacenamiento de objetos, sin depender del estado de un proceso en memoria ni producir registros duplicados al reintentar.
+**Se considera terminada cuando:** el recorrido de cuotas y pagos del prototipo puede reconstruirse desde PostgreSQL y el almacenamiento privado de vouchers (local durante este periodo), sin depender del estado de un proceso en memoria ni producir registros duplicados al reintentar. Instrucciones: [uso y verificación de Anderson](SPRINT-2-ANDERSON-USO.md).
 
 **Trazabilidad:** [Sprint 1](SPRINT-1.md), [dominio de cuotas](../../specs/02-domains/01-cuotas/spec.md), [dominio de pagos](../../specs/02-domains/02-pagos-y-moras/spec.md), [diccionario de datos](../../specs/03-contracts/database/data-dictionary.md), [precisión decimal](../../specs/01-architecture/adr/ADR-002-decimal-accounting.md), [idempotencia](../../specs/01-architecture/idempotency-and-deduplication.md).
 
 ## CON-72 — Consolidar contratos API y reglas de eventos
 
+Convergencia implementada y evidencia local: [CON-72-convergencia.md](CON-72-convergencia.md).
+Integrada en `develop`, con evidencia previa del equipo y la posterior
+[reconciliación del esquema desplegado](reconciliacion-esquema-legacy.md).
+La aprobación final corresponde al PR de entrega; no se acredita entrega física
+de notificaciones con el transporte simulado.
+
 **Objetivo técnico:** establecer un contrato único entre módulos, interfaz, persistencia y comunicaciones para integrar el prototipo sin interpretaciones incompatibles.
+
+**Base de implementación:** [contratos del Sprint 2 / CON-72](../../specs/05-api/sprint-2-contratos.md), para que cada responsable implemente su HU. La entrega se limita a OpenAPI, esquemas de eventos, catálogo y guía de contratos. Los ajustes de dominio, proceso y persistencia se incorporan junto con la implementación de cada HU.
+
+CON-72 conserva las interfaces de CON-05/06/39 integradas en `develop`: vínculos mediante `GET/PUT/DELETE`, una asignación contextual mediante `/rol` y catálogo SQL con horarios diarios, moneda y restricciones por edificio. Sus rutas y esquemas se mantienen en el OpenAPI principal; los fragmentos del sprint cubren los contratos restantes.
+
+**Estado de verificación:** adopción por API, eventos y frontend integrada, con validación automatizada reportada en la entrega de convergencia y en el corte posterior de notificaciones. Los resultados se referencian en CON-75 sin repetirlos; publicar contratos o esta actualización no sustituye la revisión final del PR.
 
 **Debe incluir:**
 
 - Alineación entre OpenAPI, DTO, ejemplos, documentación y consumo del frontend.
 - Contratos de alta y habilitación administrativa de usuarios, vínculos, asignación de roles, comprobantes, catálogo, disponibilidad, reservas y cancelación.
 - Decisión explícita del contrato de carga del voucher y de las respuestas para comprobantes nuevos, duplicados en revisión y ya conciliados.
-- Catálogo de eventos con productor, consumidor, versión, identificador, contexto y campos requeridos para cuotas, pagos, invitaciones y reservas.
+- Catálogo de eventos con productor, consumidor, versión, identificador, contexto y campos requeridos para cuotas, pagos y reservas; invitaciones de CON-04 diferidas.
 - Reglas de publicación posterior al commit, reentrega, deduplicación, reintento y conservación de errores.
 - Contrato de errores y autorización, zona horaria, límites temporales, estados y representación decimal.
 - Resolución de discrepancias documentales: cuatro roles frente a perfiles de tenencia, frontera de cancelación y respuestas de idempotencia.
@@ -421,6 +480,11 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 **Trazabilidad:** [contratos API](../../specs/05-api/api-contracts.md), [OpenAPI](../../specs/03-contracts/openapi/condomanager.openapi.yaml), [catálogo de eventos](../../specs/03-contracts/events/domain-events-catalog.md), [esquemas de eventos](../../specs/03-contracts/events/schemas/), [contrato de identidad](../../specs/02-domains/05-usuarios-rbac/identidad-y-alcances.md), [matriz de trazabilidad](../../specs/00-core/traceability-matrix.md).
 
 ## CON-73 — Persistir áreas, reservas y notificaciones
+
+Avance de Nicolás: [persistencia e integración funcional](CON-73-CON-74-integracion.md).
+Implementación integrada y verificación previa documentada. El esquema legacy
+del despliegue se reconcilió a `20261021_0015`; ese procedimiento no inició workers
+ni reprodujo eventos históricos. La revisión final del PR conserva su propio registro.
 
 **Objetivo técnico:** sustituir el almacenamiento temporal de estos módulos por repositorios persistentes que sostengan las reglas del sprint.
 
@@ -440,6 +504,11 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 
 ## CON-74 — Integrar frontend y backend del prototipo
 
+Avance y límites: [integración funcional CON-73/74](CON-73-CON-74-integracion.md).
+Se conserva la interfaz actual y el rediseño visual queda diferido. La convergencia
+CON-72 integra multipart único, subsanación de observados, estado público
+`APROBADO`, errores y consultas sobre las API persistentes.
+
 **Objetivo técnico:** permitir que los recorridos de usuarios, pagos, reservas y comunicaciones funcionen desde la interfaz sobre las API acordadas y los datos persistidos.
 
 **Debe incluir:**
@@ -458,6 +527,10 @@ Guion y resultados: [entrega CON-06](CON-06-roles-permisos.md).
 **Trazabilidad:** [diseño del frontend](../../frontend/DESIGN.md), [contratos API](../../specs/05-api/api-contracts.md), [OpenAPI](../../specs/03-contracts/openapi/condomanager.openapi.yaml), [contrato de identidad](../../specs/02-domains/05-usuarios-rbac/identidad-y-alcances.md), [seguridad y RBAC](../../specs/01-architecture/security-and-rbac.md), [runbooks](../../specs/05-operations/deployment-and-runbooks.md).
 
 ## CON-75 — Preparar errores y evidencia del prototipo
+
+Entrega: [matriz, evidencia y preparación del merge](CON-75-entrega-sprint-2.md).
+Consolida guiones y resultados previamente reportados por el equipo; esta
+actualización no vuelve a ejecutar pruebas ni marca aprobaciones no registradas.
 
 **Objetivo técnico:** demostrar de forma reproducible el funcionamiento del prototipo y su respuesta controlada ante errores e interrupciones.
 
@@ -491,4 +564,6 @@ Una historia o entrega técnica se considera terminada cuando:
 9. Forma parte de un recorrido demostrable con datos identificables, resultados verificables y errores controlados en CON-75.
 10. Pasa la revisión de otro integrante y cuenta con validación funcional de la entrega.
 
-Los responsables quedan definidos en este documento. Las estimaciones pendientes, las fechas, la capacidad disponible y los acuerdos de contrato deben registrarse durante la planificación antes de comprometer la capacidad final del sprint.
+Los responsables y las estimaciones originales se conservan como registro de
+planificación. El alcance integrado y los límites del corte se resumen en CON-75;
+la fecha de publicación y el commit final se registrarán al aprobar y fusionar la entrega.

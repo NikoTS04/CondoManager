@@ -1,30 +1,35 @@
-"""Servicio de Negocio del Dominio de Reservas de Áreas Comunes (Brandon - PROC-04).
+"""Servicio de Negocio del Dominio de Reservas de Áreas Comunes (Brandon - PROC-04 / CON-41 / CON-43).
 
 Implementa:
-1. Control estricto de la Invariante de Solvencia Financiera (Mora activa bloquea reservas).
-2. Verificación de disponibilidad horaria y prevención de solapamientos (concurrencia).
-3. Auditoría inmutable de 7 campos para cada intento, confirmación o cancelación de reserva.
-4. Política Zero-Float (ADR-002) con tipos Decimal.
+1. Control estricto de la Invariante de Solvencia Financiera (Mora activa bloquea reservas - CON-41 / CON-42).
+2. Verificación de disponibilidad horaria y prevención de solapamientos con concurrencia (CON-43).
+3. Persistencia atómica de reservas con bloqueo pesimista en base de datos PostgreSQL.
+4. Auditoría inmutable de 7 campos para cada intento, confirmación o cancelación de reserva.
+5. Política Zero-Float (ADR-002) con tipos Decimal.
 """
 
+import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
-import uuid
+
 from pydantic import BaseModel
 
 from src.core.audit import AuditoriaPayload
+from src.modules.reservas.models import Reserva
+from src.modules.reservas.repository import ReservasRepository
 from src.modules.reservas.schemas import (
+    AjusteCancelacion,
     CancelarReservaRequest,
     CancelarReservaResponse,
     CrearReservaRequest,
     ReservaResponseDTO,
 )
 
-
 # ============================================================================
 # Excepciones de Dominio (PROC-04)
 # ============================================================================
+
 
 class DeudaMoraActivaException(Exception):
     def __init__(self, departamento_id: str, saldo_vencido: Decimal):
@@ -69,9 +74,9 @@ class AreaInactivaException(Exception):
 
 
 class CancelacionInvalidaException(Exception):
-    def __init__(self, motivo: str):
+    def __init__(self, motivo: str, error_code: str = "CANCELACION_NO_PERMITIDA"):
         super().__init__(motivo)
-        self.error_code = "CANCELACION_NO_PERMITIDA"
+        self.error_code = error_code
         self.mensaje = motivo
 
 
@@ -85,6 +90,7 @@ class HorarioInvalidoException(Exception):
 # ============================================================================
 # Compatibilidad con Suite de Pruebas BDD / Unitarias Iniciales
 # ============================================================================
+
 
 class SolicitudReservaDTO(BaseModel):
     condominio_id: str
@@ -137,11 +143,10 @@ class GestorReservasService:
 # Servicio Principal de Reservas y Disponibilidad (SDD Completo)
 # ============================================================================
 
+
 class ReservasService:
     @staticmethod
-    def hay_solapamiento_horario(
-        inicio_a: time, fin_a: time, inicio_b: time, fin_b: time
-    ) -> bool:
+    def hay_solapamiento_horario(inicio_a: time, fin_a: time, inicio_b: time, fin_b: time) -> bool:
         """Evalúa si dos intervalos de tiempo se solapan [inicio, fin)."""
         return inicio_a < fin_b and fin_a > inicio_b
 
@@ -168,6 +173,36 @@ class ReservasService:
         return True
 
     @classmethod
+    def _validar_reglas_horario_y_area(
+        cls, request: CrearReservaRequest, area: Dict[str, Any]
+    ) -> None:
+        """Valida que los horarios estén bien formados y respeten las políticas del área."""
+        if any(
+            h.tzinfo is not None or h.second != 0 or h.microsecond != 0
+            for h in (request.hora_inicio, request.hora_fin)
+        ):
+            raise HorarioInvalidoException("Use horas locales HH:MM sin zona horaria ni segundos.")
+        if request.hora_fin <= request.hora_inicio:
+            raise HorarioInvalidoException("La hora de fin debe ser posterior a la hora de inicio.")
+
+        if not area.get("esta_activa", True):
+            raise AreaInactivaException(str(request.area_id))
+
+        apertura = area.get("hora_apertura", time(0))
+        cierre = area.get("hora_cierre", time(23, 59))
+        if request.hora_inicio < apertura or request.hora_fin > cierre:
+            raise HorarioInvalidoException(
+                "El turno debe quedar dentro del horario de apertura y cierre del área."
+            )
+        minutos = (
+            (request.hora_fin.hour - request.hora_inicio.hour) * 60
+            + request.hora_fin.minute
+            - request.hora_inicio.minute
+        )
+        if minutos > area.get("tiempo_maximo_horas", 24) * 60:
+            raise HorarioInvalidoException("El turno supera la duración máxima permitida del área.")
+
+    @classmethod
     def procesar_reserva(
         cls,
         request: CrearReservaRequest,
@@ -176,30 +211,32 @@ class ReservasService:
         saldo_mora_depto: Decimal,
         reservas_existentes: List[Dict[str, Any]],
     ) -> Tuple[ReservaResponseDTO, AuditoriaPayload]:
-        """Orquesta la creación de una reserva con validación atómica de solvencia y calendario."""
-        if request.hora_fin <= request.hora_inicio:
-            raise HorarioInvalidoException("La hora de fin debe ser posterior a la hora de inicio.")
+        """Orquesta la creación de una reserva en memoria con validación atómica de solvencia y calendario."""
+        cls._validar_reglas_horario_y_area(request, area)
 
-        if not area.get("esta_activa", True):
-            raise AreaInactivaException(str(request.area_id))
-
-        # 1. Invariante Innegociable de Solvencia Financiera
+        # 1. Invariante Innegociable de Solvencia Financiera (CON-41 / CON-42)
         if saldo_mora_depto > Decimal("0.00") or estado_financiero_depto == "EN_MORA":
-            audit_rechazo_mora = AuditoriaPayload(
+            AuditoriaPayload(
                 condominio_id=str(request.condominio_id),
                 departamento_id=str(request.departamento_id),
                 accion_ejecutada="SOLICITUD_RESERVA_RECHAZADA_MORA",
                 motivo=f"Intento de reserva bloqueado: departamento mantiene deuda morosa de S/ {saldo_mora_depto:.2f}",
                 resultado="FALLIDO",
-                estado_anterior={"estado_financiero": estado_financiero_depto, "saldo_mora": str(saldo_mora_depto)},
-                estado_posterior={"estado_financiero": estado_financiero_depto, "resultado_reserva": "RECHAZADA"},
+                estado_anterior={
+                    "estado_financiero": estado_financiero_depto,
+                    "saldo_mora": str(saldo_mora_depto),
+                },
+                estado_posterior={
+                    "estado_financiero": estado_financiero_depto,
+                    "resultado_reserva": "RECHAZADA",
+                },
             )
             raise DeudaMoraActivaException(
                 departamento_id=str(request.departamento_id),
                 saldo_vencido=saldo_mora_depto,
             )
 
-        # 2. Control de Disponibilidad y Concurrencia
+        # 2. Control de Disponibilidad y Concurrencia (CON-43)
         disponible = cls.validar_disponibilidad(
             area_id=request.area_id,
             fecha_reserva=request.fecha_reserva,
@@ -209,13 +246,16 @@ class ReservasService:
         )
 
         if not disponible:
-            audit_rechazo_horario = AuditoriaPayload(
+            AuditoriaPayload(
                 condominio_id=str(request.condominio_id),
                 departamento_id=str(request.departamento_id),
                 accion_ejecutada="SOLICITUD_RESERVA_RECHAZADA_CONFLICTO",
                 motivo=f"Horario ocupado para el área {request.area_id} en fecha {request.fecha_reserva}",
                 resultado="FALLIDO",
-                estado_anterior={"area_id": str(request.area_id), "fecha": str(request.fecha_reserva)},
+                estado_anterior={
+                    "area_id": str(request.area_id),
+                    "fecha": str(request.fecha_reserva),
+                },
                 estado_posterior={"resultado_reserva": "RECHAZADA_CONFLICTO"},
             )
             raise ConflictoHorarioException(
@@ -243,6 +283,7 @@ class ReservasService:
                 "fecha_reserva": str(request.fecha_reserva),
                 "horario": f"{request.hora_inicio.strftime('%H:%M')}-{request.hora_fin.strftime('%H:%M')}",
                 "costo_reserva": str(costo_reserva),
+                "moneda": area.get("moneda", "PEN"),
                 "estado": "CONFIRMADA",
             },
         )
@@ -257,6 +298,8 @@ class ReservasService:
             hora_inicio=request.hora_inicio,
             hora_fin=request.hora_fin,
             costo_reserva=costo_reserva,
+            moneda=area.get("moneda", "PEN"),
+            zona_horaria=area.get("zona_horaria", "America/Lima"),
             estado="CONFIRMADA",
             creado_en=creado_en,
         )
@@ -264,28 +307,168 @@ class ReservasService:
         return reserva_dto, audit_confirmacion
 
     @classmethod
+    async def procesar_reserva_persistente(
+        cls,
+        request: CrearReservaRequest,
+        area: Dict[str, Any],
+        estado_financiero_depto: str,
+        saldo_mora_depto: Decimal,
+        repository: ReservasRepository,
+        usuario_id: uuid.UUID,
+        reservas_existentes: Optional[List[Dict[str, Any]]] = None,
+        auditor=None,
+    ) -> ReservaResponseDTO:
+        """Crea una reserva en PostgreSQL con bloqueo pesimista y verificación atómica de solvencia y horario."""
+        cls._validar_reglas_horario_y_area(request, area)
+
+        # 1. Invariante de Solvencia Financiera (CON-41)
+        if saldo_mora_depto > Decimal("0.00") or estado_financiero_depto == "EN_MORA":
+            AuditoriaPayload(
+                condominio_id=str(request.condominio_id),
+                departamento_id=str(request.departamento_id),
+                accion_ejecutada="SOLICITUD_RESERVA_RECHAZADA_MORA",
+                motivo=f"Intento de reserva bloqueado: departamento mantiene deuda morosa de S/ {saldo_mora_depto:.2f}",
+                resultado="FALLIDO",
+                estado_anterior={
+                    "estado_financiero": estado_financiero_depto,
+                    "saldo_mora": str(saldo_mora_depto),
+                },
+                estado_posterior={
+                    "estado_financiero": estado_financiero_depto,
+                    "resultado_reserva": "RECHAZADA",
+                },
+            )
+            raise DeudaMoraActivaException(
+                departamento_id=str(request.departamento_id),
+                saldo_vencido=saldo_mora_depto,
+            )
+
+        # 2. Control de Concurrencia y Solapamientos en DB con bloqueo (CON-43)
+        solapadas = await repository.buscar_solapamientos(
+            area_id=request.area_id,
+            fecha=request.fecha_reserva,
+            hora_inicio=request.hora_inicio,
+            hora_fin=request.hora_fin,
+            bloquear=True,
+        )
+
+        disponible = cls.validar_disponibilidad(
+            request.area_id,
+            request.fecha_reserva,
+            request.hora_inicio,
+            request.hora_fin,
+            reservas_existentes or [],
+        )
+        if solapadas or not disponible:
+            AuditoriaPayload(
+                condominio_id=str(request.condominio_id),
+                departamento_id=str(request.departamento_id),
+                accion_ejecutada="SOLICITUD_RESERVA_RECHAZADA_CONFLICTO",
+                motivo=f"Horario ocupado para el área {request.area_id} en fecha {request.fecha_reserva}",
+                resultado="FALLIDO",
+                estado_anterior={
+                    "area_id": str(request.area_id),
+                    "fecha": str(request.fecha_reserva),
+                },
+                estado_posterior={"resultado_reserva": "RECHAZADA_CONFLICTO"},
+            )
+            raise ConflictoHorarioException(
+                area_id=str(request.area_id),
+                fecha=request.fecha_reserva,
+                hora_inicio=request.hora_inicio,
+                hora_fin=request.hora_fin,
+            )
+
+        # 3. Persistencia Atómica de la Reserva
+        costo_reserva = Decimal(str(area.get("costo_reserva", "0.00")))
+        ahora = datetime.now(timezone.utc)
+        nueva_reserva = Reserva(
+            id=uuid.uuid4(),
+            area_id=request.area_id,
+            departamento_id=request.departamento_id,
+            condominio_id=request.condominio_id,
+            usuario_id=usuario_id,
+            moneda=area.get("moneda", "PEN"),
+            area_nombre=area.get("nombre", "Área Común"),
+            fecha_reserva=request.fecha_reserva,
+            hora_inicio=request.hora_inicio,
+            hora_fin=request.hora_fin,
+            costo_reserva=costo_reserva,
+            estado="CONFIRMADA",
+            zona_horaria=area.get("zona_horaria", "America/Lima"),
+            creado_en=ahora,
+        )
+        guardada = await repository.guardar(nueva_reserva)
+
+        # Auditoría inmutable
+        auditoria = AuditoriaPayload(
+            condominio_id=str(request.condominio_id),
+            departamento_id=str(request.departamento_id),
+            accion_ejecutada="RESERVA_CONFIRMADA",
+            motivo=f"Reserva aprobada en {area.get('nombre', 'Área Común')} para {request.fecha_reserva}",
+            resultado="EXITOSO",
+            estado_anterior={"reserva_id": "NULL", "estado": "SOLICITADA"},
+            estado_posterior={
+                "reserva_id": str(guardada.id),
+                "area_id": str(request.area_id),
+                "fecha_reserva": str(request.fecha_reserva),
+                "horario": f"{request.hora_inicio.strftime('%H:%M')}-{request.hora_fin.strftime('%H:%M')}",
+                "costo_reserva": str(costo_reserva),
+                "moneda": area.get("moneda", "PEN"),
+                "estado": "CONFIRMADA",
+            },
+        )
+
+        if auditor is not None:
+            await auditor(auditoria)
+
+        return ReservaResponseDTO(
+            id=guardada.id,
+            condominio_id=request.condominio_id,
+            area_id=guardada.area_id,
+            area_nombre=area.get("nombre"),
+            departamento_id=guardada.departamento_id,
+            fecha_reserva=guardada.fecha_reserva,
+            hora_inicio=guardada.hora_inicio,
+            hora_fin=guardada.hora_fin,
+            costo_reserva=guardada.costo_reserva,
+            moneda=area.get("moneda", "PEN"),
+            zona_horaria=guardada.zona_horaria,
+            estado=guardada.estado,
+            creado_en=guardada.creado_en or ahora,
+        )
+
+    @classmethod
     def procesar_cancelacion(
         cls,
         reserva: Dict[str, Any],
         request: CancelarReservaRequest,
         momento_actual: Optional[datetime] = None,
+        *,
+        actor: Optional[dict] = None,
     ) -> Tuple[CancelarReservaResponse, AuditoriaPayload]:
         """Procesa la cancelación liberando el cupo en el calendario."""
-        if reserva.get("estado") == "CANCELADA":
-            raise CancelacionInvalidaException("La reserva ya ha sido cancelada previamente.")
-
         if reserva.get("estado") != "CONFIRMADA":
             raise CancelacionInvalidaException(
-                f"No se puede cancelar una reserva en estado '{reserva.get('estado')}'."
+                f"No se puede cancelar una reserva en estado '{reserva.get('estado')}'.",
+                "ESTADO_RESERVA_INVALIDO",
             )
 
         momento_actual = momento_actual or datetime.now(timezone.utc)
 
         # Regla de 24 horas de anticipación para cancelaciones voluntarias de residentes
-        if not request.es_admin:
+        # El servicio HTTP siempre proporciona el actor validado. El parámetro
+        # histórico se conserva solo para consumidores internos anteriores.
+        es_admin = actor["rol"] in {"SUPERADMIN", "ADMIN_JUNTA"} if actor else request.es_admin
+        if not es_admin:
             fecha_res = reserva["fecha_reserva"]
             hora_ini = reserva["hora_inicio"]
-            inicio_reserva_dt = datetime.combine(fecha_res, hora_ini, tzinfo=timezone.utc)
+            zona = (
+                timezone(timedelta(hours=-5))
+                if reserva.get("zona_horaria") == "America/Lima"
+                else timezone.utc
+            )
+            inicio_reserva_dt = datetime.combine(fecha_res, hora_ini, tzinfo=zona)
 
             limite_cancelacion = inicio_reserva_dt - timedelta(hours=24)
             if momento_actual > limite_cancelacion:
@@ -299,6 +482,9 @@ class ReservasService:
             accion_ejecutada="RESERVA_CANCELADA",
             motivo=request.motivo,
             resultado="EXITOSO",
+            actor_tipo=actor["rol"] if actor else "SISTEMA_AUTOMATICO",
+            actor_id=str(actor["sub"]) if actor else "SYSTEM_WORKER",
+            timestamp=momento_actual,
             estado_anterior={"reserva_id": str(reserva["id"]), "estado": "CONFIRMADA"},
             estado_posterior={"reserva_id": str(reserva["id"]), "estado": "CANCELADA"},
         )
@@ -311,3 +497,13 @@ class ReservasService:
         )
 
         return respuesta, audit_cancelacion
+
+    @staticmethod
+    def ajuste_cancelacion(cobro: Optional[dict]) -> AjusteCancelacion:
+        """El costo del turno no acredita un pago: exige un cobro efectivo vinculado."""
+        if not cobro or not cobro["reembolsable"]:
+            return AjusteCancelacion()
+        pendiente = cobro["monto"] - cobro["monto_compensado"]
+        if pendiente <= Decimal("0.00"):
+            return AjusteCancelacion()
+        return AjusteCancelacion(estado="PENDIENTE", monto=pendiente, referencia=None)

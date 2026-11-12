@@ -10,6 +10,18 @@
 ---
 
 ## 2. Propósito y Alcance del Proceso
+Implementación 0018: ítems opcionales para conservar presupuestos legacy;
+detalle nuevo con catálogo, total calculado, versión y snapshot congelado al
+aprobar. La emisión detallada usa el snapshot, conserva cargos y ajustes por
+cuota y no vuelve a repartir el total global. Padrón diferente al aprobado
+rechaza emisión. Total cero permitido solo en el contrato detallado, sin
+cuotas negativas ni consumo ficticio de saldos a favor.
+
+Regla objetivo vigente: [prorrateo jerárquico y mora diaria](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
+El presupuesto se desglosa por concepto, edificio y unidad; el piloto usa pisos
+para repartir AACC y división entre 139 para edificio 03. Esta ampliación está
+pendiente de implementación; conserva el historial de CON-9/10/11/13.
+
 Automatizar el cálculo, generación masiva y emisión periódica de las cuotas ordinarias y extraordinarias de mantenimiento para cada departamento o unidad habitacional del condominio/edificio. 
 
 El módulo calcula el importe correspondiente a cada unidad según su modelo de reparto (alícuota fija o coeficiente de participación inmobiliario), programa su fecha de vencimiento y mantiene actualizado el estado de cada obligación financiera.
@@ -60,8 +72,8 @@ El sistema soporta dos modalidades parametrizables por edificio:
 
 ### 4.3 Fechas Clave y Plazos
 - **Fecha de Emisión:** Día 1 del mes correspondiente.
-- **Fecha Límite de Pago Oportuno (Vencimiento):** Día parametrizable (por defecto: día 20 del mes a las 23:59:59).
-- **Periodo de Gracia:** 2 días calendario posteriores a la fecha de vencimiento antes de activar recargos por mora.
+- **Fecha Límite de Pago Oportuno (Vencimiento):** Día 10 a las 23:59:59 de `America/Lima` en el piloto.
+- **Periodo de Gracia:** Predeterminado 0; configurable globalmente y por vínculo del responsable de pago propietario/inquilino. La cuota conserva la política efectiva al emitirse.
 
 ### 4.4 Manejo de Saldos a Favor Anteriores
 Si un departamento cuenta con un saldo a favor en su cuenta corriente (originado por pagos en exceso previos o notas de crédito):
@@ -79,7 +91,7 @@ Si un departamento cuenta con un saldo a favor en su cuenta corriente (originado
 | **2. Evaluación de Reglas** | En la integración de CON-11, consulta por `condominio_id + periodo` exclusivamente el presupuesto `APROBADO` persistido por CON-9, la lista de unidades activas, sus coeficientes de participación y los saldos a favor pendientes. El cliente dejará de proporcionar un monto sustituto. |
 | **3. Decisión** | ¿Existe presupuesto aprobado para el periodo? <br>- Sí $\rightarrow$ Continúa con el cálculo individual por departamento. <br>- No $\rightarrow$ Genera alerta urgente al Administrador y aborta emisión masiva. |
 | **4. Acción** | 1. Inserta las filas en la tabla `cuotas_mantenimiento` con estado `EMITIDA`. <br>2. Aplica saldos a favor si existiesen. <br>3. Cambia estado a `PENDIENTE` (o `PAGADA` si se cubrió con saldo a favor). <br>4. Emite el evento `CuotasEmitidasEvent(periodo)`. |
-| **5. Verificación** | 1. Suma los montos emitidos y comprueba que coincidan con el presupuesto total: $\sum \text{Cuotas} = \text{Presupuesto}$. <br>2. Dispara a PROC-03 (Alejandro) el envío del aviso de nueva cuota a los residentes. |
+| **5. Verificación** | La suma de cuotas brutas coincide con el presupuesto distribuible aprobado, después de abonos y cobertura con moras cobradas, no con el gasto bruto. Cada nivel e ítem cierra centavos. Dispara PROC-03. |
 
 ---
 
@@ -139,7 +151,7 @@ Escenario: Emisión exitosa de cuota ordinaria mensual
   Y el departamento 301 tiene un coeficiente de participación del 0.85%
   Cuando el reloj del sistema marca las 00:00 del día 1 del mes
   Entonces el sistema emite una cuota de S/ 170.00 para el departamento 301
-  Y la cuota queda en estado "PENDIENTE" con fecha de vencimiento el día 20 del mes en curso.
+  Y la cuota queda en estado "PENDIENTE" con fecha de vencimiento el día 10 del mes en curso.
 ```
 # Integración persistente CON-11 (Sprint 1)
 

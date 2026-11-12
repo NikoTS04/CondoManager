@@ -37,7 +37,7 @@ export default function DemoSwitcher() {
     };
   }, [open, close]);
 
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === "false") return null;
+  if (process.env.NEXT_PUBLIC_DEMO_MODE !== "true") return null;
 
   return (
     <div className="relative" ref={root}>

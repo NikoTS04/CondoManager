@@ -5,16 +5,18 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
@@ -36,6 +38,9 @@ class PresupuestoMensual(Base):
     monto_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     fecha_vencimiento: Mapped[date] = mapped_column(Date, nullable=False)
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="BORRADOR")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    items: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    prorrateo_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     creado_por: Mapped[str] = mapped_column(String(100), nullable=False)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -62,7 +67,8 @@ class PresupuestoMensual(Base):
             name="ck_presupuesto_periodo",
         ),
         CheckConstraint("moneda IN ('PEN', 'USD')", name="ck_presupuesto_moneda"),
-        CheckConstraint("monto_total > 0.00", name="ck_presupuesto_monto_positivo"),
+        CheckConstraint("monto_total >= 0.00", name="ck_presupuesto_monto_positivo"),
+        CheckConstraint("version > 0", name="ck_presupuesto_version"),
         CheckConstraint(
             "CASE "
             "WHEN periodo ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' THEN "
@@ -89,3 +95,14 @@ class PresupuestoMensual(Base):
             "estado",
         ),
     )
+
+
+class ConceptoPresupuestal(Base):
+    __tablename__ = "conceptos_presupuestales"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    condominio_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("condominios.id", ondelete="RESTRICT"), nullable=False)
+    codigo: Mapped[str] = mapped_column(String(30), nullable=False)
+    categoria: Mapped[str] = mapped_column(String(40), nullable=False)
+    descripcion: Mapped[str] = mapped_column(String(500), nullable=False)
+    activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    __table_args__ = (UniqueConstraint("condominio_id", "codigo", name="uq_concepto_condominio_codigo"),)

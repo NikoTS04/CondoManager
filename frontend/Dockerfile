@@ -16,6 +16,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+ARG NEXT_PUBLIC_DEMO_MODE=false
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_DEMO_MODE
 RUN npm run build
 
 # 3. Imagen Final de Producción (Runner)

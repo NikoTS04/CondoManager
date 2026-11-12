@@ -62,23 +62,65 @@ export interface AreaComun {
   id: string;
   condominio_id: string;
   nombre: string;
-  descripcion: string;
+  descripcion: string | null;
   aforo_maximo: number;
   costo_reserva: string;
   esta_activa: boolean;
+  edificio_id: string | null;
+  edificio_nombre: string | null;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+  moneda: Moneda;
+  zona_horaria: "America/Lima";
+}
+
+export interface ConfigurarAreaPayload {
+  nombre: string;
+  descripcion: string | null;
+  edificio_id: string | null;
+  aforo_maximo: number;
+  costo_reserva: string;
+  hora_apertura: string;
+  hora_cierre: string;
+  tiempo_maximo_horas: number;
+}
+
+function rutaAreas(condominioId: string): string {
+  return `/condominios/${encodeURIComponent(condominioId)}/areas`;
+}
+
+export function listarCatalogoAreas(condominioId: string, activa?: boolean, limit = 50, offset = 0): Promise<AreaComun[]> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (activa !== undefined) params.set("esta_activa", String(activa));
+  return recursoRequest(`${rutaAreas(condominioId)}?${params}`);
+}
+
+export function registrarArea(condominioId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(rutaAreas(condominioId), { method: "POST", body: JSON.stringify(datos) });
+}
+
+export function configurarArea(condominioId: string, areaId: string, datos: ConfigurarAreaPayload): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
+export function cambiarEstadoArea(condominioId: string, areaId: string, esta_activa: boolean): Promise<AreaComun> {
+  return recursoRequest(`${rutaAreas(condominioId)}/${encodeURIComponent(areaId)}/estado`, { method: "PATCH", body: JSON.stringify({ esta_activa }) });
 }
 
 export interface Reserva {
   id: string;
   condominio_id: string;
   area_id: string;
-  area_nombre?: string;
+  area_nombre?: string | null;
   departamento_id: string;
   fecha_reserva: string;
   hora_inicio: string;
   hora_fin: string;
   costo_reserva: string;
-  estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA";
+  moneda: Moneda;
+  zona_horaria: "America/Lima" | "UTC";
+  estado: "CONFIRMADA" | "CANCELADA" | "SOLICITADA" | "RECHAZADA" | "COMPLETADA";
   creado_en: string;
 }
 
@@ -89,27 +131,36 @@ export interface ComprobantePago {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  estado: "EN_REVISION" | "CONCILIADO" | "RECHAZADO";
+  estado: "EN_REVISION" | "APROBADO" | "RECHAZADO" | "OBSERVADO";
   idempotency_hash: string;
-  url_voucher?: string;
-  motivo_rechazo?: string;
+  url_voucher: string;
+  motivo_rechazo: string | null;
 }
 
 export interface NotificacionLog {
   id: string;
-  departamento_id?: string;
+  condominio_id: string;
+  departamento_id: string | null;
+  usuario_destinatario_id: string | null;
+  evento_id: string | null;
   tipo_evento: string;
-  canal: string;
+  canal: "EMAIL" | "WHATSAPP" | "SMS" | "PUSH";
   destinatario: string;
-  asunto?: string;
-  cuerpo?: string;
-  estado: "ENTREGADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
+  asunto: string | null;
+  cuerpo: string;
+  estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
   intentos: number;
+  ciclo: number;
+  transporte: "SIMULADO" | "PROVEEDOR";
+  proximo_reintento: string | null;
+  error_mensaje: string | null;
+  proveedor_message_id: string | null;
   fecha_creacion: string;
+  fecha_actualizacion: string;
 }
 
 export type Moneda = "PEN" | "USD";
-export type ReglaMoraTipo = "MONTO_FIJO" | "PORCENTAJE_SALDO";
+export type ReglaMoraTipo = "MONTO_DIARIO" | "MONTO_FIJO" | "PORCENTAJE_SALDO";
 
 export interface CrearCondominioPayload {
   nombre: string;
@@ -117,12 +168,14 @@ export interface CrearCondominioPayload {
   moneda: Moneda;
   regla_mora_tipo: ReglaMoraTipo;
   monto_mora_fijo: string | null;
+  monto_mora_diario?: string | null;
   tasa_mora_porcentaje: string | null;
   dia_vencimiento: number;
   dias_gracia: number;
 }
 
 export interface Condominio extends CrearCondominioPayload {
+  politica_version: number;
   id: string;
   activo: boolean;
   creado_en: string;
@@ -135,6 +188,90 @@ export interface DatosPresupuestoPayload {
   moneda: Moneda;
   monto_total: string;
   fecha_vencimiento: string;
+  items?: ItemPresupuesto[] | null;
+  version_esperada?: number;
+}
+
+export interface ConceptoPresupuestal {
+  id: string; condominio_id: string; codigo: string; categoria: string; descripcion: string; activo: boolean;
+}
+
+export interface ItemPresupuesto {
+  id: string; concepto_id: string; monto_periodo: string; tipo_movimiento: "CARGO" | "ABONO";
+  seccion: "AACC" | "EDIFICIO" | "CRONOGRAMA_AACC";
+  metodo_asignacion: "POR_PISOS" | "DIRECTO_EDIFICIO" | "ASIGNACION_EXPLICITA";
+  metodo_unitario?: "EQUITATIVA" | "POR_ALICUOTA";
+  edificio_id?: string | null; descripcion?: string; codigo_origen?: string;
+  observacion_origen?: string; referencia_servicio?: string; referencia_documento?: string;
+  asignaciones_explicitas?: Record<string, string>; motivo_asignacion?: string;
+  monto_origen_condominio?: string | null; monto_origen_edificio?: string | null; monto_unitario_origen?: string | null;
+  obligacion_referencia?: string; numero_cuota?: number | null; total_cuotas?: number | null;
+  monto_total_obligacion?: string | null; monto_cubierto_moras?: string;
+}
+
+export function listarConceptosPresupuestales(cid: string): Promise<ConceptoPresupuestal[]> {
+  return recursoRequest(`/condominios/${encodeURIComponent(cid)}/conceptos-presupuestales`);
+}
+export function crearConceptoPresupuestal(cid: string, datos: { codigo: string; categoria: string; descripcion: string }): Promise<ConceptoPresupuestal> {
+  return recursoRequest(`/condominios/${encodeURIComponent(cid)}/conceptos-presupuestales`, { method: "POST", body: JSON.stringify(datos) });
+}
+export interface ReporteProrrateo {
+  version: number; estado: string; monto_total: string;
+  edificios: { id: string; nombre: string; pisos: number }[];
+  items: { id: string; codigo: string; descripcion: string; seccion: string; monto_periodo: string;
+    tipo_movimiento: string; metodo_asignacion: string;
+    asignaciones: { edificio_id: string; monto: string; monto_bruto?: string; monto_cubierto_moras?: string; unitario: string; unidades: number }[] }[];
+  fondos_moras?: ResumenFondoMoras[];
+}
+
+export interface ResumenFondoMoras {
+  edificio_id: string; periodo: string; moneda: Moneda; capturado_en: string;
+  saldo_disponible: string; saldo_reservado: string; total_aplicado: string;
+  saldo_disponible_inicial: string; cobros_netos_periodo: string; reservas_periodo: string;
+  cobros_confirmados_periodo: string; reversos_cobro_periodo: string; aplicaciones_confirmadas_periodo: string;
+  liberaciones_periodo: string; saldo_disponible_final: string; mora_pendiente_cobro: string;
+  movimientos?: { id: string; tipo: string; importe: string; fecha_local: string }[];
+}
+export interface AplicacionMoras {
+  id: string; presupuesto_id: string; item_id: string; edificio_id: string; monto: string;
+  motivo: string; estado: "RESERVADA" | "CONFIRMADA" | "LIBERADA"; creado_en: string;
+}
+export function consultarFondoMoras(eid: string, periodo: string): Promise<ResumenFondoMoras> {
+  return recursoRequest(`/edificios/${encodeURIComponent(eid)}/fondos-moras?periodo=${encodeURIComponent(periodo)}`);
+}
+export function listarAplicacionesMoras(id: string): Promise<AplicacionMoras[]> {
+  return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras`);
+}
+export async function reservarMoras(id: string, clave: string, payload: {
+  version_esperada: number; item_id: string; edificio_id: string; monto: string; motivo: string;
+}): Promise<AplicacionMoras> {
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras`, {
+    method: "POST", headers: { ...getAuthHeaders(), "Idempotency-Key": clave }, body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo reservar el fondo."));
+  return data as AplicacionMoras;
+}
+export async function liberarMoras(id: string, aplicacionId: string, version: number): Promise<void> {
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/aplicaciones-moras/${encodeURIComponent(aplicacionId)}?version_esperada=${version}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(obtenerMensajeError(await response.json(), "No se pudo liberar la reserva."));
+}
+export function consultarProrrateo(id: string): Promise<ReporteProrrateo> {
+  return recursoRequest(`/presupuestos/${encodeURIComponent(id)}/prorrateo`);
+}
+
+export async function exportarProrrateo(id: string, version: number, formato: "pdf" | "docx", edificioId: string): Promise<void> {
+  const query = new URLSearchParams({ version: String(version), formato, edificio_id: edificioId });
+  const response = await fetchProtegido(`/presupuestos/${encodeURIComponent(id)}/prorrateo/exportar?${query}`, { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error(obtenerMensajeError(await response.json(), "No se pudo generar el reporte."));
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `Prorrateo-${id}-${edificioId}-v${version}.${formato}`;
+  document.body.appendChild(enlace); enlace.click(); enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
@@ -142,6 +279,7 @@ export interface CrearPresupuestoPayload extends DatosPresupuestoPayload {
 }
 
 export interface PresupuestoMensual extends CrearPresupuestoPayload {
+  version: number;
   id: string;
   estado: EstadoPresupuesto;
   creado_por: string;
@@ -216,6 +354,27 @@ export interface VinculoUsuario {
 
 function rutaVinculos(condominioId: string, usuarioId: string): string {
   return `/condominios/${encodeURIComponent(condominioId)}/usuarios/${encodeURIComponent(usuarioId)}/departamentos`;
+}
+
+export interface CondicionesPago {
+  departamento_id: string;
+  version: number;
+  vinculo_responsable_id: string | null;
+  dias_gracia_override: number | null;
+  dias_gracia_efectivos: number;
+}
+
+export function consultarCondicionesPago(departamentoId: string): Promise<CondicionesPago> {
+  return recursoRequest(`/departamentos/${encodeURIComponent(departamentoId)}/condiciones-pago`);
+}
+
+export function guardarCondicionesPago(departamentoId: string, datos: {
+  vinculo_responsable_id: string | null; dias_gracia_override: number | null;
+  version_esperada: number; motivo: string;
+}): Promise<CondicionesPago> {
+  return recursoRequest(`/departamentos/${encodeURIComponent(departamentoId)}/condiciones-pago`, {
+    method: "PUT", body: JSON.stringify(datos),
+  });
 }
 
 export function listarVinculosUsuario(condominioId: string, usuarioId: string): Promise<VinculoUsuario[]> {
@@ -327,8 +486,19 @@ async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response
 async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   const response = await fetchProtegido(ruta, { ...init, headers: getAuthHeaders() });
   const data = await response.json();
-  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo completar la operación."));
+  if (!response.ok) {
+    const payload = data.detail && typeof data.detail === "object" ? data.detail : data;
+    throw new ApiError(obtenerMensajeError(data, "No se pudo completar la operación."),
+      response.status, obtenerCodigoError(data), payload.detalles);
+  }
   return data as T;
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public errorCode?: string,
+    public detalles?: Record<string, unknown>) {
+    super(message);
+  }
 }
 
 function contextoQuery(condominioId?: string | null): string {
@@ -434,6 +604,20 @@ export async function listarCondominios(): Promise<{
   }
 }
 
+export async function actualizarPoliticaMora(condominio: Condominio, datos: CrearCondominioPayload, motivo: string): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
+  try {
+    const { nombre: _nombre, direccion: _direccion, moneda: _moneda, ...politica } = datos;
+    const response = await fetchProtegido(`/condominios/${encodeURIComponent(condominio.id)}/politica-mora`, {
+      method: "PUT", headers: getAuthHeaders(),
+      body: JSON.stringify({ ...politica, version_esperada: condominio.politica_version, motivo }),
+    });
+    const data = await response.json();
+    return response.ok ? { ok: true, data } : { ok: false, error: obtenerMensajeError(data, "No se pudo actualizar la política. Recargue si cambió la versión.") };
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API. Recargue antes de reintentar." };
+  }
+}
+
 export async function obtenerCondominio(
   condominioId: string
 ): Promise<{ ok: boolean; data?: Condominio; error?: string }> {
@@ -508,10 +692,10 @@ export async function actualizarPresupuesto(
 }
 
 export async function aprobarPresupuesto(
-  presupuestoId: string
+  presupuestoId: string, version?: number
 ): Promise<PresupuestoApiResult> {
   try {
-    const response = await fetchProtegido(`/presupuestos/${presupuestoId}/aprobar`, {
+    const response = await fetchProtegido(`/presupuestos/${presupuestoId}/aprobar${version === undefined ? "" : `?version_esperada=${version}`}`, {
       method: "POST",
       headers: getAuthHeaders(),
     });
@@ -570,7 +754,7 @@ export function fetchAreasComunes(condominioId?: string | null): Promise<AreaCom
 export interface HorarioOcupado { hora_inicio: string; hora_fin: string }
 
 export function fetchDisponibilidad(areaId: string, fecha: string): Promise<HorarioOcupado[]> {
-  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`);
+  return recursoRequest(`/areas/${encodeURIComponent(areaId)}/disponibilidad?fecha=${encodeURIComponent(fecha)}`, { cache: "no-store" });
 }
 
 export function fetchReservas(areaId?: string, fecha?: string, condominioId?: string | null): Promise<Reserva[]> {
@@ -588,7 +772,7 @@ export async function crearReserva(payload: {
   fecha_reserva: string;
   hora_inicio: string;
   hora_fin: string;
-}): Promise<{ ok: boolean; data?: Reserva; error?: string }> {
+}): Promise<{ ok: boolean; data?: Reserva; error?: string; errorCode?: string }> {
   try {
     const data = await recursoRequest<Reserva>("/reservas", {
       method: "POST",
@@ -596,17 +780,33 @@ export async function crearReserva(payload: {
     });
     return { ok: true, data };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "No se pudo crear la reserva." };
+    return { ok: false, error: error instanceof Error ? error.message : "No se pudo crear la reserva.",
+      errorCode: error instanceof ApiError ? error.errorCode : undefined };
   }
 }
 
-export async function cancelarReserva(reservaId: string): Promise<{ ok: boolean; error?: string }> {
+export interface ReservaCancelada {
+  id: string;
+  estado: "CANCELADA";
+  mensaje: string;
+  fecha_cancelacion: string;
+  ajuste_economico: {
+    estado: "NO_APLICA" | "PENDIENTE" | "APLICADO";
+    monto: string;
+    referencia: string | null;
+  };
+}
+
+export async function cancelarReserva(
+  reservaId: string,
+  motivo = "Cancelación voluntaria",
+): Promise<{ ok: boolean; data?: ReservaCancelada; error?: string }> {
   try {
-    await recursoRequest(`/reservas/${encodeURIComponent(reservaId)}/cancelar`, {
+    const data = await recursoRequest<ReservaCancelada>(`/reservas/${encodeURIComponent(reservaId)}/cancelar`, {
       method: "POST",
-      body: JSON.stringify({ motivo: "Cancelación voluntaria" }),
+      body: JSON.stringify({ motivo }),
     });
-    return { ok: true };
+    return { ok: true, data };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo cancelar." };
   }
@@ -618,36 +818,203 @@ export async function reportarPago(payload: {
   numero_operacion: string;
   fecha_operacion: string;
   monto: string;
-  url_voucher?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  archivo_voucher: File;
+}): Promise<{ ok: boolean; error?: string; errorCode?: string; duplicado?: boolean }> {
   try {
-    await recursoRequest("/pagos/reportar", {
+    const form = new FormData();
+    for (const [campo, valor] of Object.entries(payload)) form.append(campo, valor);
+    const headers = getAuthHeaders();
+    delete headers["Content-Type"];
+    const response = await fetchProtegido("/pagos/reportar", {
       method: "POST",
-      body: JSON.stringify(payload),
+      headers,
+      body: form,
     });
-    return { ok: true };
+    const data = await response.json();
+    const errorCode = obtenerCodigoError(data);
+    if (!response.ok) return { ok: false, error: obtenerMensajeError(data, "No se pudo reportar el pago."), errorCode };
+    return { ok: true, duplicado: data.codigo === "VOUCHER_EN_EVALUACION" };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
+}
+
+export async function subsanarVoucher(comprobanteId: string, archivo: File): Promise<void> {
+  const form = new FormData();
+  form.append("archivo_voucher", archivo);
+  const headers = getAuthHeaders();
+  delete headers["Content-Type"];
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher`, { method: "PUT", headers, body: form });
+  const data = await response.json();
+  if (!response.ok) throw new Error(obtenerMensajeError(data, "No se pudo subir el voucher."));
+}
+
+export interface EvidenciaVoucher {
+  evidencia_id: string;
+  content_type: string;
+  creado_en: string;
+}
+
+export async function listarEvidencias(comprobanteId: string, signal?: AbortSignal): Promise<EvidenciaVoucher[]> {
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/evidencias`, {
+    headers: getAuthHeaders(), signal,
+  });
+  if (!response.ok) throw new Error("No se pudo consultar el historial de evidencia.");
+  return response.json();
+}
+
+export async function visualizarVoucher(comprobanteId: string, evidenciaId: string, signal?: AbortSignal): Promise<Blob> {
+  const query = new URLSearchParams({ disposicion: "inline" });
+  if (evidenciaId) query.set("evidencia_id", evidenciaId);
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobanteId)}/voucher?${query}`, {
+    headers: getAuthHeaders(), signal,
+  });
+  if (!response.ok) throw new Error("No se pudo visualizar la evidencia. Verifique su sesión y permisos.");
+  const blob = await response.blob();
+  if (!["image/png", "image/jpeg", "application/pdf"].includes(blob.type)) throw new Error("Formato de evidencia no admitido.");
+  return blob;
+}
+
+export async function descargarVoucher(comprobante: ComprobantePago): Promise<void> {
+  const response = await fetchProtegido(`/pagos/${encodeURIComponent(comprobante.id)}/voucher`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(obtenerMensajeError(data, "No se pudo recuperar el voucher."));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  const extension = { "image/png": "png", "image/jpeg": "jpg", "application/pdf": "pdf" }[response.headers.get("Content-Type") || ""];
+  enlace.download = `voucher-${comprobante.id}${extension ? `.${extension}` : ""}`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  // URL exclusiva de descarga; nunca se envía al servidor ni se persiste.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export interface Solvencia {
+  departamento_id: string;
+  saldo_vencido: string;
+  habilitado_reservas: boolean;
+}
+
+export function fetchSolvencia(departamentoId: string): Promise<Solvencia> {
+  return recursoRequest(`/pagos/solvencia/${encodeURIComponent(departamentoId)}`);
+}
+
+export interface MovimientoCuenta {
+  id: string;
+  fecha: string;
+  registrado_en: string;
+  fecha_operacion: string | null;
+  tipo: "EMISION_CUOTA" | "DEVENGO_MORA" | "AJUSTE_MORA" | "PAGO_APROBADO" | "APLICACION_CREDITO" | "DISTRIBUCION_PAGO";
+  descripcion: string;
+  importe: string;
+  cargo: string;
+  abono: string;
+  saldo: string;
+  cuota_id: string | null;
+  comprobante_id: string | null;
+  origen_id: string;
+  periodo_cuota: string | null;
+}
+
+export interface EstadoCuenta {
+  departamento_id: string;
+  condominio_id: string;
+  moneda: Moneda;
+  desde: string;
+  hasta: string;
+  generado_en: string;
+  historial_desde: string | null;
+  base_historica_sin_fecha: boolean;
+  credito_inicial_sin_desglose: string;
+  abonos_historicos_sin_desglose: string;
+  saldo_base_historico: string;
+  saldo_inicial: string;
+  cargos_periodo: string;
+  abonos_periodo: string;
+  saldo_final: string;
+  deuda_actual: string;
+  deuda_vencida_actual: string;
+  saldo_a_favor_actual: string;
+  saldo_neto_actual: string;
+  total_movimientos: number;
+  limite: number;
+  offset: number;
+  movimientos: MovimientoCuenta[];
+  pagos_en_revision: { id: string; fecha_reporte: string; fecha_operacion: string; banco: string; numero_operacion: string; monto: string }[];
+}
+
+export function fetchEstadoCuenta(departamentoId: string, desde: string, hasta: string, offset = 0, signal?: AbortSignal): Promise<EstadoCuenta> {
+  const query = new URLSearchParams({ desde, hasta, offset: String(offset), limite: "50" });
+  return recursoRequest(`/cuotas/departamentos/${encodeURIComponent(departamentoId)}/estado-cuenta?${query}`, { signal, cache: "no-store" });
 }
 
 export function fetchComprobantes(condominioId?: string | null): Promise<ComprobantePago[]> {
   return recursoRequest(`/pagos/comprobantes${contextoQuery(condominioId)}`);
 }
 
+export type DecisionPago = "APROBADO" | "RECHAZADO" | "OBSERVADO";
+
+/** Recibo histórico. No representa necesariamente los saldos actuales de CON-14. */
+export interface ResultadoRevisionPago {
+  comprobante_id: string;
+  estado_final: DecisionPago;
+  monto_imputado: string;
+  nuevo_saldo_departamento: string;
+  saldo_a_favor_generado: string;
+  departamento_habilitado_reservas: boolean;
+  motivo_rechazo: string | null;
+}
+
+function validarResultadoPago(data: ResultadoRevisionPago, id: string): ResultadoRevisionPago {
+  if (!data || data.comprobante_id !== id ||
+      !["APROBADO", "OBSERVADO", "RECHAZADO"].includes(data.estado_final) ||
+      ![data.monto_imputado, data.nuevo_saldo_departamento, data.saldo_a_favor_generado]
+        .every((v) => typeof v === "string" && /^\d+\.\d{2}$/.test(v)) ||
+      typeof data.departamento_habilitado_reservas !== "boolean" ||
+      (data.motivo_rechazo !== null && typeof data.motivo_rechazo !== "string")) {
+    throw new Error("No se pudo verificar el recibo. Consulta el resultado antes de volver a decidir.");
+  }
+  return data;
+}
+
+export async function fetchResultadoPago(comprobanteId: string, signal?: AbortSignal): Promise<ResultadoRevisionPago> {
+  const data = await recursoRequest<ResultadoRevisionPago>(`/pagos/${encodeURIComponent(comprobanteId)}/resultado`, {
+    signal, cache: "no-store",
+  });
+  return validarResultadoPago(data, comprobanteId);
+}
+
+export type RespuestaRevisionPago =
+  | { ok: true; data: ResultadoRevisionPago }
+  | { ok: false; error: string; errorCode?: string; status?: number; incierto: boolean };
+
 export async function conciliarComprobante(
   comprobanteId: string,
-  decision: "APROBADO" | "RECHAZADO",
-  motivo_rechazo?: string
-): Promise<{ ok: boolean; error?: string }> {
+  decision: DecisionPago,
+  motivo_rechazo?: string,
+  notas_internas?: string,
+): Promise<RespuestaRevisionPago> {
   try {
-    await recursoRequest(`/pagos/${encodeURIComponent(comprobanteId)}/conciliar`, {
+    const data = await recursoRequest<ResultadoRevisionPago>(`/pagos/${encodeURIComponent(comprobanteId)}/conciliar`, {
       method: "POST",
-      body: JSON.stringify({ decision, motivo_rechazo }),
+      body: JSON.stringify({ decision, motivo_rechazo, notas_internas }),
     });
-    return { ok: true };
+    const resultado = validarResultadoPago(data, comprobanteId);
+    if (resultado.estado_final !== decision) throw new Error("La respuesta no corresponde a la decisión solicitada. Consulta el resultado.");
+    return { ok: true, data: resultado };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "No se pudo conciliar." };
+    return {
+      ok: false, error: error instanceof Error ? error.message : "No se pudo conciliar.",
+      errorCode: error instanceof ApiError ? error.errorCode : undefined,
+      status: error instanceof ApiError ? error.status : undefined,
+      incierto: !(error instanceof ApiError) || error.status >= 500 || error.status === 408,
+    };
   }
 }
 
@@ -676,9 +1043,43 @@ export function fetchNotificaciones(condominioId?: string | null): Promise<Notif
   return recursoRequest(`/notificaciones/logs${contextoQuery(condominioId)}`);
 }
 
+export type TipoAlertaNotificacion =
+  | "ERROR_DEFINITIVO" | "INTENTOS_AGOTADOS" | "ACEPTACION_INCIERTA"
+  | "DESTINATARIO_INVALIDO" | "PROVEEDOR_NO_CONFIGURADO";
+
+export interface AlertaNotificacion {
+  id: string;
+  notificacion_id: string;
+  condominio_id: string;
+  departamento_id: string;
+  departamento_numero: string;
+  tipo_evento: string;
+  ciclo: number;
+  tipo: TipoAlertaNotificacion;
+  mensaje: string;
+  estado: "ABIERTA" | "ATENDIDA";
+  creada_en: string;
+  atendida_en: string | null;
+  atendida_por: string | null;
+}
+
+export function listarAlertasNotificacion(condominioId?: string | null): Promise<AlertaNotificacion[]> {
+  return recursoRequest(`/notificaciones/alertas${contextoQuery(condominioId)}`);
+}
+
+export function atenderAlertaNotificacion(id: string): Promise<AlertaNotificacion> {
+  return recursoRequest(`/notificaciones/alertas/${encodeURIComponent(id)}/atender`, { method: "POST" });
+}
+
+export function reenviarNotificacion(id: string, nuevo_destinatario: string): Promise<NotificacionLog> {
+  return recursoRequest(`/notificaciones/reenviar/${encodeURIComponent(id)}`, {
+    method: "POST", body: JSON.stringify({ nuevo_destinatario }),
+  });
+}
+
 export async function enviarComunicadoMasivo(titulo: string, mensaje: string, condominioId: string): Promise<{ ok: boolean; generadas?: number }> {
   try {
-    const data = await recursoRequest<{ notificaciones_generadas: number }>("/notificaciones/comunicado-masivo", {
+    const data = await recursoRequest<{ generadas: number }>("/notificaciones/comunicado-masivo", {
       method: "POST",
       body: JSON.stringify({
         condominio_id: condominioId,
@@ -687,7 +1088,7 @@ export async function enviarComunicadoMasivo(titulo: string, mensaje: string, co
         canal: "EMAIL",
       }),
     });
-    return { ok: true, generadas: data.notificaciones_generadas };
+    return { ok: true, generadas: data.generadas };
   } catch {
     return { ok: false };
   }

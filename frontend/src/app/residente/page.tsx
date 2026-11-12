@@ -10,15 +10,19 @@ import {
   type Departamento,
   type Reserva,
   type ComprobantePago,
+  type Solvencia,
   fetchAreasComunes,
   fetchDepartamentos,
   fetchReservas,
   fetchComprobantes,
 } from "@/lib/api";
 import { SolvenciaBanner } from "@/components/domain/SolvenciaBanner";
-import { Spinner } from "@/components/ui/Feedback";
+import { SkeletonList, Spinner } from "@/components/ui/Feedback";
+import { TabPanel } from "@/components/ui/Tabs";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { AvisosList } from "@/features/residente/AvisosList";
+import { EstadoCuenta } from "@/features/residente/EstadoCuenta";
 import {
   ResidenteNav,
   type ResidenteTab,
@@ -43,7 +47,7 @@ function ResidenteContent() {
   const departamentoId = user ? seleccionarUnidad(user, dptoParam, activeDepartment, departamentos.map((d) => d.id)) : "";
   const [contextoId] = useState(() => user?.condominio_id ||
     (user?.rol === "SUPERADMIN" ? localStorage.getItem("condo_active_id") : null));
-  const [activeTab, setActiveTab] = useState<ResidenteTab>("reservas");
+  const [activeTab, setActiveTab] = useState<ResidenteTab>("cuenta");
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
@@ -54,6 +58,7 @@ function ResidenteContent() {
   const [loadingReservas, setLoadingReservas] = useState(false);
   const [loadingComprobantes, setLoadingComprobantes] = useState(false);
   const [loadingAreas, setLoadingAreas] = useState(false);
+  const [revisionCalendario, setRevisionCalendario] = useState(0);
 
   const [errorDeptos, setErrorDeptos] = useState<string | null>(null);
   const [errorAreas, setErrorAreas] = useState<string | null>(null);
@@ -113,6 +118,7 @@ function ResidenteContent() {
   }, [contextoId]);
 
   const reloadReservas = useCallback(async () => {
+    setRevisionCalendario((r) => r + 1);
     setLoadingReservas(true);
     setErrorReservas(null);
     try {
@@ -175,6 +181,11 @@ function ResidenteContent() {
     departamentos.find((d) => d.id === departamentoId) ?? null;
 
   const estaEnMora = deptoActual?.estado_financiero === "EN_MORA";
+  const actualizarSolvencia = useCallback((solvencia: Solvencia) => {
+    setDepartamentos((actuales) => actuales.map((depto) => depto.id === solvencia.departamento_id
+      ? { ...depto, deuda_vencida: solvencia.saldo_vencido, estado_financiero: solvencia.habilitado_reservas ? "AL_DIA" : "EN_MORA" }
+      : depto));
+  }, []);
 
   return (
     <div className="space-y-6 pb-24 sm:pb-8">
@@ -211,7 +222,7 @@ function ResidenteContent() {
       )}
 
       {/* Solo mostrar SolvenciaBanner si el departamento está confirmado por backend */}
-      {deptoActual && !loadingInitial && !errorDeptos && (
+      {activeTab !== "cuenta" && deptoActual && !loadingInitial && !errorDeptos && deptoActual.estado_financiero !== "OBSERVADO" && (
         <SolvenciaBanner
           solvente={deptoActual.estado_financiero === "AL_DIA"}
           deudaVencida={deptoActual.deuda_vencida}
@@ -222,12 +233,15 @@ function ResidenteContent() {
       {/* Navegación responsiva: Tabs en sm+ y barra inferior fija en móvil */}
       <ResidenteNav activeTab={activeTab} onChangeTab={setActiveTab} />
 
+      <TabPanel idPrefix="residente" id={activeTab}>
       {/* Contenido según la pestaña activa */}
       {activeTab === "reservas" && (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
+            {loadingInitial ? <Spinner label="Cargando formulario de reserva…" /> : (
             <ReservarAreaForm
               key={departamentoId}
+              revisionExterna={revisionCalendario}
               areas={areas}
               condominioId={contextoId}
               departamentoId={departamentoId}
@@ -237,7 +251,9 @@ function ResidenteContent() {
               onRetryAreas={reloadAreas}
               onSuccess={reloadReservas}
               onGoToPagos={() => setActiveTab("pagos")}
+              onSolvenciaActualizada={actualizarSolvencia}
             />
+            )}
           </div>
           <div className="lg:col-span-2">
             <MisReservasList
@@ -258,12 +274,14 @@ function ResidenteContent() {
       {activeTab === "pagos" && (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
+            {loadingInitial ? <Spinner label="Cargando formulario de pago…" /> : (
             <ReportarPagoForm
               key={departamentoId}
               departamentoId={departamentoId}
               onSuccess={reloadComprobantes}
               comprobantesExistentes={comprobantes}
             />
+            )}
           </div>
           <div className="lg:col-span-2">
             <ComprobantesList
@@ -277,16 +295,25 @@ function ResidenteContent() {
         </div>
       )}
 
+      {activeTab === "avisos" && contextoId && departamentoId && (
+        <AvisosList condominioId={contextoId} departamentoId={departamentoId} />
+      )}
+
       {activeTab === "cuenta" && (
         <>
           {deptoActual ? (
+            <div className="space-y-6">
             <ResumenCuenta
               depto={deptoActual}
               loading={loadingInitial}
               error={errorDeptos}
               onRetry={() => void loadData()}
+              onReportarPago={() => setActiveTab("pagos")}
+              onReservar={() => setActiveTab("reservas")}
             />
-          ) : (
+            {!loadingInitial && !errorDeptos && <EstadoCuenta key={departamentoId} departamentoId={departamentoId} />}
+            </div>
+          ) : loadingInitial ? <SkeletonList rows={3} label="Cargando tu cuenta…" /> : (
             <Alert
               tone="warning"
               title="Información de cuenta no disponible"
@@ -305,6 +332,7 @@ function ResidenteContent() {
           )}
         </>
       )}
+      </TabPanel>
     </div>
   );
 }

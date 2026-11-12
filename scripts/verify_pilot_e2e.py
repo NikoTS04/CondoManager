@@ -27,6 +27,7 @@ from scripts.seed_condominio_piloto import generar_datos_areas_comunes, generar_
 from src.core.audit import AuditoriaPayload
 from src.modules.cuotas.schemas import EmitirLoteCuotasRequest
 from src.modules.cuotas.service import CuotasService
+from src.modules.notificaciones.consumo import NORMAS_USO  # noqa: E402
 from src.modules.notificaciones.schemas import (
     CanalNotificacionEnum,
     DespacharNotificacionRequest,
@@ -193,7 +194,6 @@ def main():
         numero_operacion="0089214",
         fecha_operacion=date(2026, 10, 24),
         monto=Decimal("170.00"),
-        url_voucher="https://s3.local/vouchers/voucher_0089214.jpg",
     )
 
     # Reporte 1
@@ -284,6 +284,9 @@ def main():
             "area": parrilla_1["nombre"],
             "fecha": "2026-10-25",
             "horario": "19:00 - 22:00",
+            "moneda": "S/",
+            "costo": f"{reserva_aprobada.costo_reserva:.2f}",
+            "normas_convivencia": NORMAS_USO,
         },
     )
 

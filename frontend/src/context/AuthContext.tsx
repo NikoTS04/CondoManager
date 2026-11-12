@@ -164,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return; // Nunca sustituir una sesión antigua por un login demo automático.
         }
 
-        if (process.env.NEXT_PUBLIC_DEMO_MODE !== "false") {
+        if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
           const persona = DEMO_PERSONAS.find((p) => p.key === "admin")!;
           if (!cancelled) await login(persona.email, persona.password);
         }

@@ -1,18 +1,25 @@
 # Especificación del Dataset Semilla Piloto: Villa Bonita 3 (139 Departamentos)
 
 ## 1. Contexto del Condominio Piloto
-- **Nombre:** Edificio 3 - Villa Bonita 3
+- **Condominio:** Villa Bonita 3; edificio piloto: Edificio 03.
 - **Moneda:** Soles (PEN)
-- **Total Unidades Inmobiliarias:** 139 departamentos
+- **Total Unidades del Edificio 03:** 139 departamentos; el padrón de las otras torres está pendiente de confirmación.
 - **Distribución Física:**
   - 14 pisos habitacionales.
   - Pisos 1 al 13: 10 departamentos por piso (101 a 110, 201 a 210, ..., 1301 a 1310) = 130 departamentos.
   - Piso 14: 9 departamentos tipo penthouse/flat superior (1401 a 1409) = 9 departamentos.
   - Total = 139 departamentos.
 - **Presupuesto Mensual Base:** S/ 20,850.00
-- **Día de Corte:** 20 de cada mes
-- **Días de Gracia:** 2 días calendario
-- **Modalidad de Mora:** Monto fijo de S/ 20.00 por cuota vencida impaga tras vencer el periodo de gracia.
+- **Día de Corte:** 10 de cada mes, hasta las 23:59:59 de America/Lima.
+- **Días de Gracia:** 0 por defecto, global y override por vínculo del responsable.
+- **Modalidad de Mora:** MONTO_DIARIO, importe editable default 1.00 PEN por cada día y cuota mensual vencida impaga; fecha bancaria validada detiene devengo al liquidar principal.
+- **Jerarquía piloto objetivo:** Condominio con cuatro edificios: dos de 14 pisos y
+  dos de 10 (48 en total). Edificio 03: 14 pisos y 139 departamentos. No inventar
+  números ni padrones de los otros edificios sin confirmación. AACC por pisos;
+  dentro del edificio 03 reparto equitativo entre 139. Coeficientes de la sección 2
+  son ejemplos alternativos, no el método piloto vigente.
+- **Adopción pendiente:** Estos son datos objetivo, no modificaciones al seed
+  ejecutable. No cargar septiembre como aprobado: ver [caso histórico](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md#6-caso-histórico-septiembre-2026).
 
 ---
 

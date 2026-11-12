@@ -6,14 +6,14 @@ type Variant = "primary" | "secondary" | "danger" | "ghost";
 type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-600/50",
+  primary: "bg-brand-700 text-white hover:bg-brand-800 disabled:bg-brand-700/50",
   secondary: "bg-surface text-ink border border-slate-300 hover:bg-slate-50 disabled:text-slate-400",
   danger: "bg-danger-600 text-white hover:bg-danger-700 disabled:bg-danger-600/50",
   ghost: "bg-transparent text-muted hover:bg-slate-100 hover:text-ink disabled:text-slate-400",
 };
 
 const SIZES: Record<Size, string> = {
-  sm: "min-h-9 px-3 text-sm gap-1.5",
+  sm: "min-h-11 sm:min-h-9 px-3 text-sm gap-1.5",
   md: "min-h-11 px-4 text-sm gap-2",
   lg: "min-h-12 px-5 text-base gap-2",
 };
@@ -51,7 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex items-center justify-center rounded-lg font-semibold transition-colors disabled:cursor-not-allowed",
+        "press-feedback inline-flex items-center justify-center rounded-lg font-semibold transition-colors duration-150 disabled:cursor-not-allowed",
         VARIANTS[variant],
         SIZES[size],
         fullWidth && "w-full",

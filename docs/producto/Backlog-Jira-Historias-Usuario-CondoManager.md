@@ -462,6 +462,10 @@ Resultado general: COMPLETADO CON OBSERVACIONES
 
 ## RES-01 — Administrar el catálogo de áreas comunes
 
+Contrato CON-39: [catálogo persistente](../../specs/02-domains/04-reservas/catalogo-areas.md).
+Incluye administración contextual, edificio exclusivo, horario diario de Lima,
+duración máxima, tarifa decimal en la moneda del condominio y desactivación auditada.
+
 **Historia:** Como administrador, quiero configurar las áreas comunes, para publicar sus condiciones de uso y reserva.
 
 **Criterios de aceptación:**

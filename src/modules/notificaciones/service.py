@@ -28,9 +28,9 @@ from src.modules.notificaciones.templates import PlantillasService
 # Intento 3: +10 min (600 s)
 # Intento 4: +30 min (1800 s)
 INTERVALOS_REINTENTO_SEGUNDOS = {
-    1: 120,    # Para pasar a intento 2
-    2: 600,    # Para pasar a intento 3
-    3: 1800,   # Para pasar a intento 4
+    1: 120,  # Para pasar a intento 2
+    2: 600,  # Para pasar a intento 3
+    3: 1800,  # Para pasar a intento 4
 }
 
 # Códigos de error definitivo (Hard Bounces) que abortan inmediatamente los reintentos
@@ -196,12 +196,14 @@ class NotificacionesService:
         departamentos: List[Dict[str, Any]],
         transport_fn: Optional[Callable] = None,
     ) -> Tuple[EnviarComunicadoMasivoResponse, List[NotificacionLogDTO]]:
-        """Genera y despacha un comunicado general para toda la comunidad de departamentos."""
+        """Construye la cola del ejemplo puro; la API usa el padrón SQL y el worker."""
         logs_generados: List[NotificacionLogDTO] = []
 
         for dpto in departamentos:
             numero = dpto.get("numero", "000")
-            destinatario = dpto.get("email_contacto", f"residente{numero}@condominio.pe")
+            destinatario = dpto.get("email_contacto")
+            if not destinatario:
+                continue
 
             req_indiv = DespacharNotificacionRequest(
                 condominio_id=request.condominio_id,
@@ -216,14 +218,20 @@ class NotificacionesService:
                 },
             )
 
-            log = cls.despachar_notificacion(req_indiv, transport_fn=transport_fn)
+            asunto, cuerpo = PlantillasService.renderizar(req_indiv.tipo_evento, req_indiv.contexto)
+            log = NotificacionLogDTO(
+                **req_indiv.model_dump(exclude={"contexto"}),
+                asunto=asunto,
+                cuerpo=cuerpo,
+                estado=EstadoNotificacionEnum.EN_COLA,
+                intentos=0,
+            )
             logs_generados.append(log)
 
         respuesta = EnviarComunicadoMasivoResponse(
             condominio_id=request.condominio_id,
-            total_destinatarios=len(departamentos),
-            notificaciones_generadas=len(logs_generados),
-            estado_general="ENTREGADO" if all(log.estado == EstadoNotificacionEnum.ENTREGADO for log in logs_generados) else "REINTENTANDO",
+            generadas=len(logs_generados),
+            estado_general="EN_COLA",
         )
 
         return respuesta, logs_generados

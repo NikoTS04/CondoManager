@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PagoConciliadoEventV1",
+  "allOf": [{"$ref": "./event-envelope.v1.schema.json"}],
+  "properties": {
+    "event_type": {"const": "PagoConciliadoEvent"},
+    "producer": {"const": "service.pagos"},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condominio_id", "departamento_id", "comprobante_id", "estado_final", "monto_imputado", "nuevo_saldo_departamento", "saldo_a_favor_generado", "departamento_habilitado_reservas"],
+      "properties": {
+        "condominio_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "departamento_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "comprobante_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "estado_final": {"const": "APROBADO"},
+        "monto_imputado": {"$ref": "./event-envelope.v1.schema.json#/$defs/dinero"},
+        "nuevo_saldo_departamento": {"$ref": "./event-envelope.v1.schema.json#/$defs/dinero"},
+        "saldo_a_favor_generado": {"$ref": "./event-envelope.v1.schema.json#/$defs/dinero"},
+        "departamento_habilitado_reservas": {"type": "boolean"}
+      }
+    }
+  },
+  "unevaluatedProperties": false
+}

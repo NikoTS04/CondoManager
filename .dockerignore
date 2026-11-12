@@ -20,3 +20,4 @@ uploads
 **/node_modules
 **/.next
 **/*.log
+uploads/

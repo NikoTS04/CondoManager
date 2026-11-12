@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReservaConfirmadaEventV1",
+  "allOf": [{"$ref": "./event-envelope.v1.schema.json"}],
+  "properties": {
+    "event_type": {"const": "ReservaConfirmadaEvent"},
+    "producer": {"const": "service.reservas"},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condominio_id", "departamento_id", "reserva_id", "area_id", "area_nombre", "fecha_reserva", "hora_inicio", "hora_fin", "zona_horaria", "costo_reserva", "moneda"],
+      "properties": {
+        "condominio_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "departamento_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "reserva_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "area_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "area_nombre": {"type": "string", "minLength": 1},
+        "fecha_reserva": {"type": "string", "format": "date"},
+        "hora_inicio": {"$ref": "./event-envelope.v1.schema.json#/$defs/hora_local"},
+        "hora_fin": {"$ref": "./event-envelope.v1.schema.json#/$defs/hora_local"},
+        "zona_horaria": {"const": "America/Lima"},
+        "costo_reserva": {"$ref": "./event-envelope.v1.schema.json#/$defs/dinero"},
+        "moneda": {"enum": ["PEN", "USD"]},
+        "normas_uso": {"type": "string", "description": "Opcional; CON-39 no incorpora un campo de normas. No inventar contenido."}
+      }
+    }
+  },
+  "unevaluatedProperties": false
+}

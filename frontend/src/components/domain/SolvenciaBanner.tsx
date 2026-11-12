@@ -21,7 +21,7 @@ export function SolvenciaBanner({ solvente, deudaVencida, moneda = "PEN", onRepo
       title="No puedes reservar todavía"
       action={onReportarPago ? <Button onClick={onReportarPago}>Reportar pago</Button> : undefined}
     >
-      Tienes {monto}. Reporta tu pago para desbloquear las reservas.
+      Tienes {monto}. Reporta tu pago; las reservas se habilitan cuando la junta lo aprueba y se cancela la deuda en mora.
     </Alert>
   );
 }

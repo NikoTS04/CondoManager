@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-san
 export const metadata: Metadata = {
   title: "CondoManager - Sistema Automatizado para Condominios",
   description:
-    "Gestión contable, conciliación bancaria, control de solvencia financiera y reservas de áreas comunes para Villa Bonita 3 (139 departamentos).",
+    "Consulta de cuentas, conciliación de pagos y reservas de áreas comunes para tu condominio.",
 };
 
 export default function RootLayout({
@@ -20,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body
-        className={`${inter.variable} min-h-screen flex flex-col bg-canvas text-ink font-sans`}
+        className={`${inter.variable} min-h-dvh flex flex-col bg-canvas text-ink font-sans`}
       >
         <AuthProvider>
           <a

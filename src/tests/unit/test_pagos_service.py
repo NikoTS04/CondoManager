@@ -1,6 +1,7 @@
+import uuid
 from datetime import date
 from decimal import Decimal
-import uuid
+
 import pytest
 
 from src.modules.pagos.schemas import ReportarPagoRequest
@@ -36,7 +37,6 @@ def test_prevencion_voucher_duplicado_conciliado():
         numero_operacion="123456",
         fecha_operacion=date(2026, 10, 10),
         monto=Decimal("180.00"),
-        url_voucher="https://s3/v1.jpg",
     )
 
     # 1. Primer registro
@@ -56,7 +56,11 @@ def test_prevencion_voucher_duplicado_conciliado():
 def test_conciliacion_con_imputacion_en_prelacion_y_excedente():
     """Valida la imputación contable: cancela cuota antigua y el excedente va a saldo a favor."""
     depto_id = uuid.uuid4()
-    departamento = {"id": depto_id, "saldo_a_favor": Decimal("0.00"), "estado_financiero": "EN_MORA"}
+    departamento = {
+        "id": depto_id,
+        "saldo_a_favor": Decimal("0.00"),
+        "estado_financiero": "EN_MORA",
+    }
 
     cuota_vencida = {
         "id": uuid.uuid4(),

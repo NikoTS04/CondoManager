@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PagoRevisadoEventV1",
+  "allOf": [{"$ref": "./event-envelope.v1.schema.json"}],
+  "properties": {
+    "event_type": {"const": "PagoRevisadoEvent"},
+    "producer": {"const": "service.pagos"},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condominio_id", "departamento_id", "comprobante_id", "estado_final", "motivo_rechazo"],
+      "properties": {
+        "condominio_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "departamento_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "comprobante_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "estado_final": {"enum": ["OBSERVADO", "RECHAZADO"]},
+        "motivo_rechazo": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    }
+  },
+  "unevaluatedProperties": false
+}

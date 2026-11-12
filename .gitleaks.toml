@@ -8,6 +8,9 @@ useDefault = true
 # externos en producción. CI reemplaza estos valores por secretos aleatorios.
 [allowlist]
 description = "Credenciales ficticias existentes de desarrollo; nunca producción"
+paths = [
+  '''^graphify-out/.*$''',
+]
 regexTarget = "secret"
 regexes = [
   '''^condo_secret$''',
@@ -19,6 +22,10 @@ regexes = [
 # La regla base se hereda; solo ampliar sus excepciones con literal Y ruta.
 [[rules]]
 id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Hashes SHA-256 de cache de herramientas internas"
+paths = ['''^graphify-out/.*$''']
 
 [[rules.allowlists]]
 description = "Contraseña ficticia usada por tests y contratos históricos"

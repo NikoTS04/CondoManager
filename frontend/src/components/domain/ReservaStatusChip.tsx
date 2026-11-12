@@ -1,11 +1,13 @@
 import { Badge, type Tone } from "@/components/ui/Badge";
 
-export type ReservaStatus = "CONFIRMADA" | "SOLICITADA" | "CANCELADA";
+export type ReservaStatus = "CONFIRMADA" | "SOLICITADA" | "CANCELADA" | "RECHAZADA" | "COMPLETADA";
 
 const STATUS: Record<ReservaStatus, { tone: Tone; label: string }> = {
   CONFIRMADA: { tone: "success", label: "Confirmada" },
   SOLICITADA: { tone: "warning", label: "Solicitada" },
   CANCELADA: { tone: "neutral", label: "Cancelada" },
+  RECHAZADA: { tone: "danger", label: "Rechazada" },
+  COMPLETADA: { tone: "neutral", label: "Completada" },
 };
 
 export function ReservaStatusChip({ status }: { status: ReservaStatus }) {

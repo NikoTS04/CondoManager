@@ -23,7 +23,7 @@ $$\mathbf{Evento} \longrightarrow \mathbf{Evaluaci\acute{o}n\ de\ Reglas} \longr
 El suceso que despierta el proceso. Puede originarse por:
 1. **Temporizadores / Crons (Time-based):** 
    - Llegada de fecha de emisión de cuota (ej. día 1 de cada mes a las 00:00).
-   - Vencimiento de cuota y corte de mora (ej. día 20 a las 23:59:59).
+    - Vencimiento de cuota el día 10 a las 23:59:59 de Lima; gracia efectiva default 0.
    - Alerta preventiva de vencimiento (ej. 3 días antes de la fecha límite).
    - Vencimiento de contrato de proveedor (30 o 60 días antes).
 2. **Acciones de Usuario (User-initiated):**
@@ -87,8 +87,8 @@ El motor comprueba que la acción produjo el resultado esperado:
 
 | Paso | Ejecución |
 | :--- | :--- |
-| **1. Evento** | Cron diario a las 00:01 dispara `EvaluarVencimientosDiariosJob`. |
-| **2. Evaluación** | Busca cuotas con `fecha_vencimiento < HOY` y `estado = PENDIENTE`. Verifica si el condominio tiene 2 días de gracia. |
-| **3. Decisión** | Para departamento 501: pasaron los días de gracia sin pago registrado $\rightarrow$ Aplica penalidad por mora de S/ 20.00. |
+| **1. Evento** | Cron diario a las 00:05 de America/Lima dispara `EvaluarVencimientosDiariosJob`; recupera fechas omitidas. |
+| **2. Evaluación** | Busca principal impago después de vencimiento + gracia histórica efectiva, incluso cuotas EN_MORA. Usa fecha bancaria validada para pagos. |
+| **3. Decisión** | Por cuota y día exigible genera importe diario editable (default 1.00 PEN), sin duplicar `(cuota_id, fecha_local)` ni capitalizar. Pausa de revisión no condona días. |
 | **4. Acción** | 1. Genera cargo de mora en estado de cuenta. <br>2. Cambia estado del dpto a `MOROSO`. <br>3. Dispara orden de notificación de mora a Alejandro. <br>4. Inhabilita al departamento para reservar áreas comunes. |
 | **5. Verificación** | Valida que el saldo total actualizado coincida con `saldo_anterior + mora`. Confirma registro en la bitácora inmutable. |

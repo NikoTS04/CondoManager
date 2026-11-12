@@ -1,49 +1,20 @@
-import { Clock3 } from "lucide-react";
-import { Alert } from "@/components/ui/Alert";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { EstadoFinancieroChip } from "@/components/domain/EstadoFinancieroChip";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { EmptyState, SkeletonList } from "@/components/ui/Feedback";
+import type { DepartamentoRegistrado } from "@/lib/api";
 
-interface MorasSectionProps {
-  isAuditor: boolean;
-  feedback: string | null;
-  onEvaluate: () => void;
-}
-
-export function MorasSection({ isAuditor, feedback, onEvaluate }: MorasSectionProps) {
+export function MorasSection({ departamentos, loading }: { departamentos: DepartamentoRegistrado[]; loading: boolean }) {
+  if (loading) return <SkeletonList rows={3} label="Cargando estado de unidades…" />;
+  const enMora = departamentos.filter((d) => d.activo && d.estado_financiero === "EN_MORA");
   return (
     <Card>
-      <CardHeader
-        title="Control de moras"
-        description="Consulta las reglas de gracia, postergación de comprobantes y solvencia."
-        actions={!isAuditor ? (
-          <Button
-            onClick={onEvaluate}
-            icon={<Clock3 className="h-4 w-4" aria-hidden="true" />}
-          >
-            Evaluar moras
-          </Button>
-        ) : undefined}
-      />
-      <CardBody className="space-y-4">
-        {isAuditor && (
-          <div className="rounded-lg border border-audit-200 bg-audit-50 p-3">
-            <Badge tone="audit">Solo lectura</Badge>
-          </div>
-        )}
-        {feedback && (
-          <Alert tone="info" title="Simulación del motor de moras">
-            {feedback}
-          </Alert>
-        )}
-        <div className="rounded-lg border border-line bg-canvas p-4">
-          <h3 className="font-semibold">Reglas de cálculo</h3>
-          <ul className="mt-2 list-inside list-disc space-y-2 text-sm text-muted">
-            <li>Se respetan dos días de gracia después de la fecha de vencimiento.</li>
-            <li>Un comprobante en revisión puede postergar la evaluación de mora.</li>
-            <li>La mora activa puede afectar la solvencia y el acceso a reservas.</li>
+      <CardHeader title="Unidades en mora" description="Estado financiero registrado de las unidades activas. Esta consulta no aplica recargos ni cambia saldos." />
+      <CardBody>
+        {enMora.length === 0 ? <EmptyState title="Sin unidades activas en mora" description="No hay unidades con estado En mora en los registros recibidos." /> : (
+          <ul className="divide-y divide-line">
+            {enMora.map((d) => <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0"><div><p className="font-medium">Departamento {d.numero}</p><p className="mt-1 break-all text-xs text-muted">Piso {d.piso} · ID {d.id}</p></div><EstadoFinancieroChip status={d.estado_financiero} /></li>)}
           </ul>
-        </div>
+        )}
       </CardBody>
     </Card>
   );

@@ -56,9 +56,15 @@ idéntica es un no-op. Contrato y escenarios:
 - La solicitud contiene nombre, dirección, moneda, modalidad de mora, valor de la
   modalidad, día de vencimiento y días de gracia según el contrato OpenAPI.
 - `dia_vencimiento` es un día calendario entre 1 y 28; `dias_gracia` se encuentra
-  entre 0 y 30.
+  entre 0 y 30. Defaults objetivo: día 10 y gracia 0.
+- `MONTO_DIARIO` es la modalidad predeterminada, con `monto_mora_diario` positivo
+  editable (1.00 PEN por defecto). Las otras modalidades no admiten ese campo.
+- La junta puede asignar gracia 0..30 o herencia null al vínculo propietario/
+  inquilino y designar un responsable de pago por departamento. No se suman las
+  excepciones; se audita y se conserva la política de cuotas ya emitidas.
 - La modalidad `MONTO_FIJO` exige `monto_mora_fijo` y prohíbe
-  `tasa_mora_porcentaje`. La modalidad `PORCENTAJE_SALDO` aplica la regla inversa.
+  `tasa_mora_porcentaje` y `monto_mora_diario`. `PORCENTAJE_SALDO` exige solo su tasa;
+  `MONTO_DIARIO` exige solo su monto diario. Ampliación pendiente de implementación.
 - La persistencia asigna UUID, `activo = true` y fecha UTC. Esos valores no los decide
   el cliente.
 - La creación y la auditoría `CONDOMINIO_CREADO` son atómicas.

@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,32 +10,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.audit import AuditoriaPayload
 from src.core.errors import APIError
 from src.core.models_audit import AuditoriaLogORM
+from src.modules.condominios.condiciones_pago import fotografiar_politica
 from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.cuotas.distribucion.exceptions import DistribucionError
 from src.modules.cuotas.distribucion.repository import SQLAlchemyDistribucionRepository
-from src.modules.cuotas.distribucion.service import DistribucionService, calcular_distribucion
+from src.modules.cuotas.distribucion.service import (
+    DistribucionService,
+    calcular_distribucion,
+    cerrar_centavos,
+)
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, LoteCuotas
 from src.modules.cuotas.presupuestos.repository import SQLAlchemyPresupuestoRepository
+from src.modules.cuotas.prorrateo import montos_snapshot
 from src.modules.cuotas.saldos.repository import SQLAlchemySaldoFavorRepository
 from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorService
 from src.modules.cuotas.schemas import EmitirLoteCuotasResponse, EmitirLoteRequest
-
-
-def cerrar_centavos(montos: dict[UUID, Decimal], total: Decimal) -> dict[UUID, Decimal]:
-    """Cierre determinista sin convertir importes a float ni generar negativos."""
-    resultado = dict(montos)
-    diferencia = total - sum(resultado.values(), Decimal("0.00"))
-    orden = sorted(resultado, key=lambda id: (-resultado[id], id.int))
-    paso = Decimal("0.01") if diferencia > 0 else Decimal("-0.01")
-    while diferencia:
-        for id in orden:
-            if paso < 0 and resultado[id] == 0:
-                continue
-            resultado[id] += paso
-            diferencia -= paso
-            if not diferencia:
-                break
-    return resultado
+from src.modules.usuarios.models import UsuarioDepartamento
+from src.shared.fechas import fecha_lima
 
 
 class EmisionCuotasService:
@@ -93,21 +84,66 @@ class EmisionCuotasService:
             ).all()
         )
         try:
-            distribucion = await DistribucionService(
-                SQLAlchemyDistribucionRepository(self.session)
-            ).obtener_para_emision(cid)
-            montos = cerrar_centavos(
-                calcular_distribucion(
-                    presupuesto.monto_total, distribucion.departamentos, distribucion.metodo
-                ),
-                presupuesto.monto_total,
-            )
+            if presupuesto.prorrateo_snapshot is not None:
+                montos = montos_snapshot(presupuesto.prorrateo_snapshot)
+                edificios_aprobados = {
+                    d["id"]: e["id"]
+                    for e in presupuesto.prorrateo_snapshot["edificios"]
+                    for d in e["departamentos"]
+                }
+                if set(montos) != {d.id for d in departamentos} or any(
+                    edificios_aprobados[str(d.id)] != str(d.edificio_id) for d in departamentos
+                ):
+                    raise APIError(
+                        409,
+                        "PADRON_APROBADO_MODIFICADO",
+                        "El padrón activo no coincide con el aprobado.",
+                    )
+                if sum(montos.values()) != presupuesto.monto_total:
+                    raise APIError(
+                        409,
+                        "PRESUPUESTO_DESCUADRADO",
+                        "El snapshot no coincide con el presupuesto.",
+                    )
+                metodo = "JERARQUICA"
+            else:
+                distribucion = await DistribucionService(
+                    SQLAlchemyDistribucionRepository(self.session)
+                ).obtener_para_emision(cid)
+                montos = cerrar_centavos(
+                    calcular_distribucion(
+                        presupuesto.monto_total, distribucion.departamentos, distribucion.metodo
+                    ),
+                    presupuesto.monto_total,
+                )
+                metodo = distribucion.metodo.value
         except DistribucionError as exc:
             raise APIError(422, exc.error_code, exc.mensaje, exc.detalles) from exc
         ahora = datetime.now(UTC)
+        responsables = {
+            v.departamento_id: v
+            for v in await self.session.scalars(
+                select(UsuarioDepartamento)
+                .join(Departamento, Departamento.responsable_pago_id == UsuarioDepartamento.id)
+                .join(Edificio, Departamento.edificio_id == Edificio.id)
+                .where(
+                    Edificio.condominio_id == cid,
+                    UsuarioDepartamento.departamento_id == Departamento.id,
+                    UsuarioDepartamento.es_activo.is_(True),
+                )
+            )
+        }
         cubiertas = 0
+        detalle_por_departamento = {str(id): [] for id in montos}
+        for item in (presupuesto.prorrateo_snapshot or {}).get("items", []):
+            for asignacion in item["asignaciones"]:
+                for cargo in asignacion["cuotas"]:
+                    detalle_por_departamento[cargo["departamento_id"]].append(
+                        {"item_id": item["id"], "codigo": item["codigo"], **cargo}
+                    )
         saldos = SaldosFavorService(SQLAlchemySaldoFavorRepository(self.session))
         for departamento in departamentos:
+            politica = fotografiar_politica(condominio, responsables.get(departamento.id))
             cuota = CuotaMantenimiento(
                 id=uuid4(),
                 departamento_id=departamento.id,
@@ -118,9 +154,14 @@ class EmisionCuotasService:
                 monto_mora=Decimal("0.00"),
                 monto_pagado=Decimal("0.00"),
                 monto_descuento=Decimal("0.00"),
-                fecha_emision=ahora.date(),
+                fecha_emision=fecha_lima(),
                 fecha_vencimiento=presupuesto.fecha_vencimiento,
                 estado="EMITIDA",
+                dias_gracia_aplicados=politica["dias_gracia"],
+                politica_mora_aplicada=politica,
+                detalle_prorrateo=detalle_por_departamento[str(departamento.id)]
+                if presupuesto.prorrateo_snapshot is not None
+                else None,
             )
             self.session.add(cuota)
             await self.session.flush()
@@ -133,7 +174,7 @@ class EmisionCuotasService:
             condominio_id=cid,
             presupuesto_id=presupuesto.id,
             periodo=request.periodo,
-            metodo=distribucion.metodo.value,
+            metodo=metodo,
             actor_id=actor.id,
             total_cuotas_emitidas=len(departamentos),
             monto_total_facturado=presupuesto.monto_total,
@@ -189,6 +230,7 @@ class EmisionCuotasService:
                 id=event_id,
                 lote_id=lote.id,
                 payload={
+                    **({"schema_version": 2} if metodo == "JERARQUICA" else {}),
                     "event_id": str(event_id),
                     "event_type": "CuotasEmitidasEvent",
                     "producer": "service.cuotas",

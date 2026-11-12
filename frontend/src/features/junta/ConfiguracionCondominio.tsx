@@ -11,12 +11,13 @@ import { Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import {
   crearCondominio,
+  actualizarPoliticaMora,
   listarCondominios,
   type Condominio,
   type Moneda,
   type ReglaMoraTipo,
 } from "@/lib/api";
-import { isValidMoney } from "@/lib/money";
+import { isPositiveMoney, isValidMoney } from "@/lib/money";
 
 interface ConfiguracionCondominioProps {
   puedeEditar: boolean;
@@ -32,6 +33,9 @@ export default function ConfiguracionCondominio({
   const [condominios, setCondominios] = useState<Condominio[]>([]);
   const [configuracion, setConfiguracion] = useState<Condominio | null>(null);
   const [modoCreacion, setModoCreacion] = useState(false);
+  const [editandoPolitica, setEditandoPolitica] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [montoMoraDiario, setMontoMoraDiario] = useState("1.00");
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,15 +44,16 @@ export default function ConfiguracionCondominio({
   const [nombre, setNombre] = useState("Villa Bonita 3");
   const [direccion, setDireccion] = useState("Av. Principal 123, Lima");
   const [moneda, setMoneda] = useState<Moneda>("PEN");
-  const [reglaMora, setReglaMora] = useState<ReglaMoraTipo>("MONTO_FIJO");
+  const [reglaMora, setReglaMora] = useState<ReglaMoraTipo>("MONTO_DIARIO");
   const [montoMoraFijo, setMontoMoraFijo] = useState("20.00");
   const [tasaMoraPorcentaje, setTasaMoraPorcentaje] = useState("0.0000");
-  const [diaVencimiento, setDiaVencimiento] = useState("20");
-  const [diasGracia, setDiasGracia] = useState("2");
+  const [diaVencimiento, setDiaVencimiento] = useState("10");
+  const [diasGracia, setDiasGracia] = useState("0");
 
   const seleccionar = useCallback((condominio: Condominio) => {
     setConfiguracion(condominio);
     setModoCreacion(false);
+    setEditandoPolitica(false);
     setError(null);
     setMensaje(null);
     onCondominioSeleccionado(condominio.id);
@@ -91,14 +96,16 @@ export default function ConfiguracionCondominio({
   }, [cargarCondominios]);
 
   function iniciarCreacion() {
+    setEditandoPolitica(false);
+    setMontoMoraDiario("1.00");
     setNombre("Villa Bonita 3");
     setDireccion("Av. Principal 123, Lima");
     setMoneda("PEN");
-    setReglaMora("MONTO_FIJO");
+    setReglaMora("MONTO_DIARIO");
     setMontoMoraFijo("20.00");
     setTasaMoraPorcentaje("0.0000");
-    setDiaVencimiento("20");
-    setDiasGracia("2");
+    setDiaVencimiento("10");
+    setDiasGracia("0");
     setError(null);
     setMensaje(null);
     setModoCreacion(true);
@@ -132,6 +139,10 @@ export default function ConfiguracionCondominio({
       setError("Ingresa un monto de mora válido con hasta dos decimales.");
       return;
     }
+    if (reglaMora === "MONTO_DIARIO" && !isPositiveMoney(montoMoraDiario)) {
+      setError("El importe diario debe ser positivo y tener hasta dos decimales.");
+      return;
+    }
     if (reglaMora === "PORCENTAJE_SALDO" && !/^(100\.0000|\d{1,2}\.\d{4})$/.test(tasaMoraPorcentaje)) {
       setError("La tasa debe estar entre 0.0000 y 100.0000 y tener cuatro decimales.");
       return;
@@ -139,16 +150,20 @@ export default function ConfiguracionCondominio({
 
     setGuardando(true);
     try {
-      const resultado = await crearCondominio({
+      const datos = {
         nombre: nombre.trim(),
         direccion: direccion.trim(),
         moneda,
         regla_mora_tipo: reglaMora,
         monto_mora_fijo: reglaMora === "MONTO_FIJO" ? montoMoraFijo : null,
+        monto_mora_diario: reglaMora === "MONTO_DIARIO" ? montoMoraDiario : null,
         tasa_mora_porcentaje: reglaMora === "PORCENTAJE_SALDO" ? tasaMoraPorcentaje : null,
         dia_vencimiento: vencimiento,
         dias_gracia: gracia,
-      });
+      };
+      const resultado = editandoPolitica && configuracion
+        ? await actualizarPoliticaMora(configuracion, datos, motivo)
+        : await crearCondominio(datos);
       if (!resultado.ok || !resultado.data) {
         setError(resultado.error || "No se pudo guardar la configuración.");
         return;
@@ -157,7 +172,7 @@ export default function ConfiguracionCondominio({
       const creado = resultado.data;
       setCondominios((actuales) => [creado, ...actuales.filter((item) => item.id !== creado.id)]);
       seleccionar(creado);
-      setMensaje("Condominio creado y seleccionado como contexto activo.");
+      setMensaje(editandoPolitica ? "Política actualizada. No se modificaron cuotas históricas." : "Condominio creado y seleccionado como contexto activo.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "No se pudo guardar la configuración.");
     } finally {
@@ -218,7 +233,7 @@ export default function ConfiguracionCondominio({
           {modoCreacion && (
             <form onSubmit={guardarConfiguracion} className="space-y-5">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="font-semibold">Registrar nuevo condominio</h3>
+                <h3 className="font-semibold">{editandoPolitica ? "Editar política de mora" : "Registrar nuevo condominio"}</h3>
                 {condominios.length > 0 && (
                   <Button type="button" variant="ghost" onClick={() => setModoCreacion(false)}>Cancelar</Button>
                 )}
@@ -226,10 +241,10 @@ export default function ConfiguracionCondominio({
 
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Nombre del condominio" required>
-                  <Input value={nombre} onChange={(event) => setNombre(event.target.value)} />
+                  <Input disabled={editandoPolitica} value={nombre} onChange={(event) => setNombre(event.target.value)} />
                 </Field>
                 <Field label="Moneda principal" required>
-                  <Select value={moneda} onChange={(event) => setMoneda(event.target.value as Moneda)}>
+                  <Select disabled={editandoPolitica} value={moneda} onChange={(event) => setMoneda(event.target.value as Moneda)}>
                     <option value="PEN">PEN — Sol peruano</option>
                     <option value="USD">USD — Dólar estadounidense</option>
                   </Select>
@@ -237,7 +252,7 @@ export default function ConfiguracionCondominio({
               </div>
 
               <Field label="Dirección" required>
-                <Textarea value={direccion} onChange={(event) => setDireccion(event.target.value)} rows={2} />
+                <Textarea disabled={editandoPolitica} value={direccion} onChange={(event) => setDireccion(event.target.value)} rows={2} />
               </Field>
 
               <section className="rounded-xl border border-line bg-canvas p-4">
@@ -249,10 +264,15 @@ export default function ConfiguracionCondominio({
                   <Field label="Regla de mora" required>
                     <Select value={reglaMora} onChange={(event) => setReglaMora(event.target.value as ReglaMoraTipo)}>
                       <option value="MONTO_FIJO">Monto fijo</option>
+                      <option value="MONTO_DIARIO">Importe diario por cuota vencida</option>
                       <option value="PORCENTAJE_SALDO">Porcentaje sobre saldo</option>
                     </Select>
                   </Field>
-                  {reglaMora === "MONTO_FIJO" ? (
+                  {reglaMora === "MONTO_DIARIO" ? (
+                    <Field label="Importe diario por cuota vencida" required>
+                      <MoneyInput value={montoMoraDiario} onValueChange={setMontoMoraDiario} moneda={moneda} />
+                    </Field>
+                  ) : reglaMora === "MONTO_FIJO" ? (
                     <Field label="Monto fijo de mora" required>
                       <MoneyInput value={montoMoraFijo} onValueChange={setMontoMoraFijo} moneda={moneda} />
                     </Field>
@@ -269,6 +289,9 @@ export default function ConfiguracionCondominio({
                   </Field>
                 </div>
               </section>
+
+              {editandoPolitica && <Field label="Motivo del cambio" required><Textarea required value={motivo} onChange={(event) => setMotivo(event.target.value)} /></Field>}
+              <Alert tone="warning" title="Configuración preparada">El motor persistente de mora diaria está pendiente de integración. Guardar esta política no genera recargos ni recalcula cuotas anteriores.</Alert>
 
               <Button type="submit" loading={guardando} icon={<Save className="h-4 w-4" aria-hidden="true" />}>
                 Guardar configuración
@@ -297,6 +320,14 @@ export default function ConfiguracionCondominio({
                   <p className="mt-2">Moneda: {configuracion.moneda}</p>
                   <p>Día de vencimiento: {configuracion.dia_vencimiento}</p>
                   <p>Días de gracia: {configuracion.dias_gracia}</p>
+                  {configuracion.monto_mora_diario && <p>Mora diaria por cuota: {configuracion.monto_mora_diario} {configuracion.moneda}</p>}
+                  {puedeEditar && <Button size="sm" variant="secondary" onClick={() => {
+                    setEditandoPolitica(true); setModoCreacion(true); setMotivo("");
+                    setNombre(configuracion.nombre); setDireccion(configuracion.direccion); setMoneda(configuracion.moneda);
+                    setReglaMora(configuracion.regla_mora_tipo); setMontoMoraDiario(configuracion.monto_mora_diario || "1.00");
+                    setMontoMoraFijo(configuracion.monto_mora_fijo || "0.00"); setTasaMoraPorcentaje(configuracion.tasa_mora_porcentaje || "0.0000");
+                    setDiaVencimiento(String(configuracion.dia_vencimiento)); setDiasGracia(String(configuracion.dias_gracia));
+                  }}>Editar política</Button>}
                   <p className="mt-2 break-all font-mono text-xs">UUID: {configuracion.id}</p>
                 </div>
               </div>

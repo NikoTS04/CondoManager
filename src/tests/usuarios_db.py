@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from scripts.seed_areas_demo import cargar_areas_demo
 from scripts.seed_usuarios_demo import cargar_demo
 from src.core.config import settings
 from src.core.database import get_db_session
@@ -32,13 +33,55 @@ REVISIONES = (
     "20261020_0007_alta_usuarios",
     "20261020_0008_roles_revocables",
     "20261020_0009_vinculos_departamentos",
+    "20261020_0010_catalogo_areas",
+    "20261020_0009_pagos_persistentes",
+    "20261020_0012_reservas_notificaciones",
+    "20261021_0013_convergencia_con72",
+)
+# Esquema completo (cabeza de Alembic) para la API: añade cancelaciones y alertas, que
+# las pruebas de migración aplican por separado sobre REVISIONES.
+REVISIONES_API = (
+    *REVISIONES,
+    "20261021_0012_cancelaciones_reserva",
+    "20261021_0014_unir_reservas_y_convergencia",
+    "20261021_0015_alertas_notificaciones",
+    "20261024_0016_politica_mora_diaria",
+    "20261024_0017_condiciones_pago",
+    "20261025_0018_prorrateo_detallado",
+    "20261025_0019_motor_mora_diaria",
+    "20261025_0020_fondos_moras",
 )
 
 
-def migrar(connection, revisiones=REVISIONES):
+def migrar(connection, revisiones=None):
+    revisiones = REVISIONES_API if revisiones is None else revisiones
     with Operations.context(MigrationContext.configure(connection)):
         for nombre in revisiones:
             import_module("migrations.versions." + nombre).upgrade()
+
+
+def copiar_demo_legacy(connection, esquema_origen):
+    """Semilla histórica sin cargar el ORM actual sobre tablas de otra versión."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(connection)
+    quote = connection.dialect.identifier_preparer.quote_identifier
+    for tabla in (
+        "condominios",
+        "edificios",
+        "departamentos",
+        "usuarios",
+        "usuario_roles",
+        "usuario_departamentos",
+        "areas_comunes",
+    ):
+        columnas = ", ".join(quote(c["name"]) for c in inspector.get_columns(tabla))
+        connection.execute(
+            text(
+                f"INSERT INTO {quote(tabla)} ({columnas}) "
+                f"SELECT {columnas} FROM {quote(esquema_origen)}.{quote(tabla)}"
+            )
+        )
 
 
 @dataclass
@@ -64,6 +107,8 @@ async def crear_base(url):
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     async with sessions() as session, session.begin():
         await cargar_demo(session)
+        await cargar_areas_demo(session)
+    await engine.dispose()
     return BaseUsuarios(engine, sessions, esquema, url)
 
 
@@ -78,15 +123,26 @@ async def borrar_base(base):
 @pytest.fixture
 def db_usuarios(monkeypatch):
     url = (
-        os.getenv("CON05_TEST_DATABASE_URL")
+        os.getenv("CON46_TEST_DATABASE_URL")
+        or os.getenv("CON39_TEST_DATABASE_URL")
+        or os.getenv("CON05_TEST_DATABASE_URL")
         or os.getenv("CON06_TEST_DATABASE_URL")
         or os.getenv("CON04_TEST_DATABASE_URL")
         or os.getenv("CON13_TEST_DATABASE_URL")
     )
     if not url:
-        pytest.skip("Defina CON04_TEST_DATABASE_URL con una base PostgreSQL de pruebas.")
+        pytest.skip(
+            "Defina CON46_TEST_DATABASE_URL o CON04_TEST_DATABASE_URL con PostgreSQL de pruebas."
+        )
     base = asyncio.run(crear_base(url))
+    new_engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": base.esquema}}
+    )
+    base.engine = new_engine
+    base.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
     monkeypatch.setattr(settings, "DEMO_MODE", True)
+    # La copia piloto es global al proceso: no debe filtrar reservas entre pruebas.
+    monkeypatch.setattr("src.modules.reservas.router.RESERVAS_REGISTRADAS", {})
 
     async def session():
         async with base.sessions() as db:

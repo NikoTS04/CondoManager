@@ -5,6 +5,7 @@
 ### Escenario 1: Envío de recordatorio preventivo previo al vencimiento
 ```gherkin
 Dado que el departamento 204 tiene una cuota que vence en 3 días
+Y vence el día 10 y hoy es día 7 en America/Lima
 Y no se ha recibido el pago correspondiente
 Cuando el planificador de tareas se ejecuta a las 08:00 horas
 Entonces el sistema genera una notificación de tipo "NOTIF_RECORDATORIO_PREVIO"

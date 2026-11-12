@@ -16,8 +16,16 @@ Si no se implementa una estrategia estricta de aislamiento transaccional y bloqu
 Todas las conexiones de base de datos en CondoManager operan bajo el nivel de aislamiento:
 $$\mathbf{READ\ COMMITTED}\ \text{con Bloqueo Pesimista Explícito}$$
 
-En operaciones críticas de concurrencia se utiliza bloqueo pesimista mediante:
+En reservas se bloquea primero el contexto financiero (condominio, departamento,
+cuotas ordenadas por UUID) y luego la fila del área. El lock del área se conserva
+hasta el commit de reserva, auditoría y outbox. Cancelaciones, cambios del catálogo
+y bloqueos operativos respetan el mismo orden. No basta bloquear reservas
+existentes: con un calendario vacío no habría ninguna fila que bloquear.
+
 ```sql
+SELECT id FROM areas_comunes WHERE id = :area_id FOR UPDATE;
+
+-- Después del lock estable se consultan las ocupaciones; intervalos [inicio, fin).
 SELECT * FROM reservas 
 WHERE area_id = :area_id 
   AND fecha_reserva = :fecha 
@@ -38,8 +46,8 @@ FOR UPDATE;
               │
               ▼
 [ 1. Verificar Solvencia Financiera del Departamento ]
-  SELECT COUNT(*) FROM cuotas_mantenimiento 
-  WHERE departamento_id = :id AND estado = 'EN_MORA' FOR SHARE;
+  Bloquear condominio, departamento y cuotas ordenadas por UUID.
+  Calcular deuda vencida real con la política de gracia de CON-42.
               │
       ┌───────┴───────┐
       ▼               ▼
@@ -47,8 +55,8 @@ FOR UPDATE;
       │               │
   ROLLBACK            ▼
   Retorna 403   [ 2. Bloquear Recurso Temporal con FOR UPDATE ]
-  "MORA_ACTIVA"   SELECT id FROM reservas 
-                  WHERE area_id = :area_id AND fecha_reserva = :fecha ...
+  "DEUDA_MORA_ACTIVA"   SELECT id FROM areas_comunes
+                   WHERE id = :area_id
                   FOR UPDATE;
                       │
               ┌───────┴───────┐
@@ -57,9 +65,9 @@ FOR UPDATE;
               │               │
           ROLLBACK            ▼
           Retorna 409   [ 3. Insertar Reserva 'CONFIRMADA' ]
-          "NO_DISP"           │
+          "HORARIO_NO_DISPONIBLE" │
                               ▼
-                        [ 4. Registrar Auditoría y COMMIT ]
+                        [ 4. Registrar Auditoría, Outbox y COMMIT ]
                               │
                               ▼
                         [ Retornar 201 Created ]

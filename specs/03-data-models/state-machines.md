@@ -30,7 +30,8 @@
 | `EMITIDA` | `CONSUMIR_SALDO_FAVOR` | `PAGADA` | Saldo a favor $\ge$ Monto emitido. |
 | `EMITIDA` | `PUBLICAR_A_RESIDENTES`| `PENDIENTE`| Saldo exigible $> 0$. |
 | `PENDIENTE` | `LLEGAR_FECHA_CORTE` | `VENCIDA` | Fecha actual $>$ Fecha de vencimiento. |
-| `VENCIDA` | `EXPIRAR_DIAS_GRACIA` | `EN_MORA` | No hay pago reportado en revisión. Aplica recargo de mora. |
+| `VENCIDA` | `EXPIRAR_DIAS_GRACIA` | `EN_MORA` | Fecha Lima posterior a vencimiento + gracia histórica (default 0). Revisión pausa contabilización, no solvencia. |
+| `EN_MORA` / `PAGO_PARCIAL` | `DEVENGAR_DIA_MORA` | `EN_MORA` | Principal impago y día exigible aún no registrado. Importe diario editable por cuota, default 1.00 PEN; sin capitalizar. |
 | `PENDIENTE`/`VENCIDA`/`EN_MORA` | `APROBAR_PAGO_TOTAL` | `PAGADA` | Monto imputado cubre el 100% de la deuda. |
 | `PENDIENTE`/`VENCIDA`/`EN_MORA` | `APROBAR_PAGO_PARCIAL`| `PAGO_PARCIAL`| Monto imputado cubre parte de la deuda. Saldo pendiente $> 0$. |
 

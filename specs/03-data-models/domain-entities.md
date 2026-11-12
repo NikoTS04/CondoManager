@@ -1,5 +1,11 @@
 # Modelo de Dominio y Esquema de Entidades (Domain Entities)
 
+Extensión financiera objetivo, aún sin migración: [persistencia de prorrateo y
+mora diaria](../05-api/prorrateo-mora-reportes.md#4-persistencia-objetivo-no-migración).
+Añade catálogo/ítems/asignaciones, detalle de cuota, devengos por fecha, política
+histórica, fondos de moras cobradas y versiones de reporte. El resumen anterior
+sin detalle describe la integración previa, no limita el nuevo modelo.
+
 ## 1. Diagrama Conceptual de Entidades
 
 ```
@@ -46,7 +52,7 @@
 - **`imputaciones_pago`**: `id (UUID)`, `comprobante_id (FK)`, `cuota_id (FK)`, `monto_aplicado (NUMERIC(12,2))`, `fecha_imputacion (TIMESTAMP)`.
 
 ### 2.4 Áreas Comunes
-- **`areas_comunes`**: `id (UUID)`, `condominio_id (FK)`, `nombre (VARCHAR)`, `descripcion (TEXT)`, `aforo_maximo (INT)`, `costo_reserva (NUMERIC(12,2))`, `tiempo_maximo_horas (INT)`, `esta_activa (BOOLEAN)`.
+- **`areas_comunes`**: `id (UUID)`, `condominio_id (FK)`, `edificio_id (FK nullable)`, `nombre (VARCHAR)`, `descripcion (TEXT)`, `aforo_maximo (INT)`, `costo_reserva (NUMERIC(12,2))`, `tiempo_maximo_horas (INT)`, `esta_activa (BOOLEAN)`, `hora_apertura (TIME)`, `hora_cierre (TIME)`. Horas diarias locales de Lima; [contrato CON-39](../02-domains/04-reservas/catalogo-areas.md).
 - **`reservas`**: `id (UUID)`, `area_id (FK)`, `departamento_id (FK)`, `usuario_id (FK)`, `fecha_reserva (DATE)`, `hora_inicio (TIME)`, `hora_fin (TIME)`, `estado (VARCHAR: SOLICITADA, CONFIRMADA, RECHAZADA, CANCELADA, COMPLETADA)`, `motivo_rechazo (TEXT)`.
 
 ### 2.5 Proveedores, Egresos y Tickets
