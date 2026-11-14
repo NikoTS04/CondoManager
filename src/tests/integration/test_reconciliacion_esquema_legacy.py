@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import text
 
 from scripts.reconciliar_esquema_legacy import HEAD, reconciliar, validar_modelos
+from src.tests.esquema_pre_identidad import fijar_esquema_pre_identidad
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 
@@ -91,6 +92,7 @@ async def test_reconcilia_o_revierte_atomicamente(db_usuarios, monkeypatch, fall
     async with db_usuarios.engine.connect() as conn:
         transaction = await conn.begin()
         try:
+            await fijar_esquema_pre_identidad(conn, monkeypatch)
             rid = await preparar_legacy(conn)
             if fallo == "revision":
                 await conn.execute(text("UPDATE alembic_version SET version_num='otra_revision'"))

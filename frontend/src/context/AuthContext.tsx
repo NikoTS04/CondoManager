@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { iniciarSesion, obtenerSesion } from "@/lib/api";
 import { isSessionUser, seleccionarUnidad, UUID_PATTERN, type SessionUser, type UserRole } from "@/lib/session";
 
@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [activeDepartment, actualizarDepartamento] = useState<string>("");
   const [authReady, setAuthReady] = useState(false);
   const router = useRouter();
+  const esActivacion = usePathname() === "/activar";
 
   const login = useCallback(async (email: string, password = "", condominioId?: string): Promise<LoginResult> => {
     try {
@@ -139,6 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function restoreSession() {
       try {
+        if (esActivacion) return;
         const savedToken = localStorage.getItem("condo_token");
         const savedUser = localStorage.getItem("condo_user");
         const savedDepto = localStorage.getItem("condo_depto");
@@ -175,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     void restoreSession();
     return () => { cancelled = true; };
-  }, [login, router]);
+  }, [login, router, esActivacion]);
 
   const setActiveDepartment = useCallback((depto: string) => {
     if (!user) return;

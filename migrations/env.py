@@ -50,6 +50,7 @@ from src.modules.reservas.models import (  # noqa: F401
     EventoReservaOutbox,
     Reserva,
 )
+from src.modules.usuarios.invitaciones_models import InvitacionUsuario, OperacionIdentidad  # noqa: F401
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol  # noqa: F401
 
 config = context.config

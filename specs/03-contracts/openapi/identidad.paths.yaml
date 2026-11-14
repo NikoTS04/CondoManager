@@ -1,0 +1,200 @@
+paths:
+  /auth/activar:
+    post:
+      operationId: activarCuentaInvitada
+      tags: [Usuarios y permisos]
+      summary: Consumir la invitación y elegir contraseña atómicamente
+      description: Token de un uso; no concede roles y no emite sesión. Contrato en invitacion-y-relevo.md.
+      security: []
+      x-implementation-status: implementado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, password]
+              properties:
+                token: {type: string, minLength: 40, maxLength: 128, writeOnly: true}
+                password: {type: string, minLength: 8, maxLength: 128, writeOnly: true}
+      responses:
+        '200':
+          description: Activada; iniciar sesión con la contraseña elegida.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [estado, mensaje]
+                properties:
+                  estado: {type: string, const: ACTIVADO}
+                  mensaje: {type: string}
+        '400': {description: 'Enlace inválido, expirado, revocado o sin autorización vigente'}
+        '409': {description: El token ya fue utilizado}
+        '422': {description: Campos inválidos o adicionales; no reproduce secretos}
+  /condominios/{condominio_id}/invitaciones:
+    parameters:
+      - $ref: '#/parameters/Condominio'
+    get:
+      operationId: listarInvitacionesUsuarios
+      tags: [Usuarios y permisos]
+      summary: Consultar invitaciones del contexto sin exponer enlaces
+      description: Orden por creación descendente y UUID; solo administración del contexto autorizado.
+      x-implementation-status: implementado
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200':
+          description: Estados de invitación y correo; solo administración autorizada.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/schemas/Invitacion'}}
+        '401': {description: Sesión ausente o revocada}
+        '403': {description: Rol o contexto no autorizado}
+    post:
+      operationId: invitarUsuario
+      tags: [Usuarios y permisos]
+      summary: Crear identidad pendiente y aviso durable sin contraseña administrativa
+      description: Confirma identidad, invitación, auditoría y correo pendiente en una transacción.
+      x-implementation-status: implementado
+      parameters:
+        - $ref: '#/parameters/Idempotencia'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/schemas/Invitar'}
+      responses:
+        '201': {$ref: '#/responses/InvitacionCreada'}
+        '401': {description: Sesión ausente o revocada}
+        '403': {description: Solo Junta de su contexto o SuperAdmin}
+        '409': {description: Usuario duplicado o clave de idempotencia incompatible}
+        '422': {description: Datos o clave inválidos; se rechaza contraseña y privilegios}
+        '503': {description: Clave de entrega o URL de activación no configurada}
+  /condominios/{condominio_id}/invitaciones/{invitacion_id}:
+    parameters:
+      - $ref: '#/parameters/Condominio'
+      - $ref: '#/parameters/Invitacion'
+    delete:
+      operationId: revocarInvitacionUsuario
+      tags: [Usuarios y permisos]
+      summary: Revocar el enlace sin borrar cuenta ni historial
+      description: Repetir una revocación es no-op; una invitación utilizada no se revoca.
+      x-implementation-status: implementado
+      parameters:
+        - $ref: '#/parameters/Idempotencia'
+      responses:
+        '200': {$ref: '#/responses/InvitacionActualizada'}
+        '401': {description: Sesión ausente o revocada}
+        '403': {description: Rol o contexto no autorizado}
+        '404': {description: Invitación ajena o inexistente}
+        '409': {description: Invitación utilizada o clave incompatible}
+  /condominios/{condominio_id}/invitaciones/{invitacion_id}/reenviar:
+    parameters:
+      - $ref: '#/parameters/Condominio'
+      - $ref: '#/parameters/Invitacion'
+    post:
+      operationId: reenviarInvitacionUsuario
+      tags: [Usuarios y permisos]
+      summary: Emitir nuevo enlace y revocar el anterior en una transacción
+      description: Solo la última invitación de una cuenta pendiente admite reenvío; conserva su identidad y permisos autorizados.
+      x-implementation-status: implementado
+      parameters:
+        - $ref: '#/parameters/Idempotencia'
+      responses:
+        '200': {$ref: '#/responses/InvitacionActualizada'}
+        '401': {description: Sesión ausente o revocada}
+        '403': {description: Rol o contexto no autorizado}
+        '404': {description: Invitación ajena o inexistente}
+        '409': {description: 'Invitación utilizada, reemplazada o no autorizada; clave incompatible'}
+        '503': {description: Entrega de identidad sin configurar}
+  /condominios/{condominio_id}/relevos:
+    parameters:
+      - $ref: '#/parameters/Condominio'
+    post:
+      operationId: relevarAccesoUsuarios
+      tags: [Usuarios y permisos]
+      summary: Cambiar acceso de saliente y entrante con auditoría y avisos atómicos
+      description: Solo SuperAdmin releva Junta; la administración contextual releva el vínculo específico del inquilino.
+      x-implementation-status: implementado
+      parameters:
+        - $ref: '#/parameters/Idempotencia'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tipo, saliente_id, entrante_id]
+              properties:
+                tipo: {type: string, enum: [JUNTA, INQUILINO]}
+                saliente_id: {type: string, format: uuid}
+                entrante_id: {type: string, format: uuid}
+                departamento_id: {type: [string, 'null'], format: uuid}
+                rol_saliente: {type: [string, 'null'], enum: [RESIDENTE, AUDITOR, null]}
+              description: INQUILINO exige departamento; JUNTA exige rol_saliente explícito (null revoca).
+      responses:
+        '200':
+          description: Relevo confirmado o respuesta original de la misma clave.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [operacion_id, tipo, saliente_id, entrante_id, estado]
+                properties:
+                  operacion_id: {type: string, format: uuid}
+                  tipo: {type: string, enum: [JUNTA, INQUILINO]}
+                  saliente_id: {type: string, format: uuid}
+                  entrante_id: {type: string, format: uuid}
+                  estado: {type: string, const: CONFIRMADO}
+        '401': {description: Sesión ausente o revocada}
+        '403': {description: Falta autoridad; solo SuperAdmin releva Junta}
+        '404': {description: Usuario o contexto inexistente}
+        '409': {description: 'Rol/vínculo no vigente, titular requerido o clave incompatible'}
+        '422': {description: Usuarios iguales o combinación de campos inválida}
+parameters:
+  Condominio: {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+  Invitacion: {name: invitacion_id, in: path, required: true, schema: {type: string, format: uuid}}
+  Idempotencia:
+    name: Idempotency-Key
+    in: header
+    required: true
+    description: UUID estable al reintentar la misma operación; no reutilizar con otro cuerpo o actor.
+    schema: {type: string, format: uuid}
+schemas:
+  Invitar:
+    type: object
+    additionalProperties: false
+    required: [email, nombre, apellido, documento_identidad]
+    properties:
+      email: {type: string, maxLength: 120, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'}
+      nombre: {type: string, minLength: 1, maxLength: 80}
+      apellido: {type: string, minLength: 1, maxLength: 80}
+      documento_identidad: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9-]{5,19}$'}
+      telefono: {type: [string, 'null'], maxLength: 20}
+  Invitacion:
+    type: object
+    additionalProperties: false
+    required: [id, usuario_id, email, estado, expira_en, creado_en, notificacion_id, estado_correo]
+    properties:
+      id: {type: string, format: uuid}
+      usuario_id: {type: string, format: uuid}
+      email: {type: string}
+      estado: {type: string, enum: [PENDIENTE, UTILIZADA, EXPIRADA, REVOCADA]}
+      expira_en: {type: string, format: date-time}
+      creado_en: {type: string, format: date-time}
+      notificacion_id: {type: string, format: uuid}
+      estado_correo: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE]}
+responses:
+  InvitacionCreada:
+    description: Identidad, invitación, auditoría y aviso EN_COLA confirmados conjuntamente; no acredita envío.
+    content:
+      application/json:
+        schema: {$ref: '#/schemas/Invitacion'}
+  InvitacionActualizada:
+    description: Invitación persistida; nunca incluye hash, token o contenido cifrado.
+    content:
+      application/json:
+        schema: {$ref: '#/schemas/Invitacion'}

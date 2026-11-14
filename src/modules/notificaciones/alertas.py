@@ -59,7 +59,11 @@ async def crear_alerta(db, log, tipo, ahora=None):
             departamento_id=log.departamento_id,
             ciclo=log.ciclo,
             tipo=tipo,
-            mensaje=mensaje_alerta(tipo, log.canal, numero or "-"),
+            mensaje=(
+                mensaje_alerta(tipo, log.canal, numero)
+                if numero
+                else f"Aviso de identidad: {tipo}. Revise el proveedor y la elegibilidad antes de reenviar."
+            ),
             creada_en=ahora or datetime.now(UTC),
         )
         .on_conflict_do_nothing(constraint="uq_alerta_notificacion_tipo")

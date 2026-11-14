@@ -229,7 +229,7 @@ schemas:
       id: {$ref: '#/schemas/UUID'}
       notificacion_id: {$ref: '#/schemas/UUID'}
       condominio_id: {$ref: '#/schemas/UUID'}
-      departamento_id: {$ref: '#/schemas/UUID'}
+      departamento_id: {type: [string, 'null'], format: uuid}
       departamento_numero: {type: string}
       tipo_evento: {type: string}
       ciclo: {type: integer, minimum: 1}

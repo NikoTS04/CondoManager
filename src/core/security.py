@@ -14,7 +14,7 @@ from src.modules.usuarios.repository import get_usuarios_repository
 from src.modules.usuarios.schemas import VinculoDepartamentoDTO
 
 try:
-    from fastapi import Depends, HTTPException, status
+    from fastapi import Depends, HTTPException, Request, status
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
     HAS_FASTAPI = True
@@ -54,7 +54,6 @@ except ImportError:
 
 SECRET_KEY = settings.JWT_SECRET
 ALGORITHM = settings.JWT_ALGORITHM
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas para facilitar el uso del piloto
 
 security_scheme = HTTPBearer(auto_error=False) if HAS_FASTAPI else None
 
@@ -117,7 +116,7 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     if expires_delta:
         expire = now + expires_delta
     else:
-        expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.setdefault("auth_revision", 1)
     to_encode.update({"exp": expire, "iat": now, "session_version": VERSION_SESION})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -184,13 +183,17 @@ async def get_current_user_optional(
 async def get_current_user(
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     repository=Depends(get_usuarios_repository),
+    request: Request = None,
 ) -> Dict[str, Any]:
     """Exige un Bearer token válido y retorna el payload del usuario autenticado."""
     if not auth or not auth.credentials:
         raise APIError(
             401, "NO_AUTENTICADO", "Se requiere cabecera 'Authorization: Bearer <token>'."
         )
-    return await _autenticar_token(auth.credentials, repository)
+    usuario = await _autenticar_token(auth.credentials, repository)
+    if request is not None:
+        request.state.actor_seguridad = usuario["sub"]
+    return usuario
 
 
 async def _autenticar_token(token, repository):
