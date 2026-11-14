@@ -1,6 +1,7 @@
 """Ensayo del incidente 0013; solo esquemas efímeros PostgreSQL."""
 
 from importlib import import_module
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -10,6 +11,7 @@ from sqlalchemy import inspect, text
 
 from scripts import reconciliar_esquema_20261026 as reparacion
 from scripts.reconciliar_esquema_legacy import huellas
+from src.tests.esquema_pre_identidad import fijar_esquema_pre_identidad
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 
@@ -80,9 +82,20 @@ def respaldo(conn):
     ],
 )
 async def test_repara_o_revierte_sin_perder_historia(db_usuarios, monkeypatch, fallo):
+    # Ensayo fijado a 0020; el reparador real sigue rechazando el head nuevo.
+    grafo = reparacion.ScriptDirectory.from_config(reparacion.Config("alembic.ini"))
+    monkeypatch.setattr(
+        reparacion.ScriptDirectory,
+        "from_config",
+        lambda _: SimpleNamespace(
+            get_current_head=lambda: reparacion.HEAD,
+            iterate_revisions=grafo.iterate_revisions,
+        ),
+    )
     async with db_usuarios.engine.connect() as conn:
         transaction = await conn.begin()
         try:
+            await fijar_esquema_pre_identidad(conn, monkeypatch)
             rid = await conn.run_sync(preparar)
             if fallo == "revision":
                 await conn.execute(text("UPDATE alembic_version SET version_num='otra'"))

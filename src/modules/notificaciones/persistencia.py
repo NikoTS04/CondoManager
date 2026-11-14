@@ -30,7 +30,7 @@ class NotificacionesPersistentesService:
             {
                 **{k: getattr(log, k) for k in NotificacionLogDTO.model_fields},
                 "condominio_id": str(log.condominio_id),
-                "departamento_id": str(log.departamento_id),
+                "departamento_id": str(log.departamento_id) if log.departamento_id else None,
             }
         )
 
@@ -129,22 +129,41 @@ class NotificacionesPersistentesService:
             )
             if log.estado != "FALLIDO_PERMANENTE":
                 return self.dto(log)
-            nuevo = request.nuevo_destinatario if request else None
-            destinos = await self.repo.destinatarios(
-                log.condominio_id, log.departamento_id, log.canal
-            )
-            if not nuevo or nuevo == log.destinatario:
-                raise APIError(
-                    409,
-                    "INTENTOS_AGOTADOS",
-                    "Corrija el contacto autorizado antes de iniciar otro ciclo.",
+            if log.finalidad != "OPERATIVA":
+                if request and request.nuevo_destinatario:
+                    raise APIError(
+                        422,
+                        "DESTINATARIO_NO_AUTORIZADO",
+                        "El aviso de identidad no permite cambiar su destinatario.",
+                    )
+                if log.error_mensaje == "ACEPTACION_INCIERTA_REQUIERE_REVISION":
+                    raise APIError(
+                        409, "ACEPTACION_INCIERTA", "Verifique el proveedor antes de reenviar."
+                    )
+                from src.modules.usuarios.comunicaciones import destinatario_identidad_valido
+
+                if not await destinatario_identidad_valido(self.session, log, datetime.now(UTC)):
+                    raise APIError(409, "DESTINATARIO_NO_AUTORIZADO", "El aviso ya no es elegible.")
+                nuevo = log.destinatario
+            else:
+                nuevo = request.nuevo_destinatario if request else None
+                destinos = await self.repo.destinatarios(
+                    log.condominio_id, log.departamento_id, log.canal
                 )
-            if not any(u.id == log.usuario_destinatario_id and c == nuevo for u, _, c in destinos):
-                raise APIError(
-                    422,
-                    "DESTINATARIO_NO_AUTORIZADO",
-                    "El contacto no pertenece al destinatario activo.",
-                )
+                if not nuevo or nuevo == log.destinatario:
+                    raise APIError(
+                        409,
+                        "INTENTOS_AGOTADOS",
+                        "Corrija el contacto autorizado antes de iniciar otro ciclo.",
+                    )
+                if not any(
+                    u.id == log.usuario_destinatario_id and c == nuevo for u, _, c in destinos
+                ):
+                    raise APIError(
+                        422,
+                        "DESTINATARIO_NO_AUTORIZADO",
+                        "El contacto no pertenece al destinatario activo.",
+                    )
             anterior = {"ciclo": log.ciclo, "estado": log.estado}
             ahora = datetime.now(UTC)
             await self.session.execute(
@@ -169,7 +188,9 @@ class NotificacionesPersistentesService:
                 log.condominio_id,
                 log.departamento_id,
                 "NOTIFICACION_REENVIO_MANUAL",
-                "CONTACTO_AUTORIZADO_CORREGIDO",
+                "REENVIO_IDENTIDAD_AUTORIZADO"
+                if log.finalidad != "OPERATIVA"
+                else "CONTACTO_AUTORIZADO_CORREGIDO",
                 anterior,
                 {"ciclo": log.ciclo, "estado": log.estado},
             )
@@ -181,8 +202,8 @@ class NotificacionesPersistentesService:
             id=alerta.id,
             notificacion_id=alerta.notificacion_id,
             condominio_id=str(alerta.condominio_id),
-            departamento_id=str(alerta.departamento_id),
-            departamento_numero=numero,
+            departamento_id=str(alerta.departamento_id) if alerta.departamento_id else None,
+            departamento_numero=numero or "Identidad",
             tipo_evento=tipo_evento,
             ciclo=alerta.ciclo,
             tipo=alerta.tipo,
@@ -196,7 +217,7 @@ class NotificacionesPersistentesService:
     def _consulta_alertas(self):
         return (
             select(AlertaNotificacion, Departamento.numero, Notificacion.tipo_evento)
-            .join(Departamento, Departamento.id == AlertaNotificacion.departamento_id)
+            .outerjoin(Departamento, Departamento.id == AlertaNotificacion.departamento_id)
             .join(Notificacion, Notificacion.id == AlertaNotificacion.notificacion_id)
         )
 

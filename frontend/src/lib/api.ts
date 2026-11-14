@@ -417,6 +417,50 @@ export function crearUsuario(condominioId: string, datos: CrearUsuarioPayload): 
   });
 }
 
+export interface InvitacionUsuario {
+  id: string; usuario_id: string; email: string;
+  estado: "PENDIENTE" | "UTILIZADA" | "EXPIRADA" | "REVOCADA";
+  expira_en: string; creado_en: string; notificacion_id: string; estado_correo: string;
+}
+
+export function listarInvitaciones(condominioId: string, offset = 0): Promise<InvitacionUsuario[]> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/invitaciones?limit=50&offset=${offset}`);
+}
+
+export function invitarUsuario(condominioId: string, datos: Omit<CrearUsuarioPayload, "password">, clave: string): Promise<InvitacionUsuario> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/invitaciones`, {
+    method: "POST", headers: { "Idempotency-Key": clave }, body: JSON.stringify(datos),
+  });
+}
+
+export function modificarInvitacion(condominioId: string, id: string, reenviar: boolean, clave: string): Promise<InvitacionUsuario> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/invitaciones/${encodeURIComponent(id)}${reenviar ? "/reenviar" : ""}`, {
+    method: reenviar ? "POST" : "DELETE", headers: { "Idempotency-Key": clave },
+  });
+}
+
+export interface RelevoAcceso {
+  tipo: "JUNTA" | "INQUILINO"; saliente_id: string; entrante_id: string;
+  departamento_id?: string; rol_saliente?: "RESIDENTE" | "AUDITOR" | null;
+}
+
+export function relevarAcceso(condominioId: string, datos: RelevoAcceso, clave: string): Promise<{ operacion_id: string; estado: "CONFIRMADO" }> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/relevos`, {
+    method: "POST", headers: { "Idempotency-Key": clave }, body: JSON.stringify(datos),
+  });
+}
+
+export async function activarCuenta(token: string, password: string): Promise<{ estado: "ACTIVADO"; mensaje: string }> {
+  // Ruta pública: un error del enlace no revoca una sesión administrativa abierta.
+  const response = await fetch(`${API_BASE}/auth/activar`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new ApiError(obtenerMensajeError(data, "No se pudo activar la cuenta."), response.status, obtenerCodigoError(data));
+  return data;
+}
+
 export function cambiarEstadoUsuario(condominioId: string, usuarioId: string, esta_activo: boolean): Promise<CuentaUsuario> {
   return recursoRequest(`/usuarios/${encodeURIComponent(usuarioId)}/estado?condominio_id=${encodeURIComponent(condominioId)}`, {
     method: "PATCH", body: JSON.stringify({ esta_activo }),
@@ -484,7 +528,9 @@ async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response
 }
 
 async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetchProtegido(ruta, { ...init, headers: getAuthHeaders() });
+  const headers = getAuthHeaders();
+  new Headers(init.headers).forEach((value, key) => { headers[key] = value; });
+  const response = await fetchProtegido(ruta, { ...init, headers });
   const data = await response.json();
   if (!response.ok) {
     const payload = data.detail && typeof data.detail === "object" ? data.detail : data;
@@ -1051,7 +1097,7 @@ export interface AlertaNotificacion {
   id: string;
   notificacion_id: string;
   condominio_id: string;
-  departamento_id: string;
+  departamento_id: string | null;
   departamento_numero: string;
   tipo_evento: string;
   ciclo: number;
@@ -1071,7 +1117,7 @@ export function atenderAlertaNotificacion(id: string): Promise<AlertaNotificacio
   return recursoRequest(`/notificaciones/alertas/${encodeURIComponent(id)}/atender`, { method: "POST" });
 }
 
-export function reenviarNotificacion(id: string, nuevo_destinatario: string): Promise<NotificacionLog> {
+export function reenviarNotificacion(id: string, nuevo_destinatario?: string): Promise<NotificacionLog> {
   return recursoRequest(`/notificaciones/reenviar/${encodeURIComponent(id)}`, {
     method: "POST", body: JSON.stringify({ nuevo_destinatario }),
   });

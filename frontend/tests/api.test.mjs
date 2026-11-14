@@ -9,6 +9,36 @@ const { outputText } = ts.transpileModule(source, {
 });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 
+test("invitación y relevo conservan la clave de reintento y la autorización", async (t) => {
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    return new Response(JSON.stringify({ estado: "PENDIENTE" }));
+  });
+  globalThis.window = {};
+  globalThis.localStorage = { getItem: () => "token-admin" };
+  try {
+    await api.invitarUsuario("cid", { email: "ana@test.test" }, "clave-estable");
+    await api.modificarInvitacion("cid", "iid", true, "clave-reenvio");
+    await api.relevarAcceso("cid", { tipo: "JUNTA" }, "clave-relevo");
+    assert.deepEqual(solicitudes.map((s) => s.init.headers["idempotency-key"]), ["clave-estable", "clave-reenvio", "clave-relevo"]);
+    assert.ok(solicitudes.every((s) => s.init.headers.Authorization === "Bearer token-admin"));
+  } finally { delete globalThis.window; delete globalThis.localStorage; }
+});
+
+test("la activación es pública, envía el secreto solo en POST y conserva el error del enlace", async (t) => {
+  let solicitud;
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitud = { url, init };
+    return new Response(JSON.stringify({ error_code: "ACTIVACION_EXPIRADA", mensaje: "El enlace venció." }), { status: 400 });
+  });
+  await assert.rejects(api.activarCuenta("token-secreto", "password-secreto"), (e) => e.errorCode === "ACTIVACION_EXPIRADA");
+  assert.equal(solicitud.init.method, "POST");
+  assert.equal(solicitud.init.headers.Authorization, undefined);
+  assert.equal(solicitud.url.includes("token-secreto"), false);
+  assert.deepEqual(JSON.parse(solicitud.init.body), { token: "token-secreto", password: "password-secreto" });
+});
+
 test("todas las consultas protegidas envían Bearer y propagan rechazos", async (t) => {
   t.mock.method(globalThis, "fetch", async (_url, init) => {
     assert.equal(init.headers.Authorization, "Bearer token-prueba");

@@ -1,6 +1,8 @@
 """Punto de entrada principal de la API de CondoManager."""
 
-from fastapi import FastAPI
+from uuid import UUID, uuid4
+
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
@@ -49,6 +51,18 @@ app.add_exception_handler(APIError, api_error_handler)
 app.add_exception_handler(RequestValidationError, request_validation_handler)
 app.add_exception_handler(HTTPException, http_error_handler)
 app.add_exception_handler(Exception, unexpected_error_handler)
+
+
+@app.middleware("http")
+async def correlacion_seguridad(request: Request, call_next):
+    try:
+        correlacion = str(UUID(request.headers.get("X-Correlation-ID", "")))
+    except ValueError:
+        correlacion = str(uuid4())
+    request.state.correlacion = correlacion
+    response = await call_next(request)
+    response.headers["X-Correlation-ID"] = correlacion
+    return response
 
 
 app.include_router(usuarios_router, prefix="/api/v1")

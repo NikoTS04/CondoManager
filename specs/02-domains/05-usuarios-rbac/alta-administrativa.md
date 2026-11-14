@@ -2,8 +2,9 @@
 
 Decisión del Sprint 2: el administrador establece la contraseña inicial. Las cuentas
 nuevas están inactivas hasta que un `SUPERADMIN` las habilita desde la aplicación.
-La invitación, activación por enlace y verificación del correo pertenecen a una
-evolución posterior; `esta_activo` no acredita un correo verificado.
+Este es el contrato histórico de alta manual. CON-76 incorpora un flujo separado de
+[invitación y activación](invitacion-y-relevo.md), sin modificar las credenciales de
+cuentas existentes; `esta_activo` por sí solo no acredita un correo verificado.
 
 ## Identidad y permisos
 

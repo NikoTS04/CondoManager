@@ -1,5 +1,9 @@
 # Matriz de Trazabilidad Integral (Traceability Matrix)
 
+CON-7/76: ver la [trazabilidad canónica de identidad Sprint 3](00-core/traceability-matrix.md#identidad-y-cambios-de-acceso-sprint-3--jerson)
+y su [contrato](02-domains/05-usuarios-rbac/invitacion-y-relevo.md). Correo real y
+aceptación del equipo se acreditan separadamente de las pruebas locales.
+
 CON-25/26/27/28: ver la [trazabilidad canónica de pagos Sprint 3](00-core/traceability-matrix.md#consolidación-de-pagos-sprint-3--anderson)
 y su [contrato compatible](05-api/pagos-sprint-3.md). La verificación local no
 declara integradas las dependencias de correo real ni cambia estados de Jira.

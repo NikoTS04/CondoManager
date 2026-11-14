@@ -6,6 +6,7 @@ import logging
 import random
 import re
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 from redis.asyncio import Redis
@@ -152,21 +153,30 @@ async def procesar_uno(
         )
         if log is None:
             return False
-        destinos = await NotificacionesRepository(db).destinatarios(
-            log.condominio_id,
-            log.departamento_id,
-            log.canal,
-        )
-        if not any(
-            u.id == log.usuario_destinatario_id and c == log.destinatario for u, _, c in destinos
-        ):
+        if log.finalidad == "OPERATIVA":
+            destinos = await NotificacionesRepository(db).destinatarios(
+                log.condominio_id,
+                log.departamento_id,
+                log.canal,
+            )
+            valido = any(
+                u.id == log.usuario_destinatario_id and c == log.destinatario
+                for u, _, c in destinos
+            )
+        else:
+            from src.modules.usuarios.comunicaciones import destinatario_identidad_valido
+
+            valido = await destinatario_identidad_valido(db, log, ahora)
+        if not valido:
             log.estado = "FALLIDO_PERMANENTE"
             log.error_mensaje = "DESTINATARIO_REVOCADO_O_CONTACTO_MODIFICADO"
             log.proximo_reintento = None
             await crear_alerta(db, log, "DESTINATARIO_INVALIDO", ahora)
             return True
-        # El prototipo no configura un proveedor sin reconciliación idempotente.
-        if log.transporte != "SIMULADO":
+        # CON-78 inyecta el proveedor. Nunca enviar identidad con el simulador por defecto.
+        if log.transporte != "SIMULADO" and (
+            log.finalidad == "OPERATIVA" or transport is transporte_simulado
+        ):
             log.estado = "FALLIDO_PERMANENTE"
             log.error_mensaje = "PROVEEDOR_NO_CONFIGURADO"
             await crear_alerta(db, log, "PROVEEDOR_NO_CONFIGURADO", ahora)
@@ -187,7 +197,14 @@ async def procesar_uno(
         clave = f"{lid}-{log.ciclo}-{log.intentos}"
     # El intento ya es durable antes del efecto externo. No mantener locks de SQL en red.
     try:
-        resultado = await asyncio.to_thread(transport, log, clave)
+        from src.modules.usuarios.comunicaciones import contenido_entrega
+
+        # El cuerpo descifrado vive únicamente en la llamada de transporte, no en el ORM.
+        entrega = SimpleNamespace(
+            **{c.name: getattr(log, c.name) for c in Notificacion.__table__.columns}
+        )
+        entrega.cuerpo = contenido_entrega(log)
+        resultado = await asyncio.to_thread(transport, entrega, clave)
     except Exception:
         resultado = {"status": 500, "error": "FALLO_TRANSPORTE"}
     ahora = reloj_fijo or datetime.now(UTC)

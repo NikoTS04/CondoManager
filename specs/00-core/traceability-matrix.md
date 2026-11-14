@@ -6,6 +6,17 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 ## Matriz de Trazabilidad de Extremo a Extremo (End-to-End)
 
+### Identidad y cambios de acceso Sprint 3 — Jerson
+
+Contrato: [invitación y relevo](../02-domains/05-usuarios-rbac/invitacion-y-relevo.md).
+OpenAPI: `03-contracts/openapi/identidad.paths.yaml`. Evidencia local y dependencia
+de transporte real: [CON-7/76](../../docs/sprints/CON-7-76.md).
+
+| Ticket | Regla / datos | BDD y prueba SQL | Código / interfaz |
+|---|---|---|---|
+| CON-76 | Invitación de un uso, activación atómica, revisión SQL, duración JWT y logs sin secretos | `05-usuarios-rbac/features/invitacion_relevo.feature` → `src/tests/bdd/test_identidad_sprint3_bdd.py`; `src/tests/integration/test_identidad_sprint3_db.py` | `src/modules/usuarios/invitaciones.py`, `comunicaciones.py`, `src/core/security.py`, `/activar`, `InvitacionesSection.tsx` |
+| CON-7 / USR-06 | Relevo atómico de Junta/inquilino, historial, responsable de pago y avisos al saliente | Mismo feature y pruebas; regresiones de roles/vínculos existentes | `UsuariosService`, `IdentidadService.relevar`, `RelevosSection.tsx`, cola SQL de identidad |
+
 ### Consolidación de pagos Sprint 3 — Anderson
 
 Contrato común: [CON-25–28](../05-api/pagos-sprint-3.md). Se reutilizan las tablas

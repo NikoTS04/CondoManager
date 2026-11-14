@@ -1,11 +1,12 @@
 openapi: 3.1.0
 info:
   title: CondoManager API
-  description: Contrato objetivo del Sprint 2 acordado en CON-72. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
-  version: 2.5.0
+  description: Base del Sprint 2 acordada en CON-72 y extensiones de identidad del Sprint 3. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
+  version: 2.6.0
 x-contract-baseline: CON-72-2026-10-20
 x-contract-guide: ../../05-api/sprint-2-contratos.md
 x-account-statement-guide: ../../05-api/estado-de-cuenta.md
+x-identity-guide: ../../02-domains/05-usuarios-rbac/invitacion-y-relevo.md
 x-financial-extension:
   status: implementado-prospectivo
   guide: ../../05-api/prorrateo-mora-reportes.md
@@ -28,6 +29,16 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /auth/activar:
+    $ref: './identidad.paths.yaml#/paths/~1auth~1activar'
+  /condominios/{condominio_id}/invitaciones:
+    $ref: './identidad.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1invitaciones'
+  /condominios/{condominio_id}/invitaciones/{invitacion_id}:
+    $ref: './identidad.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1invitaciones~1%7Binvitacion_id%7D'
+  /condominios/{condominio_id}/invitaciones/{invitacion_id}/reenviar:
+    $ref: './identidad.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1invitaciones~1%7Binvitacion_id%7D~1reenviar'
+  /condominios/{condominio_id}/relevos:
+    $ref: './identidad.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1relevos'
   /cuotas/departamentos/{departamento_id}/estado-cuenta:
     $ref: './estado-cuenta.paths.yaml#/paths/~1cuotas~1departamentos~1%7Bdepartamento_id%7D~1estado-cuenta'
   /edificios/{edificio_id}/fondos-moras:
@@ -134,7 +145,7 @@ paths:
                 properties:
                   access_token: { type: string }
                   token_type: { type: string, const: bearer }
-                  expires_in: { type: integer, const: 86400 }
+                  expires_in: { type: integer, minimum: 60, description: 'ACCESS_TOKEN_EXPIRE_MINUTES multiplicado por 60.' }
                   usuario: { $ref: '#/components/schemas/UsuarioDTO' }
         '401': { $ref: '#/components/responses/Error401' }
         '409':

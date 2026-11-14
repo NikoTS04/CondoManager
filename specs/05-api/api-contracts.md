@@ -425,6 +425,10 @@ tenencia devuelven `[]`. JWT con `session_version: 2`; tokens anteriores o roles
 antiguos/desconocidos reciben `401 SESION_DESACTUALIZADA` y requieren login.
 El JWT incorpora además `auth_revision`, validada contra PostgreSQL. `GET /auth/demo-users` devuelve perfiles persistidos solo con `DEMO_MODE=true`; en otro caso responde `404`. La creación, estado, selección de contexto y revocación se rigen por [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
 
+CON-76 añade [invitación, activación y relevo](../02-domains/05-usuarios-rbac/invitacion-y-relevo.md).
+La duración de sesión se configura en minutos y `expires_in` expresa esos mismos
+minutos en segundos; el ejemplo usa el valor predeterminado de 60 minutos.
+
 Pagos, reservas y notificaciones requieren Bearer. Las listas se filtran por contexto
 y vínculo activo; UUID de unidad ajena o condominio distinto responde `403`.
 `GET /pagos/comprobantes` sustituye el listado local de comprobantes y
@@ -443,7 +447,7 @@ y vínculo activo; UUID de unidad ajena o condominio distinto responde `403`.
     {
       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
       "token_type": "bearer",
-      "expires_in": 86400,
+      "expires_in": 3600,
       "usuario": {
         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "email": "admin@villabonita3.pe",

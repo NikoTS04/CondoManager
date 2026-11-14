@@ -38,7 +38,9 @@ El diseño garantiza la escalabilidad multi-edificio, permitiendo que un usuario
 El administrador define la contraseña inicial y crea una cuenta inactiva. Solo
 SuperAdmin habilita o deshabilita su estado desde la aplicación. Login y peticiones
 protegidas verifican PostgreSQL y revisión de sesión. La invitación y la verificación
-por correo quedan para una evolución posterior. Contrato completo y criterios:
+por correo se incorporan en CON-76 mediante el contrato de
+[invitación y relevo](../02-domains/05-usuarios-rbac/invitacion-y-relevo.md).
+Contrato histórico completo y criterios:
 [alta-administrativa.md](../02-domains/05-usuarios-rbac/alta-administrativa.md).
 
 ### CON-06 — Asignación y revocación de roles
