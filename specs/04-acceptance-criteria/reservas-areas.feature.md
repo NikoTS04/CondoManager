@@ -54,3 +54,22 @@ Comprobar deuda SQL por departamento: EN_REVISION no desbloquea; aprobación que
 extingue la mora habilita; cuotas futuras y otras unidades no bloquean. El rechazo
 403 DEUDA_MORA_ACTIVA deja el horario libre y no emite confirmación. El contrato
 está en `specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md`.
+
+## CON-80 — persistencia sin fuentes de memoria
+
+```gherkin
+Escenario: Dos procesos y reinicio comparten el estado de una reserva
+  Dado dos procesos API independientes conectados al mismo PostgreSQL de pruebas
+  Cuando ambos solicitan el mismo turno
+  Entonces solo una solicitud confirma y la otra devuelve conflicto
+  Y ambos consultan el mismo UUID confirmado
+  Cuando el segundo proceso cancela y se inicia otro proceso
+  Entonces el nuevo proceso consulta el mismo UUID cancelado
+  Y puede reservar nuevamente el turno liberado
+
+Escenario: Esquema incompleto no equivale a disponibilidad
+  Dado que falta una tabla requerida de reservas o bloqueos en la base de pruebas
+  Cuando se consulta el calendario o el historial afectado
+  Entonces se recibe un error operativo 503 sin datos SQL internos
+  Y no se devuelve un calendario libre ni se recurre a datos piloto
+```

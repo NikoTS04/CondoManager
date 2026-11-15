@@ -3,25 +3,22 @@
 import logging
 import uuid
 from datetime import date, time
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.authorization import (
     autorizar_departamento,
     contexto_consulta,
-    puede_ver_departamento,
 )
-from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.core.security import get_current_user
 from src.modules.pagos.solvencia import get_solvencia_service
 from src.modules.reservas.areas.repository import AreasRepository, get_areas_repository
 from src.modules.reservas.areas.service import AreasService
 from src.modules.reservas.cancelaciones import get_cancelaciones_service
-from src.modules.reservas.disponibilidad import DisponibilidadRepository, DisponibilidadService
+from src.modules.reservas.disponibilidad import DisponibilidadService, get_disponibilidad_repository
 from src.modules.reservas.persistencia import ReservasPersistentesService
 from src.modules.reservas.repository import ReservasRepository
 from src.modules.reservas.schemas import (
@@ -44,13 +41,6 @@ from src.modules.usuarios.departamentos import get_departamentos_portal_reposito
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Reservas de Áreas Comunes"])
-
-# ============================================================================
-# Almacén de Estado en Memoria (Simulación y Desarrollo)
-# ============================================================================
-
-# Almacén de reservas confirmadas / canceladas
-RESERVAS_REGISTRADAS: Dict[uuid.UUID, Dict] = {}
 
 # ============================================================================
 # Endpoints de Áreas Comunes
@@ -84,24 +74,14 @@ async def disponibilidad_area(
     response: Response,
     user: dict = Depends(get_current_user),
     areas_repository=Depends(get_areas_repository),
-    session: AsyncSession = Depends(get_db_session),
+    disponibilidad=Depends(get_disponibilidad_repository),
 ):
     DisponibilidadService.validar_fecha(fecha)
     area = await AreasService(areas_repository).publica(area_id, user)
-    persistidas = await DisponibilidadRepository(session).reservas_confirmadas(
-        area_id, area.condominio_id, fecha
-    )
-    # SQL es canónico: una cancelación confirmada en otro proceso no puede
-    # quedar oculta por una copia piloto todavía marcada CONFIRMADA.
-    piloto = [
-        dict(r)
-        for r in RESERVAS_REGISTRADAS.values()
-        if r["area_id"] == area_id and r["condominio_id"] == area.condominio_id
-    ]
-    ocupaciones = DisponibilidadService.combinar_fuentes(persistidas, piloto)
+    persistidas = await disponibilidad.reservas_confirmadas(area_id, area.condominio_id, fecha)
     response.headers["Cache-Control"] = "no-store"
     return DisponibilidadService.horarios_ocupados(
-        fecha, ocupaciones, area.hora_apertura, area.hora_cierre
+        fecha, persistidas, area.hora_apertura, area.hora_cierre
     )
 
 
@@ -128,25 +108,12 @@ async def listar_reservas(
     cid = contexto_consulta(user, condominio_id)
     if area_id is not None:
         await AreasService(areas_repository).verificar_historial(area_id, user)
-    resultados = []
-    for r in RESERVAS_REGISTRADAS.values():
-        if (
-            r["condominio_id"] == cid
-            and (area_id is None or r["area_id"] == area_id)
-            and puede_ver_departamento(user, r["departamento_id"])
-        ):
-            if fecha is None or r["fecha_reserva"] == fecha:
-                resultados.append(ReservaResponseDTO(**r))
-    persistidas = await cancelaciones.historial(cid, user, area_id, fecha)
-    ids_sql = {r.id for r in persistidas}
-    return [r for r in resultados if r.id not in ids_sql] + persistidas
+    return await cancelaciones.historial(cid, user, area_id, fecha)
 
 
 def get_areas_reserva_repository(solvencia=Depends(get_solvencia_service)):
     # Catalogo y solvencia comparten los locks de una sola transaccion financiera.
-    if hasattr(solvencia, "session"):
-        return AreasRepository(solvencia.session)
-    return AreasRepository(None)
+    return AreasRepository(solvencia.session)
 
 
 def get_creacion_reservas_repository(solvencia=Depends(get_solvencia_service)):
@@ -198,19 +165,12 @@ async def crear_reserva(
                         "mensaje": "La unidad no pertenece al edificio del área.",
                     },
                 )
-            # Una cancelación SQL debe liberar el turno también al volver a
-            # reservar desde un proceso con una copia piloto todavía antigua.
             persistidas = await areas_repository.ocupaciones(
                 request.area_id, request.condominio_id, request.fecha_reserva
             )
-            piloto = [
-                r
-                for r in RESERVAS_REGISTRADAS.values()
-                if r["area_id"] == request.area_id and r["condominio_id"] == request.condominio_id
-            ]
             ocupados = DisponibilidadService.horarios_ocupados(
                 request.fecha_reserva,
-                DisponibilidadService.combinar_fuentes(persistidas, piloto),
+                persistidas,
                 area["hora_apertura"].isoformat(),
                 area["hora_cierre"].isoformat(),
             )
@@ -224,51 +184,34 @@ async def crear_reserva(
                 }
                 for h in ocupados
             ]
-            if isinstance(reservas_repository, ReservasRepository):
 
-                async def auditor(a):
-                    await solvencia.repo.auditar(
-                        user,
-                        request.condominio_id,
-                        request.departamento_id,
-                        a.accion_ejecutada,
-                        a.motivo,
-                        a.estado_anterior,
-                        a.estado_posterior,
-                    )
+            async def auditor(a):
+                await solvencia.repo.auditar(
+                    user,
+                    request.condominio_id,
+                    request.departamento_id,
+                    a.accion_ejecutada,
+                    a.motivo,
+                    a.estado_anterior,
+                    a.estado_posterior,
+                )
 
-                reserva_dto = await ReservasService.procesar_reserva_persistente(
-                    request=request,
-                    area=area,
-                    estado_financiero_depto="AL_DIA",
-                    saldo_mora_depto=evaluacion.saldo_vencido,
-                    repository=reservas_repository,
-                    usuario_id=uuid.UUID(user["sub"]),
-                    reservas_existentes=existentes,
-                    auditor=auditor,
-                )
-                # Evento durable en la misma transacción que la reserva y su auditoría.
-                guardada = await reservas_repository.obtener_por_id(reserva_dto.id)
-                ReservasPersistentesService(solvencia).evento(
-                    guardada, "ReservaConfirmadaEvent", reserva_dto.area_nombre
-                )
-                await solvencia.session.flush()
-            else:
-                # Adaptador explícito de pruebas históricas, sin fallback ante
-                # fallos SQL del productor de CON-41.
-                reserva_dto, _ = ReservasService.procesar_reserva(
-                    request=request,
-                    area=area,
-                    estado_financiero_depto="AL_DIA",
-                    saldo_mora_depto=evaluacion.saldo_vencido,
-                    reservas_existentes=existentes,
-                )
-        # La copia de compatibilidad se actualiza únicamente tras el commit.
-        RESERVAS_REGISTRADAS[reserva_dto.id] = {
-            **reserva_dto.model_dump(),
-            "zona_horaria": area["zona_horaria"],
-            "usuario_id": user["sub"],
-        }
+            reserva_dto = await ReservasService.procesar_reserva_persistente(
+                request=request,
+                area=area,
+                estado_financiero_depto="AL_DIA",
+                saldo_mora_depto=evaluacion.saldo_vencido,
+                repository=reservas_repository,
+                usuario_id=uuid.UUID(user["sub"]),
+                reservas_existentes=existentes,
+                auditor=auditor,
+            )
+            # Evento durable en la misma transacción que la reserva y su auditoría.
+            guardada = await reservas_repository.obtener_por_id(reserva_dto.id)
+            ReservasPersistentesService(solvencia).evento(
+                guardada, "ReservaConfirmadaEvent", reserva_dto.area_nombre
+            )
+            await solvencia.session.flush()
         return reserva_dto
 
     except DeudaMoraActivaException as exc:
@@ -325,15 +268,4 @@ async def cancelar_reserva(
     cancelaciones=Depends(get_cancelaciones_service),
 ):
     """Permite al residente o administrador cancelar una reserva con al menos 24h de anticipación."""
-    reserva = RESERVAS_REGISTRADAS.get(reserva_id)
-    if reserva is not None:
-        autorizar_departamento(
-            user, reserva["departamento_id"], reserva["condominio_id"], escritura=True
-        )
-    resultado = await cancelaciones.cancelar(
-        reserva_id, request or CancelarReservaRequest(), user, piloto=reserva
-    )
-    # El servicio ha completado el commit. Nunca adelantar este cambio al SQL.
-    if reserva is not None:
-        reserva["estado"] = "CANCELADA"
-    return resultado
+    return await cancelaciones.cancelar(reserva_id, request or CancelarReservaRequest(), user)

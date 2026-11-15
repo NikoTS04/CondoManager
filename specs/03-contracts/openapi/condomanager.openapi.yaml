@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: Base del Sprint 2 acordada en CON-72 y extensiones de identidad del Sprint 3. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
-  version: 2.6.0
+  version: 2.7.0
 x-contract-baseline: CON-72-2026-10-20
 x-contract-guide: ../../05-api/sprint-2-contratos.md
 x-account-statement-guide: ../../05-api/estado-de-cuenta.md
@@ -29,6 +29,38 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /ready:
+    get:
+      operationId: consultarDisponibilidadServicio
+      summary: Comprobar PostgreSQL y revisión/esquema del artefacto desplegado
+      tags: [Sistema]
+      security: []
+      x-implementation-status: implementado
+      responses:
+        '200':
+          description: PostgreSQL disponible y esquema compatible; no certifica workers ni correo.
+          headers:
+            Cache-Control:
+              schema: {type: string, const: no-store}
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status, database, schema_revision]
+                properties:
+                  status: {type: string, const: ok}
+                  database: {type: string, const: ok}
+                  schema_revision:
+                    type: array
+                    minItems: 1
+                    maxItems: 1
+                    items: {type: string}
+        '503':
+          description: Base inaccesible, timeout de 5 segundos o esquema incompatible; sin secretos.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
   /auth/activar:
     $ref: './identidad.paths.yaml#/paths/~1auth~1activar'
   /condominios/{condominio_id}/invitaciones:

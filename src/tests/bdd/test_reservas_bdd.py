@@ -19,7 +19,7 @@ try:
 except ImportError:
     HAS_PYTEST_BDD = False
 
-from src.modules.reservas.service import GestorReservasService, SolicitudReservaDTO
+from src.tests.reservas_legacy import GestorReservasService, SolicitudReservaDTO
 
 FEATURE_FILE = (
     Path(__file__).resolve().parent.parent.parent.parent

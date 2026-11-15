@@ -26,7 +26,13 @@ class AreasCatalogoFake:
         return self.datos.get(aid)
 
     async def ocupaciones(self, aid, cid, fecha):
-        return []
+        from src.tests.reservas_contrato import RESERVAS_REGISTRADAS
+
+        return [
+            r for r in RESERVAS_REGISTRADAS.values()
+            if r["area_id"] == aid and r["condominio_id"] == cid
+            and r["fecha_reserva"] == fecha and r["estado"] == "CONFIRMADA"
+        ]
 
     async def edificio(self, cid, eid):
         return None

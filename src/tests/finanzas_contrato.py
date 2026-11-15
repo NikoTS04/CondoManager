@@ -5,6 +5,7 @@ No es un fallback de producción. La aceptación financiera usa test_pagos_db.py
 
 from contextlib import asynccontextmanager
 from copy import deepcopy
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
@@ -27,6 +28,8 @@ class FinanzasContrato:
     def __init__(self):
         self.departamentos = deepcopy(DEPARTAMENTOS_PILOTO)
         self.comprobantes = {}
+        self.session = Mock(flush=AsyncMock())
+        self.repo = Mock(auditar=AsyncMock())
 
     def departamento(self, did, usuario, escritura=False):
         if not puede_ver_departamento(usuario, did):
