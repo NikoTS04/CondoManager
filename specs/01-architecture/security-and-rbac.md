@@ -46,7 +46,10 @@ sin datos del departamento que reservó.
   de nuevo. `SISTEMA_AUTOMATICO` sigue siendo un actor interno, nunca un rol de login.
 - El frontend restaura la sesión consultando `/auth/me`, descarta cachés de roles
   antiguos y valida el UUID seleccionado en URL/localStorage contra los vínculos.
-- El JWT dura 24 horas. No hay refresh token; la renovación se realiza mediante login.
+- La duración JWT usa `ACCESS_TOKEN_EXPIRE_MINUTES` (60 por defecto), también para
+  `expires_in`. No hay refresh token; la renovación se realiza mediante login.
+  CON-76 incorpora [invitación y activación de un uso](../02-domains/05-usuarios-rbac/invitacion-y-relevo.md)
+  y registro estructurado de rechazos sin secretos, con correlación por petición.
   `auth_revision` identifica la revisión persistida de la cuenta. Toda ruta protegida
   comprueba estado activo, revisión, asignación y contexto vigentes. Desactivar y
    reactivar una cuenta invalida los tokens previos, incluso antes de su expiración.

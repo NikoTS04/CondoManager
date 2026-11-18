@@ -45,6 +45,10 @@ services:
       - CONDOMINIO_PILOTO_ID=${CONDOMINIO_PILOTO_ID:-}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      - INVITACION_EXPIRE_HOURS=${INVITACION_EXPIRE_HOURS:-24}
+      - ACTIVACION_WEB_URL=${ACTIVACION_WEB_URL:-http://localhost:3000/activar}
+      - IDENTITY_DELIVERY_KEY=${IDENTITY_DELIVERY_KEY:-}
       - DEMO_MODE=${DEMO_MODE:-false}
       # CON-78: fija el transporte de los correos que la API encola (debe coincidir con el worker).
       - EMAIL_TRANSPORTE=${EMAIL_TRANSPORTE:-SMTP}
@@ -129,6 +133,7 @@ services:
       - SMTP_REMITENTE=${SMTP_REMITENTE:-avisos@condomanager.local}
       - SMTP_NOMBRE_REMITENTE=${SMTP_NOMBRE_REMITENTE:-CondoManager}
       - SMTP_TIMEOUT_SEGUNDOS=${SMTP_TIMEOUT_SEGUNDOS:-15}
+      - IDENTITY_DELIVERY_KEY=${IDENTITY_DELIVERY_KEY:-}
     depends_on:
       backend:
         condition: service_healthy

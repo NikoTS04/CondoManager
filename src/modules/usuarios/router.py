@@ -2,13 +2,16 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 
 from src.core.config import settings
 from src.core.errors import APIError
 from src.core.security import get_current_user
+from src.modules.usuarios.invitaciones import IdentidadService
 from src.modules.usuarios.repository import get_usuarios_repository
 from src.modules.usuarios.schemas import (
+    ActivacionResponse,
+    ActivarUsuarioRequest,
     AsignacionRolResponse,
     AsignarRolRequest,
     AsignarVinculoRequest,
@@ -16,7 +19,11 @@ from src.modules.usuarios.schemas import (
     CrearUsuarioRequest,
     CuentaUsuarioConRolResponse,
     CuentaUsuarioResponse,
+    InvitacionResponse,
+    InvitarUsuarioRequest,
     LoginRequest,
+    RelevoRequest,
+    RelevoResponse,
     TokenResponse,
     UserContextResponse,
     UsuarioDTO,
@@ -25,6 +32,92 @@ from src.modules.usuarios.schemas import (
 from src.modules.usuarios.service import UsuariosService
 
 router = APIRouter(tags=["Autenticación y RBAC"])
+
+
+@router.post("/auth/activar", response_model=ActivacionResponse)
+async def activar_usuario(
+    request: ActivarUsuarioRequest, repository=Depends(get_usuarios_repository)
+):
+    return await IdentidadService(repository).activar(request)
+
+
+@router.post(
+    "/condominios/{condominio_id}/invitaciones", response_model=InvitacionResponse, status_code=201
+)
+async def invitar_usuario(
+    condominio_id: UUID,
+    request: InvitarUsuarioRequest,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await IdentidadService(repository).invitar(
+        condominio_id, request, actor, idempotency_key
+    )
+
+
+@router.get("/condominios/{condominio_id}/invitaciones", response_model=list[InvitacionResponse])
+async def listar_invitaciones(
+    condominio_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await IdentidadService(repository).listar_invitaciones(
+        condominio_id, actor, limit, offset
+    )
+
+
+@router.post(
+    "/condominios/{condominio_id}/invitaciones/{invitacion_id}/reenviar",
+    response_model=InvitacionResponse,
+)
+async def reenviar_invitacion(
+    condominio_id: UUID,
+    invitacion_id: UUID,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await IdentidadService(repository).modificar_invitacion(
+        condominio_id,
+        invitacion_id,
+        actor,
+        idempotency_key,
+        reenviar=True,
+    )
+
+
+@router.delete(
+    "/condominios/{condominio_id}/invitaciones/{invitacion_id}", response_model=InvitacionResponse
+)
+async def revocar_invitacion(
+    condominio_id: UUID,
+    invitacion_id: UUID,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await IdentidadService(repository).modificar_invitacion(
+        condominio_id,
+        invitacion_id,
+        actor,
+        idempotency_key,
+    )
+
+
+@router.post("/condominios/{condominio_id}/relevos", response_model=RelevoResponse)
+async def relevar_acceso(
+    condominio_id: UUID,
+    request: RelevoRequest,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    actor: dict = Depends(get_current_user),
+    repository=Depends(get_usuarios_repository),
+):
+    return await IdentidadService(repository).relevar(
+        condominio_id, request, actor, idempotency_key
+    )
 
 
 @router.post("/auth/login", response_model=TokenResponse)

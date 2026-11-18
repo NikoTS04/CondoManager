@@ -12,6 +12,8 @@ interface ConciliacionSectionProps {
   comprobantes: ComprobantePago[];
   departamentos: DepartamentoRegistrado[];
   isAuditor: boolean;
+  busy?: boolean;
+  onResultado?: (id: string) => void;
   onDecide: (id: string, decision: "APROBADO" | "RECHAZADO" | "OBSERVADO") => void;
 }
 
@@ -20,6 +22,8 @@ export function ConciliacionSection({
   comprobantes,
   departamentos,
   isAuditor,
+  busy = false,
+  onResultado,
   onDecide,
 }: ConciliacionSectionProps) {
   if (loading) return <SkeletonList rows={5} label="Cargando comprobantes" />;
@@ -74,10 +78,16 @@ export function ConciliacionSection({
                   </td>
                   <td className="p-3 text-right">
                     <VoucherDownloadButton comprobante={comprobante} />
+                    {comprobante.estado !== "EN_REVISION" && onResultado && (
+                      <Button size="sm" variant="secondary" disabled={busy} onClick={() => onResultado(comprobante.id)}>
+                        Ver resultado
+                      </Button>
+                    )}
                     {!isAuditor && comprobante.estado === "EN_REVISION" && (
                       <div className="flex justify-end gap-2">
                         <Button
                           size="sm"
+                          disabled={busy}
                           onClick={() => onDecide(comprobante.id, "APROBADO")}
                         >
                           Aprobar
@@ -85,11 +95,12 @@ export function ConciliacionSection({
                         <Button
                           size="sm"
                           variant="danger"
+                          disabled={busy}
                           onClick={() => onDecide(comprobante.id, "RECHAZADO")}
                         >
                           Rechazar
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={() => onDecide(comprobante.id, "OBSERVADO")}>
+                        <Button size="sm" variant="secondary" disabled={busy} onClick={() => onDecide(comprobante.id, "OBSERVADO")}>
                           Observar
                         </Button>
                       </div>

@@ -1,12 +1,17 @@
 """Errores públicos consistentes, sin entradas sensibles en validaciones."""
 
+import json
+import logging
 from typing import Any
+from uuid import UUID
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
+
+logger = logging.getLogger("condomanager.seguridad")
 
 
 class ErrorResponse(BaseModel):
@@ -31,6 +36,29 @@ class APIError(Exception):
 
 
 async def api_error_handler(_request: Request, exc: APIError) -> JSONResponse:
+    if exc.status_code in (401, 403):
+        contexto = {}
+        for nombre in ("condominio_id", "departamento_id"):
+            valor = _request.path_params.get(nombre) or _request.query_params.get(nombre)
+            try:
+                contexto[nombre] = str(UUID(str(valor)))
+            except (ValueError, TypeError):
+                pass
+        ruta = _request.scope.get("route")
+        logger.info(
+            json.dumps(
+                {
+                    "evento": "ACCESO_DENEGADO",
+                    "actor_id": getattr(_request.state, "actor_seguridad", None),
+                    "ruta": getattr(ruta, "path", _request.url.path),
+                    "contexto": contexto,
+                    "codigo": exc.error_code,
+                    "estado": exc.status_code,
+                    "correlacion": getattr(_request.state, "correlacion", None),
+                },
+                ensure_ascii=False,
+            )
+        )
     payload = {"error_code": exc.error_code, "mensaje": exc.mensaje}
     if exc.detalles is not None:
         payload["detalles"] = exc.detalles
@@ -87,7 +115,12 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
         codigo = "DATOS_VINCULO_INVALIDOS"
     elif path.endswith("/rol"):
         codigo = "DATOS_ROL_INVALIDOS"
-    elif path.startswith(("/api/v1/usuarios", "/api/v1/auth")) or path.endswith("/usuarios"):
+    elif (
+        path.startswith(("/api/v1/usuarios", "/api/v1/auth"))
+        or path.endswith("/usuarios")
+        or "/invitaciones" in path
+        or path.endswith("/relevos")
+    ):
         codigo = "DATOS_USUARIO_INVALIDOS"
     elif path == "/api/v1/cuotas/emitir-lote":
         codigo = "DATOS_EMISION_INVALIDOS"

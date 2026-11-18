@@ -6,14 +6,20 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import Depends, UploadFile
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.authorization import contexto_consulta, puede_ver_departamento
 from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.modules.condominios.models import Condominio, Departamento, Edificio
-from src.modules.pagos.contabilidad import CERO, MAX_MONEDA, plan_imputacion, saldo_en_mora
+from src.modules.pagos.contabilidad import (
+    CERO,
+    MAX_MONEDA,
+    plan_imputacion,
+    saldo_en_mora,
+    validar_conservacion_pago,
+)
 from src.modules.pagos.fondos import FondosMorasService
 from src.modules.pagos.models import ComprobantePago, ImputacionPago
 from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutbox, RevisionPago
@@ -36,6 +42,22 @@ class PagosPersistentesService:
         self.session = session
         self.repo = SQLAlchemyPagosRepository(session)
         self.storage = storage or VoucherStorage()
+
+    @staticmethod
+    def fotografia(depto, cuotas):
+        return {
+            "saldo_a_favor": f"{depto.saldo_a_favor:.2f}",
+            "estado_financiero": depto.estado_financiero,
+            "cuotas": {
+                str(c.id): {
+                    "total": f"{c.monto_total_exigible:.2f}",
+                    "pagado": f"{c.monto_pagado:.2f}",
+                    "mora": f"{c.monto_mora:.2f}",
+                    "estado": c.estado,
+                }
+                for c in cuotas
+            },
+        }
 
     @staticmethod
     def dto(c: ComprobantePago) -> ComprobantePagoDTO:
@@ -274,7 +296,7 @@ class PagosPersistentesService:
                 )
             ahora = datetime.now(UTC)
             hoy = fecha_lima()
-            anterior = {"estado": comprobante.estado, "saldo_a_favor": str(depto.saldo_a_favor)}
+            anterior = {"estado": comprobante.estado, **self.fotografia(depto, cuotas)}
             total_aplicado, credito = CERO, CERO
             if request.decision == "APROBADO" and comprobante.fecha_operacion > hoy:
                 raise APIError(
@@ -339,6 +361,7 @@ class PagosPersistentesService:
                         usuario,
                         legacy=imputaciones,
                     )
+                validar_conservacion_pago(comprobante.monto, total_aplicado, credito)
                 depto.estado_financiero = (
                     "EN_MORA"
                     if saldo_en_mora(cuotas, condominio.dias_gracia, hoy) > CERO
@@ -379,7 +402,11 @@ class PagosPersistentesService:
                 f"REVISION_PAGO_{request.decision}",
                 motivo or "APROBACION_PAGO_CON70",
                 anterior,
-                {**resultado.model_dump(mode="json"), "saldo_a_favor": str(depto.saldo_a_favor)},
+                {
+                    **resultado.model_dump(mode="json"),
+                    **self.fotografia(depto, cuotas),
+                    "fecha_operacion": comprobante.fecha_operacion.isoformat(),
+                },
             )
             evento = {
                 "APROBADO": "PagoConciliadoEvent",
@@ -416,8 +443,17 @@ class PagosPersistentesService:
             select(RevisionPago)
             .where(
                 RevisionPago.comprobante_id == comprobante.id,
+                RevisionPago.decision == comprobante.estado,
+                or_(
+                    RevisionPago.archivo_nombre == comprobante.url_voucher,
+                    RevisionPago.archivo_nombre.is_(None),
+                ),
             )
-            .order_by(RevisionPago.creado_en.desc(), RevisionPago.id.desc())
+            .order_by(
+                RevisionPago.archivo_nombre.is_not(None).desc(),
+                RevisionPago.creado_en.desc(),
+                RevisionPago.id.desc(),
+            )
             .limit(1)
         )
         return (

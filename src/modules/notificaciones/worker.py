@@ -6,6 +6,7 @@ import logging
 import random
 import re
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 from redis.asyncio import Redis
@@ -162,21 +163,28 @@ async def procesar_uno(
         )
         if log is None:
             return False
-        destinos = await NotificacionesRepository(db).destinatarios(
-            log.condominio_id,
-            log.departamento_id,
-            log.canal,
-        )
-        if not any(
-            u.id == log.usuario_destinatario_id and c == log.destinatario for u, _, c in destinos
-        ):
+        if log.finalidad == "OPERATIVA":
+            destinos = await NotificacionesRepository(db).destinatarios(
+                log.condominio_id,
+                log.departamento_id,
+                log.canal,
+            )
+            valido = any(
+                u.id == log.usuario_destinatario_id and c == log.destinatario
+                for u, _, c in destinos
+            )
+        else:
+            from src.modules.usuarios.comunicaciones import destinatario_identidad_valido
+
+            valido = await destinatario_identidad_valido(db, log, ahora)
+        if not valido:
             log.estado = "FALLIDO_PERMANENTE"
             log.error_mensaje = "DESTINATARIO_REVOCADO_O_CONTACTO_MODIFICADO"
             log.proximo_reintento = None
             await crear_alerta(db, log, "DESTINATARIO_INVALIDO", ahora)
             return True
-        # CON-78: el transporte se fijó al encolar; un mensaje del proveedor nunca se
-        # acredita con el simulado aunque falte la configuración del worker.
+        # CON-78: el transporte se fijó al encolar. Una fila PROVEEDOR (operativa o de
+        # identidad) solo sale por el proveedor; nunca se acredita con el simulado.
         envio = transport
         if log.transporte != "SIMULADO":
             envio = transporte_proveedor(settings) if proveedor is PROVEEDOR_ENTORNO else proveedor
@@ -201,7 +209,14 @@ async def procesar_uno(
         clave = f"{lid}-{log.ciclo}-{log.intentos}"
     # El intento ya es durable antes del efecto externo. No mantener locks de SQL en red.
     try:
-        resultado = await asyncio.to_thread(envio, log, clave)
+        from src.modules.usuarios.comunicaciones import contenido_entrega
+
+        # El cuerpo descifrado vive únicamente en la llamada de transporte, no en el ORM.
+        entrega = SimpleNamespace(
+            **{c.name: getattr(log, c.name) for c in Notificacion.__table__.columns}
+        )
+        entrega.cuerpo = contenido_entrega(log)
+        resultado = await asyncio.to_thread(envio, entrega, clave)
     except Exception:
         resultado = {"status": 500, "error": "FALLO_TRANSPORTE"}
     ahora = reloj_fijo or datetime.now(UTC)
@@ -293,6 +308,13 @@ async def main():
     redis = Redis.from_url(
         settings.REDIS_URL, decode_responses=True, socket_timeout=10, socket_connect_timeout=10
     )
+    # CON-78: el adaptador SMTP se construye una vez al arrancar. Sin configuración completa
+    # las filas PROVEEDOR quedan FALLIDO_PERMANENTE con alerta, nunca simuladas.
+    proveedor = transporte_proveedor(settings)
+    if proveedor is None:
+        logger.warning("Proveedor de correo no configurado: las filas PROVEEDOR no se enviarán.")
+    else:
+        logger.info("Proveedor de correo SMTP configurado.")
     try:
         while True:
             try:
@@ -304,7 +326,7 @@ async def main():
                 await recuperar_eventos()
                 await recuperar_inciertos()
                 for _ in range(100):
-                    if not await procesar_uno():
+                    if not await procesar_uno(proveedor=proveedor):
                         break
             except Exception:
                 logger.exception("Cola de notificaciones pendiente de recuperación.")

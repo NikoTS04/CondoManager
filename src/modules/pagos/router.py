@@ -131,9 +131,12 @@ async def listar_evidencias(
 @router.get("/pagos/{comprobante_id}/resultado", response_model=ConciliacionResultResponse)
 async def consultar_resultado(
     comprobante_id: UUID,
+    response: Response,
     user: dict = Depends(get_current_user),
     service=Depends(get_pagos_service),
 ):
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "Authorization"
     return await service.resultado(comprobante_id, user)
 
 
@@ -141,9 +144,12 @@ async def consultar_resultado(
 async def conciliar_pago(
     comprobante_id: UUID,
     request: ConciliarPagoRequest,
+    response: Response,
     user: dict = Depends(require_role(["ADMIN_JUNTA", "SUPERADMIN"])),
     service=Depends(get_pagos_service),
 ):
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "Authorization"
     return await service.revisar(comprobante_id, request, user)
 
 

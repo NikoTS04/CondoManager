@@ -4,14 +4,18 @@ import sys
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from PIL import Image
 from pypdf import PdfWriter
 
 from src.core.errors import APIError
-from src.modules.pagos.contabilidad import plan_imputacion, saldo_en_mora
+from src.modules.pagos.contabilidad import (
+    plan_imputacion,
+    saldo_en_mora,
+    validar_conservacion_pago,
+)
 from src.modules.pagos.storage import MAX_BYTES, VoucherStorage
 
 
@@ -26,6 +30,7 @@ def cuota(**extra):
             "monto_total_exigible": Decimal("100.00"),
             "monto_pagado": Decimal("0.00"),
             "fecha_vencimiento": date(2026, 10, 20),
+            "fecha_emision": date(2026, 10, 1),
             "dias_gracia_aplicados": None,
             **extra,
         }
@@ -55,6 +60,65 @@ def test_pagos_previos_y_futuras_no_se_cuentan_dos_veces():
     plan = plan_imputacion([parcial, futura], Decimal("100.00"), date(2026, 10, 25))
     assert plan["aplicaciones"] == {parcial.id: Decimal("85.00")}
     assert plan["remanente"] == Decimal("15.00")
+
+
+@pytest.mark.parametrize("monto", ["0.01", "15.00", "65.00", "195.00", "235.00", "250.00"])
+def test_prelacion_completa_y_conservacion_independientes_del_orden(monto):
+    a = cuota(
+        id=UUID(int=1),
+        periodo="2026-08",
+        fecha_emision=date(2026, 8, 1),
+        fecha_vencimiento=date(2026, 8, 10),
+        monto_mora=Decimal("5.00"),
+        monto_extraordinario=Decimal("20.00"),
+        monto_total_exigible=Decimal("95.00"),
+    )
+    b = cuota(
+        id=UUID(int=2),
+        periodo="2026-09",
+        fecha_emision=date(2026, 9, 1),
+        fecha_vencimiento=date(2026, 9, 10),
+        monto_mora=Decimal("10.00"),
+        monto_extraordinario=Decimal("30.00"),
+        monto_total_exigible=Decimal("100.00"),
+    )
+    actual = cuota(id=UUID(int=3), monto_total_exigible=Decimal("40.00"))
+    importe = Decimal(monto)
+    plan = plan_imputacion([actual, b, a], importe, date(2026, 10, 5))
+    assert plan == plan_imputacion([a, b, actual], importe, date(2026, 10, 5))
+    assert sum(plan["aplicaciones"].values(), Decimal("0.00")) + plan["remanente"] == importe
+    restante = importe
+    esperados = {a.id: [Decimal(0)] * 3, b.id: [Decimal(0)] * 3, actual.id: [Decimal(0)] * 3}
+    for cid, tipo, pendiente in [
+        (a.id, 0, 5),
+        (b.id, 0, 10),
+        (a.id, 1, 20),
+        (b.id, 1, 30),
+        (a.id, 2, 70),
+        (b.id, 2, 60),
+        (actual.id, 2, 40),
+    ]:
+        aplicado = min(restante, Decimal(pendiente))
+        esperados[cid][tipo] = aplicado
+        restante -= aplicado
+    assert plan["componentes"] == {cid: v for cid, v in esperados.items() if any(v)}
+    assert plan["remanente"] == restante
+
+
+def test_no_imputa_cuota_emitida_despues_de_fecha_bancaria():
+    posterior = cuota(fecha_emision=date(2026, 10, 15))
+    plan = plan_imputacion([posterior], Decimal("100.00"), date(2026, 10, 10))
+    assert plan == {"aplicaciones": {}, "componentes": {}, "remanente": Decimal("100.00")}
+
+
+@pytest.mark.parametrize(
+    "aplicado,credito",
+    [("101.00", "0.00"), ("99.00", "0.00"), ("-1.00", "101.00"), ("NaN", "0.00")],
+)
+def test_conservacion_rechaza_planes_inconsistentes(aplicado, credito):
+    with pytest.raises(APIError) as exc:
+        validar_conservacion_pago(Decimal("100.00"), Decimal(aplicado), Decimal(credito))
+    assert exc.value.error_code == "IMPUTACION_PAGO_INCONSISTENTE"
 
 
 @pytest.mark.parametrize("formato,extension", [("PNG", ".png"), ("JPEG", ".jpg"), ("PDF", ".pdf")])

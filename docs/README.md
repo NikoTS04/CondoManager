@@ -5,6 +5,7 @@
 | [Equipo](./equipo/) | Roles y responsabilidades del equipo. |
 | [Producto](./producto/) | Backlog e historias de usuario del producto. |
 | [Procesos](./procesos/) | Diagramas y flujos BPMN del negocio; [CI/CD y verificaciones](./procesos/CI-CD.md). |
+| [Diagramas de Jerson](./diagramas/jerson/) | Cinco diagramas BPMN 2.0 en PNG con sus modelos editables: CON-3, CON-04, CON-05, CON-06 y CON-39. |
 | [Sprints](./sprints/) | Planificación y alcance de cada sprint. |
 
 Las especificaciones técnicas y funcionales detalladas se mantienen en [`specs/`](../specs/).
@@ -13,6 +14,7 @@ Las especificaciones técnicas y funcionales detalladas se mantienen en [`specs/
 
 - [Sprint 3 — Usuarios y seguridad: reparto, dependencias, orden y criterios de cierre](sprints/SPRINT-3.md).
 - [Revisión de preparación: contraste de Jira con implementación y evidencia](sprints/SPRINT-3-REVISION.md).
+- [CON-7/76: invitación, activación, relevos y evidencia local de Jerson](sprints/CON-7-76.md).
 - [CON-77: aislamiento por condominio, verificaciones locales y pendientes de integración](sprints/CON-77-aislamiento.md).
 
 ## Entrega del Sprint 2

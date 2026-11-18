@@ -6,6 +6,11 @@ Los UUID de usuario proceden de la base de datos; los identificadores `usr-*` de
 ejemplos históricos no son identidades de login persistentes. El JWT v2 incorpora
 `auth_revision`, comprobada en cada petición protegida.
 
+CON-76 añade [invitación, activación de un uso y relevo](invitacion-y-relevo.md)
+manteniendo la identidad global y el contrato de sesión. Los avisos de seguridad
+tienen elegibilidad propia; no habilitan comunicaciones operativas tras revocar
+un rol o vínculo.
+
 CON-06 incorpora `usuario_roles.es_activo`. Login y `/auth/me` solo resuelven
 asignaciones activas en condominios activos; revocar o cambiar un rol invalida
 las sesiones previas de la identidad. Contrato de gestión:

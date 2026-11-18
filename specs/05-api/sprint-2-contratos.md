@@ -104,6 +104,9 @@ Política base de compensación: solo se considera un cobro efectivo registrado 
 
 ## 5. Pagos — Anderson y Brandon; persistencia CON-70
 
+CON-25/26/27/28 consolidan este mismo contrato: [incremento Sprint 3](pagos-sprint-3.md).
+No crean un motor alternativo ni sustituyen la consulta de CON-14 o los filtros de CON-24.
+
 ### Reporte y recuperación
 
 `POST /pagos/reportar` es multipart único: `departamento_id`, `banco`, `numero_operacion`, `fecha_operacion`, `monto`, `archivo_voucher`. Banco normalizado entre YAPE, PLIN, BCP, INTERBANK, BBVA, SCOTIABANK. Operación de 1–50 caracteres, sin espacios tras normalizar. Voucher PNG/JPEG/PDF de hasta **5 MiB (5242880 bytes)**; validar contenido real y rechazar formatos ajenos, no solo comprobar nombre/MIME declarado.

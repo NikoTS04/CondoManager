@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from sqlalchemy.exc import IntegrityError
 
 from src.core.audit import AuditoriaPayload
+from src.core.config import settings
 from src.core.errors import APIError
 from src.core.models_audit import AuditoriaLogORM
 from src.core.security import create_access_token, hash_password, validar_sesion, verify_password
@@ -62,7 +63,11 @@ class UsuariosService:
                 "auth_revision": usuario.auth_revision,
             }
         )
-        return TokenResponse(access_token=token, usuario=perfil)
+        return TokenResponse(
+            access_token=token,
+            usuario=perfil,
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        )
 
     async def _autorizar(self, condominio_id, actor, *, bloquear=False):
         if actor["rol"] not in {"SUPERADMIN", "ADMIN_JUNTA"} or (
@@ -109,22 +114,33 @@ class UsuariosService:
             ),
             hash_previo=await self.repo.ultimo_hash(cid),
         )
-        await self.repo.agregar(
-            AuditoriaLogORM(
-                condominio_id=cid,
-                departamento_id=departamento_id,
-                timestamp=payload.timestamp,
-                accion_ejecutada=payload.accion_ejecutada,
-                motivo=payload.motivo,
-                resultado=payload.resultado,
-                actor_tipo=payload.actor_tipo,
-                actor_id=payload.actor_id,
-                estado_anterior=payload.estado_anterior,
-                estado_posterior=payload.estado_posterior,
-                hash_previo=payload.hash_previo,
-                hash_actual=payload.calcular_hash(),
-            )
+        registro = AuditoriaLogORM(
+            condominio_id=cid,
+            departamento_id=departamento_id,
+            timestamp=payload.timestamp,
+            accion_ejecutada=payload.accion_ejecutada,
+            motivo=payload.motivo,
+            resultado=payload.resultado,
+            actor_tipo=payload.actor_tipo,
+            actor_id=payload.actor_id,
+            estado_anterior=payload.estado_anterior,
+            estado_posterior=payload.estado_posterior,
+            hash_previo=payload.hash_previo,
+            hash_actual=payload.calcular_hash(),
         )
+        await self.repo.agregar(registro)
+        if accion in {
+            "ROL_ASIGNADO",
+            "ROL_CAMBIADO",
+            "ROL_REVOCADO",
+            "VINCULO_CREADO",
+            "VINCULO_CAMBIADO",
+            "VINCULO_REVOCADO",
+            "USUARIO_ESTADO_CAMBIADO",
+        }:
+            from src.modules.usuarios.comunicaciones import aviso_cambio
+
+            await self.repo.agregar(aviso_cambio(cid, usuario, registro, departamento_id))
 
     async def crear(self, cid: UUID, request: CrearUsuarioRequest, actor: dict) -> Usuario:
         await self._autorizar(cid, actor, bloquear=True)
@@ -180,7 +196,28 @@ class UsuariosService:
             )
         await self.repo.bloquear_contextos(contextos)
         await self._autorizar(cid, actor)
-        if usuario.esta_activo != esta_activo:
+        if esta_activo and usuario.activacion_pendiente:
+            raise APIError(409, "ACTIVACION_REQUERIDA", "La cuenta debe activar su invitación.")
+        revocadas = []
+        if not esta_activo and usuario.activacion_pendiente:
+            from sqlalchemy import select
+
+            from src.modules.usuarios.invitaciones_models import InvitacionUsuario
+
+            revocadas = list(
+                await self.repo.session.scalars(
+                    select(InvitacionUsuario)
+                    .where(
+                        InvitacionUsuario.usuario_id == usuario_id,
+                        InvitacionUsuario.utilizada_en.is_(None),
+                        InvitacionUsuario.revocada_en.is_(None),
+                    )
+                    .with_for_update()
+                )
+            )
+            for invitacion in revocadas:
+                invitacion.revocada_en = datetime.now(UTC)
+        if usuario.esta_activo != esta_activo or revocadas:
             anterior = CuentaUsuarioResponse.model_validate(usuario).model_dump(mode="json")
             usuario.esta_activo = esta_activo
             usuario.auth_revision += 1
@@ -197,7 +234,9 @@ class UsuariosService:
             raise APIError(404, "ROL_NO_ENCONTRADO", "No existe una asignación en este condominio.")
         return asignacion
 
-    async def gestionar_rol(self, cid: UUID, usuario_id: UUID, rol: str | None, actor: dict):
+    async def gestionar_rol(
+        self, cid: UUID, usuario_id: UUID, rol: str | None, actor: dict, *, confirmar=True
+    ):
         """PUT asigna/reactiva; DELETE (rol=None) revoca sin borrar la asignación."""
         await self._autorizar(cid, actor)
         if str(usuario_id) == actor["sub"]:
@@ -256,7 +295,8 @@ class UsuariosService:
             posterior=AsignacionRolResponse.model_validate(asignacion).model_dump(mode="json"),
             motivo="GESTION_ROLES_PERMISOS",
         )
-        await self.repo.confirmar()
+        if confirmar:
+            await self.repo.confirmar()
         return asignacion
 
     async def _asignacion_para_vinculo(self, cid, uid, *, vigente=False):
@@ -276,7 +316,7 @@ class UsuariosService:
         return await self.repo.vinculos_usuario(uid, cid)
 
     async def gestionar_vinculo(
-        self, cid: UUID, uid: UUID, did: UUID, relacion: str | None, actor: dict
+        self, cid: UUID, uid: UUID, did: UUID, relacion: str | None, actor: dict, *, confirmar=True
     ):
         await self._autorizar(cid, actor)
         await self._asignacion_para_vinculo(cid, uid)
@@ -325,7 +365,8 @@ class UsuariosService:
             else {}
         )
         retirando_responsable = (
-            relacion is None and vinculo is not None
+            relacion is None
+            and vinculo is not None
             and getattr(departamento, "responsable_pago_id", None) == vinculo.id
         )
         if retirando_responsable:
@@ -360,7 +401,8 @@ class UsuariosService:
                 motivo="GESTION_VINCULOS_DEPARTAMENTOS",
                 departamento_id=did,
             )
-            await self.repo.confirmar()
+            if confirmar:
+                await self.repo.confirmar()
         except IntegrityError as exc:
             nombre = getattr(getattr(exc.orig, "__cause__", None), "constraint_name", "")
             if nombre == "uq_usuario_depto":

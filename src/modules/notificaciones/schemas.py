@@ -108,7 +108,7 @@ class AlertaNotificacionDTO(BaseModel):
     id: uuid.UUID
     notificacion_id: uuid.UUID
     condominio_id: str
-    departamento_id: str
+    departamento_id: str | None
     departamento_numero: str
     tipo_evento: str
     ciclo: int = Field(ge=1)
