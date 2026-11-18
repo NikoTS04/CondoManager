@@ -1,5 +1,5 @@
 # Dockerfile para el Backend FastAPI de CondoManager
-FROM python:3.12-slim AS base
+FROM python:3.15-slim AS base
 
 # Variables de entorno para Python
 ENV PYTHONUNBUFFERED=1 \
