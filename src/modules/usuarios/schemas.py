@@ -19,6 +19,13 @@ class LoginRequest(BaseModel):
     password: SecretStr = Field(..., max_length=128, description="Contraseña")
     condominio_id: UUID | None = None
 
+    @field_validator("email")
+    @classmethod
+    def validar_email(cls, value: str) -> str:
+        if "\x00" in value:
+            raise ValueError("El correo electrónico no puede contener caracteres nulos.")
+        return value
+
 
 class CrearUsuarioRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
