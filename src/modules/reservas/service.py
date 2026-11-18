@@ -13,8 +13,6 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel
-
 from src.core.audit import AuditoriaPayload
 from src.modules.reservas.models import Reserva
 from src.modules.reservas.repository import ReservasRepository
@@ -85,58 +83,6 @@ class HorarioInvalidoException(Exception):
         super().__init__(mensaje)
         self.error_code = "HORARIO_INVALIDO"
         self.mensaje = mensaje
-
-
-# ============================================================================
-# Compatibilidad con Suite de Pruebas BDD / Unitarias Iniciales
-# ============================================================================
-
-
-class SolicitudReservaDTO(BaseModel):
-    condominio_id: str
-    departamento_id: str
-    usuario_id: str
-    area_id: str
-    fecha_reserva: date
-    hora_inicio: time
-    hora_fin: time
-
-
-class ResultadoReservaDTO(BaseModel):
-    es_exitosa: bool
-    reserva_id: Optional[str] = None
-    motivo: str
-    bloqueado_por_mora: bool = False
-
-
-class GestorReservasService:
-    @staticmethod
-    def validar_y_procesar_reserva(
-        solicitud: SolicitudReservaDTO,
-        deuda_vencida_departamento: Decimal,
-        esta_horario_disponible: bool,
-    ) -> ResultadoReservaDTO:
-        """Ciclo de Automatización simplificado para pruebas en memoria."""
-        if deuda_vencida_departamento > Decimal("0.00"):
-            return ResultadoReservaDTO(
-                es_exitosa=False,
-                motivo="Reserva rechazada: Su departamento mantiene cuotas vencidas pendientes en mora.",
-                bloqueado_por_mora=True,
-            )
-
-        if not esta_horario_disponible:
-            return ResultadoReservaDTO(
-                es_exitosa=False,
-                motivo="Reserva rechazada: El área común seleccionada ya se encuentra reservada en ese horario.",
-                bloqueado_por_mora=False,
-            )
-
-        return ResultadoReservaDTO(
-            es_exitosa=True,
-            reserva_id=f"res-{uuid.uuid4()}",
-            motivo="Reserva confirmada exitosamente.",
-            bloqueado_por_mora=False,
-        )
 
 
 # ============================================================================
@@ -211,7 +157,7 @@ class ReservasService:
         saldo_mora_depto: Decimal,
         reservas_existentes: List[Dict[str, Any]],
     ) -> Tuple[ReservaResponseDTO, AuditoriaPayload]:
-        """Orquesta la creación de una reserva en memoria con validación atómica de solvencia y calendario."""
+        """Calcula DTO y auditoría sin almacenar estado; el llamador controla la transacción."""
         cls._validar_reglas_horario_y_area(request, area)
 
         # 1. Invariante Innegociable de Solvencia Financiera (CON-41 / CON-42)

@@ -6,6 +6,13 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 ## Matriz de Trazabilidad de Extremo a Extremo (End-to-End)
 
+### Persistencia y ambiente Sprint 3 — Nicolás
+
+| Ticket | Especificación / contrato | Verificación | Código / evidencia |
+|---|---|---|---|
+| CON-80 | `02-domains/04-reservas/persistencia-sprint-2.md`, `04-acceptance-criteria/reservas-areas.feature.md` | `src/tests/integration/test_con80_con81_db.py`: procesos independientes, reinicio y esquema ausente; regresiones de cancelación y outbox | `src/modules/reservas/{router,disponibilidad,cancelaciones}.py`, `docs/sprints/CON-80-81.md` |
+| CON-81 | `05-operations/deployment-and-runbooks.md`, `04-acceptance-criteria/ambiente-demo.feature.md`, OpenAPI `/ready` | `src/tests/unit/test_readiness.py`, `test_con80_con81_db.py`; migraciones y recuperación de ensayo documentadas | `src/core/readiness.py`, `Dockerfile`, misma entrega; no certifica correo real ni el volumen compartido sin ensayo propio |
+
 ### Identidad y cambios de acceso Sprint 3 — Jerson
 
 Contrato: [invitación y relevo](../02-domains/05-usuarios-rbac/invitacion-y-relevo.md).

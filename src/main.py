@@ -15,6 +15,7 @@ from src.core.errors import (
     request_validation_handler,
     unexpected_error_handler,
 )
+from src.core.readiness import router as readiness_router
 from src.modules.condominios.condiciones_pago import router as condiciones_pago_router
 from src.modules.condominios.estructura.router import router as estructura_router
 from src.modules.condominios.router import router as condominios_router
@@ -65,6 +66,7 @@ async def correlacion_seguridad(request: Request, call_next):
     return response
 
 
+app.include_router(readiness_router)
 app.include_router(usuarios_router, prefix="/api/v1")
 app.include_router(condominios_router, prefix="/api/v1")
 app.include_router(condiciones_pago_router, prefix="/api/v1")
