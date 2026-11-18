@@ -20,6 +20,11 @@ from src.modules.cuotas.models import EventoLoteOutbox
 from src.modules.notificaciones.alertas import crear_alerta
 from src.modules.notificaciones.consumo import consumir
 from src.modules.notificaciones.models import EventoConsumido, IntentoNotificacion, Notificacion
+from src.modules.notificaciones.recordatorios import (
+    TIPO_RECORDATORIO,
+    ProgramadorDiario,
+    motivo_supresion,
+)
 from src.modules.notificaciones.repository import NotificacionesRepository
 from src.modules.notificaciones.service import (
     ERRORES_DEFINITIVOS,
@@ -183,6 +188,16 @@ async def procesar_uno(
             log.proximo_reintento = None
             await crear_alerta(db, log, "DESTINATARIO_INVALIDO", ahora)
             return True
+        if log.tipo_evento == TIPO_RECORDATORIO:
+            # CON-33: la elegibilidad se decide aquí, bajo bloqueo de la cuota y antes del
+            # intento; una cuota pagada registra la supresión sin llegar al transporte.
+            motivo = await motivo_supresion(db, log, ahora)
+            if motivo:
+                log.estado = "SUPRIMIDO"
+                log.error_mensaje = motivo
+                log.proximo_reintento = None
+                log.fecha_actualizacion = ahora
+                return True
         # CON-78: el transporte se fijó al encolar. Una fila PROVEEDOR (operativa o de
         # identidad) solo sale por el proveedor; nunca se acredita con el simulado.
         envio = transport
@@ -315,6 +330,7 @@ async def main():
         logger.warning("Proveedor de correo no configurado: las filas PROVEEDOR no se enviarán.")
     else:
         logger.info("Proveedor de correo SMTP configurado.")
+    programador = ProgramadorDiario()
     try:
         while True:
             try:
@@ -325,6 +341,8 @@ async def main():
             try:
                 await recuperar_eventos()
                 await recuperar_inciertos()
+                if (nuevos := await programador.tick()) is not None:
+                    logger.info("Recordatorios de vencimiento programados: %s nuevos.", nuevos)
                 for _ in range(100):
                     if not await procesar_uno(proveedor=proveedor):
                         break

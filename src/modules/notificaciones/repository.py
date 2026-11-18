@@ -55,10 +55,11 @@ class NotificacionesRepository:
         ]
 
     async def encolar(
-        self, *, cid, did, usuario, contacto, evento, operacion, tipo, canal, contexto
+        self, *, cid, did, usuario, contacto, evento, operacion, tipo, canal, contexto, id=None
     ):
+        """Inserta o devuelve el mensaje lógico existente; `resultado.id == id` indica alta."""
         asunto, cuerpo = PlantillasService.renderizar(tipo, contexto)
-        id = uuid4()
+        id = id or uuid4()
         await self.session.execute(
             insert(Notificacion)
             .values(

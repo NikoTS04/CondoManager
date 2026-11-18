@@ -148,7 +148,7 @@ export interface NotificacionLog {
   destinatario: string;
   asunto: string | null;
   cuerpo: string;
-  estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
+  estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA" | "SUPRIMIDO";
   intentos: number;
   ciclo: number;
   transporte: "SIMULADO" | "PROVEEDOR";

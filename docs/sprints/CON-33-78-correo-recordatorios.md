@@ -8,7 +8,7 @@ Plan: [Sprint 3](SPRINT-3.md#con-78--correo-transaccional-real--alejandro). Pol�
 | Ticket | Estado | Rama |
 |---|---|---|
 | [CON-78](https://tarquisoncco2.atlassian.net/browse/CON-78) | Primer incremento: adaptador SMTP, selección de transporte y aceptación incierta. Pendiente contrato de identidad (CON-76) y demo con proveedor real. | `feat/PROC-03-con78-correo-real` |
-| [CON-33](https://tarquisoncco2.atlassian.net/browse/CON-33) | Sin iniciar. Requiere acordar con Anderson el instante de elegibilidad frente a un pago concurrente. | — |
+| [CON-33](https://tarquisoncco2.atlassian.net/browse/CON-33) | Implementado: programación diaria, deduplicación SQL, revalidación bajo bloqueo y supresión. Pendiente: confirmar con Anderson el instante de elegibilidad (propuesta abajo) y recibir el recordatorio en correo real. | `feat/PROC-03-con78-correo-real` |
 
 ## CON-78 — Qué entrega este incremento
 
@@ -32,7 +32,50 @@ Entorno: macOS, Python 3.14, PostgreSQL 16 desechable (puerto 55432), Mailpit v1
 
 ## Pendiente para cerrar CON-78
 
-1. **Contrato de identidad con Jerson (CON-76):** invitaciones y avisos de cambio de acceso no tienen `departamento_id` ni vínculo activo; la cola actual lo exige (`notificaciones_logs.departamento_id NOT NULL` y revalidación de destinatario en el worker). Proponer una clase de mensaje de identidad con su propia revalidación (cuenta + contexto) sin relajar la de mensajes operativos.
+1. ~~**Contrato de identidad con Jerson (CON-76).**~~ Resuelto al integrar `develop`: finalidades `OPERATIVA`/`INVITACION`/`SEGURIDAD` con revalidación propia. El worker atiende filas `SIMULADO` con `transport` y toda fila `PROVEEDOR` (de cualquier finalidad) con `proveedor`, construido una vez al arrancar desde la configuración SMTP.
 2. **Proveedor del ambiente demo con Nicolás (CON-81):** elegir proveedor SMTP, credenciales en `.env` del ambiente, prueba con cuentas autorizadas y evidencia SQL de intentos.
 3. Plantillas nuevas de identidad (invitación, activación, cambio de acceso) cuando exista el contrato.
 4. Recorrido en navegador: despacho/comunicado desde la Junta → correo en Mailpit/proveedor → estado `ENVIADO` visible.
+
+## CON-33 — Recordatorios de vencimiento
+
+Código: [`recordatorios.py`](../../src/modules/notificaciones/recordatorios.py), revalidación en
+[`worker.py`](../../src/modules/notificaciones/worker.py) y migración
+`20261118_0022_recordatorios_vencimiento` (estado `SUPRIMIDO`).
+
+| Regla | Implementación |
+|---|---|
+| Configuración | `RECORDATORIOS_ACTIVOS` (true), `RECORDATORIO_DIAS_ANTICIPACION` (3), `RECORDATORIO_HORA_LIMA` (8). Solo canal EMAIL. |
+| Programación | `ProgramadorDiario` corre dentro del worker de notificaciones: una pasada por fecha de Lima desde la hora configurada. |
+| Selección SQL | Cuotas con `monto_pagado < monto_total_exigible`, departamento y condominio activos y `hoy ≤ fecha_vencimiento ≤ hoy + N` (America/Lima). Destinatarios: los mismos vínculos activos con email que el resto de avisos operativos (propietario e inquilino). |
+| Fechas pasadas | Nunca se programan cuotas ya vencidas. La ventana recupera días perdidos por un worker caído solo para vencimientos futuros o de hoy. Si el despacho llega después del vencimiento, la fila queda `SUPRIMIDO_VENCIMIENTO_PASADO`. |
+| Identidad estable | `evento_id` = cuota, `operacion_id` = uuid5(cuota, vencimiento); con `uq_notificacion_logica` el mensaje lógico es único por cuota, fecha, destinatario y canal. Dos workers, reintentos y reinicios no duplican. Un cambio de vencimiento genera un recordatorio nuevo y suprime el anterior (`SUPRIMIDO_VENCIMIENTO_MODIFICADO`). |
+| Revalidación | Antes de cada intento, con la fila de la cola bloqueada, el worker lee la cuota con `FOR SHARE`. Sin saldo → `SUPRIMIDO_CUOTA_PAGADA`, sin intento ni transporte. Con saldo → re-renderiza el cuerpo con el saldo vigente (un abono parcial no deja un monto desactualizado). |
+| Voucher en revisión | No modifica `monto_pagado`, así que el recordatorio se envía. El texto indica que puede ignorarse si el comprobante ya está en revisión. |
+| Gracia | El correo informa el vencimiento y el último día sin mora: `fecha_vencimiento + dias_gracia_aplicados` (o la gracia del condominio). |
+| Interfaz | Junta: «Suprimido (ya no aplica)»; residente: «No enviado: el aviso ya no aplica». Un suprimido no se reenvía. |
+
+### Propuesta a Anderson: instante de elegibilidad
+
+> La elegibilidad se decide **al despachar**, en la transacción que reserva el intento, leyendo la
+> cuota con `FOR SHARE`. La aprobación de un pago (CON-25/27/28) bloquea condominio →
+> departamento → cuotas `FOR UPDATE`, así que un pago en curso termina primero y su resultado
+> decide. El instante de elegibilidad es el *commit* de esa transacción: un pago aprobado después
+> (milisegundos a segundos, mientras el correo sale por SMTP) ya no puede detener ese envío. La
+> cola no bloquea filas de pagos en orden inverso, así que no hay riesgo de deadlock.
+
+Pendiente de confirmación con Anderson. Si se acepta, no requiere cambios en pagos.
+
+### Verificación CON-33
+
+| Prueba (`src/tests/integration/test_recordatorios_db.py`, PostgreSQL 16) | Resultado |
+|---|---|
+| Un recordatorio por destinatario; segunda pasada, día siguiente y reinicio sin duplicados | Aprobada |
+| Dos programadores concurrentes (`asyncio.gather`) crean un solo mensaje lógico por destinatario | Aprobada |
+| Ventana: vencida/19-oct no, hoy/21-oct/23-oct sí, 24-oct (fuera de N) no | 6 casos aprobados |
+| Cuota pagada no se programa; pago aprobado antes del despacho → `SUPRIMIDO_CUOTA_PAGADA` sin intentos | Aprobadas |
+| Voucher en revisión → se envía; abono parcial → el correo anuncia el saldo vigente | Aprobadas |
+| Pago concurrente con la cuota bloqueada: el worker espera y suprime tras el commit | Aprobada |
+| Despacho tardío tras el vencimiento; cambio de vencimiento suprime y reprograma | Aprobadas |
+| Hora de Lima (07:59 no, 08:00 sí, 22:00 local = mismo día), un pase por día, apagado por configuración | Aprobada |
+| Mutaciones: sin `FOR SHARE` o sin revalidar saldo, las pruebas de pago concurrente/aprobado fallan | Confirmado |

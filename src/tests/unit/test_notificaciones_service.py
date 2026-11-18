@@ -43,6 +43,7 @@ def test_renderizado_todas_las_plantillas():
         "vencimiento": "2026-10-20",
         "fecha_corte": "2026-10-20",
         "monto_pendiente": str(Decimal("150.00")),
+        "fecha_limite_mora": "2026-10-25",
         "banco": "BCP",
         "numero_operacion": "992812",
         "monto_abonado": str(Decimal("150.00")),

@@ -11,6 +11,7 @@ import { formatDate } from "@/lib/format";
 const ESTADOS: Record<NotificacionLog["estado"], string> = {
   EN_COLA: "En cola", ENVIADO: "Aceptado, entrega sin confirmar", ENTREGADO: "Entrega confirmada",
   REINTENTANDO: "Reintento programado", FALLIDO_PERMANENTE: "Envío fallido: la administración debe revisarlo",
+  SUPRIMIDO: "No enviado: el aviso ya no aplica",
 };
 
 export function AvisosList({ condominioId, departamentoId }: { condominioId: string; departamentoId: string }) {

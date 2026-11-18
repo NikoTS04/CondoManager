@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     SMTP_NOMBRE_REMITENTE: str = "CondoManager"
     SMTP_TIMEOUT_SEGUNDOS: float = Field(default=15.0, gt=0, le=120)
 
+    # CON-33: recordatorios de vencimiento (solo EMAIL), calendario de America/Lima.
+    RECORDATORIOS_ACTIVOS: bool = True
+    RECORDATORIO_DIAS_ANTICIPACION: int = Field(default=3, ge=1, le=30)
+    RECORDATORIO_HORA_LIMA: int = Field(default=8, ge=0, le=23)
+
     # JWT y Seguridad
     JWT_SECRET: str = "super_secret_condo_manager_jwt_key_development_only_2026_xyz"
     JWT_ALGORITHM: str = "HS256"

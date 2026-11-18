@@ -24,6 +24,7 @@ class EstadoNotificacionEnum(str, Enum):
     ENTREGADO = "ENTREGADO"
     REINTENTANDO = "REINTENTANDO"
     FALLIDO_PERMANENTE = "FALLIDO_PERMANENTE"
+    SUPRIMIDO = "SUPRIMIDO"
 
 
 class NotificacionLogDTO(BaseModel):

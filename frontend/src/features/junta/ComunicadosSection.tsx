@@ -38,6 +38,8 @@ const ESTADOS_NOTIFICACION: Record<
   REINTENTANDO: { label: "Reintentando", tone: "warning" },
   FALLIDO_PERMANENTE: { label: "Fallido", tone: "danger" },
   EN_COLA: { label: "En cola", tone: "info" },
+  // CON-33: recordatorio no enviado porque la cuota dejó de ser elegible al despachar.
+  SUPRIMIDO: { label: "Suprimido (ya no aplica)", tone: "success" },
 };
 
 const TIPOS_ALERTA: Record<TipoAlertaNotificacion, string> = {

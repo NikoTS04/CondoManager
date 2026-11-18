@@ -51,6 +51,7 @@ REVISIONES_API = (
     "20261025_0019_motor_mora_diaria",
     "20261025_0020_fondos_moras",
     "20261113_0021_invitaciones_identidad",
+    "20261118_0022_recordatorios_vencimiento",
 )
 
 

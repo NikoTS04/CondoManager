@@ -98,3 +98,11 @@ igual mediante `recuperar_inciertos` (§3).
 **Desarrollo y demo.** Docker Compose usa por omisión Mailpit (`mailpit:1025`, interfaz
 en `http://localhost:8025`), que captura los correos sin reenviarlos. El ambiente demo
 define el proveedor real en `.env` y envía solo a cuentas de prueba autorizadas.
+
+## 6. Supresión de recordatorios (CON-33)
+
+`SUPRIMIDO` es un estado terminal sin intento de transporte: el recordatorio de vencimiento dejó
+de ser elegible al revalidarse antes del despacho (`SUPRIMIDO_CUOTA_PAGADA`,
+`SUPRIMIDO_VENCIMIENTO_PASADO`, `SUPRIMIDO_VENCIMIENTO_MODIFICADO`,
+`SUPRIMIDO_CUOTA_INEXISTENTE`, `SUPRIMIDO_CONTEXTO_INACTIVO`). No genera alerta ni admite
+reenvío manual.

@@ -33,8 +33,10 @@ PLANTILLAS_CONFIG = {
         "asunto": "CondoManager: Recordatorio amistoso de vencimiento próximo",
         "cuerpo": (
             "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
-            "Le recordamos que el plazo para el pago oportuno de su cuota vence el {fecha_corte}.\n"
-            "• Saldo pendiente: S/ {monto_pendiente}\n\n"
+            "Le recordamos que su cuota del periodo {periodo} vence el {fecha_corte}.\n"
+            "• Saldo pendiente: {moneda} {monto_pendiente}\n"
+            "• Último día sin recargo por mora: {fecha_limite_mora}\n"
+            "Si ya realizó el pago y su comprobante está en revisión, puede ignorar este aviso.\n\n"
             "Evite recargos por mora y restricciones de reserva de áreas comunes.\n"
             "Atentamente,\nAdministración"
         ),

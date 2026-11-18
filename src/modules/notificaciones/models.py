@@ -71,7 +71,7 @@ class Notificacion(Base):
         ),
         CheckConstraint("intentos BETWEEN 0 AND 4 AND ciclo >= 1", name="ck_notificacion_intentos"),
         CheckConstraint(
-            "estado IN ('EN_COLA','ENVIADO','ENTREGADO','REINTENTANDO','FALLIDO_PERMANENTE')",
+            "estado IN ('EN_COLA','ENVIADO','ENTREGADO','REINTENTANDO','FALLIDO_PERMANENTE','SUPRIMIDO')",
             name="ck_notificacion_estado",
         ),
         CheckConstraint(
