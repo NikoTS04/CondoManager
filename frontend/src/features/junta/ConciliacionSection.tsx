@@ -71,7 +71,6 @@ export function ConciliacionSection({
     }
   }, [condominioId, filtroDepartamento, filtroBanco, filtroEstado, filtroFechaDesde, filtroFechaHasta, limit, offset]);
 
-  // Si hay filtros activos o paginación, consultar la API directamente (CON-24)
   useEffect(() => {
     if (hayFiltrosActivos && condominioId) {
       void consultarApi();
@@ -90,8 +89,6 @@ export function ConciliacionSection({
     setItemsApi(null);
   };
 
-  const listaActual = itemsApi !== null ? itemsApi : comprobantesProp;
-
   const bancosDisponibles = useMemo(() => {
     const setBancos = new Set<string>();
     for (const c of comprobantesProp) {
@@ -100,7 +97,6 @@ export function ConciliacionSection({
     return Array.from(setBancos).sort();
   }, [comprobantesProp]);
 
-  // Si no se usó API remota (o fallback cliente), aplicar filtrado local defensivo
   const comprobantesMostrados = useMemo(() => {
     if (itemsApi !== null) return itemsApi;
     return comprobantesProp.filter((c) => {
@@ -133,7 +129,6 @@ export function ConciliacionSection({
         description="Filtra y revisa los comprobantes bancarios antes de aprobarlos, observarlos o rechazarlos."
       />
       <CardBody>
-        {/* Barra de Filtros Combinables conectados a la API (CON-24) */}
         <div className="mb-6 rounded-lg border border-line bg-surface-subtle p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted">
