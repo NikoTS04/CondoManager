@@ -31,6 +31,25 @@ Base acordada el 20/10/2026. Los contratos HTTP y las reglas asociadas están en
 
 ## Productores, consumidores y esquemas
 
+### Identidad CON-76/7 — cola SQL transaccional
+
+`UsuarioInvitadoEvent` y `AccesoUsuarioCambiadoEvent` identifican avisos internos
+persistidos directamente en `notificaciones_logs` en el commit de identidad. No
+son nuevos envelopes del Stream ni requieren un segundo relay. Para invitación,
+`evento_id = operacion_id = invitaciones_usuario.id`; para cambio de acceso,
+ambos identifican `auditoria_logs.id`. La unicidad lógica existente evita duplicados.
+
+Finalidades INVITACION y SEGURIDAD pueden carecer de departamento. Su productor
+es `usuarios`; el worker valida su origen confirmado y aplica elegibilidad de
+identidad, sin relajar la de OPERATIVA. El cuerpo público no contiene enlaces de
+activación; material de entrega cifrado con clave externa y accesible solo al
+transporte. Contrato completo: [invitación y relevo](../../02-domains/05-usuarios-rbac/invitacion-y-relevo.md).
+CON-78 integra su proveedor con `procesar_uno(..., transport=proveedor)`; el
+simulador predeterminado nunca marca identidad como enviada. Un proveedor real
+debe conservar la política de aceptación incierta/reconciliación de CON-78.
+
+### Eventos operativos existentes
+
 | Evento | Productor | Consumidor y efecto | Esquema canónico | Estado del productor |
 |---|---|---|---|---|
 | `CuotasEmitidasEvent` | CON-11, cuotas | CON-32 genera avisos por cuota y destinatario desde el lote persistido. | [cuotas-emitidas.schema.json](schemas/cuotas-emitidas.schema.json) | Existente con outbox; conservar compatibilidad. |

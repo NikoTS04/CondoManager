@@ -11,6 +11,10 @@
 
 ## 2. Propósito y Límites del Dominio
 
+CON-25/26/27/28 consolidan el motor existente según el
+[contrato Sprint 3](../../05-api/pagos-sprint-3.md), con recibo recuperable,
+conservación monetaria, estados acordados de parcial y origen del excedente.
+
 La integración CON-22/CON-70 y la consulta CON-42 conservan la contabilidad y
 el almacenamiento privado del [contrato Sprint 2](sprint-2-anderson.md).
 La interfaz vigente adopta [CON-72](../../05-api/sprint-2-contratos.md): reporte

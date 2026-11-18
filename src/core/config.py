@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     # JWT y Seguridad
     JWT_SECRET: str = "super_secret_condo_manager_jwt_key_development_only_2026_xyz"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60, ge=1)
+    INVITACION_EXPIRE_HOURS: int = Field(default=24, ge=1, le=168)
+    ACTIVACION_WEB_URL: str = "http://localhost:3000/activar"
+    IDENTITY_DELIVERY_KEY: str = ""
 
     # Contexto del catálogo piloto; debe configurarse con el UUID creado por CON-2.
     CONDOMINIO_PILOTO_ID: str = ""

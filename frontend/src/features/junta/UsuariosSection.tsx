@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Field";
-import { asignarRolUsuario, cambiarEstadoUsuario, crearUsuario, listarUsuarios, revocarRolUsuario, type CuentaUsuario, type CuentaUsuarioConRol, type RolContextual } from "@/lib/api";
+import { asignarRolUsuario, cambiarEstadoUsuario, listarUsuarios, revocarRolUsuario, type CuentaUsuario, type CuentaUsuarioConRol, type RolContextual } from "@/lib/api";
 import { RolUsuarioEditor } from "@/features/junta/RolUsuarioEditor";
 import { VinculosUsuarioSection } from "@/features/junta/VinculosUsuarioSection";
+import { InvitacionesSection } from "@/features/junta/InvitacionesSection";
+import { RelevosSection } from "@/features/junta/RelevosSection";
 
 interface Props {
   condominioId: string | null;
@@ -16,12 +18,10 @@ interface Props {
   usuarioActualId: string;
 }
 
-const VACIO = { nombre: "", apellido: "", email: "", documento_identidad: "", telefono: "", password: "" };
 const POR_PAGINA = 50;
 
 export function UsuariosSection({ condominioId, esSuperAdmin, usuarioActualId }: Props) {
   const [usuarios, setUsuarios] = useState<CuentaUsuarioConRol[]>([]);
-  const [form, setForm] = useState(VACIO);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,25 +46,6 @@ export function UsuariosSection({ condominioId, esSuperAdmin, usuarioActualId }:
   }, [condominioId, pagina, revision]);
 
   const actualizar = useCallback(() => setRevision((value) => value + 1), []);
-
-  async function registrar(event: FormEvent) {
-    event.preventDefault();
-    if (!condominioId || busy) return;
-    setBusy("crear");
-    setError(null);
-    setMensaje(null);
-    try {
-      await crearUsuario(condominioId, { ...form, telefono: form.telefono.trim() || null });
-      setForm(VACIO);
-      setPagina(0);
-      actualizar();
-      setMensaje("Cuenta creada inactiva. Un SuperAdmin debe habilitarla para permitir el inicio de sesión.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No se pudo crear la cuenta.");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function cambiarEstado(usuario: CuentaUsuario) {
     if (!condominioId || !esSuperAdmin || busy) return;
@@ -124,22 +105,8 @@ export function UsuariosSection({ condominioId, esSuperAdmin, usuarioActualId }:
     <div className="space-y-6">
       {error && <Alert tone="danger" title="No se completó la operación">{error}</Alert>}
       {mensaje && <Alert tone="success" title="Resultado">{mensaje}</Alert>}
-      <Card>
-        <CardHeader title="Registrar usuario" description="La cuenta se crea inactiva, con rol Residente. La contraseña inicial la establece la administración." />
-        <CardBody>
-          <form onSubmit={registrar} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Nombre" required><Input value={form.nombre} maxLength={80} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></Field>
-              <Field label="Apellido" required><Input value={form.apellido} maxLength={80} onChange={(e) => setForm({ ...form, apellido: e.target.value })} /></Field>
-              <Field label="Correo electrónico" required><Input type="email" value={form.email} maxLength={120} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-              <Field label="Documento de identidad" required hint="De 6 a 20 caracteres: letras, números o guiones."><Input value={form.documento_identidad} minLength={6} maxLength={20} onChange={(e) => setForm({ ...form, documento_identidad: e.target.value })} /></Field>
-              <Field label="Teléfono"><Input type="tel" value={form.telefono} maxLength={20} onChange={(e) => setForm({ ...form, telefono: e.target.value })} /></Field>
-              <Field label="Contraseña inicial" required hint="De 8 a 128 caracteres."><Input type="password" autoComplete="new-password" value={form.password} minLength={8} maxLength={128} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
-            </div>
-            <Button type="submit" disabled={busy !== null} loading={busy === "crear"}>Crear cuenta inactiva</Button>
-          </form>
-        </CardBody>
-      </Card>
+      <InvitacionesSection key={condominioId} condominioId={condominioId} onCambio={actualizar} />
+      <RelevosSection key={`relevos:${condominioId}`} condominioId={condominioId} esSuperAdmin={esSuperAdmin} usuarios={usuarios} usuarioActualId={usuarioActualId} onCambio={actualizar} />
       {esSuperAdmin && (
         <Card>
           <CardHeader title="Asignar acceso a un usuario existente" description="Utiliza el UUID de una identidad ya registrada para asignarle un rol en este condominio. Su estado de cuenta se conserva." />

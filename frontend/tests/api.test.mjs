@@ -9,6 +9,36 @@ const { outputText } = ts.transpileModule(source, {
 });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 
+test("invitación y relevo conservan la clave de reintento y la autorización", async (t) => {
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    return new Response(JSON.stringify({ estado: "PENDIENTE" }));
+  });
+  globalThis.window = {};
+  globalThis.localStorage = { getItem: () => "token-admin" };
+  try {
+    await api.invitarUsuario("cid", { email: "ana@test.test" }, "clave-estable");
+    await api.modificarInvitacion("cid", "iid", true, "clave-reenvio");
+    await api.relevarAcceso("cid", { tipo: "JUNTA" }, "clave-relevo");
+    assert.deepEqual(solicitudes.map((s) => s.init.headers["idempotency-key"]), ["clave-estable", "clave-reenvio", "clave-relevo"]);
+    assert.ok(solicitudes.every((s) => s.init.headers.Authorization === "Bearer token-admin"));
+  } finally { delete globalThis.window; delete globalThis.localStorage; }
+});
+
+test("la activación es pública, envía el secreto solo en POST y conserva el error del enlace", async (t) => {
+  let solicitud;
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitud = { url, init };
+    return new Response(JSON.stringify({ error_code: "ACTIVACION_EXPIRADA", mensaje: "El enlace venció." }), { status: 400 });
+  });
+  await assert.rejects(api.activarCuenta("token-secreto", "password-secreto"), (e) => e.errorCode === "ACTIVACION_EXPIRADA");
+  assert.equal(solicitud.init.method, "POST");
+  assert.equal(solicitud.init.headers.Authorization, undefined);
+  assert.equal(solicitud.url.includes("token-secreto"), false);
+  assert.deepEqual(JSON.parse(solicitud.init.body), { token: "token-secreto", password: "password-secreto" });
+});
+
 test("todas las consultas protegidas envían Bearer y propagan rechazos", async (t) => {
   t.mock.method(globalThis, "fetch", async (_url, init) => {
     assert.equal(init.headers.Authorization, "Bearer token-prueba");
@@ -270,4 +300,62 @@ test("estado de cuenta propaga denegación y no fabrica saldos", async (t) => {
   }), { status: 403 }));
   await assert.rejects(api.fetchEstadoCuenta("ajena", "2026-10-01", "2026-10-31"),
     (e) => e.status === 403 && e.errorCode === "ACCESO_DENEGADO");
+});
+
+const reciboPago = {
+  comprobante_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", estado_final: "APROBADO",
+  monto_imputado: "100.00", nuevo_saldo_departamento: "0.00", saldo_a_favor_generado: "20.00",
+  departamento_habilitado_reservas: true, motivo_rechazo: null,
+};
+
+test("conciliar conserva el recibo decimal y transmite notas solo en la escritura", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    assert.equal(new URL(url).pathname, `/api/v1/pagos/${reciboPago.comprobante_id}/conciliar`);
+    assert.equal(init.method, "POST");
+    assert.deepEqual(JSON.parse(init.body), { decision: "APROBADO", notas_internas: "Solo administración" });
+    return new Response(JSON.stringify(reciboPago));
+  });
+  const r = await api.conciliarComprobante(reciboPago.comprobante_id, "APROBADO", undefined, "Solo administración");
+  assert.deepEqual(r, { ok: true, data: reciboPago });
+});
+
+test("conciliar preserva el código financiero y no confunde conflicto con red incierta", async (t) => {
+  const mock = t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    error_code: "FONDOS_MORAS_COMPROMETIDOS", mensaje: "La corrección afecta fondos reservados.",
+  }), { status: 409 }));
+  const r = await api.conciliarComprobante(reciboPago.comprobante_id, "APROBADO");
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 409);
+  assert.equal(r.errorCode, "FONDOS_MORAS_COMPROMETIDOS");
+  assert.equal(r.incierto, false);
+  mock.mock.mockImplementation(async () => { throw new TypeError("Respuesta perdida"); });
+  assert.equal((await api.conciliarComprobante(reciboPago.comprobante_id, "APROBADO")).incierto, true);
+});
+
+test("consultar un recibo usa GET privado y nunca repite la aprobación", async (t) => {
+  const controller = new AbortController();
+  let solicitudes = 0;
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes++;
+    assert.equal(new URL(url).pathname, `/api/v1/pagos/${reciboPago.comprobante_id}/resultado`);
+    assert.equal(init.method, undefined);
+    assert.equal(init.cache, "no-store");
+    assert.equal(init.signal, controller.signal);
+    return new Response(JSON.stringify(reciboPago));
+  });
+  assert.deepEqual(await api.fetchResultadoPago(reciboPago.comprobante_id, controller.signal), reciboPago);
+  assert.equal(solicitudes, 1);
+});
+
+test("un recibo ajeno, numérico o con decisión distinta no se muestra como éxito", async (t) => {
+  const mock = t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    ...reciboPago, comprobante_id: "otra-unidad",
+  })));
+  await assert.rejects(api.fetchResultadoPago(reciboPago.comprobante_id), /verificar el recibo/);
+  mock.mock.mockImplementation(async () => new Response(JSON.stringify({ ...reciboPago, monto_imputado: 100 })));
+  assert.equal((await api.conciliarComprobante(reciboPago.comprobante_id, "APROBADO")).incierto, true);
+  mock.mock.mockImplementation(async () => new Response(JSON.stringify(reciboPago)));
+  const r = await api.conciliarComprobante(reciboPago.comprobante_id, "RECHAZADO", "No acreditado");
+  assert.equal(r.ok, false);
+  assert.equal(r.incierto, true);
 });

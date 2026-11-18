@@ -101,7 +101,7 @@ function AlertasEntrega({
     <Card className="xl:col-span-2">
       <CardHeader
         title="Alertas de entrega"
-        description="Avisos que no pudieron entregarse y requieren revisar los datos de contacto."
+        description="Avisos que no pudieron entregarse y requieren revisar el contacto o el proveedor."
       />
       <CardBody>
         {errorAccion && <Alert tone="danger">{errorAccion}</Alert>}
@@ -128,7 +128,7 @@ function AlertasEntrega({
               >
                 <div>
                   <p className="font-medium">
-                    Dpto. {alerta.departamento_numero} · {TIPOS_ALERTA[alerta.tipo] ?? alerta.tipo}
+                    {alerta.departamento_id ? `Dpto. ${alerta.departamento_numero}` : "Identidad"} · {TIPOS_ALERTA[alerta.tipo] ?? alerta.tipo}
                   </p>
                   <p className="mt-1 text-sm">{alerta.mensaje}</p>
                   <p className="mt-1 text-xs text-muted">{formatDate(alerta.creada_en)}</p>
@@ -177,7 +177,9 @@ export function ComunicadosSection({
     setBusy(true);
     setError(null);
     try {
-      await reenviarNotificacion(seleccion, contacto.trim());
+      const aviso = notificaciones.find((n) => n.id === seleccion);
+      const identidad = aviso?.tipo_evento === "UsuarioInvitadoEvent" || aviso?.tipo_evento === "AccesoUsuarioCambiadoEvent";
+      await reenviarNotificacion(seleccion, identidad ? undefined : contacto.trim());
       setSeleccion(null);
       setVersionAlertas((v) => v + 1);
       onActualizada();
@@ -244,6 +246,7 @@ export function ComunicadosSection({
             <ul className="divide-y divide-line">
               {notificaciones.map((notificacion) => {
                 const estado = ESTADOS_NOTIFICACION[notificacion.estado];
+                const identidad = notificacion.tipo_evento === "UsuarioInvitadoEvent" || notificacion.tipo_evento === "AccesoUsuarioCambiadoEvent";
                 return (
                   <li
                     key={notificacion.id}
@@ -267,14 +270,16 @@ export function ComunicadosSection({
                       {notificacion.error_mensaje && <p className="text-sm text-danger-700">{notificacion.error_mensaje}</p>}
                       {!isAuditor && notificacion.estado === "FALLIDO_PERMANENTE" && (
                         seleccion === notificacion.id ? <form onSubmit={reencolar} className="mt-3 space-y-2">
-                          <Field label="Contacto autorizado corregido" required>
-                            <Input value={contacto} onChange={(e) => setContacto(e.target.value)} required />
-                          </Field>
-                          <p className="text-xs text-muted">Debe coincidir con el contacto actualizado de este usuario en el padrón.</p>
-                          <Button type="submit" loading={busy}>Reencolar aviso</Button>
+                          {identidad ? <p className="text-xs text-muted">Se volverá a comprobar el origen y la elegibilidad del aviso. El destinatario de identidad se conserva.</p> : <>
+                            <Field label="Contacto autorizado corregido" required>
+                              <Input value={contacto} onChange={(e) => setContacto(e.target.value)} required />
+                            </Field>
+                            <p className="text-xs text-muted">Debe coincidir con el contacto actualizado de este usuario en el padrón.</p>
+                          </>}
+                          <Button type="submit" disabled={busy} loading={busy}>Reencolar aviso</Button>
                         </form> : <Button variant="secondary" size="sm" onClick={() => {
                           setSeleccion(notificacion.id); setContacto(""); setError(null);
-                        }}>Corregir y reencolar</Button>
+                        }}>{identidad ? "Reintentar aviso de identidad" : "Corregir y reencolar"}</Button>
                       )}
                     </div>
                     <Badge tone={estado.tone}>{estado.label}</Badge>

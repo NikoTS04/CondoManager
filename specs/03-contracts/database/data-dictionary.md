@@ -12,7 +12,7 @@ Contrato: [alta administrativa](../../02-domains/05-usuarios-rbac/alta-administr
 
 | Columna | Tipo | Nulo | Default | Regla |
 |---|---|---|---|---|
-| `esta_activo` | BOOLEAN | NO | `false` | Solo SuperAdmin cambia su estado mediante API. |
+| `esta_activo` | BOOLEAN | NO | `false` | Estado administrativo global de SuperAdmin; la activación CON-76 habilita exclusivamente la identidad pendiente autorizada por su token. |
 | `auth_revision` | INTEGER | NO | `1` | Positivo; cambia atómicamente con el estado o los permisos e invalida JWT previos. |
 | `es_superadmin` | BOOLEAN | NO | `false` | Concesión global provisionada por CLI, no por API. |
 
@@ -22,6 +22,27 @@ las tablas. `password_hash` guarda PBKDF2-SHA256 y nunca se expone.
 `usuario_roles` mantiene una asignación por `(usuario_id, condominio_id)` y
 `usuario_departamentos` un vínculo por `(usuario_id, departamento_id)`, ambos
 con claves foráneas y checks de los catálogos canónicos.
+
+## Invitación y cola de identidad — CON-76/7 (0021)
+
+- `usuarios.activacion_pendiente BOOLEAN NOT NULL DEFAULT false`: true solo para
+  nuevas identidades invitadas; la activación atómica lo retira. La migración no
+  cambia estados, contraseñas ni privilegios existentes.
+- `invitaciones_usuario`: UUID PK, FK usuario/condominio/creador RESTRICT,
+  token_hash SHA-256 único (VARCHAR(64)), revision_cuenta positiva, creado_en y
+  expira_en obligatorios UTC (expira > creado), utilizada_en/revocada_en nullable.
+  Índice por usuario. No se almacena el token en claro.
+- `operaciones_identidad`: PK (condominio_id FK RESTRICT, clave UUID), huella SHA-256
+  de actor/operación/cuerpo y respuesta JSONB sin secretos. Serialización mediante
+  locks SQL; una clave incompatible produce conflicto.
+- `notificaciones_logs.finalidad`: OPERATIVA (default), INVITACION o SEGURIDAD.
+  OPERATIVA mantiene departamento obligatorio y contenido_cifrado NULL mediante
+  CHECK. Identidad admite departamento NULL. `contenido_cifrado TEXT NULL` contiene
+  solo material Fernet de entrega, nunca expuesto en DTO/eventos/auditoría.
+  `notificaciones_alertas.departamento_id` admite NULL para avisos de identidad.
+- El downgrade rechaza perder invitaciones, operaciones o avisos de identidad.
+
+Contrato: [invitación y relevo](../../02-domains/05-usuarios-rbac/invitacion-y-relevo.md).
 
 ## Asignaciones revocables — CON-06
 

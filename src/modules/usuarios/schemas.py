@@ -147,9 +147,63 @@ class TokenResponse(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
-    expires_in: int = Field(default=86400, description="Segundos de validez del token")
+    expires_in: int = Field(description="Segundos de validez del token")
     usuario: UsuarioDTO
 
 
 class UserContextResponse(UsuarioDTO):
     """Contexto de sesión activo para el usuario autenticado."""
+
+
+class InvitarUsuarioRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    email: str = Field(max_length=120, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    nombre: str = Field(min_length=1, max_length=80)
+    apellido: str = Field(min_length=1, max_length=80)
+    documento_identidad: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{5,19}$")
+    telefono: str | None = Field(default=None, max_length=20)
+
+    _email = field_validator("email")(CrearUsuarioRequest.normalizar_email.__func__)
+    _documento = field_validator("documento_identidad")(
+        CrearUsuarioRequest.normalizar_documento.__func__
+    )
+
+
+class ActivarUsuarioRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: SecretStr = Field(min_length=40, max_length=128)
+    password: SecretStr = Field(min_length=8, max_length=128)
+
+
+class ActivacionResponse(BaseModel):
+    estado: Literal["ACTIVADO"]
+    mensaje: str
+
+
+class InvitacionResponse(BaseModel):
+    id: UUID
+    usuario_id: UUID
+    email: str
+    estado: Literal["PENDIENTE", "UTILIZADA", "EXPIRADA", "REVOCADA"]
+    expira_en: datetime
+    creado_en: datetime
+    notificacion_id: UUID
+    estado_correo: str
+
+
+class RelevoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tipo: Literal["JUNTA", "INQUILINO"]
+    saliente_id: UUID
+    entrante_id: UUID
+    departamento_id: UUID | None = None
+    rol_saliente: Literal["RESIDENTE", "AUDITOR"] | None = None
+
+
+class RelevoResponse(BaseModel):
+    operacion_id: UUID
+    tipo: Literal["JUNTA", "INQUILINO"]
+    saliente_id: UUID
+    entrante_id: UUID
+    estado: Literal["CONFIRMADO"] = "CONFIRMADO"

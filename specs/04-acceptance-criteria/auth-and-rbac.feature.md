@@ -235,3 +235,28 @@ Entonces recibe 403 y no se modifica ningún recurso
 Y AUDITOR puede consultar los recursos de A pero nunca enviar pagos, reservas o comunicados
 Y un residente consulta horarios ocupados sin recibir datos privados de otras unidades.
 ```
+
+### Sprint 3 — CON-7/76: invitación y relevo
+
+Contrato: [invitación y relevo](../02-domains/05-usuarios-rbac/invitacion-y-relevo.md).
+BDD ejecutable: `05-usuarios-rbac/features/invitacion_relevo.feature`;
+`src/tests/bdd/test_identidad_sprint3_bdd.py`. Bordes SQL, concurrencia y secretos:
+`src/tests/integration/test_identidad_sprint3_db.py`.
+
+```gherkin
+Dado un usuario invitado por administración autorizada
+Cuando consume su enlace temporal y elige contraseña
+Entonces la activación confirma atómicamente y permite iniciar sesión
+Y el mismo enlace usado, vencido o revocado no habilita otra activación
+Y el invitado no elige privilegios ni modifica otras cuentas.
+
+Dado un residente o Junta saliente y un reemplazo autorizado
+Cuando se confirma el relevo con clave de idempotencia estable
+Entonces ambos accesos, auditoría y avisos confirman juntos
+Y el JWT anterior deja de operar en la siguiente petición
+Y cuotas, pagos, reservas y políticas históricas permanecen intactos
+Y un fallo de correo no restaura los permisos revocados.
+```
+
+Recepción de correo real, recuperación del proveedor y revisión de PR requieren
+la integración de CON-78; la cola o un transporte de prueba no acreditan ese cierre.

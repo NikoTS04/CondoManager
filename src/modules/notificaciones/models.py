@@ -25,8 +25,8 @@ class Notificacion(Base):
     condominio_id: Mapped[UUID] = mapped_column(
         ForeignKey("condominios.id", ondelete="RESTRICT"), nullable=False
     )
-    departamento_id: Mapped[UUID] = mapped_column(
-        ForeignKey("departamentos.id", ondelete="RESTRICT"), nullable=False
+    departamento_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("departamentos.id", ondelete="RESTRICT"), nullable=True
     )
     usuario_destinatario_id: Mapped[UUID] = mapped_column(
         ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=False
@@ -38,6 +38,10 @@ class Notificacion(Base):
     destinatario: Mapped[str] = mapped_column(Text, nullable=False)
     asunto: Mapped[str | None] = mapped_column(Text)
     cuerpo: Mapped[str] = mapped_column(Text, nullable=False)
+    finalidad: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="OPERATIVA", server_default="OPERATIVA"
+    )
+    contenido_cifrado: Mapped[str | None] = mapped_column(Text)
     estado: Mapped[str] = mapped_column(String(30), nullable=False, default="EN_COLA")
     transporte: Mapped[str] = mapped_column(String(20), nullable=False, default="SIMULADO")
     ciclo: Mapped[int] = mapped_column(nullable=False, default=1)
@@ -54,6 +58,10 @@ class Notificacion(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "(finalidad = 'OPERATIVA' AND departamento_id IS NOT NULL AND contenido_cifrado IS NULL) OR finalidad IN ('INVITACION','SEGURIDAD')",
+            name="ck_notificacion_finalidad",
+        ),
         UniqueConstraint(
             "evento_id",
             "operacion_id",
@@ -130,8 +138,8 @@ class AlertaNotificacion(Base):
     condominio_id: Mapped[UUID] = mapped_column(
         ForeignKey("condominios.id", ondelete="RESTRICT"), nullable=False
     )
-    departamento_id: Mapped[UUID] = mapped_column(
-        ForeignKey("departamentos.id", ondelete="RESTRICT"), nullable=False
+    departamento_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("departamentos.id", ondelete="RESTRICT"), nullable=True
     )
     ciclo: Mapped[int] = mapped_column(nullable=False)
     tipo: Mapped[str] = mapped_column(String(40), nullable=False)

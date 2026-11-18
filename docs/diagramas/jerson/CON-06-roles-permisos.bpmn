@@ -1,0 +1,305 @@
+<?xml version='1.0' encoding='utf-8'?>
+<bpmn:definitions xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="CON_06_Definitions" targetNamespace="https://condomanager.local/bpmn/jerson" exporter="CondoManager — diagramas de Jerson" exporterVersion="1.0">
+  <bpmn:process id="CON_06_Process" name="Administrar roles y permisos" isExecutable="false">
+    <bpmn:documentation>Responsable de la historia: Jerson. PROC-05 · Sprint 2 · Asignación, cambio, reactivación y revocación de roles contextuales
+SuperAdmin gestiona ADMIN_JUNTA, AUDITOR y RESIDENTE. Junta solo gestiona Auditor/Residente de su condominio, también respecto del rol previo.
+Se rechaza modificar la propia asignación o una identidad SuperAdmin global. La concesión global de SuperAdmin se provisiona por CLI.
+Rol, revisión global y auditoría confirman juntos. El cambio revoca tokens anteriores; el nuevo login usa el rol vigente y conserva vínculos e historial.
+Fuente: specs/02-domains/05-usuarios-rbac/roles-y-permisos.md</bpmn:documentation>
+    <bpmn:laneSet id="CON_06_LaneSet">
+      <bpmn:lane id="CON_06_Lane_0" name="Administración autorizada">
+        <bpmn:flowNodeRef>CON_06_inicio</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_seleccionar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_solicitar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_resultado</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_fin</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="CON_06_Lane_1" name="Sistema CondoManager">
+        <bpmn:flowNodeRef>CON_06_validar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_autorizado</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_rechazar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_rechazado</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_operacion</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_preparar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_revocar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_unir</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_cambio</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_guardar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_06_sin_cambio</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="CON_06_inicio" name="Gestionar permisos">
+      <bpmn:outgoing>CON_06_Flow_0</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="CON_06_seleccionar" name="Seleccionar condominio y usuario destino">
+      <bpmn:incoming>CON_06_Flow_0</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_1</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="CON_06_solicitar" name="Elegir operación y rol contextual">
+      <bpmn:incoming>CON_06_Flow_1</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_06_validar" name="Validar autoridad, usuario, contexto, rol y operación">
+      <bpmn:incoming>CON_06_Flow_2</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_06_autorizado" name="¿Solicitud permitida y válida?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_06_Flow_3</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>CON_06_Flow_6</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="CON_06_rechazar" name="Rechazar e informar motivo sin modificar permisos">
+      <bpmn:incoming>CON_06_Flow_4</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_06_rechazado" name="Solicitud rechazada">
+      <bpmn:incoming>CON_06_Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="CON_06_operacion" name="¿Operación solicitada?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_06_Flow_6</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_7</bpmn:outgoing>
+      <bpmn:outgoing>CON_06_Flow_8</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="CON_06_preparar" name="Preparar alta, cambio o reactivación de asignación">
+      <bpmn:incoming>CON_06_Flow_7</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_9</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="CON_06_revocar" name="Preparar revocación lógica sin eliminar la asignación">
+      <bpmn:incoming>CON_06_Flow_8</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_10</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_06_unir" name="" gatewayDirection="Converging">
+      <bpmn:incoming>CON_06_Flow_9</bpmn:incoming>
+      <bpmn:incoming>CON_06_Flow_10</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_11</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="CON_06_cambio" name="¿Existe cambio real?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_06_Flow_11</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_12</bpmn:outgoing>
+      <bpmn:outgoing>CON_06_Flow_13</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="CON_06_guardar" name="Guardar rol, revisión global y auditoría atómicos">
+      <bpmn:incoming>CON_06_Flow_12</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_14</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="CON_06_sin_cambio" name="Devolver asignación vigente sin duplicar cambios">
+      <bpmn:incoming>CON_06_Flow_13</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_15</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="CON_06_resultado" name="Revisar rol y estado de la asignación">
+      <bpmn:incoming>CON_06_Flow_14</bpmn:incoming>
+      <bpmn:incoming>CON_06_Flow_15</bpmn:incoming>
+      <bpmn:outgoing>CON_06_Flow_16</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="CON_06_fin" name="Permisos gestionados">
+      <bpmn:incoming>CON_06_Flow_16</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="CON_06_Flow_0" sourceRef="CON_06_inicio" targetRef="CON_06_seleccionar" />
+    <bpmn:sequenceFlow id="CON_06_Flow_1" sourceRef="CON_06_seleccionar" targetRef="CON_06_solicitar" />
+    <bpmn:sequenceFlow id="CON_06_Flow_2" sourceRef="CON_06_solicitar" targetRef="CON_06_validar" />
+    <bpmn:sequenceFlow id="CON_06_Flow_3" sourceRef="CON_06_validar" targetRef="CON_06_autorizado" />
+    <bpmn:sequenceFlow id="CON_06_Flow_4" sourceRef="CON_06_autorizado" targetRef="CON_06_rechazar" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_06_Flow_5" sourceRef="CON_06_rechazar" targetRef="CON_06_rechazado" />
+    <bpmn:sequenceFlow id="CON_06_Flow_6" sourceRef="CON_06_autorizado" targetRef="CON_06_operacion" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_06_Flow_7" sourceRef="CON_06_operacion" targetRef="CON_06_preparar" name="Asignar / cambiar / restaurar">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Asignar / cambiar / restaurar</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_06_Flow_8" sourceRef="CON_06_operacion" targetRef="CON_06_revocar" name="Revocar">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Revocar</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_06_Flow_9" sourceRef="CON_06_preparar" targetRef="CON_06_unir" />
+    <bpmn:sequenceFlow id="CON_06_Flow_10" sourceRef="CON_06_revocar" targetRef="CON_06_unir" />
+    <bpmn:sequenceFlow id="CON_06_Flow_11" sourceRef="CON_06_unir" targetRef="CON_06_cambio" />
+    <bpmn:sequenceFlow id="CON_06_Flow_12" sourceRef="CON_06_cambio" targetRef="CON_06_guardar" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_06_Flow_13" sourceRef="CON_06_cambio" targetRef="CON_06_sin_cambio" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_06_Flow_14" sourceRef="CON_06_guardar" targetRef="CON_06_resultado" />
+    <bpmn:sequenceFlow id="CON_06_Flow_15" sourceRef="CON_06_sin_cambio" targetRef="CON_06_resultado" />
+    <bpmn:sequenceFlow id="CON_06_Flow_16" sourceRef="CON_06_resultado" targetRef="CON_06_fin" />
+  </bpmn:process>
+  <bpmn:collaboration id="CON_06_Collaboration">
+    <bpmn:participant id="CON_06_Participant" name="CondoManager · CON-06" processRef="CON_06_Process" />
+  </bpmn:collaboration>
+  <bpmndi:BPMNDiagram id="CON_06_Diagram" name="Administrar roles y permisos">
+    <bpmndi:BPMNPlane id="CON_06_Plane" bpmnElement="CON_06_Collaboration">
+      <bpmndi:BPMNShape id="CON_06_Participant_di" bpmnElement="CON_06_Participant" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#66788c">
+        <dc:Bounds x="24" y="24" width="2892" height="830" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_Lane_0_di" bpmnElement="CON_06_Lane_0" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="24" width="2862" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_Lane_1_di" bpmnElement="CON_06_Lane_1" isHorizontal="true" bioc:fill="#f7faff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="274" width="2862" height="580" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_inicio_di" bpmnElement="CON_06_inicio" bioc:fill="#e9f8ee" bioc:stroke="#24824b">
+        <dc:Bounds x="141" y="126" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="84" y="173" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_seleccionar_di" bpmnElement="CON_06_seleccionar" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="265" y="97" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_solicitar_di" bpmnElement="CON_06_solicitar" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="495" y="97" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_validar_di" bpmnElement="CON_06_validar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="725" y="372" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_autorizado_di" bpmnElement="CON_06_autorizado" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1013" y="393" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="964" y="332" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_rechazar_di" bpmnElement="CON_06_rechazar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="945" y="662" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_rechazado_di" bpmnElement="CON_06_rechazado" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="1251" y="691" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1194" y="738" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_operacion_di" bpmnElement="CON_06_operacion" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1253" y="393" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1204" y="332" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_preparar_di" bpmnElement="CON_06_preparar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1425" y="372" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_revocar_di" bpmnElement="CON_06_revocar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1425" y="592" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_unir_di" bpmnElement="CON_06_unir" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1743" y="393" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1694" y="332" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_cambio_di" bpmnElement="CON_06_cambio" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1963" y="393" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1914" y="332" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_guardar_di" bpmnElement="CON_06_guardar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="2135" y="372" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_sin_cambio_di" bpmnElement="CON_06_sin_cambio" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="2135" y="592" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_resultado_di" bpmnElement="CON_06_resultado" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="2395" y="97" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_06_fin_di" bpmnElement="CON_06_fin" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="2741" y="126" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2684" y="173" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="CON_06_Flow_0_di" bpmnElement="CON_06_Flow_0" bioc:stroke="#475b70">
+        <di:waypoint x="179" y="145" />
+        <di:waypoint x="265" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_1_di" bpmnElement="CON_06_Flow_1" bioc:stroke="#475b70">
+        <di:waypoint x="455" y="145" />
+        <di:waypoint x="495" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_2_di" bpmnElement="CON_06_Flow_2" bioc:stroke="#475b70">
+        <di:waypoint x="590" y="193" />
+        <di:waypoint x="590" y="282" />
+        <di:waypoint x="820" y="282" />
+        <di:waypoint x="820" y="372" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_3_di" bpmnElement="CON_06_Flow_3" bioc:stroke="#475b70">
+        <di:waypoint x="915" y="420" />
+        <di:waypoint x="1013" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_4_di" bpmnElement="CON_06_Flow_4" bioc:stroke="#475b70">
+        <di:waypoint x="1040" y="447" />
+        <di:waypoint x="1040" y="662" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1020" y="560" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_5_di" bpmnElement="CON_06_Flow_5" bioc:stroke="#475b70">
+        <di:waypoint x="1135" y="710" />
+        <di:waypoint x="1251" y="710" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_6_di" bpmnElement="CON_06_Flow_6" bioc:stroke="#475b70">
+        <di:waypoint x="1067" y="420" />
+        <di:waypoint x="1253" y="420" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1060" y="386" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_7_di" bpmnElement="CON_06_Flow_7" bioc:stroke="#475b70">
+        <di:waypoint x="1307" y="420" />
+        <di:waypoint x="1425" y="420" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1310" y="470" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_8_di" bpmnElement="CON_06_Flow_8" bioc:stroke="#475b70">
+        <di:waypoint x="1280" y="447" />
+        <di:waypoint x="1280" y="640" />
+        <di:waypoint x="1425" y="640" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1280" y="540" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_9_di" bpmnElement="CON_06_Flow_9" bioc:stroke="#475b70">
+        <di:waypoint x="1615" y="420" />
+        <di:waypoint x="1743" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_10_di" bpmnElement="CON_06_Flow_10" bioc:stroke="#475b70">
+        <di:waypoint x="1615" y="640" />
+        <di:waypoint x="1770" y="640" />
+        <di:waypoint x="1770" y="447" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_11_di" bpmnElement="CON_06_Flow_11" bioc:stroke="#475b70">
+        <di:waypoint x="1797" y="420" />
+        <di:waypoint x="1963" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_12_di" bpmnElement="CON_06_Flow_12" bioc:stroke="#475b70">
+        <di:waypoint x="2017" y="420" />
+        <di:waypoint x="2135" y="420" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2010" y="386" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_13_di" bpmnElement="CON_06_Flow_13" bioc:stroke="#475b70">
+        <di:waypoint x="1990" y="447" />
+        <di:waypoint x="1990" y="640" />
+        <di:waypoint x="2135" y="640" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1970" y="540" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_14_di" bpmnElement="CON_06_Flow_14" bioc:stroke="#475b70">
+        <di:waypoint x="2230" y="372" />
+        <di:waypoint x="2230" y="145" />
+        <di:waypoint x="2395" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_15_di" bpmnElement="CON_06_Flow_15" bioc:stroke="#475b70">
+        <di:waypoint x="2325" y="640" />
+        <di:waypoint x="2490" y="640" />
+        <di:waypoint x="2490" y="193" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_06_Flow_16_di" bpmnElement="CON_06_Flow_16" bioc:stroke="#475b70">
+        <di:waypoint x="2585" y="145" />
+        <di:waypoint x="2741" y="145" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

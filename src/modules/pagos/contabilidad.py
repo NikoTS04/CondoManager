@@ -3,11 +3,26 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.core.errors import APIError
 from src.modules.cuotas.models import CuotaMantenimiento
 from src.shared.decimal_types import redondear_moneda
 
 CERO = Decimal("0.00")
 MAX_MONEDA = Decimal("9999999999.99")
+
+
+def validar_conservacion_pago(monto: Decimal, aplicado: Decimal, credito: Decimal) -> None:
+    """Rechazar un plan inconsistente antes del commit, sin inventar ajustes."""
+    if (
+        any(not v.is_finite() or v < CERO for v in (monto, aplicado, credito))
+        or monto <= CERO
+        or aplicado + credito != monto
+    ):
+        raise APIError(
+            409,
+            "IMPUTACION_PAGO_INCONSISTENTE",
+            "Las aplicaciones y el crédito no explican el importe del comprobante.",
+        )
 
 
 def saldo_en_mora(cuotas: list[CuotaMantenimiento], dias_gracia: int, hoy: date) -> Decimal:
@@ -43,6 +58,9 @@ def plan_imputacion(
     """
     componentes = []
     for c in cuotas:
+        # También para nuevas aprobaciones legacy. Los recibos ya aprobados no se recalculan.
+        if c.fecha_emision > hoy:
+            continue
         mora = min(c.monto_mora, c.monto_total_exigible)
         extraordinaria = min(c.monto_extraordinario, c.monto_total_exigible - mora)
         ordinaria = c.monto_total_exigible - mora - extraordinaria

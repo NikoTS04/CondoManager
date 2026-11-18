@@ -1,0 +1,465 @@
+<?xml version='1.0' encoding='utf-8'?>
+<bpmn:definitions xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="CON_39_Definitions" targetNamespace="https://condomanager.local/bpmn/jerson" exporter="CondoManager — diagramas de Jerson" exporterVersion="1.0">
+  <bpmn:process id="CON_39_Process" name="Administrar el catálogo de áreas comunes" isExecutable="false">
+    <bpmn:documentation>Responsable de la historia: Jerson. PROC-04 · Sprint 2 · Mantenimiento administrativo y consulta del catálogo por residentes
+Crear o modificar: nombre, descripción, aforo, horarios, costo decimal no negativo y estado; validar pertenencia al condominio autorizado.
+Desactivar impide nuevas reservas y conserva reservas previas e historial. Persistencia y auditoría confirman juntas; un fallo revierte la operación.
+La consulta se inicia de forma independiente: valida sesión y contexto y muestra las áreas activas con sus reglas de uso y reserva.
+Fuente: docs/sprints/SPRINT-2.md#con-39--administrar-el-catálogo-de-áreas-comunes</bpmn:documentation>
+    <bpmn:laneSet id="CON_39_LaneSet">
+      <bpmn:lane id="CON_39_Lane_0" name="Administración">
+        <bpmn:flowNodeRef>CON_39_inicio</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_solicitar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_operacion</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_formulario</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_corregir</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_seleccionar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_resultado</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_fin</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="CON_39_Lane_1" name="Sistema CondoManager">
+        <bpmn:flowNodeRef>CON_39_autorizar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_permiso</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_denegar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_denegado</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_validar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_valido</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_guardar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_comprobar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_existe</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_error</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_sin_cambio</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_desactivar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_unir</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_consultar</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="CON_39_Lane_2" name="Residente">
+        <bpmn:flowNodeRef>CON_39_consulta</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_abrir</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_mostrar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>CON_39_consultado</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="CON_39_inicio" name="Gestionar catálogo">
+      <bpmn:outgoing>CON_39_Flow_0</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="CON_39_solicitar" name="Seleccionar condominio y solicitar mantenimiento">
+      <bpmn:incoming>CON_39_Flow_0</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_1</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_39_autorizar" name="Validar sesión, rol administrativo y contexto">
+      <bpmn:incoming>CON_39_Flow_1</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_39_permiso" name="¿Acceso autorizado?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_39_Flow_2</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>CON_39_Flow_5</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="CON_39_denegar" name="Rechazar por falta de autorización">
+      <bpmn:incoming>CON_39_Flow_3</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_39_denegado" name="Acceso denegado">
+      <bpmn:incoming>CON_39_Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="CON_39_operacion" name="¿Operación solicitada?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_39_Flow_5</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_6</bpmn:outgoing>
+      <bpmn:outgoing>CON_39_Flow_13</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="CON_39_formulario" name="Ingresar o corregir datos y reglas del área">
+      <bpmn:incoming>CON_39_Flow_6</bpmn:incoming>
+      <bpmn:incoming>CON_39_Flow_10</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_7</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_39_validar" name="Validar aforo, horarios, costo y pertenencia del área">
+      <bpmn:incoming>CON_39_Flow_7</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_8</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_39_valido" name="¿Datos válidos?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_39_Flow_8</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_9</bpmn:outgoing>
+      <bpmn:outgoing>CON_39_Flow_11</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="CON_39_corregir" name="Revisar errores informados">
+      <bpmn:incoming>CON_39_Flow_9</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_10</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_39_guardar" name="Guardar área y auditoría en una transacción">
+      <bpmn:incoming>CON_39_Flow_11</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_12</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="CON_39_seleccionar" name="Seleccionar área a desactivar">
+      <bpmn:incoming>CON_39_Flow_13</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_14</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_39_comprobar" name="Verificar existencia y pertenencia del área">
+      <bpmn:incoming>CON_39_Flow_14</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_15</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_39_existe" name="¿Área del contexto existente?" gatewayDirection="Diverging">
+      <bpmn:incoming>CON_39_Flow_15</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_16</bpmn:outgoing>
+      <bpmn:outgoing>CON_39_Flow_18</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="CON_39_error" name="Informar recurso inexistente sin modificar el catálogo">
+      <bpmn:incoming>CON_39_Flow_16</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_17</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="CON_39_sin_cambio" name="Catálogo sin cambios">
+      <bpmn:incoming>CON_39_Flow_17</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="CON_39_desactivar" name="Desactivar área y auditar conservando el historial">
+      <bpmn:incoming>CON_39_Flow_18</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_19</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="CON_39_unir" name="" gatewayDirection="Converging">
+      <bpmn:incoming>CON_39_Flow_12</bpmn:incoming>
+      <bpmn:incoming>CON_39_Flow_19</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_20</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="CON_39_resultado" name="Revisar configuración y estado del área">
+      <bpmn:incoming>CON_39_Flow_20</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_21</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="CON_39_fin" name="Catálogo actualizado">
+      <bpmn:incoming>CON_39_Flow_21</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:startEvent id="CON_39_consulta" name="Consultar áreas">
+      <bpmn:outgoing>CON_39_Flow_22</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="CON_39_abrir" name="Abrir catálogo de áreas comunes">
+      <bpmn:incoming>CON_39_Flow_22</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_23</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="CON_39_consultar" name="Validar sesión y consultar áreas activas del contexto">
+      <bpmn:incoming>CON_39_Flow_23</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_24</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="CON_39_mostrar" name="Consultar aforo, horarios, costo y reglas de uso">
+      <bpmn:incoming>CON_39_Flow_24</bpmn:incoming>
+      <bpmn:outgoing>CON_39_Flow_25</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="CON_39_consultado" name="Catálogo consultado">
+      <bpmn:incoming>CON_39_Flow_25</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="CON_39_Flow_0" sourceRef="CON_39_inicio" targetRef="CON_39_solicitar" />
+    <bpmn:sequenceFlow id="CON_39_Flow_1" sourceRef="CON_39_solicitar" targetRef="CON_39_autorizar" />
+    <bpmn:sequenceFlow id="CON_39_Flow_2" sourceRef="CON_39_autorizar" targetRef="CON_39_permiso" />
+    <bpmn:sequenceFlow id="CON_39_Flow_3" sourceRef="CON_39_permiso" targetRef="CON_39_denegar" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_39_Flow_4" sourceRef="CON_39_denegar" targetRef="CON_39_denegado" />
+    <bpmn:sequenceFlow id="CON_39_Flow_5" sourceRef="CON_39_permiso" targetRef="CON_39_operacion" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_39_Flow_6" sourceRef="CON_39_operacion" targetRef="CON_39_formulario" name="Crear / modificar">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Crear / modificar</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_39_Flow_7" sourceRef="CON_39_formulario" targetRef="CON_39_validar" />
+    <bpmn:sequenceFlow id="CON_39_Flow_8" sourceRef="CON_39_validar" targetRef="CON_39_valido" />
+    <bpmn:sequenceFlow id="CON_39_Flow_9" sourceRef="CON_39_valido" targetRef="CON_39_corregir" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_39_Flow_10" sourceRef="CON_39_corregir" targetRef="CON_39_formulario" />
+    <bpmn:sequenceFlow id="CON_39_Flow_11" sourceRef="CON_39_valido" targetRef="CON_39_guardar" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_39_Flow_12" sourceRef="CON_39_guardar" targetRef="CON_39_unir" />
+    <bpmn:sequenceFlow id="CON_39_Flow_13" sourceRef="CON_39_operacion" targetRef="CON_39_seleccionar" name="Desactivar">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Desactivar</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_39_Flow_14" sourceRef="CON_39_seleccionar" targetRef="CON_39_comprobar" />
+    <bpmn:sequenceFlow id="CON_39_Flow_15" sourceRef="CON_39_comprobar" targetRef="CON_39_existe" />
+    <bpmn:sequenceFlow id="CON_39_Flow_16" sourceRef="CON_39_existe" targetRef="CON_39_error" name="No">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">No</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_39_Flow_17" sourceRef="CON_39_error" targetRef="CON_39_sin_cambio" />
+    <bpmn:sequenceFlow id="CON_39_Flow_18" sourceRef="CON_39_existe" targetRef="CON_39_desactivar" name="Sí">
+      <bpmn:conditionExpression language="text/plain" xsi:type="bpmn:tFormalExpression">Sí</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="CON_39_Flow_19" sourceRef="CON_39_desactivar" targetRef="CON_39_unir" />
+    <bpmn:sequenceFlow id="CON_39_Flow_20" sourceRef="CON_39_unir" targetRef="CON_39_resultado" />
+    <bpmn:sequenceFlow id="CON_39_Flow_21" sourceRef="CON_39_resultado" targetRef="CON_39_fin" />
+    <bpmn:sequenceFlow id="CON_39_Flow_22" sourceRef="CON_39_consulta" targetRef="CON_39_abrir" />
+    <bpmn:sequenceFlow id="CON_39_Flow_23" sourceRef="CON_39_abrir" targetRef="CON_39_consultar" />
+    <bpmn:sequenceFlow id="CON_39_Flow_24" sourceRef="CON_39_consultar" targetRef="CON_39_mostrar" />
+    <bpmn:sequenceFlow id="CON_39_Flow_25" sourceRef="CON_39_mostrar" targetRef="CON_39_consultado" />
+  </bpmn:process>
+  <bpmn:collaboration id="CON_39_Collaboration">
+    <bpmn:participant id="CON_39_Participant" name="CondoManager · CON-39" processRef="CON_39_Process" />
+  </bpmn:collaboration>
+  <bpmndi:BPMNDiagram id="CON_39_Diagram" name="Administrar el catálogo de áreas comunes">
+    <bpmndi:BPMNPlane id="CON_39_Plane" bpmnElement="CON_39_Collaboration">
+      <bpmndi:BPMNShape id="CON_39_Participant_di" bpmnElement="CON_39_Participant" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#66788c">
+        <dc:Bounds x="24" y="24" width="2872" height="1080" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_Lane_0_di" bpmnElement="CON_39_Lane_0" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="24" width="2842" height="270" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_Lane_1_di" bpmnElement="CON_39_Lane_1" isHorizontal="true" bioc:fill="#f7faff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="294" width="2842" height="600" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_Lane_2_di" bpmnElement="CON_39_Lane_2" isHorizontal="true" bioc:fill="#ffffff" bioc:stroke="#a2b2c4">
+        <dc:Bounds x="54" y="894" width="2842" height="210" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_inicio_di" bpmnElement="CON_39_inicio" bioc:fill="#e9f8ee" bioc:stroke="#24824b">
+        <dc:Bounds x="141" y="126" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="84" y="173" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_solicitar_di" bpmnElement="CON_39_solicitar" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="265" y="97" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_autorizar_di" bpmnElement="CON_39_autorizar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="495" y="382" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_permiso_di" bpmnElement="CON_39_permiso" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="783" y="403" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="734" y="342" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_denegar_di" bpmnElement="CON_39_denegar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="935" y="772" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_denegado_di" bpmnElement="CON_39_denegado" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="1241" y="801" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1184" y="848" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_operacion_di" bpmnElement="CON_39_operacion" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1003" y="118" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="954" y="57" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_formulario_di" bpmnElement="CON_39_formulario" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="1165" y="77" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_validar_di" bpmnElement="CON_39_validar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1395" y="382" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_valido_di" bpmnElement="CON_39_valido" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1693" y="403" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1644" y="342" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_corregir_di" bpmnElement="CON_39_corregir" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="1625" y="77" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_guardar_di" bpmnElement="CON_39_guardar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1865" y="382" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_seleccionar_di" bpmnElement="CON_39_seleccionar" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="1165" y="192" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_comprobar_di" bpmnElement="CON_39_comprobar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1395" y="612" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_existe_di" bpmnElement="CON_39_existe" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="1693" y="633" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1644" y="572" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_error_di" bpmnElement="CON_39_error" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1625" y="772" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_sin_cambio_di" bpmnElement="CON_39_sin_cambio" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="1931" y="801" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1874" y="848" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_desactivar_di" bpmnElement="CON_39_desactivar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="1865" y="612" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_unir_di" bpmnElement="CON_39_unir" isMarkerVisible="true" bioc:fill="#fff2ce" bioc:stroke="#956600">
+        <dc:Bounds x="2173" y="403" width="54" height="54" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2124" y="342" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_resultado_di" bpmnElement="CON_39_resultado" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="2345" y="97" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_fin_di" bpmnElement="CON_39_fin" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="2691" y="126" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2634" y="173" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_consulta_di" bpmnElement="CON_39_consulta" bioc:fill="#e9f8ee" bioc:stroke="#24824b">
+        <dc:Bounds x="141" y="976" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="84" y="1023" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_abrir_di" bpmnElement="CON_39_abrir" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="265" y="947" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_consultar_di" bpmnElement="CON_39_consultar" bioc:fill="#eaf3ff" bioc:stroke="#296293">
+        <dc:Bounds x="495" y="612" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_mostrar_di" bpmnElement="CON_39_mostrar" bioc:fill="#fff5db" bioc:stroke="#8a681d">
+        <dc:Bounds x="785" y="947" width="190" height="96" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CON_39_consultado_di" bpmnElement="CON_39_consultado" bioc:fill="#fff0ed" bioc:stroke="#ad443a">
+        <dc:Bounds x="1111" y="976" width="38" height="38" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1054" y="1023" width="152" height="52" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="CON_39_Flow_0_di" bpmnElement="CON_39_Flow_0" bioc:stroke="#475b70">
+        <di:waypoint x="179" y="145" />
+        <di:waypoint x="265" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_1_di" bpmnElement="CON_39_Flow_1" bioc:stroke="#475b70">
+        <di:waypoint x="360" y="193" />
+        <di:waypoint x="360" y="287" />
+        <di:waypoint x="590" y="287" />
+        <di:waypoint x="590" y="382" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_2_di" bpmnElement="CON_39_Flow_2" bioc:stroke="#475b70">
+        <di:waypoint x="685" y="430" />
+        <di:waypoint x="783" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_3_di" bpmnElement="CON_39_Flow_3" bioc:stroke="#475b70">
+        <di:waypoint x="810" y="457" />
+        <di:waypoint x="810" y="820" />
+        <di:waypoint x="935" y="820" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="790" y="730" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_4_di" bpmnElement="CON_39_Flow_4" bioc:stroke="#475b70">
+        <di:waypoint x="1125" y="820" />
+        <di:waypoint x="1241" y="820" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_5_di" bpmnElement="CON_39_Flow_5" bioc:stroke="#475b70">
+        <di:waypoint x="810" y="403" />
+        <di:waypoint x="810" y="145" />
+        <di:waypoint x="1003" y="145" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="790" y="260" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_6_di" bpmnElement="CON_39_Flow_6" bioc:stroke="#475b70">
+        <di:waypoint x="1057" y="145" />
+        <di:waypoint x="1111" y="145" />
+        <di:waypoint x="1111" y="125" />
+        <di:waypoint x="1165" y="125" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1050" y="146" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_7_di" bpmnElement="CON_39_Flow_7" bioc:stroke="#475b70">
+        <di:waypoint x="1355" y="125" />
+        <di:waypoint x="1490" y="125" />
+        <di:waypoint x="1490" y="382" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_8_di" bpmnElement="CON_39_Flow_8" bioc:stroke="#475b70">
+        <di:waypoint x="1585" y="430" />
+        <di:waypoint x="1693" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_9_di" bpmnElement="CON_39_Flow_9" bioc:stroke="#475b70">
+        <di:waypoint x="1720" y="403" />
+        <di:waypoint x="1720" y="173" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1700" y="270" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_10_di" bpmnElement="CON_39_Flow_10" bioc:stroke="#475b70">
+        <di:waypoint x="1720" y="77" />
+        <di:waypoint x="1720" y="55" />
+        <di:waypoint x="1260" y="55" />
+        <di:waypoint x="1260" y="77" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_11_di" bpmnElement="CON_39_Flow_11" bioc:stroke="#475b70">
+        <di:waypoint x="1747" y="430" />
+        <di:waypoint x="1865" y="430" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1740" y="396" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_12_di" bpmnElement="CON_39_Flow_12" bioc:stroke="#475b70">
+        <di:waypoint x="2055" y="430" />
+        <di:waypoint x="2173" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_13_di" bpmnElement="CON_39_Flow_13" bioc:stroke="#475b70">
+        <di:waypoint x="1030" y="172" />
+        <di:waypoint x="1030" y="240" />
+        <di:waypoint x="1165" y="240" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1045" y="207" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_14_di" bpmnElement="CON_39_Flow_14" bioc:stroke="#475b70">
+        <di:waypoint x="1260" y="288" />
+        <di:waypoint x="1260" y="660" />
+        <di:waypoint x="1395" y="660" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_15_di" bpmnElement="CON_39_Flow_15" bioc:stroke="#475b70">
+        <di:waypoint x="1585" y="660" />
+        <di:waypoint x="1693" y="660" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_16_di" bpmnElement="CON_39_Flow_16" bioc:stroke="#475b70">
+        <di:waypoint x="1720" y="687" />
+        <di:waypoint x="1720" y="772" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1700" y="732" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_17_di" bpmnElement="CON_39_Flow_17" bioc:stroke="#475b70">
+        <di:waypoint x="1815" y="820" />
+        <di:waypoint x="1931" y="820" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_18_di" bpmnElement="CON_39_Flow_18" bioc:stroke="#475b70">
+        <di:waypoint x="1747" y="660" />
+        <di:waypoint x="1865" y="660" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1740" y="626" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_19_di" bpmnElement="CON_39_Flow_19" bioc:stroke="#475b70">
+        <di:waypoint x="2055" y="660" />
+        <di:waypoint x="2200" y="660" />
+        <di:waypoint x="2200" y="457" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_20_di" bpmnElement="CON_39_Flow_20" bioc:stroke="#475b70">
+        <di:waypoint x="2200" y="403" />
+        <di:waypoint x="2200" y="145" />
+        <di:waypoint x="2345" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_21_di" bpmnElement="CON_39_Flow_21" bioc:stroke="#475b70">
+        <di:waypoint x="2535" y="145" />
+        <di:waypoint x="2691" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_22_di" bpmnElement="CON_39_Flow_22" bioc:stroke="#475b70">
+        <di:waypoint x="179" y="995" />
+        <di:waypoint x="265" y="995" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_23_di" bpmnElement="CON_39_Flow_23" bioc:stroke="#475b70">
+        <di:waypoint x="360" y="947" />
+        <di:waypoint x="360" y="827" />
+        <di:waypoint x="590" y="827" />
+        <di:waypoint x="590" y="708" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_24_di" bpmnElement="CON_39_Flow_24" bioc:stroke="#475b70">
+        <di:waypoint x="685" y="660" />
+        <di:waypoint x="710" y="660" />
+        <di:waypoint x="710" y="995" />
+        <di:waypoint x="785" y="995" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="CON_39_Flow_25_di" bpmnElement="CON_39_Flow_25" bioc:stroke="#475b70">
+        <di:waypoint x="975" y="995" />
+        <di:waypoint x="1111" y="995" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

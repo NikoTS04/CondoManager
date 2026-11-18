@@ -182,6 +182,10 @@ CON-81: ambiente desde el inicio; cierre con despliegue y recuperación finales.
 
 **Trazabilidad:** [roles y permisos](../../specs/02-domains/05-usuarios-rbac/roles-y-permisos.md), [vínculos](../../specs/02-domains/05-usuarios-rbac/vinculos-departamentos.md), [PROC-05](../../specs/02-processes-and-automations/proc-05-gestion-usuarios.md).
 
+Implementación y verificación local de CON-7/76:
+[identidad y cambios de acceso](CON-7-76.md). El cierre conserva la dependencia de
+correo real CON-78 y la revisión/integración del equipo.
+
 ### CON-25 — Aprobar e imputar un pago · Anderson
 
 **Base:** conciliación persistente, prelación, reconstrucción diaria, imputaciones, crédito, auditoría y outbox.
