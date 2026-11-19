@@ -27,6 +27,7 @@ build/
 
 # Variables de entorno y secretos
 .env
+/.env.deploy
 .env.local
 .env.*.local
 *.pem
