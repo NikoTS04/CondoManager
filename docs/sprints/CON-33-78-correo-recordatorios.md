@@ -50,7 +50,7 @@ Entorno: macOS, Python 3.14, PostgreSQL 16 desechable (puerto 55432), Mailpit v1
 1. ~~**Contrato de identidad con Jerson (CON-76).**~~ Resuelto al integrar `develop`: finalidades `OPERATIVA`/`INVITACION`/`SEGURIDAD` con revalidación propia. El worker atiende filas `SIMULADO` con `transport` y toda fila `PROVEEDOR` (de cualquier finalidad) con `proveedor`, construido una vez al arrancar desde la configuración SMTP.
 2. **Proveedor del ambiente demo con Nicolás (CON-81):** elegir proveedor SMTP, credenciales en `.env` del ambiente, prueba con cuentas autorizadas y evidencia SQL de intentos.
 3. ~~Plantillas de identidad~~ (invitación, cambio de acceso, cuenta activada): implementadas; ver «Plantillas de identidad».
-4. Recorrido en navegador: despacho/comunicado desde la Junta → correo en Mailpit/proveedor → estado `ENVIADO` visible.
+4. ~~Recorrido en navegador~~ con Mailpit: hecho (ver «Recorrido de aceptación local»). Falta repetirlo con el proveedor real del demo.
 
 ## CON-33 — Recordatorios de vencimiento
 
@@ -94,3 +94,34 @@ Pendiente de confirmación con Anderson. Si se acepta, no requiere cambios en pa
 | Despacho tardío tras el vencimiento; cambio de vencimiento suprime y reprograma | Aprobadas |
 | Hora de Lima (07:59 no, 08:00 sí, 22:00 local = mismo día), un pase por día, apagado por configuración | Aprobada |
 | Mutaciones: sin `FOR SHARE` o sin revalidar saldo, las pruebas de pago concurrente/aprobado fallan | Confirmado |
+
+## Recorrido de aceptación local (18/11/2026)
+
+Stack aislado: PostgreSQL 16 desechable (`condomanager_demo`, migrada a `0022` con
+`seed_usuarios_demo` y `seed_areas_demo`), Redis y Mailpit v1.27 desechables, API (`uvicorn`),
+worker de notificaciones y frontend (`next dev`) locales con `EMAIL_TRANSPORTE=SMTP` hacia Mailpit.
+No se usó la base compartida.
+
+1. **Recordatorio (CON-33).** Se insertó una cuota del Dpto. 102 (S/ 180.00, vence 21/11, gracia
+   5 días). Se reinició el worker: el log indica «Proveedor de correo SMTP configurado» y
+   «Recordatorios de vencimiento programados: 1 nuevos». Mailpit recibió el correo con el
+   vencimiento 21/11/2026, el saldo S/ 180.00 y el último día sin mora 26/11/2026.
+2. **Comunicado desde la Junta (CON-78).** Portal Junta → Comunicados → «Corte de agua programado»
+   → confirmar. Los 3 destinatarios demo con email quedaron `ENVIADO` y Mailpit recibió los 3.
+3. **Estado visible.** El historial de la Junta muestra «Aceptado, entrega sin confirmar» (`ENVIADO`)
+   con ciclo e intentos.
+
+Evidencia SQL (`notificaciones_logs` ⨝ `notificaciones_intentos`):
+
+| tipo_evento | estado | transporte | intento | proveedor_message_id |
+|---|---|---|---|---|
+| NOTIF_COMUNICADO_GENERAL | ENVIADO | PROVEEDOR | 1 | `<b4e28fb0-…-1-1@condomanager.local>` |
+| NOTIF_COMUNICADO_GENERAL | ENVIADO | PROVEEDOR | 1 | `<a0a8eeb1-…-1-1@condomanager.local>` |
+| NOTIF_COMUNICADO_GENERAL | ENVIADO | PROVEEDOR | 1 | `<c3da1110-…-1-1@condomanager.local>` |
+| NOTIF_RECORDATORIO_PREVIO | ENVIADO | PROVEEDOR | 1 | `<16e372b3-…-1-1@condomanager.local>` |
+
+Capturas: [Junta, historial de envíos](evidencia/con78-33/junta-comunicados-enviado.png) ·
+[bandeja de Mailpit](evidencia/con78-33/mailpit-bandeja.png).
+
+**Pendiente:** repetir el mismo recorrido con el proveedor SMTP real del ambiente demo
+(CON-81, con Nicolás) sobre cuentas autorizadas, e incluir invitaciones y avisos de relevo (CON-76).
