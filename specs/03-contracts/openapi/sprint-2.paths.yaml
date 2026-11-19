@@ -48,6 +48,7 @@ paths:
     get:
       operationId: listarReservas
       summary: Reservas de las unidades autorizadas, incluidas las canceladas
+      description: Fuente única SQL; no adopta memoria. Esquema requerido ausente responde 503.
       x-historias: [CON-41, CON-46]
       x-implementation-status: implementado
       parameters:
@@ -64,6 +65,7 @@ paths:
         '403': {$ref: '#/responses/Error'}
         '404': {$ref: '#/responses/Error'}
         '422': {$ref: '#/responses/Error'}
+        '503': {$ref: '#/responses/Error'}
     post:
       operationId: crearReserva
       summary: Confirmar una reserva con solvencia y exclusión de horarios en PostgreSQL
@@ -87,6 +89,7 @@ paths:
         '404': {$ref: '#/responses/Error'}
         '409': {$ref: '#/responses/Error'}
         '422': {$ref: '#/responses/Error'}
+        '503': {$ref: '#/responses/Error'}
   /reservas/{reserva_id}/cancelar:
     parameters:
       - {$ref: '#/parameters/ReservaPath'}
@@ -150,11 +153,39 @@ paths:
   /pagos/comprobantes:
     get:
       operationId: listarComprobantes
-      summary: Comprobantes persistidos y autorizados; estado público APROBADO
-      x-historias: [CON-22, CON-23]
+      summary: Comprobantes persistidos y autorizados; estado público APROBADO y filtros combinables CON-24
+      x-historias: [CON-22, CON-23, CON-24]
       x-implementation-status: implementado
       parameters:
         - {$ref: '#/parameters/Contexto'}
+        - name: fecha_desde
+          in: query
+          required: false
+          schema: {type: string, format: date}
+        - name: fecha_hasta
+          in: query
+          required: false
+          schema: {type: string, format: date}
+        - name: departamento_id
+          in: query
+          required: false
+          schema: {type: string, format: uuid}
+        - name: banco
+          in: query
+          required: false
+          schema: {type: string}
+        - name: estado
+          in: query
+          required: false
+          schema: {type: string, enum: [EN_REVISION, APROBADO, OBSERVADO, RECHAZADO]}
+        - name: limit
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: offset
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0, default: 0}
       responses:
         '200':
           description: Lista con enlaces autenticados a voucher; el residente solo ve sus unidades.

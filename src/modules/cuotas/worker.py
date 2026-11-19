@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 STREAM = "condomanager:domain-events"
 
 
-async def emitir_pendientes(session_factory=AsyncSessionLocal, hoy: date | None = None):
+async def emitir_pendientes(session_factory=AsyncSessionLocal, hoy: date | None = None, *, estricto=False):
     hoy = hoy or datetime.now(UTC).date()
     if hoy.day < settings.CUOTAS_DIA_EMISION:
         return
@@ -53,10 +53,14 @@ async def emitir_pendientes(session_factory=AsyncSessionLocal, hoy: date | None 
                 )
         except APIError as exc:
             if exc.error_code != "LOTE_YA_EMITIDO":
+                if estricto:
+                    raise
                 logger.exception(
                     "Emisión pendiente fallida: condominio=%s periodo=%s", cid, periodo
                 )
         except Exception:
+            if estricto:
+                raise
             logger.exception("Emisión pendiente fallida: condominio=%s periodo=%s", cid, periodo)
 
 

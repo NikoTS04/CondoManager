@@ -95,6 +95,7 @@ async def disponibilidad_area(
     response_model=List[ReservaResponseDTO],
     status_code=status.HTTP_200_OK,
     summary="Consultar reservas y disponibilidad por área y fecha",
+    responses={503: {"model": ErrorResponse, "description": "Historial SQL no disponible."}},
 )
 async def listar_reservas(
     area_id: Optional[uuid.UUID] = Query(None, description="ID del área común a consultar"),
@@ -126,6 +127,7 @@ def get_creacion_reservas_repository(solvencia=Depends(get_solvencia_service)):
     response_model=ReservaResponseDTO,
     status_code=status.HTTP_201_CREATED,
     summary="Solicitud de reserva de área común (con filtro de solvencia)",
+    responses={503: {"model": ErrorResponse, "description": "Creación SQL no disponible."}},
 )
 async def crear_reserva(
     request: CrearReservaRequest,

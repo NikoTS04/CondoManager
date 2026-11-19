@@ -154,3 +154,7 @@ class DisponibilidadService:
             )
             for inicio, fin in fusionados
         ]
+
+
+def get_disponibilidad_repository(session: AsyncSession = Depends(get_db_session)):
+    return DisponibilidadRepository(session)

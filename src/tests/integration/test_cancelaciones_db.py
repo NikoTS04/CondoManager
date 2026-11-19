@@ -254,6 +254,8 @@ async def test_fallo_transaccional_revierte_estado_auditoria_y_evento(
     caso_cancelacion, monkeypatch
 ):
     client, base, residente, rid = caso_cancelacion
+    async with base.sessions() as db:
+        creador_id = (await db.get(Reserva, rid)).usuario_id
     original = CancelacionesService._guardar
 
     async def fallar(self, *args):

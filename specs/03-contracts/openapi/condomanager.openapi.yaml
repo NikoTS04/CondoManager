@@ -529,7 +529,8 @@ paths:
   /moras/evaluar:
     post:
       operationId: evaluarMoras
-      summary: Simular evaluación de moras; solo administración del contexto
+      summary: Evaluación manual retirada; usar operación del worker diario
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -541,7 +542,11 @@ paths:
                 condominio_id: { type: string, format: uuid }
                 fecha_corte: { type: string, format: date }
       responses:
-        '200': { description: Resultado de evaluación piloto }
+        '410':
+          description: EVALUACION_MANUAL_RETIRADA; no se modifican obligaciones.
+          content:
+            application/json:
+              schema: {$ref: './sprint-2.schemas.yaml#/schemas/Error'}
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
   /notificaciones/logs:
@@ -761,10 +766,38 @@ paths:
           description: CONDOMINIO_NO_ENCONTRADO o DISTRIBUCION_NO_CONFIGURADA
         '422':
           description: DATOS_DISTRIBUCION_INVALIDOS por UUID inválido
+  /health/ready:
+    get:
+      security: []
+      tags: [Sistema]
+      summary: Disponibilidad de PostgreSQL y Redis
+      operationId: readiness
+      description: SELECT 1 y PING con timeout de dos segundos por dependencia. No acredita workers, almacenamiento ni correo. Sin detalles internos.
+      responses:
+        '200':
+          description: Ambas dependencias disponibles.
+          content:
+            application/json:
+              schema: &readinessSchema
+                type: object
+                required: [status, dependencies]
+                properties:
+                  status: {type: string, enum: [ok, error]}
+                  dependencies:
+                    type: object
+                    required: [postgres, redis]
+                    properties:
+                      postgres: {type: string, enum: [ok, error]}
+                      redis: {type: string, enum: [ok, error, disabled]}
+        '503':
+          description: Al menos una dependencia no disponible o con timeout.
+          content:
+            application/json:
+              schema: *readinessSchema
   /health:
     get:
       security: []
-      summary: Comprobación de estado del servicio
+      summary: Liveness del proceso, sin consultar dependencias
       operationId: healthCheck
       responses:
         '200':
@@ -777,6 +810,12 @@ paths:
                   status: { type: string, example: "ok" }
                   service: { type: string, example: "CondoManager Core API" }
 
+  /jobs/diario:
+    $ref: './hobby.paths.yaml#/paths/~1jobs~1diario'
+  /condominios/{cid}/areas/{aid}/bloqueos:
+    $ref: './hobby.paths.yaml#/paths/~1condominios~1%7Bcid%7D~1areas~1%7Baid%7D~1bloqueos'
+  /condominios/{cid}/areas/{aid}/bloqueos/{bid}:
+    $ref: './hobby.paths.yaml#/paths/~1condominios~1%7Bcid%7D~1areas~1%7Baid%7D~1bloqueos~1%7Bbid%7D'
   /condominios:
     get:
       summary: Listar condominios activos
@@ -1105,6 +1144,10 @@ components:
                 format: binary
                 description: CSV UTF-8, máximo 2 MiB y 5000 filas; numero,piso,edificio,coeficiente,total_pisos
   securitySchemes:
+    cronBearer:
+      type: http
+      scheme: bearer
+      description: CRON_SECRET privado; no es un JWT de usuario
     bearerAuth:
       type: http
       scheme: bearer

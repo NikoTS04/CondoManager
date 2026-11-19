@@ -86,6 +86,9 @@ async def test_usuarios_service_credenciales_invalidas(identidad_piloto):
     with pytest.raises(CredencialesInvalidasException):
         await UsuariosService(identidad_piloto).autenticar(req_inexistente)
 
+    with pytest.raises(ValueError):
+        LoginRequest(email="\x00", password="Password123!")
+
 
 def test_require_role_enforcement():
     """Verifica que el guardián RBAC permita o deniegue según el rol."""

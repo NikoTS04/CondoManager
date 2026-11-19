@@ -180,3 +180,19 @@ errores de restore** ni crear permisos públicos para que termine.
    confirma que ya fue emitido, sin alterar datos históricos.
 7. API y worker pueden competir: el lock del condominio y restricciones únicas
    permiten un único lote. Consumidores de Redis deduplican por `event_id`.
+## Sondas compatibles — 18/11/2026
+
+Usar `/api/v1/health` para vida del proceso y `/api/v1/health/ready` para
+disponibilidad de PostgreSQL y Redis. Readiness devuelve 503 si falla cualquiera,
+incluido timeout, sin exponer configuración. No sustituye verificación de workers,
+volumen de vouchers, migración aplicada ni recepción real de correo. La migración
+objetivo actual es `20261113_0021`; comprobarla antes de habilitar identidad.
+## Compatibilidad CON-80 y mora — 18/11/2026
+
+No hay nueva migración. Verificar cabeza `20261113_0021` y tablas requeridas de
+reservas/bloqueos antes de desplegar. Las rutas ya no simulan resultados si faltan.
+Reconciliar reservas que solo existan en procesos antiguos antes de apagarlos:
+esta entrega no hace adopción automática ni altera historia persistida.
+Un cliente de `/moras/evaluar` debe manejar 410 y dejar de usar ese simulador;
+la mora diaria continúa en `pagos-worker` (arranque y 00:05 America/Lima).
+Readiness no garantiza que el worker esté ejecutándose: comprobarlo por separado.

@@ -30,7 +30,7 @@ const MENSAJES: Record<string, string> = {
   VOUCHER_EN_EVALUACION: "Este comprobante ya fue reportado y está en revisión por la junta.",
   VOUCHER_REQUIERE_SUBSANACION: "El comprobante está observado. Usa Subsanar voucher en tu historial para adjuntar una nueva imagen.",
   VOUCHER_RECHAZADO: "La operación fue rechazada. Consulta el motivo y contacta con la administración.",
-  ARCHIVO_DEMASIADO_GRANDE: "El voucher supera 5 MiB. Adjunta un archivo más pequeño.",
+  ARCHIVO_DEMASIADO_GRANDE: "El voucher supera el límite permitido. Adjunta un archivo más pequeño.",
   FORMATO_VOUCHER_NO_SOPORTADO: "Adjunta un archivo PNG, JPEG o PDF.",
   VOUCHER_INVALIDO: "No se pudo validar el archivo. Adjunta una imagen o PDF legible y sin protección.",
   ESTADO_COMPROBANTE_INVALIDO: "El estado cambió. Actualiza el historial antes de continuar.",

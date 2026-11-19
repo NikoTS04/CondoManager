@@ -77,3 +77,10 @@ reales de CON-70, incorpora avisos y conserva errores estructurados. Las pruebas
 incluyen rollback, sesiones independientes, reinicio, diez reservas concurrentes,
 consumo duplicado, workers concurrentes y límites temporales. No se acredita
 entrega física usando el transporte simulado.
+## Consolidación CON-80 — 18/11/2026
+
+Esta nota sustituye las referencias históricas siguientes a compatibilidad piloto:
+SQL es la única fuente productiva. No se mezclan listas en memoria ni se adopta
+una reserva al cancelar. Los dobles de contrato se inyectan exclusivamente desde
+`src/tests/`. Los mismos locks, auditoría, outbox y resultados de cancelación
+persistidos se conservan. Una tabla requerida ausente devuelve 503.

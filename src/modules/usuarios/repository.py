@@ -24,6 +24,8 @@ class SQLAlchemyUsuariosRepository:
         self.session = session
 
     async def por_email(self, email: str) -> Usuario | None:
+        if not email or "\x00" in email:
+            return None
         return await self.session.scalar(
             select(Usuario).where(func.lower(func.btrim(Usuario.email)) == email.strip().lower())
         )
@@ -39,6 +41,8 @@ class SQLAlchemyUsuariosRepository:
         return await self.session.scalar(query)
 
     async def duplicado(self, email: str, documento: str) -> bool:
+        if "\x00" in email or "\x00" in documento:
+            return False
         return (
             await self.session.scalar(
                 select(Usuario.id)

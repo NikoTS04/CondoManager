@@ -27,3 +27,8 @@ Las especificaciones técnicas y funcionales detalladas se mantienen en [`specs/
 - [Persistencia e integración CON-73/74](sprints/CON-73-CON-74-integracion.md).
 - [Notificaciones y resultados reportados por el equipo](sprints/CON-32-34-36-37-notificaciones.md).
 - [Reconciliación del esquema desplegado](sprints/reconciliacion-esquema-legacy.md).
+# Estado de implementación
+
+Consultar [estado actual y prioridades — 18/11/2026](sprints/ESTADO-ACTUAL.md).
+Los planes e informes de sprints conservan sus fechas y evidencias históricas;
+no deben interpretarse como inventarios actualizados ni certificados de despliegue.

@@ -4,7 +4,12 @@ import io
 import os
 import re
 import warnings
+import zipfile
+from enum import Enum
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import uuid4
 
 from PIL import Image, UnidentifiedImageError
@@ -15,7 +20,35 @@ from src.core.errors import APIError
 
 MAX_BYTES = 5 * 1024 * 1024
 NOMBRE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|pdf)")
-MIME = {"png": "image/png", "jpg": "image/jpeg", "pdf": "application/pdf"}
+NOMBRE_DOCUMENTO = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|pdf|docx)")
+MIME = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+class TipoDocumento(str, Enum):
+    VOUCHER = "VOUCHER"
+    PRORRATEO = "PRORRATEO"
+
+
+CATALOGO_DOCUMENTOS = {
+    TipoDocumento.VOUCHER: {
+        "max_bytes": 5 * 1024 * 1024,
+        "formatos_permitidos": {"png", "jpg", "pdf"},
+        "mimes": {"png": "image/png", "jpg": "image/jpeg", "pdf": "application/pdf"},
+    },
+    TipoDocumento.PRORRATEO: {
+        "max_bytes": 10 * 1024 * 1024,
+        "formatos_permitidos": {"pdf", "docx"},
+        "mimes": {
+            "pdf": "application/pdf",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+    },
+}
 
 
 class VoucherStorage:
@@ -27,10 +60,69 @@ class VoucherStorage:
 
     @staticmethod
     def validar(datos: bytes) -> tuple[str, str]:
-        if len(datos) > MAX_BYTES:
-            raise APIError(413, "ARCHIVO_DEMASIADO_GRANDE", "El máximo permitido es 5 MiB.")
+        return VoucherStorage.validar_documento(datos, TipoDocumento.VOUCHER)
+
+    @staticmethod
+    def validar_documento(
+        datos: bytes, tipo: TipoDocumento = TipoDocumento.VOUCHER
+    ) -> tuple[str, str]:
+        config = CATALOGO_DOCUMENTOS.get(tipo, CATALOGO_DOCUMENTOS[TipoDocumento.VOUCHER])
+        limite_bytes = config["max_bytes"]
+        if tipo == TipoDocumento.VOUCHER or settings.APP_ENV == "production" or os.getenv("VERCEL"):
+            limite_bytes = min(limite_bytes, settings.VOUCHER_MAX_BYTES)
+
+        if len(datos) > limite_bytes:
+            raise APIError(
+                413,
+                "ARCHIVO_DEMASIADO_GRANDE",
+                f"El máximo permitido para {tipo.value.lower()} es {limite_bytes // (1024 * 1024)} MiB.",
+            )
         if not datos:
-            raise APIError(422, "VOUCHER_INVALIDO", "Adjunte un archivo PNG, JPG o PDF válido.")
+            raise APIError(
+                422,
+                "VOUCHER_INVALIDO",
+                f"Adjunte un archivo válido para {tipo.value.lower()}.",
+            )
+
+        if tipo == TipoDocumento.PRORRATEO:
+            # Soporta PDF y DOCX
+            if datos.startswith(b"%PDF-"):
+                if not datos.rstrip().endswith(b"%%EOF"):
+                    raise APIError(422, "DOCUMENTO_INVALIDO", "PDF incompleto o corrupto.")
+                try:
+                    pdf = PdfReader(io.BytesIO(datos), strict=True)
+                    if pdf.is_encrypted or not 1 <= len(pdf.pages) <= 500:
+                        raise APIError(
+                            422, "DOCUMENTO_INVALIDO", "PDF protegido o fuera de límites."
+                        )
+                    return "pdf", MIME["pdf"]
+                except Exception as exc:
+                    raise APIError(
+                        422, "DOCUMENTO_INVALIDO", "No se pudo validar el archivo PDF."
+                    ) from exc
+
+            if datos.startswith(b"PK\x03\x04"):
+                try:
+                    with zipfile.ZipFile(io.BytesIO(datos)) as zf:
+                        nombres = set(zf.namelist())
+                        if (
+                            "[Content_Types].xml" not in nombres
+                            or "word/document.xml" not in nombres
+                        ):
+                            raise APIError(
+                                422, "DOCUMENTO_INVALIDO", "El archivo DOCX no es válido."
+                            )
+                    return "docx", MIME["docx"]
+                except zipfile.BadZipFile as exc:
+                    raise APIError(
+                        422, "DOCUMENTO_INVALIDO", "El archivo DOCX está dañado."
+                    ) from exc
+
+            raise APIError(
+                415, "FORMATO_NO_SOPORTADO", "Formato no soportado para prorrateo. Use PDF o DOCX."
+            )
+
+        # Por defecto validación de VOUCHER
         try:
             if datos.startswith(b"%PDF-"):
                 if not datos.rstrip().endswith(b"%%EOF"):
@@ -67,8 +159,8 @@ class VoucherStorage:
                 422, "VOUCHER_INVALIDO", "No se pudo validar el archivo adjunto."
             ) from exc
 
-    def guardar(self, datos: bytes) -> tuple[str, str]:
-        extension, content_type = self.validar(datos)
+    def guardar(self, datos: bytes, tipo: TipoDocumento = TipoDocumento.VOUCHER) -> tuple[str, str]:
+        extension, content_type = self.validar_documento(datos, tipo)
         nombre = f"{uuid4()}.{extension}"
         destino = self.directorio / nombre
         try:
@@ -83,22 +175,97 @@ class VoucherStorage:
             except OSError:
                 pass  # La limpieza recuperable reintentará; no ocultar el error controlado.
             raise APIError(
-                503, "VOUCHER_ALMACENAMIENTO_NO_DISPONIBLE", "No se pudo guardar el voucher."
+                503, "VOUCHER_ALMACENAMIENTO_NO_DISPONIBLE", "No se pudo guardar el archivo."
             ) from exc
         return nombre, content_type
 
     def ruta(self, nombre: str) -> Path:
-        if not NOMBRE.fullmatch(nombre):
+        if not NOMBRE_DOCUMENTO.fullmatch(nombre):
             raise APIError(
                 404, "VOUCHER_NO_DISPONIBLE", "La evidencia no está en el almacén local."
             )
+        # Prevención estricta de Path Traversal
+        if ".." in nombre or "/" in nombre or "\\" in nombre:
+            raise APIError(404, "VOUCHER_NO_DISPONIBLE", "Ruta de archivo no autorizada.")
         ruta = self.directorio / nombre
-        if ruta.is_symlink() or ruta.resolve().parent != self.directorio or not ruta.is_file():
+        if (
+            ruta.is_symlink()
+            or ruta.resolve().parent != self.directorio.resolve()
+            or not ruta.is_file()
+        ):
             raise APIError(404, "VOUCHER_NO_DISPONIBLE", "La evidencia local no está disponible.")
         return ruta
 
     def eliminar(self, nombre: str):
-        if NOMBRE.fullmatch(nombre):
+        if (
+            NOMBRE_DOCUMENTO.fullmatch(nombre)
+            and ".." not in nombre
+            and "/" not in nombre
+            and "\\" not in nombre
+        ):
             ruta = self.directorio / nombre
             if not ruta.is_symlink():
                 ruta.unlink(missing_ok=True)
+
+    def eliminar_seguro(self, nombre: str, es_vigente: bool = False):
+        if es_vigente:
+            raise APIError(
+                409,
+                "EVIDENCIA_VIGENTE_NO_ELIMINABLE",
+                "No se puede eliminar una evidencia vigente o asociada a un comprobante activo.",
+            )
+        self.eliminar(nombre)
+
+
+class SinRedireccion(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class SupabaseVoucherStorage(VoucherStorage):
+    """REST privado, sin fallback local ni redirección de credenciales."""
+
+    def _request(self, method, nombre, datos=None, content_type=None):
+        if not NOMBRE_DOCUMENTO.fullmatch(nombre):
+            raise APIError(404, "VOUCHER_NO_DISPONIBLE", "Referencia de evidencia inválida.")
+        url = (
+            settings.SUPABASE_URL.rstrip("/") + "/storage/v1/object/"
+            + quote(settings.SUPABASE_STORAGE_BUCKET, safe="") + "/" + quote(nombre, safe="")
+        )
+        clave = settings.SUPABASE_SERVICE_ROLE_KEY.get_secret_value()
+        headers = {"Authorization": f"Bearer {clave}", "apikey": clave}
+        if content_type:
+            headers["Content-Type"] = content_type
+        try:
+            with build_opener(SinRedireccion()).open(
+                Request(url, data=datos, headers=headers, method=method), timeout=15
+            ) as response:
+                limite = settings.VOUCHER_MAX_BYTES
+                cuerpo = response.read(limite + 1)
+                if len(cuerpo) > limite:
+                    raise APIError(503, "VOUCHER_NO_DISPONIBLE", "Evidencia fuera de límites.")
+                return cuerpo
+        except HTTPError as exc:
+            if exc.code == 404:
+                if method == "DELETE":
+                    return b""
+                raise APIError(404, "VOUCHER_NO_DISPONIBLE", "Evidencia no disponible.") from None
+            raise APIError(503, "VOUCHER_ALMACENAMIENTO_NO_DISPONIBLE", "Almacén no disponible.") from None
+        except (URLError, OSError):
+            raise APIError(503, "VOUCHER_ALMACENAMIENTO_NO_DISPONIBLE", "Almacén no disponible.") from None
+
+    def guardar(self, datos, tipo=TipoDocumento.VOUCHER):
+        extension, content_type = self.validar_documento(datos, tipo)
+        nombre = f"{uuid4()}.{extension}"
+        self._request("POST", nombre, datos, content_type)
+        return nombre, content_type
+
+    def ruta(self, nombre):
+        return self._request("GET", nombre)
+
+    def eliminar(self, nombre):
+        self._request("DELETE", nombre)
+
+
+def get_voucher_storage():
+    return SupabaseVoucherStorage() if settings.VOUCHER_STORAGE == "supabase" else VoucherStorage()

@@ -60,3 +60,22 @@ Las pruebas de integración añaden concurrencia API/worker, autorización y out
 Los escenarios ejecutables de reporte local, revisión e idempotencia están en
 `specs/02-domains/02-pagos-y-moras/features/sprint_2_anderson.feature`.
 Se verifican con PostgreSQL, archivos temporales reales y nuevas sesiones.
+# Consolidación de bandeja — 18/11/2026
+
+Escenario: filtros combinados y paginación autorizada
+  Dado un actor con acceso vigente al condominio
+  Cuando consulta comprobantes por fecha bancaria, departamento, banco y estado
+  Entonces recibe solo los coincidentes, en orden estable, dentro del límite solicitado
+  Y no recibe unidades sin vínculo ni registros de otro condominio
+  Y la lectura no modifica las operaciones financieras
+
+Escenario: parámetros inválidos
+  Cuando se consulta un rango invertido, estado desconocido o paginación inválida
+  Entonces la API responde 422 sin consultar ni modificar comprobantes
+# Retirada de ruta manual
+
+Escenario: evaluación manual deprecada
+  Dado un administrador con contexto autorizado
+  Cuando llama POST /moras/evaluar
+  Entonces recibe 410 EVALUACION_MANUAL_RETIRADA sin alterar saldos ni eventos
+  Y un residente, auditor o actor de otro condominio sigue recibiendo 403

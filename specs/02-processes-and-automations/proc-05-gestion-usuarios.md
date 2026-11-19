@@ -66,7 +66,7 @@ idéntica es un no-op. Contrato y escenarios:
   excepciones; se audita y se conserva la política de cuotas ya emitidas.
 - La modalidad `MONTO_FIJO` exige `monto_mora_fijo` y prohíbe
   `tasa_mora_porcentaje` y `monto_mora_diario`. `PORCENTAJE_SALDO` exige solo su tasa;
-  `MONTO_DIARIO` exige solo su monto diario. Ampliación pendiente de implementación.
+  `MONTO_DIARIO` exige solo su monto diario. Implementado en las entregas 0016–0019.
 - La persistencia asigna UUID, `activo = true` y fecha UTC. Esos valores no los decide
   el cliente.
 - La creación y la auditoría `CONDOMINIO_CREADO` son atómicas.
