@@ -18,6 +18,18 @@ Plan: [Sprint 3](SPRINT-3.md#con-78--correo-transaccional-real--alejandro). Pol�
 - SMTP acredita `ENVIADO` (aceptación); `ENTREGADO` queda reservado a evidencia posterior del proveedor.
 - Docker Compose: servicio Mailpit para desarrollo (`http://localhost:8025`), variables SMTP en API y worker; `.env.example` documentado.
 
+### Plantillas de identidad (`src/modules/usuarios/comunicaciones.py`)
+
+Las tres se encolan como `Notificacion` con `transporte=PROVEEDOR`, `canal=EMAIL`, sin `departamento_id`, y el worker las revalida con `destinatario_identidad_valido` justo antes de enviar. Si la revalidación falla, la fila pasa a `FALLIDO_PERMANENTE` con alerta `DESTINATARIO_INVALIDO`. Ninguna usa la revalidación de mensajes operativos.
+
+| Plantilla | Finalidad / `tipo_evento` | Cuándo se encola | Revalidación antes de enviar |
+|---|---|---|---|
+| Invitación | `INVITACION` / `UsuarioInvitadoEvent` | Al invitar o reenviar (cuerpo cifrado; el enlace con token nunca queda en el historial). | Invitación vigente (no usada, no revocada, no vencida), cuenta pendiente de activar con la misma revisión, contexto y acceso activos, y correo igual al de la cuenta. |
+| Cambio de acceso | `SEGURIDAD` / `AccesoUsuarioCambiadoEvent` | Al cambiar rol, vínculo o estado de la cuenta (relevos incluidos). | Existe el registro de auditoría de la operación, del mismo contexto, y apunta a este usuario; correo igual al de la cuenta. |
+| Cuenta activada | `SEGURIDAD` / `CuentaActivadaEvent` | En la misma transacción que consume la invitación y activa la cuenta. `evento_id` se deriva (UUIDv5) de la invitación y `operacion_id` es la invitación, por lo que `uq_notificacion_logica` impide un segundo aviso si se reintenta. | La invitación está usada y no revocada, la cuenta sigue activa, el contexto y el rol siguen activos y el correo coincide. |
+
+La plantilla «cuenta activada» incluye nombre, condominio, enlace a `/login` (derivado de `ACTIVACION_WEB_URL`; sin URL válida se omite) y «si no fuiste tú, contacta a la administración». Nunca lleva token ni contraseña.
+
 ## Verificación
 
 Entorno: macOS, Python 3.14, PostgreSQL 16 desechable (puerto 55432), Mailpit v1.27.
@@ -34,7 +46,7 @@ Entorno: macOS, Python 3.14, PostgreSQL 16 desechable (puerto 55432), Mailpit v1
 
 1. ~~**Contrato de identidad con Jerson (CON-76).**~~ Resuelto al integrar `develop`: finalidades `OPERATIVA`/`INVITACION`/`SEGURIDAD` con revalidación propia. El worker atiende filas `SIMULADO` con `transport` y toda fila `PROVEEDOR` (de cualquier finalidad) con `proveedor`, construido una vez al arrancar desde la configuración SMTP.
 2. **Proveedor del ambiente demo con Nicolás (CON-81):** elegir proveedor SMTP, credenciales en `.env` del ambiente, prueba con cuentas autorizadas y evidencia SQL de intentos.
-3. Plantillas nuevas de identidad (invitación, activación, cambio de acceso) cuando exista el contrato.
+3. ~~Plantillas de identidad~~ (invitación, cambio de acceso, cuenta activada): implementadas; ver «Plantillas de identidad».
 4. Recorrido en navegador: despacho/comunicado desde la Junta → correo en Mailpit/proveedor → estado `ENVIADO` visible.
 
 ## CON-33 — Recordatorios de vencimiento

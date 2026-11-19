@@ -13,7 +13,7 @@ from src.core.config import settings
 from src.core.errors import APIError
 from src.core.security import hash_password
 from src.modules.notificaciones.models import Notificacion
-from src.modules.usuarios.comunicaciones import aviso_invitacion
+from src.modules.usuarios.comunicaciones import aviso_activacion, aviso_invitacion
 from src.modules.usuarios.invitaciones_models import InvitacionUsuario, OperacionIdentidad
 from src.modules.usuarios.models import Usuario, UsuarioRol
 from src.modules.usuarios.schemas import InvitacionResponse, RelevoResponse
@@ -263,7 +263,11 @@ class IdentidadService(UsuariosService):
         usuario.activacion_pendiente = False
         usuario.auth_revision += 1
         invitacion.utilizada_en = datetime.now(UTC)
-        await self.repo.agregar(usuario, invitacion)
+        # Mismo commit que consume la invitación: sin activación no hay aviso, y el
+        # bloqueo de la invitación más la clave lógica evitan duplicados al reintentar.
+        await self.repo.agregar(
+            usuario, invitacion, aviso_activacion(invitacion, usuario, contexto)
+        )
         await self._auditar(
             invitacion.condominio_id,
             {"rol": "INVITACION", "sub": str(usuario.id)},

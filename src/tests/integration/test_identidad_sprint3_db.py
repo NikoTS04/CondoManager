@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 
 from src.core.config import settings
 from src.core.models_audit import AuditoriaLogORM
@@ -284,6 +285,109 @@ async def test_cola_no_simula_identidad_y_proveedor_inyectado_recupera(api_usuar
         log = await db.get(Notificacion, UUID(cuenta["notificacion_id"]))
         assert log.estado == "ENVIADO" and "#token=" not in log.cuerpo
     assert not await procesar_uno(base.sessions, proveedor=transporte)
+
+
+async def avisos_activacion(base):
+    async with base.sessions() as db:
+        return list(
+            await db.scalars(
+                select(Notificacion).where(Notificacion.tipo_evento == "CuentaActivadaEvent")
+            )
+        )
+
+
+async def test_activacion_encola_un_solo_aviso_idempotente(api_usuarios):
+    client, base = api_usuarios
+    cuenta = await invitar(client, base)
+    token = await token_invitacion(base, cuenta["id"])
+    assert await avisos_activacion(base) == []
+    assert (await activar(client, token)).status_code == 200
+    # El reintento de la activación es rechazado y no encola otro aviso.
+    assert (await activar(client, token)).json()["error_code"] == "ACTIVACION_USADA"
+    avisos = await avisos_activacion(base)
+    assert len(avisos) == 1
+    aviso = avisos[0]
+    assert aviso.finalidad == "SEGURIDAD" and aviso.transporte == "PROVEEDOR"
+    assert aviso.estado == "EN_COLA" and aviso.departamento_id is None
+    assert aviso.operacion_id == UUID(cuenta["id"]) and aviso.evento_id != aviso.operacion_id
+    assert aviso.usuario_destinatario_id == UUID(cuenta["usuario_id"])
+    assert aviso.destinatario == cuenta["email"] and aviso.canal == "EMAIL"
+    assert aviso.asunto == "Tu cuenta de CondoManager está activa"
+    assert "Ana" in aviso.cuerpo and "https://condo.ejemplo.test/login" in aviso.cuerpo
+    assert "contacta a la administración" in aviso.cuerpo
+    assert (
+        token not in aviso.cuerpo and PASSWORD not in aviso.cuerpo and "#token=" not in aviso.cuerpo
+    )
+    # La clave lógica rechaza un segundo aviso para la misma invitación y destinatario.
+    async with base.sessions() as db:
+        db.add(
+            Notificacion(
+                id=uuid4(),
+                condominio_id=aviso.condominio_id,
+                usuario_destinatario_id=aviso.usuario_destinatario_id,
+                evento_id=aviso.evento_id,
+                operacion_id=aviso.operacion_id,
+                tipo_evento=aviso.tipo_evento,
+                finalidad="SEGURIDAD",
+                canal="EMAIL",
+                destinatario=aviso.destinatario,
+                cuerpo="duplicado",
+                transporte="PROVEEDOR",
+            )
+        )
+        with pytest.raises(IntegrityError) as error:
+            await db.commit()
+        assert "uq_notificacion_logica" in str(error.value)
+
+
+async def test_aviso_de_activacion_se_envia_una_vez_sin_secretos(api_usuarios):
+    client, base = api_usuarios
+    cuenta = await invitar(client, base)
+    token = await token_invitacion(base, cuenta["id"])
+    assert (await activar(client, token)).status_code == 200
+    recibidos = []
+
+    def proveedor(log, key):
+        recibidos.append((log.asunto, log.cuerpo, log.destinatario))
+        return {"status": 200, "message_id": "activacion-prueba"}
+
+    # Primero sale la invitación (ya consumida): la revalidación la descarta sin enviar.
+    assert await procesar_uno(base.sessions, proveedor=proveedor)
+    assert recibidos == []
+    assert await procesar_uno(base.sessions, proveedor=proveedor)
+    assert len(recibidos) == 1
+    asunto, cuerpo, destinatario = recibidos[0]
+    assert asunto == "Tu cuenta de CondoManager está activa" and destinatario == cuenta["email"]
+    assert token not in cuerpo and PASSWORD not in cuerpo and "#token=" not in cuerpo
+    (aviso,) = await avisos_activacion(base)
+    assert aviso.estado == "ENVIADO" and aviso.proveedor_message_id == "activacion-prueba"
+    assert not await procesar_uno(base.sessions, proveedor=proveedor)
+    assert len(recibidos) == 1
+
+
+async def test_aviso_de_activacion_sin_url_valida_omite_enlace(api_usuarios, monkeypatch):
+    client, base = api_usuarios
+    cuenta = await invitar(client, base)
+    token = await token_invitacion(base, cuenta["id"])
+    monkeypatch.setattr(settings, "ACTIVACION_WEB_URL", "no-es-una-url")
+    assert (await activar(client, token)).status_code == 200
+    (aviso,) = await avisos_activacion(base)
+    assert "http" not in aviso.cuerpo and "contacta a la administración" in aviso.cuerpo
+
+
+async def test_aviso_de_activacion_se_revalida_si_la_cuenta_ya_no_esta_activa(api_usuarios):
+    client, base = api_usuarios
+    cuenta = await invitar(client, base)
+    token = await token_invitacion(base, cuenta["id"])
+    assert (await activar(client, token)).status_code == 200
+    async with base.sessions() as db, db.begin():
+        (await db.get(Usuario, UUID(cuenta["usuario_id"]))).esta_activo = False
+    # Descarta primero la invitación y luego el aviso de activación.
+    assert await procesar_uno(base.sessions, proveedor=lambda *a: pytest.fail("no se envía"))
+    assert await procesar_uno(base.sessions, proveedor=lambda *a: pytest.fail("no se envía"))
+    (aviso,) = await avisos_activacion(base)
+    assert aviso.estado == "FALLIDO_PERMANENTE"
+    assert aviso.error_mensaje == "DESTINATARIO_REVOCADO_O_CONTACTO_MODIFICADO"
 
 
 async def preparar_relevo(client, base):
