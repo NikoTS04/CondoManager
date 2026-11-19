@@ -41,6 +41,9 @@ Entorno: macOS, Python 3.14, PostgreSQL 16 desechable (puerto 55432), Mailpit v1
 | Envío real `TransporteSMTP` → Mailpit con plantilla `NOTIF_RECORDATORIO_PREVIO` | Aceptado; Mailpit recibe `Message-ID nid-1-1@condomanager.local` |
 | Servidor SMTP caído (puerto cerrado) | `FALLO_TEMPORAL` (503) |
 | Suite backend completa `pytest -q` con `CON3/CON13_TEST_DATABASE_URL` | 725 aprobadas, 0 fallidas, 0 omitidas (13 min) |
+| Tras integrar `develop` (CON-7/76) | 789 aprobadas, 0 fallidas (9 min) |
+| Con CON-33 (`42a9fc5`) | 806 aprobadas, 0 fallidas; ciclo `0022` bajada/subida correcto |
+| Con aviso de cuenta activada: identidad, recordatorios, correo, alertas y unitarias | 378 aprobadas |
 
 ## Pendiente para cerrar CON-78
 
