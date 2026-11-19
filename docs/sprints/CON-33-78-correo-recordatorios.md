@@ -111,6 +111,12 @@ No se usó la base compartida.
 3. **Estado visible.** El historial de la Junta muestra «Aceptado, entrega sin confirmar» (`ENVIADO`)
    con ciclo e intentos.
 
+4. **Identidad (CON-7/76 + CON-78).** Junta → Usuarios → «Invitar usuario» (Lucía Prueba,
+   `lucia.prueba@ejemplo.test`). Mailpit recibió «Activa tu cuenta de CondoManager» con el enlace
+   `/activar#token=…`; en `notificaciones_logs.cuerpo` solo queda «Enlace privado omitido del
+   historial». Al abrir el enlace y elegir contraseña, llegó «Tu cuenta de CondoManager está activa»
+   con el enlace a `/login`. Ambas filas: `INVITACION`/`SEGURIDAD`, `PROVEEDOR`, `ENVIADO`, 1 intento.
+
 Evidencia SQL (`notificaciones_logs` ⨝ `notificaciones_intentos`):
 
 | tipo_evento | estado | transporte | intento | proveedor_message_id |
@@ -119,6 +125,8 @@ Evidencia SQL (`notificaciones_logs` ⨝ `notificaciones_intentos`):
 | NOTIF_COMUNICADO_GENERAL | ENVIADO | PROVEEDOR | 1 | `<a0a8eeb1-…-1-1@condomanager.local>` |
 | NOTIF_COMUNICADO_GENERAL | ENVIADO | PROVEEDOR | 1 | `<c3da1110-…-1-1@condomanager.local>` |
 | NOTIF_RECORDATORIO_PREVIO | ENVIADO | PROVEEDOR | 1 | `<16e372b3-…-1-1@condomanager.local>` |
+| UsuarioInvitadoEvent | ENVIADO | PROVEEDOR | 1 | `<768e81f9-…-1-1@condomanager.local>` |
+| CuentaActivadaEvent | ENVIADO | PROVEEDOR | 1 | `<f5aaea6e-…-1-1@condomanager.local>` |
 
 Capturas: [Junta, historial de envíos](evidencia/con78-33/junta-comunicados-enviado.png) ·
 [bandeja de Mailpit](evidencia/con78-33/mailpit-bandeja.png).
