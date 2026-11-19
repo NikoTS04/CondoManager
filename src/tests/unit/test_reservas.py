@@ -1,6 +1,19 @@
-from datetime import date, time
+import uuid
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from src.modules.reservas.service import GestorReservasService, SolicitudReservaDTO
+
+import pytest
+
+from src.modules.reservas.schemas import CancelarReservaRequest, CrearReservaRequest
+from src.modules.reservas.service import (
+    AreaInactivaException,
+    CancelacionInvalidaException,
+    ConflictoHorarioException,
+    DeudaMoraActivaException,
+    HorarioInvalidoException,
+    ReservasService,
+)
+from src.tests.reservas_legacy import GestorReservasService, SolicitudReservaDTO
 
 
 def test_rechazo_reserva_por_mora_activa():
@@ -75,22 +88,6 @@ def test_rechazo_reserva_por_conflicto_horario():
 # ============================================================================
 # Pruebas Avanzadas para ReservasService (SDD Completo - Brandon PROC-04)
 # ============================================================================
-
-from datetime import datetime, timedelta, timezone
-import uuid
-import pytest
-from src.modules.reservas.schemas import (
-    CancelarReservaRequest,
-    CrearReservaRequest,
-)
-from src.modules.reservas.service import (
-    AreaInactivaException,
-    CancelacionInvalidaException,
-    ConflictoHorarioException,
-    DeudaMoraActivaException,
-    HorarioInvalidoException,
-    ReservasService,
-)
 
 
 @pytest.fixture

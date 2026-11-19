@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
 import { VoucherDownloadButton } from "@/components/domain/VoucherDownloadButton";
 import { ComprobanteStatusChip } from "@/components/domain/ComprobanteStatusChip";
@@ -40,6 +40,7 @@ export function ConciliacionSection({
   const [itemsApi, setItemsApi] = useState<ComprobantePago[] | null>(null);
   const [loadingApi, setLoadingApi] = useState<boolean>(false);
   const [errorApi, setErrorApi] = useState<string | null>(null);
+  const consultaActual = useRef(0);
 
   const hayFiltrosActivos =
     filtroEstado !== "TODOS" ||
@@ -51,6 +52,7 @@ export function ConciliacionSection({
 
   const consultarApi = useCallback(async () => {
     if (!condominioId) return;
+    const consulta = ++consultaActual.current;
     setLoadingApi(true);
     setErrorApi(null);
     try {
@@ -63,21 +65,23 @@ export function ConciliacionSection({
         limit,
         offset,
       });
-      setItemsApi(data);
+      if (consulta === consultaActual.current) setItemsApi(data);
     } catch (err) {
-      setErrorApi(err instanceof Error ? err.message : "Error al consultar la bandeja de conciliación.");
+      if (consulta === consultaActual.current) setErrorApi(err instanceof Error ? err.message : "Error al consultar la bandeja de conciliación.");
     } finally {
-      setLoadingApi(false);
+      if (consulta === consultaActual.current) setLoadingApi(false);
     }
   }, [condominioId, filtroDepartamento, filtroBanco, filtroEstado, filtroFechaDesde, filtroFechaHasta, limit, offset]);
 
   useEffect(() => {
-    if (hayFiltrosActivos && condominioId) {
+    const contador = consultaActual;
+    if (!loadingProp && condominioId) {
       void consultarApi();
     } else {
       setItemsApi(null);
     }
-  }, [hayFiltrosActivos, condominioId, consultarApi]);
+    return () => { contador.current++; };
+  }, [loadingProp, comprobantesProp, condominioId, consultarApi]);
 
   const limpiarFiltros = () => {
     setFiltroEstado("TODOS");

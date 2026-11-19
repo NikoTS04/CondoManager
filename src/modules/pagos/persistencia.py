@@ -33,7 +33,7 @@ from src.modules.pagos.schemas import (
     ReportarPagoRequest,
 )
 from src.modules.pagos.service import PagosService
-from src.modules.pagos.storage import MAX_BYTES, VoucherStorage
+from src.modules.pagos.storage import MAX_BYTES, VoucherStorage, get_voucher_storage
 from src.shared.fechas import fecha_lima
 
 
@@ -41,7 +41,7 @@ class PagosPersistentesService:
     def __init__(self, session: AsyncSession, storage: VoucherStorage | None = None):
         self.session = session
         self.repo = SQLAlchemyPagosRepository(session)
-        self.storage = storage or VoucherStorage()
+        self.storage = storage or get_voucher_storage()
 
     @staticmethod
     def fotografia(depto, cuotas):

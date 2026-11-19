@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select
 
 from src.modules.cuotas.models import CuotaMantenimiento
-from src.modules.notificaciones.consumo import consumir
+from src.modules.notificaciones.consumo import TIPOS, consumir
 from src.modules.notificaciones.models import EventoConsumido, IncidenciaEvento, Notificacion
 from src.modules.notificaciones.worker import recuperar_eventos
 from src.modules.pagos.models import ComprobantePago
@@ -55,6 +55,7 @@ async def test_avisos_de_pago_usan_revision_persistida_y_no_duplican(api_pagos):
         assert await consumir(base.sessions, evento.payload) == 1
         assert await consumir(base.sessions, evento.payload) == 0
     await recuperar_eventos(base.sessions)
+    await recuperar_eventos(base.sessions)
     await base.engine.dispose()
 
     async with base.sessions() as db:
@@ -62,7 +63,16 @@ async def test_avisos_de_pago_usan_revision_persistida_y_no_duplican(api_pagos):
         revisiones = {str(r.comprobante_id): r for r in await db.scalars(select(RevisionPago))}
         comprobantes = {str(c.id): c for c in await db.scalars(select(ComprobantePago))}
         cuotas = list(await db.scalars(select(CuotaMantenimiento)))
-        assert await db.scalar(select(func.count()).select_from(EventoConsumido)) == 6
+        assert await db.scalar(
+            select(func.count()).select_from(EventoConsumido)
+            .where(EventoConsumido.event_id.in_([e.id for e in eventos]))
+        ) == 6
+        # El recuperador también consume fondos/moras; no son duplicados de pagos.
+        esperados = sum([
+            await db.scalar(select(func.count()).select_from(modelo))
+            for modelo in dict.fromkeys(modelo for modelo, _ in TIPOS.values())
+        ])
+        assert await db.scalar(select(func.count()).select_from(EventoConsumido)) == esperados
         assert await db.scalar(select(func.count()).select_from(IncidenciaEvento)) == 0
     assert len(logs) == 6
     indice = por_comprobante(logs)

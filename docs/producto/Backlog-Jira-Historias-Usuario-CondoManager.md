@@ -5,8 +5,9 @@ Este backlog traduce las especificaciones funcionales de CondoManager a elemento
 ## Resumen
 
 - **9 épicas**.
-- **60 historias de usuario base**.
+- **61 historias de usuario**, incluida TIC-06 como propuesta futura.
 - Las historias cubren el alcance funcional completo documentado.
+- Estado de implementación y prioridades: [inventario vigente](../sprints/ESTADO-ACTUAL.md).
 - Las tareas puramente técnicas —crear tablas, endpoints, componentes o pruebas— deberían registrarse en Jira como subtareas de la historia correspondiente.
 
 ## Plantilla recomendada para Jira

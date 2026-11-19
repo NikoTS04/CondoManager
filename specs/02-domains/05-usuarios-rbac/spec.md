@@ -1,6 +1,6 @@
 # Dominio 05: Condominios, Usuarios, Roles (RBAC) y Departamentos
 
-Extensión objetivo pendiente de código: [política diaria y gracia por
+Extensión implementada (0016–0019): [política diaria y gracia por
 responsable de pago](../01-cuotas/prorrateo-y-mora-diaria.md#1-calendario-y-política-de-mora).
 Un responsable activo por departamento, override nullable de gracia sobre el
 vínculo propietario/inquilino; no añade rol ni duplica obligación. Junta/SuperAdmin

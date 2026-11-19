@@ -1,14 +1,9 @@
-"""CON-46: cancelación atómica, resultado repetible y evento durable.
-
-CON-41/73 mantienen la creación. Mientras se integra su productor SQL, se puede
-adoptar una reserva del piloto en la misma transacción que la cancela. SQL tiene
-precedencia y la memoria solo se actualiza después del commit.
-"""
+"""CON-46/80: cancelación SQL atómica, resultado repetible y evento durable."""
 
 from uuid import UUID, uuid4
 
 from fastapi import Depends
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,8 +50,6 @@ class CancelacionesService:
     async def historial(self, cid, actor, area_id=None, fecha=None):
         """Permite consultar las cancelaciones desde otra sesión o tras reiniciar."""
         try:
-            if not await self.session.scalar(text("SELECT to_regclass('reservas') IS NOT NULL")):
-                return []
             query = (
                 select(Reserva, AreaComun)
                 .join(AreaComun, AreaComun.id == Reserva.area_id)
@@ -155,13 +148,13 @@ class CancelacionesService:
         )
         await self.session.flush()
 
-    async def cancelar(self, rid, request, actor, piloto=None):
+    async def cancelar(self, rid, request, actor):
         try:
             async with self.session.begin():
                 row = await self._reserva(rid)
-                datos = self.representar(*row) if row else dict(piloto or {})
-                if not datos:
+                if row is None:
                     raise APIError(404, "RESERVA_NO_ENCONTRADA", "Reserva no encontrada.")
+                datos = self.representar(*row)
                 cid, did = datos["condominio_id"], datos["departamento_id"]
                 autorizar_departamento(actor, did, cid, escritura=True)
                 # Orden compartido con creación: condominio -> departamento ->
@@ -177,34 +170,14 @@ class CancelacionesService:
                 if area is None:
                     raise APIError(404, "AREA_NO_ENCONTRADA", "El área no pertenece al condominio.")
                 row = await self._reserva(rid, bloquear=True)
-                if row:
-                    reserva = row[0]
-                    datos = self.representar(*row)
-                    # Revalidar también los identificadores del registro bloqueado.
-                    autorizar_departamento(
-                        actor, reserva.departamento_id, row[1].condominio_id, escritura=True
-                    )
-                else:
-                    # Puente temporal: solo datos del servidor, nunca del cuerpo HTTP.
-                    try:
-                        creador_id = UUID(str(datos["usuario_id"]))
-                    except (KeyError, TypeError, ValueError):
-                        raise APIError(
-                            409,
-                            "RESERVA_REQUIERE_RECONCILIACION",
-                            "La reserva piloto no conserva un creador válido. Requiere revisión.",
-                        ) from None
-                    reserva = Reserva(
-                        **{
-                            col.name: datos[col.name]
-                            for col in Reserva.__table__.columns
-                            if col.name in datos
-                        },
-                    )
-                    reserva.usuario_id = creador_id
-                    reserva.zona_horaria = datos.get("zona_horaria") or "UTC"
-                    self.session.add(reserva)
-                    await self.session.flush()
+                if row is None:
+                    raise APIError(404, "RESERVA_NO_ENCONTRADA", "Reserva no encontrada.")
+                reserva = row[0]
+                datos = self.representar(*row)
+                # Revalidar también los identificadores del registro bloqueado.
+                autorizar_departamento(
+                    actor, reserva.departamento_id, row[1].condominio_id, escritura=True
+                )
                 if reserva.estado == "CANCELADA":
                     anterior = await self.session.get(CancelacionReserva, rid)
                     if anterior is None:

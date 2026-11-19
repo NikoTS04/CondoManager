@@ -142,8 +142,6 @@ def db_usuarios(monkeypatch):
     base.engine = new_engine
     base.sessions = async_sessionmaker(new_engine, expire_on_commit=False)
     monkeypatch.setattr(settings, "DEMO_MODE", True)
-    # La copia piloto es global al proceso: no debe filtrar reservas entre pruebas.
-    monkeypatch.setattr("src.modules.reservas.router.RESERVAS_REGISTRADAS", {})
 
     async def session():
         async with base.sessions() as db:

@@ -31,8 +31,8 @@ USER appuser
 EXPOSE 8000
 
 # Healthcheck HTTP
-HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+HEALTHCHECK --interval=10s --timeout=7s --start-period=5s --retries=3 \
+    CMD curl -f --max-time 6 http://localhost:8000/api/v1/ready || exit 1
 
 # Comando de inicio del servidor ASGI
 CMD ["sh", "-c", "python -m alembic upgrade head && exec uvicorn src.main:app --host 0.0.0.0 --port 8000"]

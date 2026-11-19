@@ -8,6 +8,42 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 });
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+const apiURL = (url) => new URL(url, "http://localhost");
+
+test("bloqueos usan contexto y liberación lógica autenticada", async (t) => {
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    return new Response("{}");
+  });
+  const datos = { inicio: "2026-12-01T14:00:00-05:00", fin: "2026-12-01T16:00:00-05:00", motivo: "Reparación" };
+  await api.crearBloqueo("cid", "aid", datos);
+  await api.listarBloqueos("cid", "aid");
+  await api.levantarBloqueo("cid", "aid", "bid");
+  assert.deepEqual(JSON.parse(solicitudes[0].init.body), datos);
+  assert.equal(solicitudes[2].init.method, "DELETE");
+  assert.ok(solicitudes[2].url.endsWith("/condominios/cid/areas/aid/bloqueos/bid"));
+});
+
+test("la bandeja serializa filtros y página, conserva contexto y permite cancelar", async (t) => {
+  let solicitud;
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitud = { url, init };
+    return new Response("[]");
+  });
+  const controller = new AbortController();
+  assert.deepEqual(await api.fetchComprobantes("cid", {
+    fechaDesde: "2026-11-01", fechaHasta: "2026-11-30", departamentoId: "unidad",
+    banco: "BCP & Banco", estado: "EN_REVISION", limit: 26, offset: 25,
+  }, controller.signal), []);
+  assert.deepEqual(Object.fromEntries(apiURL(solicitud.url).searchParams), {
+    condominio_id: "cid", fecha_desde: "2026-11-01", fecha_hasta: "2026-11-30",
+    departamento_id: "unidad", banco: "BCP & Banco", estado: "EN_REVISION",
+    limit: "26", offset: "25",
+  });
+  assert.equal(solicitud.init.signal, controller.signal);
+  assert.equal(solicitud.init.cache, "no-store");
+});
 
 test("invitación y relevo conservan la clave de reintento y la autorización", async (t) => {
   const solicitudes = [];
@@ -79,7 +115,7 @@ test("las consultas y los comunicados usan el condominio seleccionado", async (t
     return new Response(JSON.stringify({ generadas: 2 }));
   });
   await api.fetchComprobantes(cid);
-  assert.equal(new URL(solicitudes[0].url).searchParams.get("condominio_id"), cid);
+  assert.equal(apiURL(solicitudes[0].url).searchParams.get("condominio_id"), cid);
   await api.enviarComunicadoMasivo("Aviso", "Mensaje de prueba", cid);
   assert.equal(JSON.parse(solicitudes[1].init.body).condominio_id, cid);
 });
@@ -139,12 +175,12 @@ test("alta, listado y estado de usuarios respetan el contexto y los métodos del
   }
   const [listado, alta, estado] = solicitudes;
   assert.equal(listado.init.headers.Authorization, "Bearer token-prueba");
-  assert.equal(new URL(listado.url).pathname.endsWith(`/condominios/${cid}/usuarios`), true);
-  assert.equal(new URL(listado.url).searchParams.get("limit"), "25");
+  assert.equal(apiURL(listado.url).pathname.endsWith(`/condominios/${cid}/usuarios`), true);
+  assert.equal(apiURL(listado.url).searchParams.get("limit"), "25");
   assert.equal(alta.init.method, "POST");
   assert.equal(JSON.parse(alta.init.body).email, "nuevo@ejemplo.test");
   assert.equal(estado.init.method, "PATCH");
-  assert.equal(new URL(estado.url).searchParams.get("condominio_id"), cid);
+  assert.equal(apiURL(estado.url).searchParams.get("condominio_id"), cid);
   assert.equal(JSON.parse(estado.init.body).esta_activo, false);
 });
 
@@ -181,7 +217,7 @@ test("consultar, asignar y revocar roles utiliza el recurso contextual y conserv
     assert.equal((await api.asignarRolUsuario(cid, uid, "AUDITOR")).rol, "AUDITOR");
     assert.equal((await api.revocarRolUsuario(cid, uid)).es_activo, false);
     for (const solicitud of solicitudes) {
-      assert.equal(new URL(solicitud.url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/rol`);
+      assert.equal(apiURL(solicitud.url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/rol`);
     }
     assert.equal(solicitudes[1].init.method, "PUT");
     assert.deepEqual(JSON.parse(solicitudes[1].init.body), { rol: "AUDITOR" });
@@ -224,8 +260,8 @@ test("los vínculos se gestionan por UUID sin enviar roles ni estados de cuenta"
   await api.listarVinculosUsuario(cid, uid);
   assert.equal((await api.asignarVinculoUsuario(cid, uid, did, "INQUILINO")).es_activo, true);
   assert.equal((await api.revocarVinculoUsuario(cid, uid, did)).es_activo, false);
-  assert.equal(new URL(solicitudes[0].url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/departamentos`);
-  assert.equal(new URL(solicitudes[1].url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/departamentos/${did}`);
+  assert.equal(apiURL(solicitudes[0].url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/departamentos`);
+  assert.equal(apiURL(solicitudes[1].url).pathname, `/api/v1/condominios/${cid}/usuarios/${uid}/departamentos/${did}`);
   assert.equal(solicitudes[1].init.method, "PUT");
   assert.deepEqual(JSON.parse(solicitudes[1].init.body), { tipo_relacion: "INQUILINO" });
   assert.equal(solicitudes[2].init.method, "DELETE");
@@ -242,18 +278,18 @@ test("el catálogo administrativo transmite costo como cadena y el estado en su 
   });
   const datos = { nombre: "Sala", aforo_maximo: 12, costo_reserva: "0.10", hora_apertura: "08:00", hora_cierre: "22:00", tiempo_maximo_horas: 4, descripcion: null, edificio_id: null };
   await api.listarCatalogoAreas(cid, false, 25, 50);
-  assert.equal(new URL(solicitudes[0].url).searchParams.get("esta_activa"), "false");
-  assert.equal(new URL(solicitudes[0].url).searchParams.get("offset"), "50");
+  assert.equal(apiURL(solicitudes[0].url).searchParams.get("esta_activa"), "false");
+  assert.equal(apiURL(solicitudes[0].url).searchParams.get("offset"), "50");
   await api.registrarArea(cid, datos);
   await api.configurarArea(cid, aid, datos);
   await api.cambiarEstadoArea(cid, aid, false);
   assert.equal(solicitudes[1].init.method, "POST");
   assert.equal(JSON.parse(solicitudes[1].init.body).costo_reserva, "0.10");
   assert.equal(solicitudes[2].init.method, "PUT");
-  assert.equal(new URL(solicitudes[2].url).pathname, `/api/v1/condominios/${cid}/areas/${aid}`);
+  assert.equal(apiURL(solicitudes[2].url).pathname, `/api/v1/condominios/${cid}/areas/${aid}`);
   assert.equal(solicitudes[3].init.method, "PATCH");
   assert.deepEqual(JSON.parse(solicitudes[3].init.body), { esta_activa: false });
-  assert.equal(new URL(solicitudes[3].url).pathname.endsWith(`/${aid}/estado`), true);
+  assert.equal(apiURL(solicitudes[3].url).pathname.endsWith(`/${aid}/estado`), true);
 });
 
 test("las alertas de entrega usan la ruta y el método correctos y propagan errores", async (t) => {
@@ -264,12 +300,12 @@ test("las alertas de entrega usan la ruta y el método correctos y propagan erro
     return new Response(JSON.stringify([]));
   });
   await api.listarAlertasNotificacion(cid);
-  const lista = new URL(solicitudes[0].url);
+  const lista = apiURL(solicitudes[0].url);
   assert.equal(lista.pathname.endsWith("/notificaciones/alertas"), true);
   assert.equal(lista.searchParams.get("condominio_id"), cid);
   assert.equal(solicitudes[0].init.method, undefined);
   await api.atenderAlertaNotificacion("alerta/1");
-  assert.equal(new URL(solicitudes[1].url).pathname.endsWith("/notificaciones/alertas/alerta%2F1/atender"), true);
+  assert.equal(apiURL(solicitudes[1].url).pathname.endsWith("/notificaciones/alertas/alerta%2F1/atender"), true);
   assert.equal(solicitudes[1].init.method, "POST");
   mock.mock.mockImplementation(async () => new Response(
     JSON.stringify({ detail: { mensaje: "Acceso denegado" } }), { status: 403 },
@@ -281,7 +317,7 @@ test("estado de cuenta transmite unidad, rango y página y conserva dinero decim
   const unidad = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const controller = new AbortController();
   t.mock.method(globalThis, "fetch", async (url, init) => {
-    const parsed = new URL(url);
+    const parsed = apiURL(url);
     assert.equal(parsed.pathname, `/api/v1/cuotas/departamentos/${unidad}/estado-cuenta`);
     assert.equal(parsed.searchParams.get("desde"), "2026-10-01");
     assert.equal(parsed.searchParams.get("hasta"), "2026-10-31");
@@ -310,7 +346,7 @@ const reciboPago = {
 
 test("conciliar conserva el recibo decimal y transmite notas solo en la escritura", async (t) => {
   t.mock.method(globalThis, "fetch", async (url, init) => {
-    assert.equal(new URL(url).pathname, `/api/v1/pagos/${reciboPago.comprobante_id}/conciliar`);
+    assert.equal(apiURL(url).pathname, `/api/v1/pagos/${reciboPago.comprobante_id}/conciliar`);
     assert.equal(init.method, "POST");
     assert.deepEqual(JSON.parse(init.body), { decision: "APROBADO", notas_internas: "Solo administración" });
     return new Response(JSON.stringify(reciboPago));
@@ -337,7 +373,7 @@ test("consultar un recibo usa GET privado y nunca repite la aprobación", async 
   let solicitudes = 0;
   t.mock.method(globalThis, "fetch", async (url, init) => {
     solicitudes++;
-    assert.equal(new URL(url).pathname, `/api/v1/pagos/${reciboPago.comprobante_id}/resultado`);
+    assert.equal(apiURL(url).pathname, `/api/v1/pagos/${reciboPago.comprobante_id}/resultado`);
     assert.equal(init.method, undefined);
     assert.equal(init.cache, "no-store");
     assert.equal(init.signal, controller.signal);

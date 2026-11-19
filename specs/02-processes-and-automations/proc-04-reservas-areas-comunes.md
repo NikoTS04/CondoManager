@@ -122,3 +122,21 @@ Escenario: Rechazo automático de reserva por cuota en mora
 La transacción y adopción de históricos se rigen por
 [persistencia Sprint 2](../02-domains/04-reservas/persistencia-sprint-2.md).
 Crear/cancelar conservan auditoría y outbox atómicos con la solvencia de CON-42.
+# Consolidación CON-80 — 18/11/2026
+
+SQL es la única fuente de reservas en creación, historial, disponibilidad y
+cancelación. No se combina ni se adopta estado desde memoria del proceso.
+Se conserva el orden de locks condominio → departamento → área → reserva,
+la solvencia SQL y la transacción de reserva/auditoría/outbox.
+La cancelación conserva su resultado repetible y el ajuste financiero existente.
+Si falta una tabla requerida o falla SQL se responde 503: nunca lista/calendario
+vacío ni confirmación simulada. Datos antiguos que solo existan en un proceso
+requieren reconciliación explícita antes de apagarlo; esta entrega no los importa.
+# Bloqueos preventivos — 18/11/2026
+
+Junta/SuperAdmin crea y levanta bloqueos futuros, Auditor consulta. Intervalos
+con zona explícita se conservan UTC, [inicio, fin); el motivo obligatorio queda
+en auditoría. No se borra el bloqueo al levantarlo. Se usan locks de condominio
+y área compartidos con creación de reservas. Si hay reservas confirmadas afectadas
+se rechaza con 409: no se cancelan ni devuelven importes automáticamente.
+La reprogramación y aviso a afectados sigue pendiente del flujo/proveedor.

@@ -16,7 +16,6 @@ from sqlalchemy.dialects.postgresql import insert
 
 from src.core.config import settings
 from src.core.database import AsyncSessionLocal
-from src.modules.cuotas.models import EventoLoteOutbox
 from src.modules.notificaciones.alertas import crear_alerta
 from src.modules.notificaciones.consumo import consumir
 from src.modules.notificaciones.models import EventoConsumido, IntentoNotificacion, Notificacion
@@ -26,7 +25,6 @@ from src.modules.notificaciones.service import (
     INTERVALOS_REINTENTO_SEGUNDOS,
     NotificacionesService,
 )
-from src.modules.pagos.models_persistencia import EventoPagoOutbox
 from src.modules.reservas.models import EventoReservaOutbox
 
 logger = logging.getLogger(__name__)
@@ -36,7 +34,9 @@ GRUPO = "notificaciones-v1"
 
 async def recuperar_eventos(session_factory=AsyncSessionLocal):
     """El outbox SQL conserva hechos incluso si Redis pierde un mensaje publicado."""
-    for modelo in (EventoLoteOutbox, EventoPagoOutbox, EventoReservaOutbox):
+    from src.modules.notificaciones.consumo import TIPOS
+
+    for modelo in dict.fromkeys(modelo for modelo, _ in TIPOS.values()):
         async with session_factory() as db:
             resuelto = exists().where(
                 EventoConsumido.event_id == modelo.id,
@@ -223,6 +223,11 @@ async def procesar_uno(
             intento.proveedor_message_id = log.proveedor_message_id
             log.proximo_reintento = None
             log.error_mensaje = None
+        elif resultado.get("incierto"):
+            log.estado = "FALLIDO_PERMANENTE"
+            intento.error = log.error_mensaje = "ACEPTACION_INCIERTA"
+            log.proximo_reintento = None
+            await crear_alerta(db, log, "ACEPTACION_INCIERTA", ahora)
         else:
             # Evitar mensajes del proveedor que puedan incluir contactos o secretos.
             definitivo = NotificacionesService.es_error_definitivo(

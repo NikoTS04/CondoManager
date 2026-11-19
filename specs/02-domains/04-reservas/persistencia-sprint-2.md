@@ -9,6 +9,22 @@ CON-42/70. El rediseño visual no forma parte de esta entrega.
 
 ## Transacciones y calendario
 
+### CON-80 — fuente operativa única
+
+- API y workers usan exclusivamente PostgreSQL para operaciones. No combinan
+  reservas con diccionarios de proceso, ni adoptan registros en memoria al cancelar.
+  Los dobles históricos viven en `src/tests/` y se inyectan solo desde fixtures.
+- Una tabla requerida ausente o un fallo SQL devuelve 503 controlado; nunca se
+  interpreta como calendario libre o historial vacío. Se conservan los códigos
+  `DISPONIBILIDAD_NO_DISPONIBLE`, `RESERVAS_NO_DISPONIBLES`,
+  `RESERVA_NO_DISPONIBLE` y `CANCELACION_NO_DISPONIBLE`.
+- Antes de desplegar el retiro de compatibilidad, verificar operaciones que solo
+  existan en procesos antiguos. Reconciliarlas explícitamente y con autorización;
+  no inventar creador ni realizar una adopción automática en una solicitud HTTP.
+- Aceptación: dos procesos independientes comparten UUID/estado, compiten por un
+  turno con un único éxito y observan su liberación al cancelar; un proceso nuevo
+  conserva operaciones y pendientes. Auditoría, outbox y locks no se debilitan.
+
 - Crear usa la sesión de `SolvenciaService.para_reserva`: condominio,
   departamento y cuotas bloqueados antes del área. Cancelar toma el mismo orden.
   El lock de la fila del área existe incluso con calendario vacío; se mantiene
@@ -61,3 +77,10 @@ reales de CON-70, incorpora avisos y conserva errores estructurados. Las pruebas
 incluyen rollback, sesiones independientes, reinicio, diez reservas concurrentes,
 consumo duplicado, workers concurrentes y límites temporales. No se acredita
 entrega física usando el transporte simulado.
+## Consolidación CON-80 — 18/11/2026
+
+Esta nota sustituye las referencias históricas siguientes a compatibilidad piloto:
+SQL es la única fuente productiva. No se mezclan listas en memoria ni se adopta
+una reserva al cancelar. Los dobles de contrato se inyectan exclusivamente desde
+`src/tests/`. Los mismos locks, auditoría, outbox y resultados de cancelación
+persistidos se conservan. Una tabla requerida ausente devuelve 503.

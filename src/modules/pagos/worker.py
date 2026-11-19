@@ -19,7 +19,12 @@ from src.modules.pagos.models_mora import EventoMoraOutbox
 from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutbox
 from src.modules.pagos.mora_diaria import MoraDiariaService
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
-from src.modules.pagos.storage import NOMBRE, VoucherStorage
+from src.modules.pagos.storage import (
+    NOMBRE,
+    SupabaseVoucherStorage,
+    VoucherStorage,
+    get_voucher_storage,
+)
 from src.shared.fechas import fecha_lima
 
 logger = logging.getLogger(__name__)
@@ -43,7 +48,7 @@ async def publicar_pendientes(redis, session_factory=AsyncSessionLocal):
                 evento.publicado_en = datetime.now(UTC)
 
 
-async def evaluar_moras_diarias(session_factory=AsyncSessionLocal, hoy=None, ahora=None):
+async def evaluar_moras_diarias(session_factory=AsyncSessionLocal, hoy=None, ahora=None, *, estricto=False):
     hoy = hoy or fecha_lima()
     async with session_factory() as session:
         unidades = list(
@@ -90,6 +95,8 @@ async def evaluar_moras_diarias(session_factory=AsyncSessionLocal, hoy=None, aho
                     ahora=ahora,
                 )
         except Exception:
+            if estricto:
+                raise
             logger.exception("Mora diaria pendiente: condominio=%s departamento=%s", cid, did)
 
 
@@ -98,7 +105,7 @@ async def limpiar_pendientes(
     storage: VoucherStorage | None = None,
     ahora: datetime | None = None,
 ):
-    storage = storage or VoucherStorage()
+    storage = storage or get_voucher_storage()
     limite = (ahora or datetime.now(UTC)) - timedelta(hours=24)
     for _ in range(100):
         async with session_factory() as session, session.begin():
@@ -115,7 +122,7 @@ async def limpiar_pendientes(
             await session.delete(subida)
     # Interrupción entre escritura y registro SQL: recuperar archivos no registrados.
     # La consulta SQL es obligatoria; si la BD está caída nunca se borra evidencia.
-    if not storage.directorio.exists():
+    if isinstance(storage, SupabaseVoucherStorage) or not storage.directorio.exists():
         return
     for ruta in storage.directorio.iterdir():
         if not NOMBRE.fullmatch(ruta.name) or ruta.is_symlink() or not ruta.is_file():

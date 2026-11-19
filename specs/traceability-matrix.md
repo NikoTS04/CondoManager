@@ -1,5 +1,8 @@
 # Matriz de Trazabilidad Integral (Traceability Matrix)
 
+CON-80/81: ver la [trazabilidad canónica de persistencia y ambiente](00-core/traceability-matrix.md#persistencia-y-ambiente-sprint-3--nicolás)
+y la [entrega con límites operativos](../docs/sprints/CON-80-81.md).
+
 CON-7/76: ver la [trazabilidad canónica de identidad Sprint 3](00-core/traceability-matrix.md#identidad-y-cambios-de-acceso-sprint-3--jerson)
 y su [contrato](02-domains/05-usuarios-rbac/invitacion-y-relevo.md). Correo real y
 aceptación del equipo se acreditan separadamente de las pruebas locales.
@@ -8,10 +11,13 @@ CON-25/26/27/28: ver la [trazabilidad canónica de pagos Sprint 3](00-core/trace
 y su [contrato compatible](05-api/pagos-sprint-3.md). La verificación local no
 declara integradas las dependencias de correo real ni cambia estados de Jira.
 
-Ampliación financiera objetivo 2026-10-24: ver [matriz canónica](00-core/traceability-matrix.md#extensión-financiera-objetivo-pendiente-de-implementación)
+Ampliación financiera 2026-10-24: ver [matriz canónica](00-core/traceability-matrix.md#extensión-financiera-implementada-00180020)
 y [dominio de prorrateo/mora diaria](02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
-Incluye FIN-PRORRATEO, FIN-MORA-DIARIA, FIN-FONDOS-MORA y FIN-REPORTE;
-especificados, pendientes de código y automatización de aceptación.
+Incluye FIN-PRORRATEO, FIN-MORA-DIARIA, FIN-FONDOS-MORA y FIN-REPORTE:
+implementados en entregas 0018–0020, con pruebas unitarias/SQL. La automatización
+del feature documental completo sigue diferenciada de esas pruebas.
+Ver [inventario vigente](../docs/sprints/ESTADO-ACTUAL.md); las filas de egresos,
+tickets y balances son trazabilidad objetivo, no implementación acreditada.
 
 Esta matriz garantiza la cobertura total del ciclo de vida del software en **CondoManager**, vinculando cada requerimiento de negocio y directiva de automatización con su especificación técnica, modelo de datos, contrato API, criterios de prueba BDD, módulo de código fuente y responsable del equipo.
 

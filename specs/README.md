@@ -1,5 +1,14 @@
 # CondoManager - Especificaciones Técnicas (Spec-Driven Development de Nivel Empresarial)
 
+## Estado actual — 18 noviembre 2026
+
+El [inventario vigente](../docs/sprints/ESTADO-ACTUAL.md) distingue implementación,
+evidencia histórica y aceptación pendiente. La cabeza del código es
+`20261113_0021`; las evidencias de despliegue y verificación que siguen corresponden
+a sus respectivos cortes. Identidad ya está integrada por PR #40.
+Prorrateo, mora diaria, fondos y PDF/DOCX tienen código y pruebas; su feature
+documental no equivale por sí solo a BDD automatizado. Correo: proveedor por decidir.
+
 ## Despliegue recuperado — 26 octubre 2026
 
 Base activa en `20261025_0020`, backend y tres workers healthy, sin alterar hechos

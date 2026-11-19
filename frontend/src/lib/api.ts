@@ -75,6 +75,22 @@ export interface AreaComun {
   zona_horaria: "America/Lima";
 }
 
+export interface BloqueoArea {
+  id: string; area_id: string; inicio: string; fin: string; activo: boolean;
+}
+
+export function listarBloqueos(cid: string, aid: string): Promise<BloqueoArea[]> {
+  return recursoRequest(`${rutaAreas(cid)}/${encodeURIComponent(aid)}/bloqueos`, { cache: "no-store" });
+}
+
+export function crearBloqueo(cid: string, aid: string, datos: { inicio: string; fin: string; motivo: string }): Promise<BloqueoArea> {
+  return recursoRequest(`${rutaAreas(cid)}/${encodeURIComponent(aid)}/bloqueos`, { method: "POST", body: JSON.stringify(datos) });
+}
+
+export function levantarBloqueo(cid: string, aid: string, bid: string): Promise<BloqueoArea> {
+  return recursoRequest(`${rutaAreas(cid)}/${encodeURIComponent(aid)}/bloqueos/${encodeURIComponent(bid)}`, { method: "DELETE" });
+}
+
 export interface ConfigurarAreaPayload {
   nombre: string;
   descripcion: string | null;
@@ -467,7 +483,7 @@ export function cambiarEstadoUsuario(condominioId: string, usuarioId: string, es
   });
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -1012,7 +1028,8 @@ export interface FiltrosComprobantes {
 
 export function fetchComprobantes(
   condominioId?: string | null,
-  filtros?: FiltrosComprobantes
+  filtros?: FiltrosComprobantes,
+  signal?: AbortSignal,
 ): Promise<ComprobantePago[]> {
   const params = new URLSearchParams();
   if (condominioId) params.append("condominio_id", condominioId);
@@ -1025,7 +1042,7 @@ export function fetchComprobantes(
   if (filtros?.offset) params.append("offset", String(filtros.offset));
 
   const qs = params.toString();
-  return recursoRequest(`/pagos/comprobantes${qs ? `?${qs}` : ""}`);
+  return recursoRequest(`/pagos/comprobantes${qs ? `?${qs}` : ""}`, { signal, cache: "no-store" });
 }
 
 export type DecisionPago = "APROBADO" | "RECHAZADO" | "OBSERVADO";

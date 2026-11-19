@@ -7,6 +7,9 @@ import warnings
 import zipfile
 from enum import Enum
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import uuid4
 
 from PIL import Image, UnidentifiedImageError
@@ -65,6 +68,8 @@ class VoucherStorage:
     ) -> tuple[str, str]:
         config = CATALOGO_DOCUMENTOS.get(tipo, CATALOGO_DOCUMENTOS[TipoDocumento.VOUCHER])
         limite_bytes = config["max_bytes"]
+        if tipo == TipoDocumento.VOUCHER or settings.APP_ENV == "production" or os.getenv("VERCEL"):
+            limite_bytes = min(limite_bytes, settings.VOUCHER_MAX_BYTES)
 
         if len(datos) > limite_bytes:
             raise APIError(
@@ -210,3 +215,57 @@ class VoucherStorage:
                 "No se puede eliminar una evidencia vigente o asociada a un comprobante activo.",
             )
         self.eliminar(nombre)
+
+
+class SinRedireccion(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class SupabaseVoucherStorage(VoucherStorage):
+    """REST privado, sin fallback local ni redirección de credenciales."""
+
+    def _request(self, method, nombre, datos=None, content_type=None):
+        if not NOMBRE_DOCUMENTO.fullmatch(nombre):
+            raise APIError(404, "VOUCHER_NO_DISPONIBLE", "Referencia de evidencia inválida.")
+        url = (
+            settings.SUPABASE_URL.rstrip("/") + "/storage/v1/object/"
+            + quote(settings.SUPABASE_STORAGE_BUCKET, safe="") + "/" + quote(nombre, safe="")
+        )
+        clave = settings.SUPABASE_SERVICE_ROLE_KEY.get_secret_value()
+        headers = {"Authorization": f"Bearer {clave}", "apikey": clave}
+        if content_type:
+            headers["Content-Type"] = content_type
+        try:
+            with build_opener(SinRedireccion()).open(
+                Request(url, data=datos, headers=headers, method=method), timeout=15
+            ) as response:
+                limite = settings.VOUCHER_MAX_BYTES
+                cuerpo = response.read(limite + 1)
+                if len(cuerpo) > limite:
+                    raise APIError(503, "VOUCHER_NO_DISPONIBLE", "Evidencia fuera de límites.")
+                return cuerpo
+        except HTTPError as exc:
+            if exc.code == 404:
+                if method == "DELETE":
+                    return b""
+                raise APIError(404, "VOUCHER_NO_DISPONIBLE", "Evidencia no disponible.") from None
+            raise APIError(503, "VOUCHER_ALMACENAMIENTO_NO_DISPONIBLE", "Almacén no disponible.") from None
+        except (URLError, OSError):
+            raise APIError(503, "VOUCHER_ALMACENAMIENTO_NO_DISPONIBLE", "Almacén no disponible.") from None
+
+    def guardar(self, datos, tipo=TipoDocumento.VOUCHER):
+        extension, content_type = self.validar_documento(datos, tipo)
+        nombre = f"{uuid4()}.{extension}"
+        self._request("POST", nombre, datos, content_type)
+        return nombre, content_type
+
+    def ruta(self, nombre):
+        return self._request("GET", nombre)
+
+    def eliminar(self, nombre):
+        self._request("DELETE", nombre)
+
+
+def get_voucher_storage():
+    return SupabaseVoucherStorage() if settings.VOUCHER_STORAGE == "supabase" else VoucherStorage()

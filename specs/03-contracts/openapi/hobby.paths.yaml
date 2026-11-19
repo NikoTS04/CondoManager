@@ -1,0 +1,90 @@
+paths:
+  /jobs/diario:
+    get:
+      operationId: ejecutarDiarioHobby
+      summary: Ejecutar lote diario recuperable sin Redis
+      security: [{cronBearer: []}]
+      responses:
+        '200':
+          description: Operaciones completadas; no acredita correo enviado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [estado, correo_enviado]
+                properties:
+                  estado: {type: string, const: COMPLETADO}
+                  correo_enviado: {type: boolean, const: false}
+        '401': {description: Secreto de cron ausente o incorrecto}
+        '403': {description: Preview no ejecuta cron}
+        '409': {description: Otra ejecución mantiene el lock}
+        '503': {description: Lote incompleto o timeout; operaciones previas pueden estar confirmadas}
+  /condominios/{cid}/areas/{aid}/bloqueos:
+    parameters:
+      - {name: cid, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: aid, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listarBloqueos
+      summary: Consultar últimos 100 bloqueos del área, incluidos levantados
+      responses:
+        '200':
+          description: Consulta administrativa contextual
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/schemas/Bloqueo'}}
+        '401': {description: Sin sesión}
+        '403': {description: Rol o contexto denegado}
+        '404': {description: Área no encontrada}
+    post:
+      operationId: crearBloqueo
+      summary: Bloquear intervalo futuro sin cancelar reservas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [inicio, fin, motivo]
+              properties:
+                inicio: {type: string, format: date-time}
+                fin: {type: string, format: date-time}
+                motivo: {type: string, minLength: 1, maxLength: 500}
+      responses:
+        '201':
+          description: Bloqueo confirmado con auditoría en la misma transacción
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/Bloqueo'}
+        '401': {description: Sin sesión}
+        '403': {description: Rol o contexto denegado}
+        '404': {description: Área no encontrada}
+        '409': {description: Intervalo afecta reservas confirmadas}
+        '422': {description: Intervalo sin zona, no futuro, invertido o motivo inválido}
+  /condominios/{cid}/areas/{aid}/bloqueos/{bid}:
+    parameters:
+      - {name: cid, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: aid, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: bid, in: path, required: true, schema: {type: string, format: uuid}}
+    delete:
+      operationId: levantarBloqueo
+      summary: Levantar lógicamente un bloqueo; repetición no duplica auditoría
+      responses:
+        '200':
+          description: Bloqueo inactivo conservado
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/Bloqueo'}
+        '401': {description: Sin sesión}
+        '403': {description: Rol o contexto denegado}
+        '404': {description: Bloqueo no encontrado en el área}
+schemas:
+  Bloqueo:
+    type: object
+    required: [id, area_id, inicio, fin, activo]
+    properties:
+      id: {type: string, format: uuid}
+      area_id: {type: string, format: uuid}
+      inicio: {type: string, format: date-time}
+      fin: {type: string, format: date-time}
+      activo: {type: boolean}

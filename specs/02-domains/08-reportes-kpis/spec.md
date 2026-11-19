@@ -10,7 +10,7 @@
 ---
 
 ## 2. Indicadores en Tiempo Real y Generación de Balances
-Ampliación objetivo pendiente de implementación:
+Ampliación de prorrateo implementada (0018–0020), distinta del balance contable:
 [llenado, aprobación y exportación de prorrateo](../01-cuotas/prorrateo-y-mora-diaria.md#7-reporte-mensual-llenado-consulta-pdf-y-docx).
 PDF y DOCX se generan desde la misma versión. Incluye desglose jerárquico,
 financiación con moras, fondos, cronograma y anexo de centavos, sin exponer datos

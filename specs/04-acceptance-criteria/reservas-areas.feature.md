@@ -54,3 +54,48 @@ Comprobar deuda SQL por departamento: EN_REVISION no desbloquea; aprobación que
 extingue la mora habilita; cuotas futuras y otras unidades no bloquean. El rechazo
 403 DEUDA_MORA_ACTIVA deja el horario libre y no emite confirmación. El contrato
 está en `specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md`.
+# CON-80 — SQL como fuente única
+
+Escenario: lectura desde otra sesión y después de reiniciar
+  Dada una reserva confirmada en PostgreSQL
+  Cuando otra instancia consulta historial y disponibilidad
+  Entonces observa la misma reserva sin copiar estado del proceso original
+  Cuando la cancela y repite la cancelación
+  Entonces obtiene el mismo resultado persistido y el horario queda libre
+  Y existe una sola cancelación, auditoría y evento de cancelación
+
+Escenario: esquema incompleto o indisponible
+  Cuando falla la consulta de una tabla requerida de reservas o bloqueos
+  Entonces se devuelve 503 sin aparentar éxito ni calendario vacío
+# Bloqueo preventivo
+
+Escenario: mantenimiento sin reservas afectadas
+  Dada una Junta autorizada y un intervalo futuro con zona y motivo
+  Cuando crea un bloqueo
+  Entonces el calendario lo muestra ocupado y las reservas solapadas fallan
+  Cuando lo levanta
+  Entonces el horario vuelve a estar disponible y se conserva auditoría
+
+Escenario: impedir cancelaciones implícitas
+  Dada una reserva confirmada en el intervalo
+  Cuando Junta intenta bloquearlo
+  Entonces recibe 409 sin cambiar reserva, saldo o outbox
+
+## CON-80 — persistencia sin fuentes de memoria
+
+```gherkin
+Escenario: Dos procesos y reinicio comparten el estado de una reserva
+  Dado dos procesos API independientes conectados al mismo PostgreSQL de pruebas
+  Cuando ambos solicitan el mismo turno
+  Entonces solo una solicitud confirma y la otra devuelve conflicto
+  Y ambos consultan el mismo UUID confirmado
+  Cuando el segundo proceso cancela y se inicia otro proceso
+  Entonces el nuevo proceso consulta el mismo UUID cancelado
+  Y puede reservar nuevamente el turno liberado
+
+Escenario: Esquema incompleto no equivale a disponibilidad
+  Dado que falta una tabla requerida de reservas o bloqueos en la base de pruebas
+  Cuando se consulta el calendario o el historial afectado
+  Entonces se recibe un error operativo 503 sin datos SQL internos
+  Y no se devuelve un calendario libre ni se recurre a datos piloto
+```

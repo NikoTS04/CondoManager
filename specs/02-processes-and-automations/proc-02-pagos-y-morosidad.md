@@ -165,3 +165,21 @@ Reporte/subsanación, auditoría y outbox se confirman juntos. Los errores antes
 del commit eliminan la nueva carga; un commit incierto conserva el objeto para
 la limpieza/reconciliación existente. No se reescriben hashes, saldos ni eventos
 históricos. Nuevos eventos usan los esquemas canónicos .v1 de CON-72.
+# Consolidación 18/11/2026: bandeja de conciliación
+
+La consulta SQL combina filtros opcionales por fecha bancaria (`fecha_desde`/`fecha_hasta`,
+inclusivos), departamento UUID, banco exacto sin distinguir mayúsculas y estado.
+Orden CON-24 de main: fecha bancaria, registro y UUID descendentes.
+La autorización por condominio y vínculos se aplica **antes** de paginar.
+`limit` (1–100, default 50) y `offset` (>=0) conservan el contrato CON-24
+integrado en main. Un rango invertido devuelve 422.
+La interfaz administrativa consulta páginas de 25 resultados y descarta respuestas
+de búsquedas o contextos anteriores. Consultar no modifica saldos ni auditorías.
+# Retirada de evaluación manual ficticia — 18/11/2026
+
+`POST /moras/evaluar` queda deprecado y devuelve 410 `EVALUACION_MANUAL_RETIRADA`
+tras validar sesión, rol administrativo y contexto. No ejecuta cálculos ni
+modifica obligaciones. No hay reemplazo HTTP en esta entrega: el worker de pagos
+mantiene el motor diario SQL, su recuperación inicial y ejecución 00:05 Lima.
+Una eventual ejecución manual debe reutilizar ese motor bajo contrato propio;
+no puede llamar al motor histórico con listas vacías y declarar éxito.

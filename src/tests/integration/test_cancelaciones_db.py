@@ -22,7 +22,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.models_audit import AuditoriaLogORM
 from src.modules.pagos.models import ComprobantePago
-from src.modules.reservas import router
 from src.modules.reservas.cancelaciones import CancelacionesService
 from src.modules.reservas.models import (
     CancelacionReserva,
@@ -132,12 +131,12 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
     client, base, residente, rid = caso_cancelacion
     # Precondición del consumidor: reserva SQL y cobro efectivo ya registrado
     # por el flujo financiero. La tarifa por sí sola nunca acredita este cobro.
-    datos = router.RESERVAS_REGISTRADAS[rid]
-    creador_id = UUID(datos["usuario_id"])
     comprobante_id = uuid4()
     async with base.sessions() as db, db.begin():
         guardada = await db.get(Reserva, rid)
         assert guardada is not None and guardada.estado == "CONFIRMADA"
+        datos = {c.name: getattr(guardada, c.name) for c in Reserva.__table__.columns}
+        creador_id = datos["usuario_id"]
         assert guardada.usuario_id == creador_id and guardada.zona_horaria == "America/Lima"
         db.add(
             ComprobantePago(
@@ -185,8 +184,7 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
         "monto": "40.00",
         "referencia": None,
     }
-    # Otra instancia no puede ocultar SQL con una copia piloto desactualizada.
-    monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {rid: {**datos, "estado": "CONFIRMADA"}})
+    # Una sesión independiente debe observar el turno liberado.
     calendario = await client.get(
         f"/api/v1/areas/{AREA}/disponibilidad",
         headers=residente,
@@ -203,14 +201,13 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
     assert sorted(r.status_code for r in intentos) == [201, 409], [r.text for r in intentos]
     nueva = next(r for r in intentos if r.status_code == 201)
     assert nueva.json()["id"] != str(rid)
-    monkeypatch.setattr(router, "RESERVAS_REGISTRADAS", {})
     assert (await client.post(ruta, headers=residente)).json() == original
     historial = await client.get("/api/v1/reservas", headers=residente)
     assert historial.status_code == 200
     assert next(r for r in historial.json() if r["id"] == str(rid))["estado"] == "CANCELADA"
     async with base.sessions() as db:
         assert (await db.get(Reserva, rid)).estado == "CANCELADA"
-        assert (await db.get(Reserva, rid)).usuario_id == UUID(datos["usuario_id"])
+        assert (await db.get(Reserva, rid)).usuario_id == datos["usuario_id"]
         assert await db.scalar(select(func.count()).select_from(CancelacionReserva)) == 1
         assert (
             await db.scalar(
@@ -257,6 +254,8 @@ async def test_fallo_transaccional_revierte_estado_auditoria_y_evento(
     caso_cancelacion, monkeypatch
 ):
     client, base, residente, rid = caso_cancelacion
+    async with base.sessions() as db:
+        creador_id = (await db.get(Reserva, rid)).usuario_id
     original = CancelacionesService._guardar
 
     async def fallar(self, *args):
@@ -270,9 +269,10 @@ async def test_fallo_transaccional_revierte_estado_auditoria_y_evento(
     assert (
         response.status_code == 503 and response.json()["error_code"] == "CANCELACION_NO_DISPONIBLE"
     )
-    assert router.RESERVAS_REGISTRADAS[rid]["estado"] == "CONFIRMADA"
     async with base.sessions() as db:
-        assert (await db.get(Reserva, rid)).estado == "CONFIRMADA"
+        guardada = await db.get(Reserva, rid)
+        assert guardada.estado == "CONFIRMADA"
+        creador_id = guardada.usuario_id
         assert await db.scalar(select(func.count()).select_from(CancelacionReserva)) == 0
         assert (
             await db.scalar(
@@ -295,6 +295,4 @@ async def test_fallo_transaccional_revierte_estado_auditoria_y_evento(
     assert reintento.status_code == 200, reintento.text
     assert reintento.json()["ajuste_economico"]["estado"] == "NO_APLICA"
     async with base.sessions() as db:
-        assert (await db.get(Reserva, rid)).usuario_id == UUID(
-            router.RESERVAS_REGISTRADAS[rid]["usuario_id"]
-        )
+        assert (await db.get(Reserva, rid)).usuario_id == creador_id

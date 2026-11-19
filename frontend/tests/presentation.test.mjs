@@ -27,8 +27,18 @@ const { ResumenCuenta } = loadComponent("features/residente/ResumenCuenta");
 const { ResumenSection } = loadComponent("features/junta/ResumenSection");
 const { MorasSection } = loadComponent("features/junta/MorasSection");
 const { ResultadoPago } = loadComponent("components/domain/ResultadoPago");
+const { ConciliacionSection } = loadComponent("features/junta/ConciliacionSection");
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 const depto = { id: "unidad-a", numero: "402", piso: 4, coeficiente: "0.6800", saldo_a_favor: "25.50", deuda_vencida: "123.45", estado_financiero: "EN_MORA", activo: true };
+
+test("la bandeja conserva filtros etiquetados durante carga sin mostrar éxitos ni vacíos", () => {
+  const html = render(ConciliacionSection, {
+    condominioId: "cid", loading: true, comprobantes: [], departamentos: [depto],
+    isAuditor: true, onDecide() {},
+  });
+  assert.match(html, /Cargando comprobantes/);
+  assert.doesNotMatch(html, /Sin resultados|Aprobar|Rechazar/);
+});
 
 test("la cuenta muestra importes reales sin cuota ni periodo referencial", () => {
   const html = render(ResumenCuenta, { depto });

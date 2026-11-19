@@ -15,6 +15,7 @@ from src.main import app
 from src.modules.notificaciones.persistencia import get_notificaciones_service
 from src.modules.reservas.areas.repository import get_areas_repository
 from src.modules.reservas.cancelaciones import get_cancelaciones_service
+from src.modules.reservas.disponibilidad import get_disponibilidad_repository
 from src.modules.reservas.router import (
     get_areas_reserva_repository,
     get_creacion_reservas_repository,
@@ -25,15 +26,19 @@ from src.tests.areas import AreasCatalogoFake
 from src.tests.cancelaciones_contrato import CancelacionesContrato
 from src.tests.departamentos import CatalogoDepartamentosFake
 from src.tests.identidad import RepositorioIdentidadDemo
-from src.tests.reservas_contrato import NOTIFICACIONES_REGISTRADAS, NotificacionesContrato
+from src.tests.reservas_contrato import (
+    NOTIFICACIONES_REGISTRADAS,
+    RESERVAS_REGISTRADAS,
+    NotificacionesContrato,
+    ReservasRepositoryFake,
+)
 
 pytest_plugins = ["src.tests.usuarios_db", "src.tests.finanzas_contrato", "src.tests.pagos_db"]
 
 
 @pytest.fixture
-def autorizacion_aislada(monkeypatch):
-    # La copia piloto de reservas es global al proceso: cada prueba parte vacía.
-    monkeypatch.setattr("src.modules.reservas.router.RESERVAS_REGISTRADAS", {})
+def autorizacion_aislada(monkeypatch, finanzas_contrato):
+    RESERVAS_REGISTRADAS.clear()
     NOTIFICACIONES_REGISTRADAS.clear()
 
     async def actor(auth=Depends(security_scheme)):
@@ -47,7 +52,9 @@ def autorizacion_aislada(monkeypatch):
     areas = AreasCatalogoFake()
     app.dependency_overrides[get_areas_repository] = lambda: areas
     app.dependency_overrides[get_areas_reserva_repository] = lambda: areas
-    app.dependency_overrides[get_creacion_reservas_repository] = lambda: None
+    reservas = ReservasRepositoryFake()
+    app.dependency_overrides[get_creacion_reservas_repository] = lambda: reservas
+    app.dependency_overrides[get_disponibilidad_repository] = lambda: reservas
     app.dependency_overrides[get_notificaciones_service] = lambda: NotificacionesContrato()
     cancelaciones = CancelacionesContrato()
     app.dependency_overrides[get_cancelaciones_service] = lambda: cancelaciones
@@ -57,6 +64,7 @@ def autorizacion_aislada(monkeypatch):
     app.dependency_overrides.pop(get_areas_repository, None)
     app.dependency_overrides.pop(get_areas_reserva_repository, None)
     app.dependency_overrides.pop(get_creacion_reservas_repository, None)
+    app.dependency_overrides.pop(get_disponibilidad_repository, None)
     app.dependency_overrides.pop(get_cancelaciones_service, None)
     app.dependency_overrides.pop(get_notificaciones_service, None)
 
