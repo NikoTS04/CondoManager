@@ -32,10 +32,12 @@ Dependabot (`.github/dependabot.yml`) propone cada semana, hacia `develop`, actu
 
 ```bash
 uv run --extra dev ruff check .
-uv run --extra dev python -m pytest -q --cov
+uv run --extra dev python -m pytest -q -n auto --cov
 cd frontend && npm ci && npm run lint && npx tsc --noEmit && npm run build
 uvx --from actionlint-py actionlint      # sintaxis de los workflows
 ```
+
+Las pruebas con PostgreSQL crean una base plantilla una sola vez (clave derivada de `REVISIONES_API` y los scripts demo) y la clonan por prueba/worker (`PYTEST_XDIST_WORKER`); si el rol no tiene permiso `CREATEDB`, hacen fallback automático a esquemas por prueba. Para depuración secuencial puede omitirse `-n auto`.
 
 ## Branch protection (requiere permisos de administrador del repositorio)
 

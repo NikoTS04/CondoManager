@@ -5,6 +5,7 @@ CON3_TEST_DATABASE_URL (o la CON13_TEST_DATABASE_URL de CI) debe apuntar a prueb
 
 import asyncio
 import os
+from contextlib import asynccontextmanager
 from importlib import import_module
 from uuid import UUID, uuid4
 
@@ -15,6 +16,7 @@ from alembic.operations import Operations
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from src.core.database import get_db_session
 from src.core.models_audit import AuditoriaLogORM
@@ -23,7 +25,12 @@ from src.main import app
 from src.modules.condominios.estructura.repository import EstructuraRepository
 from src.modules.condominios.models import Departamento
 from src.modules.cuotas.distribucion.repository import SQLAlchemyDistribucionRepository
-from src.tests.usuarios_db import REVISIONES_API
+from src.tests.usuarios_db import (
+    REVISIONES_API,
+    borrar_base_plantilla,
+    crear_base_plantilla,
+    worker_id,
+)
 
 pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
 
@@ -47,11 +54,11 @@ async def connection():
     url = os.environ.get("CON3_TEST_DATABASE_URL") or os.environ.get("CON13_TEST_DATABASE_URL")
     if not url:
         pytest.skip("Defina CON3_TEST_DATABASE_URL para ejecutar integración PostgreSQL.")
-    engine = create_async_engine(url)
+    engine = create_async_engine(url, poolclass=NullPool)
     async with engine.connect() as conn:
         transaccion = await conn.begin()
         try:
-            esquema = f"con3_{uuid4().hex}"
+            esquema = f"con3_{worker_id()}_{uuid4().hex[:16]}"
             await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
             await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
             yield conn
@@ -60,13 +67,11 @@ async def connection():
     await engine.dispose()
 
 
-@pytest_asyncio.fixture
-async def api(connection):
-    await connection.run_sync(lambda c: migrar(c, REVISIONES_API))
-
+@asynccontextmanager
+async def _cliente_api(conn):
     async def db():
         async with AsyncSession(
-            bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint"
+            bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint"
         ) as session:
             try:
                 yield session
@@ -76,9 +81,52 @@ async def api(connection):
                 raise
 
     app.dependency_overrides[get_db_session] = db
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client, connection
-    app.dependency_overrides.pop(get_db_session, None)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            yield client, conn
+    finally:
+        app.dependency_overrides.pop(get_db_session, None)
+
+
+@pytest_asyncio.fixture
+async def api():
+    url = os.environ.get("CON3_TEST_DATABASE_URL") or os.environ.get("CON13_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("Defina CON3_TEST_DATABASE_URL para ejecutar integración PostgreSQL.")
+    clonada = await crear_base_plantilla(
+        url, prefijo="con3", esquema="app_tpl", revisiones=REVISIONES_API, con_seed=False
+    )
+    if clonada is not None:
+        db_url, esquema, db_name = clonada
+        engine = create_async_engine(
+            db_url, poolclass=NullPool, connect_args={"server_settings": {"search_path": esquema}}
+        )
+        try:
+            async with engine.connect() as conn:
+                transaccion = await conn.begin()
+                try:
+                    async with _cliente_api(conn) as par:
+                        yield par
+                finally:
+                    await transaccion.rollback()
+        finally:
+            await engine.dispose()
+            await borrar_base_plantilla(url, db_name)
+        return
+
+    engine = create_async_engine(url, poolclass=NullPool)
+    async with engine.connect() as conn:
+        transaccion = await conn.begin()
+        try:
+            esquema = f"con3_{worker_id()}_{uuid4().hex[:16]}"
+            await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
+            await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
+            await conn.run_sync(lambda c: migrar(c, REVISIONES_API))
+            async with _cliente_api(conn) as par:
+                yield par
+        finally:
+            await transaccion.rollback()
+    await engine.dispose()
 
 
 def auth(rol="SUPERADMIN", condominio_id=None):
@@ -388,13 +436,26 @@ async def test_importaciones_concurrentes_no_duplican_y_conservan_cadena():
     url = os.environ.get("CON3_TEST_DATABASE_URL") or os.environ.get("CON13_TEST_DATABASE_URL")
     if not url:
         pytest.skip("Se necesita PostgreSQL real para concurrencia.")
-    esquema = f"con3_concurrente_{uuid4().hex}"
-    administrador = create_async_engine(url)
-    async with administrador.begin() as conn:
-        await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
-        await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
-        await conn.run_sync(lambda c: migrar(c, REVISIONES_API))
-    engine = create_async_engine(url, connect_args={"server_settings": {"search_path": esquema}})
+    clonada = await crear_base_plantilla(
+        url, prefijo="con3c", esquema="app_tpl", revisiones=REVISIONES_API, con_seed=False
+    )
+    if clonada is not None:
+        db_url, esquema, db_name = clonada
+        administrador = None
+        engine = create_async_engine(
+            db_url, poolclass=NullPool, connect_args={"server_settings": {"search_path": esquema}}
+        )
+    else:
+        db_name = None
+        esquema = f"con3c_{worker_id()}_{uuid4().hex[:16]}"
+        administrador = create_async_engine(url, poolclass=NullPool)
+        async with administrador.begin() as conn:
+            await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
+            await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
+            await conn.run_sync(lambda c: migrar(c, REVISIONES_API))
+        engine = create_async_engine(
+            url, poolclass=NullPool, connect_args={"server_settings": {"search_path": esquema}}
+        )
 
     async def db():
         async with AsyncSession(engine, expire_on_commit=False) as session:
@@ -432,6 +493,9 @@ async def test_importaciones_concurrentes_no_duplican_y_conservan_cadena():
     finally:
         app.dependency_overrides.pop(get_db_session, None)
         await engine.dispose()
-        async with administrador.begin() as conn:
-            await conn.execute(text(f'DROP SCHEMA "{esquema}" CASCADE'))
-        await administrador.dispose()
+        if db_name is not None:
+            await borrar_base_plantilla(url, db_name)
+        elif administrador is not None:
+            async with administrador.begin() as conn:
+                await conn.execute(text(f'DROP SCHEMA "{esquema}" CASCADE'))
+            await administrador.dispose()

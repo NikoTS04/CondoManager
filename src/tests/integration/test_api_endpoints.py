@@ -235,7 +235,7 @@ async def test_api_condominio_persistencia_postgres(monkeypatch):
     # Esquema aislado y migrado con Alembic: no depende de que la base ya esté migrada.
     base = await crear_base(database_url)
     engine = create_async_engine(
-        database_url,
+        base.url,
         poolclass=NullPool,
         connect_args={"server_settings": {"search_path": base.esquema}},
     )

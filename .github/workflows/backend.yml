@@ -171,7 +171,7 @@ jobs:
         run: uv sync --extra dev --python 3.12
       - name: Ejecutar pruebas y cobertura (mínimo 80 %)
         run: |
-          uv run --no-sync python -m pytest -q --cov --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=pytest.xml
+          uv run --no-sync python -m pytest -q -n auto --cov --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=pytest.xml
       - name: Resumen de pruebas y cobertura
         if: always()
         run: |
@@ -269,7 +269,7 @@ jobs:
       - name: Integración contra PostgreSQL real
         id: integracion
         # La variable habilita los tests de BD; no se usa create_all para ocultar migraciones faltantes.
-        run: uv run --no-sync python -m pytest -q src/tests/integration --junitxml=postgres-pytest.xml
+        run: uv run --no-sync python -m pytest -q -n auto src/tests/integration --junitxml=postgres-pytest.xml
       - name: Resumen de migraciones y drift
         if: always()
         env:
