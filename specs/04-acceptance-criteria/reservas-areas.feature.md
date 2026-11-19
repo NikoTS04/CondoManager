@@ -54,7 +54,6 @@ Comprobar deuda SQL por departamento: EN_REVISION no desbloquea; aprobación que
 extingue la mora habilita; cuotas futuras y otras unidades no bloquean. El rechazo
 403 DEUDA_MORA_ACTIVA deja el horario libre y no emite confirmación. El contrato
 está en `specs/02-domains/02-pagos-y-moras/sprint-2-anderson.md`.
-<<<<<<< HEAD
 # CON-80 — SQL como fuente única
 
 Escenario: lectura desde otra sesión y después de reiniciar
@@ -81,7 +80,6 @@ Escenario: impedir cancelaciones implícitas
   Dada una reserva confirmada en el intervalo
   Cuando Junta intenta bloquearlo
   Entonces recibe 409 sin cambiar reserva, saldo o outbox
-=======
 
 ## CON-80 — persistencia sin fuentes de memoria
 
@@ -101,4 +99,3 @@ Escenario: Esquema incompleto no equivale a disponibilidad
   Entonces se recibe un error operativo 503 sin datos SQL internos
   Y no se devuelve un calendario libre ni se recurre a datos piloto
 ```
->>>>>>> origin/develop

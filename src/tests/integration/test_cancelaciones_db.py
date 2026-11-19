@@ -131,13 +131,6 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
     client, base, residente, rid = caso_cancelacion
     # Precondición del consumidor: reserva SQL y cobro efectivo ya registrado
     # por el flujo financiero. La tarifa por sí sola nunca acredita este cobro.
-<<<<<<< HEAD
-    async with base.sessions() as db:
-        reserva = await db.get(Reserva, rid)
-        datos = {col.name: getattr(reserva, col.name) for col in Reserva.__table__.columns}
-    creador_id = datos["usuario_id"]
-=======
->>>>>>> origin/develop
     comprobante_id = uuid4()
     async with base.sessions() as db, db.begin():
         guardada = await db.get(Reserva, rid)
@@ -191,12 +184,7 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
         "monto": "40.00",
         "referencia": None,
     }
-<<<<<<< HEAD
-    # Descartar conexiones: las siguientes solicitudes solo pueden recuperar SQL.
-    await base.engine.dispose()
-=======
     # Una sesión independiente debe observar el turno liberado.
->>>>>>> origin/develop
     calendario = await client.get(
         f"/api/v1/areas/{AREA}/disponibilidad",
         headers=residente,

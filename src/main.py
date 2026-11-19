@@ -16,12 +16,9 @@ from src.core.errors import (
     request_validation_handler,
     unexpected_error_handler,
 )
-<<<<<<< HEAD
 from src.core.health import router as health_router
 from src.core.jobs import router as jobs_router
-=======
 from src.core.readiness import router as readiness_router
->>>>>>> origin/develop
 from src.modules.condominios.condiciones_pago import router as condiciones_pago_router
 from src.modules.condominios.estructura.router import router as estructura_router
 from src.modules.condominios.router import router as condominios_router

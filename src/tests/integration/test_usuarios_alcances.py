@@ -30,11 +30,7 @@ def auth(rol="RESIDENTE", numeros=("102",), cid=CID, vinculos=None):
         "Authorization": "Bearer "
         + create_access_token(
             {
-<<<<<<< HEAD
-                "sub": str(uuid4()),
-=======
                 "sub": "22222222-2222-2222-2222-222222222222",
->>>>>>> origin/develop
                 "rol": rol,
                 "condominio_id": cid,
                 "departamentos": vinculos

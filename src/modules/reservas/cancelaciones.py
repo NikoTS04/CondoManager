@@ -174,10 +174,7 @@ class CancelacionesService:
                     raise APIError(404, "RESERVA_NO_ENCONTRADA", "Reserva no encontrada.")
                 reserva = row[0]
                 datos = self.representar(*row)
-<<<<<<< HEAD
-=======
                 # Revalidar también los identificadores del registro bloqueado.
->>>>>>> origin/develop
                 autorizar_departamento(
                     actor, reserva.departamento_id, row[1].condominio_id, escritura=True
                 )

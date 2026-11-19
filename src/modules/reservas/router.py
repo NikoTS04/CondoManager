@@ -208,10 +208,7 @@ async def crear_reserva(
                 reservas_existentes=existentes,
                 auditor=auditor,
             )
-<<<<<<< HEAD
-=======
             # Evento durable en la misma transacción que la reserva y su auditoría.
->>>>>>> origin/develop
             guardada = await reservas_repository.obtener_por_id(reserva_dto.id)
             ReservasPersistentesService(solvencia).evento(
                 guardada, "ReservaConfirmadaEvent", reserva_dto.area_nombre

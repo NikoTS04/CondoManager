@@ -6,7 +6,6 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 ## Matriz de Trazabilidad de Extremo a Extremo (End-to-End)
 
-<<<<<<< HEAD
 ### Consolidación local — 18/11/2026
 
 Continuación Hobby/Supabase: contrato `05-api/vercel-hobby.md`, OpenAPI
@@ -23,14 +22,12 @@ No acredita despliegue, entrega real de correo ni nuevos módulos contables.
 | Retirada de simulador manual de mora | `proc-02-pagos-y-morosidad.md`, OpenAPI `/moras/evaluar` deprecado | `pagos/router.py` | `test_reservas_sql.py`: 410 autorizado y 403 ajeno/no administrativo; worker diario sin cambios |
 
 Resultados y siguientes entregas: [estado actual](../../docs/sprints/ESTADO-ACTUAL.md).
-=======
 ### Persistencia y ambiente Sprint 3 — Nicolás
 
 | Ticket | Especificación / contrato | Verificación | Código / evidencia |
 |---|---|---|---|
 | CON-80 | `02-domains/04-reservas/persistencia-sprint-2.md`, `04-acceptance-criteria/reservas-areas.feature.md` | `src/tests/integration/test_con80_con81_db.py`: procesos independientes, reinicio y esquema ausente; regresiones de cancelación y outbox | `src/modules/reservas/{router,disponibilidad,cancelaciones}.py`, `docs/sprints/CON-80-81.md` |
 | CON-81 | `05-operations/deployment-and-runbooks.md`, `04-acceptance-criteria/ambiente-demo.feature.md`, OpenAPI `/ready` | `src/tests/unit/test_readiness.py`, `test_con80_con81_db.py`; migraciones y recuperación de ensayo documentadas | `src/core/readiness.py`, `Dockerfile`, misma entrega; no certifica correo real ni el volumen compartido sin ensayo propio |
->>>>>>> origin/develop
 
 ### Identidad y cambios de acceso Sprint 3 — Jerson
 

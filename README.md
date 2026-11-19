@@ -73,11 +73,8 @@ docker compose up -d --build --wait --wait-timeout 180 redis backend frontend
 docker compose ps
 ```
 
-<<<<<<< HEAD
 El backend ejecuta `alembic upgrade head` antes de iniciar la API. La cabeza del código es `20261113_0021` (identidad): revisar respaldo, revisión y compatibilidad antes de arrancar contra una base existente. El despliegue histórico se recuperó y actualizó a 0020 el 26 de octubre tras respaldo, dos restauraciones de ensayo y validación de datos originales; ver [resultado y límites](docs/sprints/reconciliacion-esquema-20261026.md). Ese antecedente no acredita despliegue de 0021. El reparador [legacy](docs/sprints/reconciliacion-esquema-legacy.md) no adopta estas revisiones financieras. Los fondos se reconocen prospectivamente desde cobros de mora conciliados; no se importa caja histórica.
-=======
 El ambiente compartido utiliza PostgreSQL en **Supabase**, configurado en el `.env` privado; el Compose principal no crea PostgreSQL. El backend ejecuta `alembic upgrade head` antes de iniciar la API: revisar respaldo, revisión y compatibilidad antes de arrancar contra una base existente. Consultar la cabeza con `alembic heads` (esta entrega incluye `20261113_0021`). La recuperación histórica a 0020 del 26 de octubre conserva sus propios [resultados y límites](docs/sprints/reconciliacion-esquema-20261026.md), no certifica el despliegue actual. Seguir el [runbook CON-81 de arranque, pruebas y recuperación](specs/05-operations/deployment-and-runbooks.md). Los fondos se reconocen prospectivamente desde cobros de mora conciliados; no se importa caja histórica.
->>>>>>> origin/develop
 
 | Servicio | Dirección |
 |---|---|
@@ -125,11 +122,8 @@ El worker de cuotas puede emitir periodos pendientes desde el día UTC configura
 
 - Vouchers privados locales en Docker; el perfil Hobby usa Supabase Storage privado. Descargas autenticadas en ambos casos; archivos previos no se migran solos. Hobby limita subida y descarga remota a 3 MiB.
 - Notificaciones con transporte `SIMULADO`: acredita `ENVIADO`, no entrega física por correo o WhatsApp.
-<<<<<<< HEAD
 - Invitación, activación por enlace y relevos implementados; recepción real pendiente del proveedor. El alta manual histórica conserva su contrato.
-=======
 - Invitación/activación y relevo de accesos SQL disponibles en CON-7/76; su entrega por correo real depende de CON-78. Ver [alcance y evidencia](docs/sprints/CON-7-76.md).
->>>>>>> origin/develop
 - Una tarifa de reserva no acredita un cobro. Una cancelación con ajuste `PENDIENTE` no acredita devolución ejecutada.
 - Reservas operativas usan únicamente PostgreSQL; los dobles en memoria viven en pruebas. Una tabla requerida ausente devuelve error operativo, no disponibilidad.
 - El rediseño visual y el despliegue automático a producción quedan fuera de esta entrega.

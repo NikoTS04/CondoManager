@@ -25,11 +25,7 @@ def auth():
         "Authorization": "Bearer "
         + create_access_token(
             {
-<<<<<<< HEAD
-                "sub": str(uuid.uuid4()),
-=======
                 "sub": "22222222-2222-2222-2222-222222222222",
->>>>>>> origin/develop
                 "rol": "ADMIN_JUNTA",
                 "condominio_id": str(CONDOMINIO_PILOTO_ID),
             }
