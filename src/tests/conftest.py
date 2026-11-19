@@ -28,9 +28,15 @@ from src.tests.departamentos import CatalogoDepartamentosFake
 from src.tests.identidad import RepositorioIdentidadDemo
 from src.tests.reservas_contrato import (
     NOTIFICACIONES_REGISTRADAS,
+<<<<<<< HEAD
     CreacionReservasContrato,
     DisponibilidadContrato,
     NotificacionesContrato,
+=======
+    RESERVAS_REGISTRADAS,
+    NotificacionesContrato,
+    ReservasRepositoryFake,
+>>>>>>> origin/develop
 )
 
 pytest_plugins = ["src.tests.usuarios_db", "src.tests.finanzas_contrato", "src.tests.pagos_db"]
@@ -38,7 +44,11 @@ pytest_plugins = ["src.tests.usuarios_db", "src.tests.finanzas_contrato", "src.t
 
 @pytest.fixture
 def autorizacion_aislada(monkeypatch, finanzas_contrato):
+<<<<<<< HEAD
     monkeypatch.setattr("src.tests.reservas_contrato.RESERVAS_REGISTRADAS", {})
+=======
+    RESERVAS_REGISTRADAS.clear()
+>>>>>>> origin/develop
     NOTIFICACIONES_REGISTRADAS.clear()
 
     async def actor(auth=Depends(security_scheme)):
@@ -52,8 +62,14 @@ def autorizacion_aislada(monkeypatch, finanzas_contrato):
     areas = AreasCatalogoFake()
     app.dependency_overrides[get_areas_repository] = lambda: areas
     app.dependency_overrides[get_areas_reserva_repository] = lambda: areas
+<<<<<<< HEAD
     app.dependency_overrides[get_creacion_reservas_repository] = CreacionReservasContrato
     app.dependency_overrides[get_disponibilidad_repository] = DisponibilidadContrato
+=======
+    reservas = ReservasRepositoryFake()
+    app.dependency_overrides[get_creacion_reservas_repository] = lambda: reservas
+    app.dependency_overrides[get_disponibilidad_repository] = lambda: reservas
+>>>>>>> origin/develop
     app.dependency_overrides[get_notificaciones_service] = lambda: NotificacionesContrato()
     cancelaciones = CancelacionesContrato()
     app.dependency_overrides[get_cancelaciones_service] = lambda: cancelaciones

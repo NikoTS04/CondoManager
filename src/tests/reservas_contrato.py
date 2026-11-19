@@ -12,6 +12,7 @@ RESERVAS_REGISTRADAS = {}
 NOTIFICACIONES_REGISTRADAS = {}
 
 
+<<<<<<< HEAD
 class CreacionReservasContrato:
     """Repositorio explícito de pruebas; producción no contiene un fallback."""
 
@@ -25,6 +26,29 @@ class CreacionReservasContrato:
         RESERVAS_REGISTRADAS[reserva.id] = {
             **ReservaResponseDTO.model_validate(reserva).model_dump(),
             "usuario_id": str(reserva.usuario_id),
+=======
+class ReservasRepositoryFake:
+    """Mismo contrato del repositorio SQL; almacenamiento solo de pruebas."""
+
+    async def reservas_confirmadas(self, aid, cid, fecha):
+        return [
+            r for r in RESERVAS_REGISTRADAS.values()
+            if r["area_id"] == aid and r["condominio_id"] == cid
+            and r["fecha_reserva"] == fecha and r["estado"] == "CONFIRMADA"
+        ]
+
+    async def buscar_solapamientos(self, area_id, fecha, hora_inicio, hora_fin, **kwargs):
+        return [
+            r for r in RESERVAS_REGISTRADAS.values()
+            if r["area_id"] == area_id and r["fecha_reserva"] == fecha
+            and r["estado"] == "CONFIRMADA"
+            and hora_inicio < r["hora_fin"] and hora_fin > r["hora_inicio"]
+        ]
+
+    async def guardar(self, reserva):
+        RESERVAS_REGISTRADAS[reserva.id] = {
+            c.name: getattr(reserva, c.name) for c in reserva.__table__.columns
+>>>>>>> origin/develop
         }
         return reserva
 
@@ -34,6 +58,7 @@ class CreacionReservasContrato:
         return SimpleNamespace(**RESERVAS_REGISTRADAS[rid])
 
 
+<<<<<<< HEAD
 class DisponibilidadContrato:
     async def reservas_confirmadas(self, aid, cid, fecha):
         return [
@@ -43,6 +68,8 @@ class DisponibilidadContrato:
         ]
 
 
+=======
+>>>>>>> origin/develop
 class ReservasContrato:
     def __init__(self, areas, finanzas):
         self.areas = AreasService(areas)

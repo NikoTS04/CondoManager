@@ -15,6 +15,10 @@ from src.modules.reservas.schemas import HorarioOcupado
 ZONA_LIMA = timezone(timedelta(hours=-5), name="America/Lima")
 
 
+def get_disponibilidad_repository(session: AsyncSession = Depends(get_db_session)):
+    return DisponibilidadRepository(session)
+
+
 class DisponibilidadRepository:
     def __init__(self, session: AsyncSession):
         self.session = session

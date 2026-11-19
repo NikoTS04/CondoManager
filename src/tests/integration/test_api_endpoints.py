@@ -25,7 +25,11 @@ def auth():
         "Authorization": "Bearer "
         + create_access_token(
             {
+<<<<<<< HEAD
                 "sub": str(uuid.uuid4()),
+=======
+                "sub": "22222222-2222-2222-2222-222222222222",
+>>>>>>> origin/develop
                 "rol": "ADMIN_JUNTA",
                 "condominio_id": str(CONDOMINIO_PILOTO_ID),
             }
@@ -96,7 +100,7 @@ def test_api_reservas_flujo_completo(monkeypatch, autorizacion_aislada):
 
     # Aislar el calendario para que la prueba sea repetible y usar UUID,
     # tal como exige OpenAPI; "402" era rechazado por Pydantic antes del servicio.
-    monkeypatch.setattr(reservas_router, "RESERVAS_REGISTRADAS", {})
+    reservas_router.RESERVAS_REGISTRADAS.clear()
     departamentos = {d["numero"]: str(d["id"]) for d in autorizacion_aislada.datos.values()}
     condominio_id = str(next(iter(autorizacion_aislada.datos.values()))["condominio_id"])
     # 1. Catálogo de áreas comunes

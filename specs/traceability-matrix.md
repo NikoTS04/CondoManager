@@ -1,5 +1,8 @@
 # Matriz de Trazabilidad Integral (Traceability Matrix)
 
+CON-80/81: ver la [trazabilidad canónica de persistencia y ambiente](00-core/traceability-matrix.md#persistencia-y-ambiente-sprint-3--nicolás)
+y la [entrega con límites operativos](../docs/sprints/CON-80-81.md).
+
 CON-7/76: ver la [trazabilidad canónica de identidad Sprint 3](00-core/traceability-matrix.md#identidad-y-cambios-de-acceso-sprint-3--jerson)
 y su [contrato](02-domains/05-usuarios-rbac/invitacion-y-relevo.md). Correo real y
 aceptación del equipo se acreditan separadamente de las pruebas locales.

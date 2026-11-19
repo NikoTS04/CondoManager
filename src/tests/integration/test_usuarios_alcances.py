@@ -30,7 +30,11 @@ def auth(rol="RESIDENTE", numeros=("102",), cid=CID, vinculos=None):
         "Authorization": "Bearer "
         + create_access_token(
             {
+<<<<<<< HEAD
                 "sub": str(uuid4()),
+=======
+                "sub": "22222222-2222-2222-2222-222222222222",
+>>>>>>> origin/develop
                 "rol": rol,
                 "condominio_id": cid,
                 "departamentos": vinculos
@@ -65,7 +69,6 @@ def solicitud_pago(numero="102"):
 
 @pytest.fixture(autouse=True)
 def aislar_recursos(monkeypatch, finanzas_contrato):
-    monkeypatch.setattr(reservas, "RESERVAS_REGISTRADAS", {})
     monkeypatch.setattr(notificaciones, "NOTIFICACIONES_REGISTRADAS", {})
 
 

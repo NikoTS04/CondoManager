@@ -43,6 +43,19 @@ Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y res
 
 ## 2. Contratos Principales por Módulo
 
+### CON-81 — disponibilidad del despliegue
+
+GET `/health` y `/api/v1/health` conservan su respuesta de liveness HTTP.
+GET `/ready` y `/api/v1/ready` son públicos, de solo lectura, sin caché:
+devuelven 200 con `status: "ok"`, `database: "ok"` y `schema_revision` (lista
+ordenada de revisiones instaladas) únicamente si PostgreSQL responde y coincide
+con la única cabeza de migraciones del artefacto desplegado. El chequeo también
+verifica la presencia de las tablas/columnas mapeadas requeridas por la API.
+Con fallo, timeout (5 segundos) o esquema incompleto devuelven 503 con
+`error_code: "SERVICIO_NO_DISPONIBLE"` y mensaje genérico, nunca DSN, host,
+credenciales ni excepción SQL. Readiness no certifica entrega de correo ni avance
+de workers: esas evidencias requieren los recorridos del runbook.
+
 ### Fondos de moras cobradas (0020)
 
 GET `/edificios/{id}/fondos-moras?periodo=YYYY-MM` entrega saldos, resumen mensual

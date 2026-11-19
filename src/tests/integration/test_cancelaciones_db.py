@@ -131,14 +131,19 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
     client, base, residente, rid = caso_cancelacion
     # Precondición del consumidor: reserva SQL y cobro efectivo ya registrado
     # por el flujo financiero. La tarifa por sí sola nunca acredita este cobro.
+<<<<<<< HEAD
     async with base.sessions() as db:
         reserva = await db.get(Reserva, rid)
         datos = {col.name: getattr(reserva, col.name) for col in Reserva.__table__.columns}
     creador_id = datos["usuario_id"]
+=======
+>>>>>>> origin/develop
     comprobante_id = uuid4()
     async with base.sessions() as db, db.begin():
         guardada = await db.get(Reserva, rid)
         assert guardada is not None and guardada.estado == "CONFIRMADA"
+        datos = {c.name: getattr(guardada, c.name) for c in Reserva.__table__.columns}
+        creador_id = datos["usuario_id"]
         assert guardada.usuario_id == creador_id and guardada.zona_horaria == "America/Lima"
         db.add(
             ComprobantePago(
@@ -186,8 +191,12 @@ async def test_cancelacion_concurrente_persistencia_ajuste_y_evento_unicos(
         "monto": "40.00",
         "referencia": None,
     }
+<<<<<<< HEAD
     # Descartar conexiones: las siguientes solicitudes solo pueden recuperar SQL.
     await base.engine.dispose()
+=======
+    # Una sesión independiente debe observar el turno liberado.
+>>>>>>> origin/develop
     calendario = await client.get(
         f"/api/v1/areas/{AREA}/disponibilidad",
         headers=residente,
@@ -273,7 +282,9 @@ async def test_fallo_transaccional_revierte_estado_auditoria_y_evento(
         response.status_code == 503 and response.json()["error_code"] == "CANCELACION_NO_DISPONIBLE"
     )
     async with base.sessions() as db:
-        assert (await db.get(Reserva, rid)).estado == "CONFIRMADA"
+        guardada = await db.get(Reserva, rid)
+        assert guardada.estado == "CONFIRMADA"
+        creador_id = guardada.usuario_id
         assert await db.scalar(select(func.count()).select_from(CancelacionReserva)) == 0
         assert (
             await db.scalar(
