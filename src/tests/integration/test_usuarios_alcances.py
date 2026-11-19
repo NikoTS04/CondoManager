@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 
 from src.core.security import create_access_token, decode_access_token
 from src.main import app
-from src.modules.reservas import router as reservas
 from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID, vinculo_piloto
 from src.tests import reservas_contrato as notificaciones
+from src.tests import reservas_contrato as reservas
 
 pytestmark = pytest.mark.usefixtures(
     "autorizacion_aislada", "identidad_piloto", "finanzas_contrato"
@@ -30,7 +30,7 @@ def auth(rol="RESIDENTE", numeros=("102",), cid=CID, vinculos=None):
         "Authorization": "Bearer "
         + create_access_token(
             {
-                "sub": "prueba",
+                "sub": str(uuid4()),
                 "rol": rol,
                 "condominio_id": cid,
                 "departamentos": vinculos

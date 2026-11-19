@@ -83,6 +83,7 @@ export default function JuntaPortal() {
     setLoadError(null);
 
     try {
+      // shortcut: los contadores usan la página CON-24; sustituirlos por agregados para totales globales.
       const [nuevosComprobantes, nuevosDepartamentos, nuevasNotificaciones] = await Promise.all([
         condominioActivoId ? fetchComprobantes(condominioActivoId) : Promise.resolve([]),
         condominioActivoId ? listarDepartamentos(condominioActivoId) : Promise.resolve([]),
@@ -424,9 +425,10 @@ export default function JuntaPortal() {
           )}
           {section === "conciliacion" && !loadError && condominioActivoId && (
             <ConciliacionSection
+              key={condominioActivoId}
+              condominioId={condominioActivoId}
               loading={loading}
               comprobantes={comprobantes}
-              condominioId={condominioActivoId}
               departamentos={departamentosRegistrados}
               isAuditor={isAuditor}
               busy={busy}

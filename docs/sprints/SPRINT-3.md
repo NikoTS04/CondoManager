@@ -1,5 +1,11 @@
 # Sprint 3 — Usuarios y seguridad
 
+> Estado al 18/11/2026: este es el plan histórico, no el inventario actual.
+> Estado de cuenta, consolidación de pagos, aislamiento e identidad tienen
+> implementación en el checkout; identidad se integró por PR #40.
+> Ver [estado y pendientes actuales](ESTADO-ACTUAL.md). No se actualizaron estados
+> de Jira ni se declaró aceptación del equipo.
+
 ## Objetivo
 
 Completar el acceso de usuarios mediante invitación, consolidar la seguridad por rol y condominio, enviar correos reales y terminar los recorridos de conciliación y consulta financiera sobre datos persistentes. El recorrido final debe funcionar desde el navegador, conservarse después de reiniciar y dejar evidencia de sus resultados y errores.

@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
 
+from src.core.config import settings
 from src.core.errors import (
     APIError,
     ErrorResponse,
@@ -15,6 +16,8 @@ from src.core.errors import (
     request_validation_handler,
     unexpected_error_handler,
 )
+from src.core.health import router as health_router
+from src.core.jobs import router as jobs_router
 from src.modules.condominios.condiciones_pago import router as condiciones_pago_router
 from src.modules.condominios.estructura.router import router as estructura_router
 from src.modules.condominios.router import router as condominios_router
@@ -27,6 +30,7 @@ from src.modules.notificaciones.router import router as notificaciones_router
 from src.modules.pagos.fondos_api import router as fondos_router
 from src.modules.pagos.router import router as pagos_router
 from src.modules.reservas.areas.router import router as areas_router
+from src.modules.reservas.bloqueos import router as bloqueos_router
 from src.modules.reservas.router import router as reservas_router
 from src.modules.usuarios.router import router as usuarios_router
 
@@ -41,7 +45,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,6 +70,9 @@ async def correlacion_seguridad(request: Request, call_next):
 
 
 app.include_router(usuarios_router, prefix="/api/v1")
+app.include_router(health_router)
+app.include_router(health_router, prefix="/api/v1")
+app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(condominios_router, prefix="/api/v1")
 app.include_router(condiciones_pago_router, prefix="/api/v1")
 app.include_router(estructura_router, prefix="/api/v1")
@@ -78,6 +85,7 @@ app.include_router(pagos_router, prefix="/api/v1")
 app.include_router(fondos_router, prefix="/api/v1")
 app.include_router(reservas_router, prefix="/api/v1")
 app.include_router(areas_router, prefix="/api/v1")
+app.include_router(bloqueos_router, prefix="/api/v1")
 app.include_router(notificaciones_router, prefix="/api/v1")
 
 

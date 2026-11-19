@@ -1,12 +1,15 @@
 """Capa de persistencia y configuración de SQLAlchemy 2.0 Async."""
 
 from typing import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
+
 from src.core.config import settings
 
 # Engine asíncrono para PostgreSQL / asyncpg (o fallback SQLite para tests)
@@ -16,6 +19,7 @@ engine = create_async_engine(
     hide_parameters=True,
     future=True,
     pool_pre_ping=True,
+    **({"poolclass": NullPool} if settings.DB_NULL_POOL else {}),
 )
 
 # Fábrica de sesiones asíncronas

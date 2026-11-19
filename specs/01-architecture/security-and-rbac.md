@@ -87,8 +87,10 @@ La relación de titular se conserva aunque la cuenta no tenga acceso. Contrato:
 [vínculos](../02-domains/05-usuarios-rbac/vinculos-departamentos.md).
 
 CON-04 utiliza identidades, roles y vínculos persistentes para login y autorización.
-Los recursos de pagos/reservas/notificaciones conservan su estado piloto hasta sus
-entregas de persistencia. Los datos demo se provisionan explícitamente y el login
+Pagos, reservas y notificaciones tienen persistencia integrada. En la consolidación
+CON-80 del 18/11 se retiró la copia productiva de reservas en memoria; SQL es la
+única fuente y un esquema requerido ausente produce un error operativo.
+Los datos demo se provisionan explícitamente y el login
 siempre consulta PostgreSQL. Véase [alta administrativa](../02-domains/05-usuarios-rbac/alta-administrativa.md).
 
 El SQL exige `usuario_roles.condominio_id NOT NULL`: representa una **asignación
@@ -97,5 +99,7 @@ persistida por condominio**. El `condominio_id: null` del `SUPERADMIN` piloto es
 global persistida se representa mediante `usuarios.es_superadmin`, provisionada por
 CLI; las API de alta y estado no modifican esa concesión. Se conserva la restricción SQL.
 
-Egresos, proveedores, tickets, exportación de balances y traspaso de Junta son
-capacidades documentales futuras; no amplían los permisos de los endpoints actuales.
+Egresos, proveedores, tickets y exportación de balances son capacidades documentales
+futuras; no amplían permisos actuales. El relevo de Junta ya tiene contrato y código
+en [invitación y relevo](../02-domains/05-usuarios-rbac/invitacion-y-relevo.md);
+la entrega real de sus avisos depende del proveedor por decidir.

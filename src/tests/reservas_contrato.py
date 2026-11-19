@@ -12,6 +12,37 @@ RESERVAS_REGISTRADAS = {}
 NOTIFICACIONES_REGISTRADAS = {}
 
 
+class CreacionReservasContrato:
+    """Repositorio explícito de pruebas; producción no contiene un fallback."""
+
+    async def buscar_solapamientos(self, area_id, fecha, hora_inicio, hora_fin, **kwargs):
+        disponible = ReservasService.validar_disponibilidad(
+            area_id, fecha, hora_inicio, hora_fin, list(RESERVAS_REGISTRADAS.values())
+        )
+        return [] if disponible else [object()]
+
+    async def guardar(self, reserva):
+        RESERVAS_REGISTRADAS[reserva.id] = {
+            **ReservaResponseDTO.model_validate(reserva).model_dump(),
+            "usuario_id": str(reserva.usuario_id),
+        }
+        return reserva
+
+    async def obtener_por_id(self, rid):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(**RESERVAS_REGISTRADAS[rid])
+
+
+class DisponibilidadContrato:
+    async def reservas_confirmadas(self, aid, cid, fecha):
+        return [
+            r
+            for r in RESERVAS_REGISTRADAS.values()
+            if r["area_id"] == aid and r["condominio_id"] == cid and r["estado"] == "CONFIRMADA"
+        ]
+
+
 class ReservasContrato:
     def __init__(self, areas, finanzas):
         self.areas = AreasService(areas)

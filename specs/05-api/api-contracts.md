@@ -521,3 +521,38 @@ productores canónicos y lector compatible con eventos históricos persistidos.
 ## CON-14 — Estado de cuenta
 
 Contrato y criterios de lectura: [estado de cuenta por unidad y periodo](estado-de-cuenta.md).
+# Incremento compatible — 18/11/2026
+
+- `GET /pagos/comprobantes`: mantiene respuesta array. Filtros opcionales
+  `fecha_desde`, `fecha_hasta` (fecha bancaria ISO inclusiva), `departamento_id` (UUID),
+  `banco` (exacto, insensible a mayúsculas, 1–30 caracteres), `estado`
+  (EN_REVISION/APROBADO/OBSERVADO/RECHAZADO), `limit` (1–100, default 50) y `offset` (>=0).
+  Se conserva el contrato CON-24 de main. Respuesta privada sin caché.
+- `GET /health/ready` (también bajo `/api/v1`): 200 solo si PostgreSQL (`SELECT 1`)
+  y Redis (`PING`) responden en hasta dos segundos por dependencia; 503 en otro
+  caso. Expone únicamente `status` y estados `ok`/`error` por dependencia, nunca
+  credenciales ni excepciones. No prueba workers, entrega de correo o almacenamiento.
+  `/health` conserva su función compatible de liveness.
+# Consolidación SQL y retiro explícito — 18/11/2026
+
+Reservas conserva rutas y DTO: ahora su única fuente es PostgreSQL, sin adopción
+piloto. El historial, disponibilidad, creación y cancelación devuelven 503 ante
+fallos del esquema requerido. No migran datos que existan únicamente en memoria.
+`POST /moras/evaluar` queda deprecado: devuelve 410
+`EVALUACION_MANUAL_RETIRADA` a administradores autorizados. Conserva 401/403/422
+para errores de sesión, alcance o cuerpo. El worker diario SQL no cambia.
+# Perfil Hobby
+
+Ver [contrato Hobby y Supabase](vercel-hobby.md). Añade endpoint interno diario;
+los DTO de pagos no cambian. Límite de subida configurable: 3 MiB en ese perfil.
+# Bloqueos preventivos
+
+`GET/POST /condominios/{cid}/areas/{aid}/bloqueos`, `DELETE .../bloqueos/{bid}`.
+POST: inicio/fin ISO con zona, motivo (1–500); 201. DELETE: liberación lógica,
+200 repetible. GET: lista de los últimos 100 bloqueos, incluidos inactivos.
+Junta/SuperAdmin escriben; Auditor consulta, residentes usan disponibilidad anónima
+de ocupaciones. 409 si POST afecta reservas confirmadas; no cancela operaciones.
+# Services y Mailjet
+
+Contrato de rutas internas, binding y adapter desactivado:
+[vercel-services-mailjet.md](vercel-services-mailjet.md).

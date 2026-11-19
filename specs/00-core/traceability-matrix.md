@@ -6,6 +6,23 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 ## Matriz de Trazabilidad de Extremo a Extremo (End-to-End)
 
+### Consolidación local — 18/11/2026
+
+Continuación Hobby/Supabase: contrato `05-api/vercel-hobby.md`, OpenAPI
+`hobby.paths.yaml`, `src/core/jobs.py`, `pagos/storage.py` y
+`reservas/bloqueos.py`. Pruebas: `test_hobby.py`, `test_bloqueos_db.py`,
+tests frontend y suite SQL completa. Guía: `docs/procesos/VERCEL-HOBBY.md`.
+No acredita despliegue, entrega real de correo ni nuevos módulos contables.
+
+| Capacidad | Contrato | Código | Pruebas / límite |
+|---|---|---|---|
+| Bandeja filtrable (incremento CON-24, sin cambiar Jira) | `05-api/api-contracts.md`, OpenAPI `sprint-2.paths.yaml` | `pagos/router.py`, `persistencia.py`, `ConciliacionSection.tsx` | `test_bandeja_salud.py`, `test_bandeja_db.py`, tests frontend; prueba PostgreSQL pendiente de entorno |
+| Readiness PostgreSQL/Redis | `05-api/api-contracts.md`, `05-operations/deployment-and-runbooks.md` | `src/core/health.py` | `test_bandeja_salud.py`; no acredita workers/correo/volumen |
+| Reservas solo SQL (CON-80, sin cambiar Jira) | `proc-04-reservas-areas-comunes.md`, `persistencia-sprint-2.md` | `reservas/router.py`, `cancelaciones.py`, `disponibilidad.py` | `test_reservas_sql_db.py`: esquema ausente y segundo proceso ASGI; regresiones de cancelación y concurrencia |
+| Retirada de simulador manual de mora | `proc-02-pagos-y-morosidad.md`, OpenAPI `/moras/evaluar` deprecado | `pagos/router.py` | `test_reservas_sql.py`: 410 autorizado y 403 ajeno/no administrativo; worker diario sin cambios |
+
+Resultados y siguientes entregas: [estado actual](../../docs/sprints/ESTADO-ACTUAL.md).
+
 ### Identidad y cambios de acceso Sprint 3 — Jerson
 
 Contrato: [invitación y relevo](../02-domains/05-usuarios-rbac/invitacion-y-relevo.md).
@@ -35,7 +52,7 @@ Los features de la tabla residen en `specs/02-domains/`. La evidencia real de
 navegador se reproduce con `scripts/evidencia_pagos_sprint3.py`; los bordes de UI
 con API interceptada están separados en `frontend/e2e/pagos_sprint3.py`.
 
-### Extensión financiera objetivo (pendiente de implementación)
+### Extensión financiera implementada (0018–0020)
 
 | Código documental | Regla | Dominio / decisión | Contrato | Aceptación |
 |---|---|---|---|---|
@@ -44,7 +61,13 @@ con API interceptada están separados en `frontend/e2e/pagos_sprint3.py`.
 | FIN-FONDOS-MORA | Moras cobradas financian gastos sin doble uso | Mismo dominio, PROC-06 | Mismo contrato, fondos y aplicaciones | Mismo archivo, escenarios de cobertura |
 | FIN-REPORTE | Llenado, aprobación, PDF/DOCX y visor privado | Mismo dominio, PROC-08/02 | Mismo contrato, reportes y evidencia | Mismo archivo, escenarios de exportación y permisos |
 
-Son códigos de documentación, no tickets asignados ni pruebas ejecutables ya conectadas.
+Son códigos documentales, no tickets asignados. Código en `cuotas/prorrateo.py`,
+`cuotas/documentos_prorrateo.py`, `pagos/mora_diaria.py` y `pagos/fondos.py`.
+Pruebas en `test_prorrateo*`, `test_mora_diaria*` y `test_fondos_moras*`;
+el feature documental de aceptación no está conectado íntegramente a BDD.
+Egresos, tickets y balances de las filas siguientes son objetivos futuros, no
+módulos existentes. El estado vigente se conserva en
+[ESTADO-ACTUAL.md](../../docs/sprints/ESTADO-ACTUAL.md).
 
 
 | ID Req. | Funcionalidad de Negocio | Especificación de Dominio (L2) | Contrato API (L3) | Criterio BDD Ejecutable (L4) | Módulo en `src/` | Responsable |

@@ -1,6 +1,7 @@
 """API compatible de pagos con PostgreSQL y evidencia local privada."""
 
 from datetime import date
+from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -10,7 +11,6 @@ from fastapi.responses import FileResponse
 from src.core.authorization import autorizar_condominio
 from src.core.errors import APIError, ErrorResponse
 from src.core.security import get_current_user, require_role
-from src.modules.pagos.moras_service import MotorMorasService
 from src.modules.pagos.persistencia import get_pagos_service
 from src.modules.pagos.schemas import (
     ComprobantePagoDTO,
@@ -18,7 +18,6 @@ from src.modules.pagos.schemas import (
     ConciliacionResultResponse,
     ConciliarPagoRequest,
     EvaluarMorasRequest,
-    EvaluarMorasResponse,
     ReportarPagoFormulario,
     SolvenciaResponse,
     SubsanarVoucherRequest,
@@ -32,17 +31,22 @@ ESTADOS_COMPROBANTE_VALIDOS = {"EN_REVISION", "APROBADO", "OBSERVADO", "RECHAZAD
 
 @router.get("/pagos/comprobantes", response_model=list[ComprobantePagoDTO])
 async def listar_comprobantes(
+    response: Response,
     user: dict = Depends(get_current_user),
     condominio_id: UUID | None = None,
     fecha_desde: date | None = None,
     fecha_hasta: date | None = None,
     departamento_id: UUID | None = None,
-    banco: str | None = None,
+    banco: str | None = Query(None, min_length=1, max_length=30),
     estado: str | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     service=Depends(get_pagos_service),
 ):
+    if banco is not None:
+        banco = banco.strip()
+        if not banco:
+            raise APIError(422, "BANCO_INVALIDO", "Indique un banco.")
     if fecha_desde is not None and fecha_hasta is not None and fecha_desde > fecha_hasta:
         raise APIError(
             422,
@@ -58,6 +62,8 @@ async def listar_comprobantes(
                 f"El estado debe ser uno de: {', '.join(sorted(ESTADOS_COMPROBANTE_VALIDOS))}.",
             )
         estado = estado_normalizado
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "Authorization"
     return await service.listar(
         user,
         condominio_id=condominio_id,
@@ -143,6 +149,18 @@ async def descargar_voucher(
         ruta, nombre = await service.voucher(comprobante_id, user)
     else:
         ruta, nombre = await service.voucher(comprobante_id, user, evidencia_id)
+    if isinstance(ruta, bytes):
+        return Response(
+            content=ruta,
+            media_type={".png": "image/png", ".jpg": "image/jpeg", ".pdf": "application/pdf"}[
+                Path(nombre).suffix
+            ],
+            headers={
+                "Cache-Control": "private, no-store",
+                "Content-Disposition": f'{disposicion}; filename="{nombre}"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
     return FileResponse(
         ruta,
         filename=nombre,
@@ -188,15 +206,18 @@ async def conciliar_pago(
     return await service.revisar(comprobante_id, request, user)
 
 
-@router.post("/moras/evaluar", response_model=EvaluarMorasResponse)
+@router.post(
+    "/moras/evaluar",
+    deprecated=True,
+    responses={410: {"model": ErrorResponse, "description": "Evaluación manual retirada."}},
+)
 async def evaluar_moras(
     request: EvaluarMorasRequest,
     user: dict = Depends(require_role(["ADMIN_JUNTA", "SUPERADMIN"])),
 ):
     autorizar_condominio(user, request.condominio_id, escritura=True)
-    return MotorMorasService.evaluar_y_aplicar_moras(
-        cuotas=[],
-        departamentos={},
-        comprobantes_en_revision_por_depto={},
-        fecha_evaluacion=request.fecha_corte,
+    raise APIError(
+        410,
+        "EVALUACION_MANUAL_RETIRADA",
+        "La evaluación manual fue retirada. La mora diaria se procesa mediante el worker de pagos.",
     )

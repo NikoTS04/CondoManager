@@ -2,7 +2,20 @@
 
 Sistema de gestión de cuotas de mantenimiento, pagos y reservas para condominios. El equipo trabaja con especificaciones en `specs/`, API en FastAPI y un portal web en Next.js.
 
+Despliegue objetivo: [Vercel Hobby + Supabase](docs/procesos/VERCEL-HOBBY.md).
+Configuración y código preparados para ensayo; **no acredita un despliegue remoto**.
+
 ## Entrega del Sprint 2
+
+> **Código al 18/11/2026:** la base revisada es `22b8f3b`, que integra identidad
+> del PR #40. Ver [estado actual y prioridades](docs/sprints/ESTADO-ACTUAL.md).
+> Las secciones del Sprint 2 conservan su corte histórico; no son el inventario
+> completo de esta rama. Notificaciones reales: proveedor por decidir.
+
+La consolidación local añade filtros/paginación de conciliación y readiness de
+PostgreSQL/Redis, elimina memoria productiva de reservas y retira el simulador
+`POST /moras/evaluar` con 410. El worker diario SQL mantiene su funcionamiento.
+Ver límites y comprobaciones en el inventario enlazado.
 
 El candidato del [PR #25 (`develop` → `main`)](https://github.com/NikoTS04/CondoManager/pull/25) parte de `f49dc55`: incluye el Sprint 2 integrado en el PR #27 (`52b4512`) y la ampliación financiera del PR #28. Esta última incorpora gracia por responsable, prorrateo detallado, mora diaria y fondos por edificio, con migraciones hasta `20261025_0020`. La aprobación, el merge y cualquier publicación conservan su registro propio en GitHub.
 
@@ -60,7 +73,7 @@ docker compose up -d --build --wait --wait-timeout 180 redis backend frontend
 docker compose ps
 ```
 
-El backend ejecuta `alembic upgrade head` antes de iniciar la API. La cabeza de esta rama es `20261025_0020`: revisar respaldo, revisión y compatibilidad antes de arrancar contra una base existente. El despliegue se recuperó y actualizó a 0020 el 26 de octubre tras respaldo, dos restauraciones de ensayo y validación de datos originales; ver [resultado y límites](docs/sprints/reconciliacion-esquema-20261026.md). El reparador [legacy](docs/sprints/reconciliacion-esquema-legacy.md) no adopta estas revisiones financieras. Los fondos se reconocen prospectivamente desde cobros de mora conciliados; no se importa caja histórica.
+El backend ejecuta `alembic upgrade head` antes de iniciar la API. La cabeza del código es `20261113_0021` (identidad): revisar respaldo, revisión y compatibilidad antes de arrancar contra una base existente. El despliegue histórico se recuperó y actualizó a 0020 el 26 de octubre tras respaldo, dos restauraciones de ensayo y validación de datos originales; ver [resultado y límites](docs/sprints/reconciliacion-esquema-20261026.md). Ese antecedente no acredita despliegue de 0021. El reparador [legacy](docs/sprints/reconciliacion-esquema-legacy.md) no adopta estas revisiones financieras. Los fondos se reconocen prospectivamente desde cobros de mora conciliados; no se importa caja histórica.
 
 | Servicio | Dirección |
 |---|---|
@@ -105,9 +118,9 @@ El worker de cuotas puede emitir periodos pendientes desde el día UTC configura
 
 ## Límites del prototipo
 
-- Vouchers privados en `uploads/vouchers/`, compartidos por backend y worker de pagos mediante volumen. MinIO/S3 queda diferido; descargar requiere autenticación.
+- Vouchers privados locales en Docker; el perfil Hobby usa Supabase Storage privado. Descargas autenticadas en ambos casos; archivos previos no se migran solos. Hobby limita subida y descarga remota a 3 MiB.
 - Notificaciones con transporte `SIMULADO`: acredita `ENVIADO`, no entrega física por correo o WhatsApp.
-- Alta con contraseña inicial e intervención de SuperAdmin; invitaciones y verificación por correo diferidas.
+- Invitación, activación por enlace y relevos implementados; recepción real pendiente del proveedor. El alta manual histórica conserva su contrato.
 - Una tarifa de reserva no acredita un cobro. Una cancelación con ajuste `PENDIENTE` no acredita devolución ejecutada.
 - El rediseño visual y el despliegue automático a producción quedan fuera de esta entrega.
 

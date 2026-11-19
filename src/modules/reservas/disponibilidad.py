@@ -3,10 +3,12 @@
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 
+from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.modules.reservas.schemas import HorarioOcupado
 
@@ -18,8 +20,6 @@ class DisponibilidadRepository:
         self.session = session
 
     async def reservas_confirmadas(self, area_id: UUID, condominio_id: UUID, fecha: date):
-        # Incluye estados históricos para descartar copias piloto obsoletas.
-        # El servicio selecciona únicamente CONFIRMADA para ocupar el calendario.
         try:
             return await self._leer_reservas(area_id, condominio_id, fecha)
         except SQLAlchemyError as exc:
@@ -30,12 +30,6 @@ class DisponibilidadRepository:
             ) from exc
 
     async def _leer_reservas(self, area_id: UUID, condominio_id: UUID, fecha: date):
-        # CON-39 puede ejecutarse antes de que CON-73 cree/adopte reservas.
-        # Solo la ausencia de la tabla permite continuar con el almacén piloto;
-        # un fallo SQL se propaga y nunca se presenta como calendario vacío.
-        if not await self.session.scalar(text("SELECT to_regclass('reservas') IS NOT NULL")):
-            return []
-
         resultado = await self.session.execute(
             text(
                 """
@@ -44,6 +38,7 @@ class DisponibilidadRepository:
                 FROM reservas r
                 JOIN areas_comunes a ON a.id = r.area_id
                 WHERE a.id = :area_id AND a.condominio_id = :condominio_id
+                  AND r.estado = 'CONFIRMADA'
                   AND r.fecha_reserva BETWEEN :fecha AND :fecha_hasta
                 """
             ),
@@ -60,8 +55,6 @@ class DisponibilidadRepository:
 
     async def _leer_bloqueos(self, area_id: UUID, fecha: date):
         """Los bloqueos operativos ocupan el calendario con el mismo formato que las reservas."""
-        if not await self.session.scalar(text("SELECT to_regclass('bloqueos_area') IS NOT NULL")):
-            return []
         desde = datetime.combine(fecha - timedelta(days=1), time(), timezone.utc)
         hasta = desde + timedelta(days=3)
         filas = await self.session.execute(
@@ -102,13 +95,6 @@ class DisponibilidadRepository:
 
 
 class DisponibilidadService:
-    @staticmethod
-    def combinar_fuentes(persistidas, piloto):
-        ids_sql = {str(r["id"]) for r in persistidas}
-        return [r for r in persistidas if r.get("estado", "CONFIRMADA") == "CONFIRMADA"] + [
-            r for r in piloto if r["estado"] == "CONFIRMADA" and str(r["id"]) not in ids_sql
-        ]
-
     @staticmethod
     def validar_fecha(fecha: date) -> None:
         if fecha < datetime.now(ZONA_LIMA).date():
@@ -164,3 +150,7 @@ class DisponibilidadService:
             )
             for inicio, fin in fusionados
         ]
+
+
+def get_disponibilidad_repository(session: AsyncSession = Depends(get_db_session)):
+    return DisponibilidadRepository(session)

@@ -48,6 +48,7 @@ paths:
     get:
       operationId: listarReservas
       summary: Reservas de las unidades autorizadas, incluidas las canceladas
+      description: Fuente única SQL; no adopta memoria. Esquema requerido ausente responde 503.
       x-historias: [CON-41, CON-46]
       x-implementation-status: implementado
       parameters:
@@ -64,6 +65,7 @@ paths:
         '403': {$ref: '#/responses/Error'}
         '404': {$ref: '#/responses/Error'}
         '422': {$ref: '#/responses/Error'}
+        '503': {$ref: '#/responses/Error'}
     post:
       operationId: crearReserva
       summary: Confirmar una reserva con solvencia y exclusión de horarios en PostgreSQL
@@ -87,6 +89,7 @@ paths:
         '404': {$ref: '#/responses/Error'}
         '409': {$ref: '#/responses/Error'}
         '422': {$ref: '#/responses/Error'}
+        '503': {$ref: '#/responses/Error'}
   /reservas/{reserva_id}/cancelar:
     parameters:
       - {$ref: '#/parameters/ReservaPath'}

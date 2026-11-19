@@ -10,7 +10,7 @@
 ---
 
 ## 2. Propósito y Alcance
-Ampliación objetivo pendiente de implementación:
+Ampliación de conceptos y fondos implementada en cuotas/pagos (0018–0020):
 [catálogo, fondos de mora y evidencia privada](../01-cuotas/prorrateo-y-mora-diaria.md).
 Incorpora OBLIGACIONES_FINANCIADAS, códigos estables, ámbitos de gasto y cobertura
 parcial/total con moras cobradas. La aplicación de fondos no duplica el pago de
@@ -18,6 +18,9 @@ proveedor ni permite sobregiros. Comprobantes consultables inline por tesorería
 auditoría, con historial privado, sin descarga manual obligatoria.
 
 Centralizar el registro de egresos operativos (luz, agua, ascensores, seguridad, limpieza) clasificados por partida presupuestal, gestionar el directorio de contratistas y mantener la custodia digital de contratos con alertas tempranas automáticas de vencimiento a los 60 y 30 días.
+
+Ese flujo integral sigue pendiente: la cobertura presupuestal no equivale al pago
+ejecutado de un proveedor ni acredita directorio, contratos o alertas implementados.
 
 ---
 

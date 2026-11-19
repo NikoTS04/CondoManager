@@ -25,7 +25,7 @@ def auth():
         "Authorization": "Bearer "
         + create_access_token(
             {
-                "sub": "prueba-api",
+                "sub": str(uuid.uuid4()),
                 "rol": "ADMIN_JUNTA",
                 "condominio_id": str(CONDOMINIO_PILOTO_ID),
             }
