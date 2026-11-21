@@ -20,6 +20,8 @@
     }
   },
   "rewrites": [
+    { "source": "/api/v1/jobs/notificaciones", "destination": { "service": "app" } },
+    { "source": "/api/v1/notificaciones/mailjet/eventos", "destination": { "service": "app" } },
     { "source": "/api/v1/jobs/diario", "destination": { "service": "app" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
   ],

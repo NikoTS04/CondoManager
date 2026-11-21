@@ -1,5 +1,10 @@
 # Vercel Hobby + Supabase
 
+Actualización PROC-03: el despacho de correo y sus reintentos usan un programador
+externo autorizado, **Supabase Cron cada minuto**, sin añadir crons por minuto a
+Vercel Hobby. Activación y secretos: [Mailjet producción](MAILJET-PRODUCCION.md).
+La preparación histórica inferior no acredita configuración remota actual.
+
 ## Correcciones al .env importado en Vercel
 
 Revisión local sin copiar secretos: DEBUG estaba true, JWT era el predeterminado,

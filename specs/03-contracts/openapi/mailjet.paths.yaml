@@ -1,0 +1,75 @@
+paths:
+  /jobs/notificaciones:
+    post:
+      operationId: ejecutarColaMailjet
+      tags: [Sistema]
+      description: Supabase Cron cada minuto. Bearer CRON_SECRET, no JWT. Preview rechazado.
+      security:
+        - cronBearer: []
+      responses:
+        '200':
+          description: Lote procesado o proveedor deshabilitado; no acredita entrega.
+        '401':
+          description: Credencial del programador incorrecta.
+        '403':
+          description: Preview no autorizado.
+        '409':
+          description: Otra ejecución mantiene el lock.
+        '503':
+          description: Ejecución incompleta; cola recuperable.
+  /notificaciones/mailjet/eventos:
+    post:
+      operationId: recibirEventoMailjet
+      tags: [Notificaciones y Comunicaciones]
+      description: HTTPS Basic usuario mailjet y MAILJET_WEBHOOK_SECRET. Máximo 64 KiB.
+      security:
+        - mailjetCallback: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/EventoMailjet'
+                - type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    $ref: '#/components/schemas/EventoMailjet'
+      responses:
+        '200':
+          description: Eventos tratados idempotentemente, incluidos ajenos o de ciclos anteriores.
+        '401':
+          description: Callback no autenticado.
+        '413':
+          description: Cuerpo demasiado grande.
+        '422':
+          description: Evento malformado.
+        '500':
+          description: Fallo de persistencia; el proveedor debe reintentar.
+components:
+  securitySchemes:
+    cronBearer:
+      type: http
+      scheme: bearer
+      description: CRON_SECRET, no token de usuario.
+    mailjetCallback:
+      type: http
+      scheme: basic
+  schemas:
+    EventoMailjet:
+      type: object
+      required: [event, MessageID, email]
+      properties:
+        event:
+          type: string
+          maxLength: 30
+        MessageID:
+          type: integer
+          minimum: 1
+        CustomID:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          maxLength: 320

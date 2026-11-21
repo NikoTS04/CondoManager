@@ -8,6 +8,13 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 ### Consolidación local — 18/11/2026
 
+PROC-03 Mailjet productivo (21/11/2026): cola PROVEEDOR, job protegido por minuto,
+callback Basic autenticado con correlación y recordatorios deduplicados.
+Código: `notificaciones/{worker,mailjet,eventos_mailjet,recordatorios,repository}.py`,
+`core/jobs.py`. Pruebas: `test_mailjet_produccion.py`,
+`test_mailjet_produccion_db.py`. Operación: `docs/procesos/MAILJET-PRODUCCION.md`.
+La configuración remota y recepción real siguen requiriendo aceptación.
+
 Continuación Hobby/Supabase: contrato `05-api/vercel-hobby.md`, OpenAPI
 `hobby.paths.yaml`, `src/core/jobs.py`, `pagos/storage.py` y
 `reservas/bloqueos.py`. Pruebas: `test_hobby.py`, `test_bloqueos_db.py`,

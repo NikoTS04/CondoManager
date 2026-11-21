@@ -42,16 +42,22 @@ def transporte_mailjet(log, clave):
             datos = response.read(65537)
             if len(datos) > 65536:
                 return incierto
-            mensaje = json.loads(datos)["Messages"][0]
+            mensajes = json.loads(datos)["Messages"]
+            if len(mensajes) != 1:
+                return incierto
+            mensaje = mensajes[0]
             if mensaje["Status"] != "success":
                 return incierto
-            message_id = mensaje["To"][0]["MessageID"]
-            if not message_id:
+            destinos = mensaje["To"]
+            if len(destinos) != 1:
+                return incierto
+            message_id = destinos[0]["MessageID"]
+            if type(message_id) is not int or message_id <= 0:
                 return incierto
             return {"status": 200, "message_id": str(message_id)}
     except HTTPError as exc:
         if 400 <= exc.code < 500 and exc.code != 408:
             return {"status": exc.code, "error": "MAILJET_RECHAZO"}
         return incierto
-    except (URLError, OSError, ValueError, KeyError, IndexError, TypeError):
+    except (URLError, OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
         return incierto

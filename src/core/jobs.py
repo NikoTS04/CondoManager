@@ -17,6 +17,45 @@ from src.modules.pagos.worker import evaluar_moras_diarias, limpiar_pendientes
 router = APIRouter()
 
 
+async def ejecutar_notificaciones():
+    from src.modules.notificaciones.recordatorios import generar_recordatorios
+    from src.modules.notificaciones.worker import procesar_uno, recuperar_inciertos
+
+    if not settings.MAILJET_ENABLED:
+        return {"estado": "DESHABILITADO", "procesadas": 0}
+    async with AsyncSessionLocal() as db, db.begin():
+        if not await db.scalar(text("SELECT pg_try_advisory_xact_lock(189561)")):
+            raise APIError(409, "JOB_EN_CURSO", "Ya existe una ejecución de notificaciones.")
+        await recuperar_inciertos()
+        await recuperar_eventos()
+        await generar_recordatorios()
+        procesadas = 0
+        for _ in range(20):
+            if not await procesar_uno(solo_proveedor=True):
+                break
+            procesadas += 1
+        return {"estado": "COMPLETADO", "procesadas": procesadas}
+
+
+@router.post("/jobs/notificaciones", tags=["Sistema"])
+async def notificaciones(response: Response, authorization: str | None = Header(None)):
+    secreto = settings.CRON_SECRET.get_secret_value()
+    if not secreto or not secrets.compare_digest(
+        (authorization or "").encode(), f"Bearer {secreto}".encode()
+    ):
+        raise APIError(401, "CRON_NO_AUTORIZADO", "Se requiere credencial del programador.")
+    if os.getenv("VERCEL_ENV") == "preview":
+        raise APIError(403, "CRON_PREVIEW_DENEGADO", "Preview no ejecuta procesos productivos.")
+    try:
+        resultado = await asyncio.wait_for(ejecutar_notificaciones(), timeout=45)
+    except APIError:
+        raise
+    except Exception:
+        raise APIError(503, "JOB_INCOMPLETO", "Cola pendiente de recuperación.") from None
+    response.headers["Cache-Control"] = "no-store"
+    return resultado
+
+
 async def ejecutar_diario():
     async with AsyncSessionLocal() as db, db.begin():
         if not await db.scalar(text("SELECT pg_try_advisory_xact_lock(189560)")):

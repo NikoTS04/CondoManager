@@ -29,6 +29,10 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /jobs/notificaciones:
+    $ref: './mailjet.paths.yaml#/paths/~1jobs~1notificaciones'
+  /notificaciones/mailjet/eventos:
+    $ref: './mailjet.paths.yaml#/paths/~1notificaciones~1mailjet~1eventos'
   /ready:
     get:
       operationId: consultarDisponibilidadServicio
@@ -1144,6 +1148,9 @@ components:
                 format: binary
                 description: CSV UTF-8, máximo 2 MiB y 5000 filas; numero,piso,edificio,coeficiente,total_pisos
   securitySchemes:
+    mailjetCallback:
+      type: http
+      scheme: basic
     cronBearer:
       type: http
       scheme: bearer

@@ -60,3 +60,18 @@ def test_timeout_no_acredita_envio(monkeypatch, preparado):
             raise URLError("aceptación desconocida")
     monkeypatch.setattr(mailjet, "build_opener", lambda *a: Transporte())
     assert mailjet.transporte_mailjet(preparado, "clave")["incierto"] is True
+
+
+@pytest.mark.parametrize("datos", [
+    None, [], {"Messages": []},
+    {"Messages": [{"Status": "success", "To": [{"MessageID": 0}]}]},
+    {"Messages": [{"Status": "success", "To": [{"MessageID": True}]}]},
+    {"Messages": [{"Status": "error", "Errors": [{"ErrorMessage": "privado"}]}]},
+])
+def test_respuesta_invalida_no_acredita_envio(monkeypatch, preparado, datos):
+    class Transporte:
+        def open(self, *args, **kwargs):
+            return io.BytesIO(json.dumps(datos).encode())
+    monkeypatch.setattr(mailjet, "build_opener", lambda *a: Transporte())
+    resultado = mailjet.transporte_mailjet(preparado, "clave")
+    assert resultado["incierto"] is True and "privado" not in str(resultado)

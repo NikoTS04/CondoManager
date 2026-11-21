@@ -569,3 +569,9 @@ de ocupaciones. 409 si POST afecta reservas confirmadas; no cancela operaciones.
 
 Contrato de rutas internas, binding y adapter desactivado:
 [vercel-services-mailjet.md](vercel-services-mailjet.md).
+# Extensión PROC-03: correo productivo
+
+Contrato de job Supabase Cron y callback autenticado Mailjet:
+[Mailjet productivo](vercel-services-mailjet.md). OpenAPI:
+[`mailjet.paths.yaml`](../03-contracts/openapi/mailjet.paths.yaml).
+La API de despacho conserva 202: confirma persistencia en cola, no recepción.
