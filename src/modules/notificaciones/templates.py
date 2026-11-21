@@ -7,6 +7,14 @@ from string import Formatter
 from typing import Any, Dict, Tuple
 
 PLANTILLAS_CONFIG = {
+    "NOTIF_CORTE_HOY": {
+        "asunto": "CondoManager: Su cuota vence hoy",
+        "cuerpo": (
+            "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
+            "Su cuota vence hoy, {fecha_corte}. Saldo pendiente: {moneda} {monto_pendiente}.\n"
+            "Si ya reportó su pago, consulte su estado en la plataforma."
+        ),
+    },
     "NOTIF_MORA_DIARIA": {
         "asunto": "CondoManager: {tipo_movimiento} de mora diaria",
         "cuerpo": (
@@ -34,7 +42,7 @@ PLANTILLAS_CONFIG = {
         "cuerpo": (
             "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
             "Le recordamos que el plazo para el pago oportuno de su cuota vence el {fecha_corte}.\n"
-            "• Saldo pendiente: S/ {monto_pendiente}\n\n"
+            "• Saldo pendiente: {moneda} {monto_pendiente}\n\n"
             "Evite recargos por mora y restricciones de reserva de áreas comunes.\n"
             "Atentamente,\nAdministración"
         ),

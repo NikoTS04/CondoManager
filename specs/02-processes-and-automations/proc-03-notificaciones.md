@@ -34,6 +34,13 @@ El módulo gestiona plantillas dinámicas, políticas de reintentos ante fallos 
 
 ## 4. Reglas de Negocio y Políticas de Entrega
 
+Integración productiva Mailjet, Supabase Cron, semántica de entrega, seguridad,
+límites e idempotencia: [contrato vigente](../05-api/vercel-services-mailjet.md).
+Mailjet sustituye el transporte simulado solo para nuevas notificaciones habilitadas.
+La respuesta Send API acredita ENVIADO; solo el callback `sent` acredita ENTREGADO.
+Los tiempos de reintento son umbrales mínimos, sujetos al tick de un minuto.
+Una aceptación incierta no se reintenta automáticamente.
+
 ### 4.1 Selección de Destinatarios
 - Si el departamento está habitado por un inquilino:
   - Notificaciones operativas del día a día (cuotas, recordatorios, reservas, incidencias) se envían tanto al **Inquilino** como al **Propietario** (en copia informativa).

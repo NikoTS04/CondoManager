@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 import random
 import re
 from datetime import UTC, datetime, timedelta
@@ -124,10 +125,20 @@ def transporte_simulado(log, clave):
 
 async def procesar_uno(
     session_factory=AsyncSessionLocal,
-    transport=transporte_simulado,
+    transport=None,
     ahora=None,
     jitter=random.randint,
+    solo_proveedor=False,
 ):
+    from src.modules.notificaciones.mailjet import transporte_mailjet
+
+    solo_proveedor = (
+        solo_proveedor or settings.APP_ENV == "production"
+        or os.getenv("VERCEL_ENV") == "production"
+    )
+    if solo_proveedor and not settings.MAILJET_ENABLED:
+        return False
+    transporte_inyectado = transport is not None
     reloj_fijo = ahora
     ahora = ahora or datetime.now(UTC)
     async with session_factory() as db, db.begin():
@@ -146,6 +157,11 @@ async def procesar_uno(
                     Notificacion.proximo_reintento <= ahora,
                 ),
                 ~pendiente,
+                *([Notificacion.transporte == "PROVEEDOR"] if solo_proveedor else []),
+                *(
+                    [Notificacion.transporte == "SIMULADO"]
+                    if not settings.MAILJET_ENABLED and not transporte_inyectado else []
+                ),
             )
             .order_by(Notificacion.fecha_creacion, Notificacion.id)
             .limit(1)
@@ -173,14 +189,22 @@ async def procesar_uno(
             log.proximo_reintento = None
             await crear_alerta(db, log, "DESTINATARIO_INVALIDO", ahora)
             return True
-        # CON-78 inyecta el proveedor. Nunca enviar identidad con el simulador por defecto.
-        if log.transporte != "SIMULADO" and (
-            log.finalidad == "OPERATIVA" or transport is transporte_simulado
-        ):
+        transport = transport or (
+            transporte_mailjet if log.transporte == "PROVEEDOR" else transporte_simulado
+        )
+        if log.transporte == "PROVEEDOR" and transport is transporte_simulado:
             log.estado = "FALLIDO_PERMANENTE"
             log.error_mensaje = "PROVEEDOR_NO_CONFIGURADO"
             await crear_alerta(db, log, "PROVEEDOR_NO_CONFIGURADO", ahora)
             return True
+        if log.tipo_evento in ("NOTIF_RECORDATORIO_PREVIO", "NOTIF_CORTE_HOY"):
+            from src.modules.cuotas.models import CuotaMantenimiento
+
+            cuota = await db.get(CuotaMantenimiento, log.operacion_id)
+            if cuota is None or cuota.monto_pendiente <= 0:
+                log.estado = "FALLIDO_PERMANENTE"
+                log.error_mensaje = "RECORDATORIO_SIN_DEUDA"
+                return True
         log.intentos += 1
         # Cambiar la fila impide adquirirla desde una instantánea anterior al commit.
         log.bloqueado_hasta = ahora + timedelta(minutes=5)
@@ -206,7 +230,12 @@ async def procesar_uno(
         entrega.cuerpo = contenido_entrega(log)
         resultado = await asyncio.to_thread(transport, entrega, clave)
     except Exception:
-        resultado = {"status": 500, "error": "FALLO_TRANSPORTE"}
+        # El simulador no puede haber causado una entrega externa.
+        resultado = (
+            {"status": 500, "error": "FALLO_TRANSPORTE"}
+            if log.transporte == "SIMULADO"
+            else {"status": 0, "error": "ACEPTACION_INCIERTA", "incierto": True}
+        )
     ahora = reloj_fijo or datetime.now(UTC)
     async with session_factory() as db, db.begin():
         log = await db.scalar(select(Notificacion).where(Notificacion.id == lid).with_for_update())

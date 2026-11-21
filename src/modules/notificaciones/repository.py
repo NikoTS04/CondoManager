@@ -1,11 +1,13 @@
 """Destinatarios SQL y cola contextual, sin contactos inventados del piloto."""
 
+import os
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from src.core.authorization import contexto_consulta, vinculos_activos
+from src.core.config import settings
 from src.modules.condominios.models import Departamento, Edificio
 from src.modules.notificaciones.models import Notificacion
 from src.modules.notificaciones.templates import PlantillasService
@@ -64,7 +66,10 @@ class NotificacionesRepository:
                 asunto=asunto,
                 cuerpo=cuerpo,
                 estado="EN_COLA",
-                transporte="SIMULADO",
+                transporte="PROVEEDOR" if canal == "EMAIL" and (
+                    settings.MAILJET_ENABLED or settings.APP_ENV == "production"
+                    or os.getenv("VERCEL_ENV") == "production"
+                ) else "SIMULADO",
                 ciclo=1,
                 intentos=0,
             )
