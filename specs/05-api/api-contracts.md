@@ -571,6 +571,9 @@ Contrato de rutas internas, binding y adapter desactivado:
 [vercel-services-mailjet.md](vercel-services-mailjet.md).
 # Extensión PROC-03: correo productivo
 
+Selección de audiencia, confirmación, operación y políticas:
+[cierre EMAIL](notificaciones-completas.md). Requiere esquema 0022.
+
 Contrato de job Supabase Cron y callback autenticado Mailjet:
 [Mailjet productivo](vercel-services-mailjet.md). OpenAPI:
 [`mailjet.paths.yaml`](../03-contracts/openapi/mailjet.paths.yaml).

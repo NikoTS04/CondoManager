@@ -29,6 +29,24 @@ tags:
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
 paths:
+  /notificaciones/audiencia:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1audiencia'
+  /notificaciones/comunicados/previsualizar:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1comunicados~1previsualizar'
+  /notificaciones/comunicados/{id}/confirmar:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1comunicados~1%7Bid%7D~1confirmar'
+  /notificaciones/comunicados:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1comunicados'
+  /notificaciones/configuracion/{cid}:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1configuracion~1%7Bcid%7D'
+  /notificaciones/contactos-bloqueados:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1contactos-bloqueados'
+  /notificaciones/contactos-bloqueados/{cid}/reactivar:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1contactos-bloqueados~1%7Bcid%7D~1reactivar'
+  /notificaciones/{id}/resolver-incierto:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1%7Bid%7D~1resolver-incierto'
+  /notificaciones/operacion:
+    $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1operacion'
   /jobs/notificaciones:
     $ref: './mailjet.paths.yaml#/paths/~1jobs~1notificaciones'
   /notificaciones/mailjet/eventos:

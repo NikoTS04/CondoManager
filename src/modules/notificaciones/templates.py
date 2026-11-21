@@ -7,6 +7,23 @@ from string import Formatter
 from typing import Any, Dict, Tuple
 
 PLANTILLAS_CONFIG = {
+    "NOTIF_RECORDATORIO_RECUPERADO": {
+        "asunto": "CondoManager: Recordatorio de cuota pendiente",
+        "cuerpo": (
+            "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
+            "Su cuota con vencimiento {fecha_corte} mantiene un saldo de {moneda} {monto_pendiente}.\n"
+            "Este aviso se recuperó después de la fecha programada. Consulte su estado de cuenta."
+        ),
+    },
+    "NOTIF_RESTRICCION_LEVANTADA": {
+        "asunto": "CondoManager: Reservas rehabilitadas",
+        "cuerpo": (
+            "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
+            "Su pago conciliado canceló la deuda vencida y se rehabilitó el permiso de reservas.\n"
+            "El permiso se comprueba nuevamente con su situación actual al reservar.\n"
+            "Pueden existir cuotas aún no vencidas; consulte su estado de cuenta actualizado."
+        ),
+    },
     "NOTIF_CORTE_HOY": {
         "asunto": "CondoManager: Su cuota vence hoy",
         "cuerpo": (

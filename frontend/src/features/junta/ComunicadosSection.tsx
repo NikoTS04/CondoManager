@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Send } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, SkeletonList } from "@/components/ui/Feedback";
-import { Field, Input, Textarea } from "@/components/ui/Field";
+import { Field, Input } from "@/components/ui/Field";
+import { ComunicadoEditor, CorreoOperacion, ResolucionIncierta } from "./CorreoOperacion";
 import {
   atenderAlertaNotificacion,
   listarAlertasNotificacion,
@@ -21,11 +21,6 @@ interface ComunicadosSectionProps {
   notificaciones: NotificacionLog[];
   condominioId: string | null;
   isAuditor: boolean;
-  titulo: string;
-  mensaje: string;
-  onTituloChange: (value: string) => void;
-  onMensajeChange: (value: string) => void;
-  onSubmit: (event: FormEvent) => void;
   onActualizada: () => void;
 }
 
@@ -38,6 +33,7 @@ const ESTADOS_NOTIFICACION: Record<
   REINTENTANDO: { label: "Reintentando", tone: "warning" },
   FALLIDO_PERMANENTE: { label: "Fallido", tone: "danger" },
   EN_COLA: { label: "En cola", tone: "info" },
+  OMITIDO: { label: "Omitido", tone: "info" },
 };
 
 const TIPOS_ALERTA: Record<TipoAlertaNotificacion, string> = {
@@ -158,11 +154,6 @@ export function ComunicadosSection({
   notificaciones,
   condominioId,
   isAuditor,
-  titulo,
-  mensaje,
-  onTituloChange,
-  onMensajeChange,
-  onSubmit,
   onActualizada,
 }: ComunicadosSectionProps) {
   const [seleccion, setSeleccion] = useState<string | null>(null);
@@ -205,28 +196,8 @@ export function ComunicadosSection({
               </p>
             </div>
           ) : (
-            <form onSubmit={onSubmit} className="space-y-4">
-              <Field label="Título" required>
-                <Input
-                  value={titulo}
-                  onChange={(event) => onTituloChange(event.target.value)}
-                  autoComplete="off"
-                />
-              </Field>
-              <Field label="Mensaje" required>
-                <Textarea
-                  value={mensaje}
-                  onChange={(event) => onMensajeChange(event.target.value)}
-                  rows={5}
-                />
-              </Field>
-              <Button
-                type="submit"
-                icon={<Send className="h-4 w-4" aria-hidden="true" />}
-              >
-                Enviar comunicado
-              </Button>
-            </form>
+            condominioId ? <ComunicadoEditor cid={condominioId} onActualizada={onActualizada} /> :
+              <p>Selecciona un condominio para previsualizar.</p>
           )}
         </CardBody>
       </Card>
@@ -268,7 +239,9 @@ export function ComunicadosSection({
                         Próximo intento: {formatDate(notificacion.proximo_reintento)}
                       </p>}
                       {notificacion.error_mensaje && <p className="text-sm text-danger-700">{notificacion.error_mensaje}</p>}
-                      {!isAuditor && notificacion.estado === "FALLIDO_PERMANENTE" && (
+                      {!isAuditor && notificacion.error_mensaje?.startsWith("ACEPTACION_INCIERTA") &&
+                        <ResolucionIncierta aviso={notificacion} onActualizada={() => { setVersionAlertas((v) => v + 1); onActualizada(); }} />}
+                      {!isAuditor && notificacion.estado === "FALLIDO_PERMANENTE" && !notificacion.error_mensaje?.startsWith("ACEPTACION_INCIERTA") && (
                         seleccion === notificacion.id ? <form onSubmit={reencolar} className="mt-3 space-y-2">
                           {identidad ? <p className="text-xs text-muted">Se volverá a comprobar el origen y la elegibilidad del aviso. El destinatario de identidad se conserva.</p> : <>
                             <Field label="Contacto autorizado corregido" required>
@@ -296,6 +269,7 @@ export function ComunicadosSection({
         isAuditor={isAuditor}
         version={versionAlertas}
       />
+      {condominioId && <CorreoOperacion cid={condominioId} isAuditor={isAuditor} />}
     </div>
   );
 }

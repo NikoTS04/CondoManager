@@ -39,6 +39,7 @@ async def test_job_lote_acotado_y_exclusion(monkeypatch):
 
     monkeypatch.setattr(settings, "MAILJET_ENABLED", True)
     monkeypatch.setattr(jobs, "AsyncSessionLocal", factory)
+    monkeypatch.setattr(jobs, "registrar_job", AsyncMock())
     for modulo, nombre in (
         (worker, "recuperar_inciertos"), (jobs, "recuperar_eventos"),
         (recordatorios, "generar_recordatorios"),

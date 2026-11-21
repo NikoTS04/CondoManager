@@ -10,6 +10,43 @@ const { outputText } = ts.transpileModule(source, {
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 const apiURL = (url) => new URL(url, "http://localhost");
 
+test("correo completo mantiene contexto, confirmación estable y resolución explícita", async (t) => {
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    return new Response(JSON.stringify({ id: "lote", cantidad: 1 }));
+  });
+  globalThis.window = {};
+  globalThis.localStorage = { getItem: () => "token-admin" };
+  try {
+    const datos = { condominio_id: "cid", titulo: "Aviso", mensaje: "Mensaje de prueba", usuario_ids: ["uid"] };
+    await api.previsualizarComunicado(datos);
+    await api.confirmarComunicado("lote");
+    await api.confirmarComunicado("lote");
+    await api.listarComunicados("cid");
+    await api.politicaCorreo("cid", { dias: [3, 0], hora: 8, habilitado: true });
+    await api.operacionCorreo("cid");
+    await api.contactosSuprimidos("cid");
+    await api.reactivarContacto("cid", "usuario@example.test", "Contacto verificado");
+    await api.resolverCorreoIncierto("nid", { ciclo: 1, intento: 1, decision: "NO_ACEPTADO",
+      referencia: "Verificado en Mailjet", confirmar_no_aceptado: true });
+    assert.deepEqual(JSON.parse(solicitudes[0].init.body), datos);
+    assert.equal(solicitudes[1].url, solicitudes[2].url);
+    assert.equal(solicitudes[1].init.body, undefined);
+    assert.equal(apiURL(solicitudes[3].url).searchParams.get("condominio_id"), "cid");
+    assert.equal(solicitudes[4].init.method, "PUT");
+    assert.equal(JSON.parse(solicitudes[8].init.body).confirmar_no_aceptado, true);
+    assert.ok(solicitudes.every((s) => s.init.headers.Authorization === "Bearer token-admin"));
+  } finally { delete globalThis.window; delete globalThis.localStorage; }
+});
+
+test("la confirmación de correo propaga errores y no inventa un lote en cola", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(
+    JSON.stringify({ error_code: "AUDIENCIA_CAMBIADA", mensaje: "Previsualice de nuevo" }), { status: 409 },
+  ));
+  await assert.rejects(api.confirmarComunicado("lote"), (e) => e.status === 409 && e.errorCode === "AUDIENCIA_CAMBIADA");
+});
+
 test("bloqueos usan contexto y liberación lógica autenticada", async (t) => {
   const solicitudes = [];
   t.mock.method(globalThis, "fetch", async (url, init) => {

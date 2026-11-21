@@ -1,0 +1,171 @@
+paths:
+  /notificaciones/audiencia:
+    get:
+      operationId: consultarAudienciaCorreo
+      description: SuperAdmin/Junta/Auditor contextual; residentes denegados.
+      parameters: [{$ref: '#/components/parameters/Condominio'}]
+      responses:
+        '200': {description: Contactos elegibles con usuario, unidad, edificio y correo.}
+        '403': {description: Contexto o rol no permitido.}
+  /notificaciones/comunicados/previsualizar:
+    post:
+      operationId: previsualizarComunicado
+      description: Solo administración. Persiste borrador y audiencia; no envía.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Previsualizacion'}
+      responses:
+        '201': {description: UUID de borrador, contenido, destinatarios, cantidad y fechas.}
+        '403': {description: Rol/contexto no permitido.}
+        '422': {description: Datos o filtros ajenos al contexto.}
+  /notificaciones/comunicados/{id}/confirmar:
+    post:
+      operationId: confirmarComunicado
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      description: Administración; confirmación transaccional e idempotente del mismo UUID.
+      responses:
+        '202': {description: Mismo lote confirmado, nunca acredita entrega.}
+        '403': {description: Sin permiso contextual.}
+        '404': {description: Borrador inexistente.}
+        '409': {description: Audiencia cambiada o vista caducada tras 15 minutos.}
+        '422': {description: Audiencia vacía.}
+  /notificaciones/comunicados:
+    get:
+      operationId: listarLotesComunicados
+      parameters: [{$ref: '#/components/parameters/Condominio'}]
+      responses:
+        '200': {description: Últimos 50 borradores/lotes y sus conteos por estado.}
+        '403': {description: Sin permiso contextual.}
+  /notificaciones/configuracion/{cid}:
+    get:
+      operationId: consultarPoliticaCorreo
+      parameters: [{$ref: '#/components/parameters/Cid'}]
+      responses:
+        '200':
+          description: Política efectiva por condominio.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Politica'}
+    put:
+      operationId: configurarPoliticaCorreo
+      parameters: [{$ref: '#/components/parameters/Cid'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Politica'}
+      responses:
+        '200': {description: Política guardada y auditada; no reenvía avisos ya generados.}
+        '403': {description: Solo SuperAdmin/Junta contextual.}
+        '422': {description: Días u hora inválidos.}
+  /notificaciones/contactos-bloqueados:
+    get:
+      operationId: consultarSupresionCorreo
+      parameters: [{$ref: '#/components/parameters/Condominio'}]
+      responses:
+        '200': {description: Últimos 500 contactos suprimidos del contexto, motivo y fecha.}
+  /notificaciones/contactos-bloqueados/{cid}/reactivar:
+    post:
+      operationId: reactivarContactoCorreo
+      parameters: [{$ref: '#/components/parameters/Cid'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, motivo]
+              properties:
+                email: {type: string, minLength: 3, maxLength: 320}
+                motivo: {type: string, minLength: 10, maxLength: 500}
+      responses:
+        '200': {description: Reactivado con auditoría; no reenvía históricos.}
+        '403': {description: Sin permiso de administración contextual.}
+  /notificaciones/{id}/resolver-incierto:
+    post:
+      operationId: resolverAceptacionIncierta
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Resolucion'}
+      responses:
+        '200': {description: Resolución humana auditada, estado y ciclo.}
+        '403': {description: Sin permiso de administración contextual.}
+        '404': {description: Notificación inexistente.}
+        '409': {description: Ciclo cambiado, intento en curso, contacto bloqueado o no elegible.}
+        '422': {description: Falta MessageID, referencia o confirmación explícita.}
+  /notificaciones/operacion:
+    get:
+      operationId: supervisarColaCorreo
+      parameters: [{$ref: '#/components/parameters/Condominio'}]
+      responses:
+        '200': {description: Conteos contextuales, cola más antigua, inciertos, alertas y último job; revisión si no hay éxito reciente en 5 minutos.}
+components:
+  parameters:
+    Condominio:
+      name: condominio_id
+      in: query
+      required: true
+      schema: {type: string, format: uuid}
+    Cid:
+      name: cid
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    Previsualizacion:
+      type: object
+      additionalProperties: false
+      required: [condominio_id, titulo, mensaje]
+      properties:
+        condominio_id: {type: string, format: uuid}
+        titulo: {type: string, minLength: 5, maxLength: 150}
+        mensaje: {type: string, minLength: 10, maxLength: 20000}
+        canal: {type: string, const: EMAIL, default: EMAIL}
+        remitente: {type: string, maxLength: 150, default: Junta Directiva}
+        edificio_ids:
+          type: array
+          maxItems: 500
+          items: {type: string, format: uuid}
+        departamento_ids:
+          type: array
+          maxItems: 500
+          items: {type: string, format: uuid}
+        usuario_ids:
+          type: array
+          maxItems: 500
+          items: {type: string, format: uuid}
+    Politica:
+      type: object
+      additionalProperties: false
+      properties:
+        dias:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          default: [3, 0]
+          items: {type: integer, minimum: 0, maximum: 30}
+        hora: {type: integer, minimum: 0, maximum: 23, default: 8}
+        habilitado: {type: boolean, default: true}
+    Resolucion:
+      type: object
+      additionalProperties: false
+      required: [ciclo, intento, decision, referencia]
+      properties:
+        ciclo: {type: integer, minimum: 1}
+        intento: {type: integer, minimum: 1, maximum: 4}
+        decision: {type: string, enum: [ACEPTADO, NO_ACEPTADO, DESCARTAR]}
+        referencia: {type: string, minLength: 10, maxLength: 500}
+        message_id: {type: [string, 'null'], pattern: '^[1-9][0-9]{0,30}$'}
+        confirmar_no_aceptado: {type: boolean, default: false}

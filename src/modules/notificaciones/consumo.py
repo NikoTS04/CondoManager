@@ -10,7 +10,11 @@ from sqlalchemy.dialects.postgresql import insert
 
 from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox
-from src.modules.notificaciones.models import EventoConsumido, IncidenciaEvento
+from src.modules.notificaciones.models import (
+    EventoConsumido,
+    EventoSolvenciaOutbox,
+    IncidenciaEvento,
+)
 from src.modules.notificaciones.repository import NotificacionesRepository
 from src.modules.notificaciones.templates import PlantillaIncompletaError
 from src.modules.pagos.fondos_models import EventoFondoMorasOutbox
@@ -20,6 +24,7 @@ from src.modules.pagos.models_persistencia import EventoPagoOutbox
 from src.modules.reservas.models import EventoReservaOutbox, Reserva
 
 TIPOS = {
+    "SolvenciaRestablecidaEvent": (EventoSolvenciaOutbox, "NOTIF_RESTRICCION_LEVANTADA"),
     "FondosMorasActualizadosEvent": (EventoFondoMorasOutbox, None),
     "MoraAplicadaEvent": (EventoMoraOutbox, "NOTIF_MORA_DIARIA"),
     "MoraAjustadaEvent": (EventoMoraOutbox, "NOTIF_MORA_DIARIA"),
@@ -71,6 +76,8 @@ async def consumir(session_factory, payload):
             raise ValueError("VERSION_MORA_NO_SOPORTADA")
         if modelo is EventoFondoMorasOutbox and payload.get("schema_version") != 1:
             raise ValueError("VERSION_FONDOS_NO_SOPORTADA")
+        if modelo is EventoSolvenciaOutbox and payload.get("schema_version") != 1:
+            raise ValueError("VERSION_SOLVENCIA_NO_SOPORTADA")
         async with session_factory() as db, db.begin():
             original = await db.get(modelo, eid)
             # El evento debe representar exactamente una operación ya confirmada.
@@ -122,6 +129,8 @@ async def consumir(session_factory, payload):
                     )
                     for c in cuotas
                 ]
+            elif modelo is EventoSolvenciaOutbox:
+                operaciones = [(UUID(data["comprobante_id"]), UUID(data["departamento_id"]), {})]
             elif modelo is EventoMoraOutbox:
                 did = UUID(data["departamento_id"])
                 operaciones = [
