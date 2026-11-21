@@ -13,6 +13,8 @@ def test_services_routing_y_binding_confirmados():
         {"type": "service", "service": "app", "format": "url", "env": "APP_URL"}
     ]
     assert config["rewrites"] == [
+        {"source": "/api/v1/jobs/notificaciones", "destination": {"service": "app"}},
+        {"source": "/api/v1/notificaciones/mailjet/eventos", "destination": {"service": "app"}},
         {"source": "/api/v1/jobs/diario", "destination": {"service": "app"}},
         {"source": "/(.*)", "destination": {"service": "frontend"}},
     ]

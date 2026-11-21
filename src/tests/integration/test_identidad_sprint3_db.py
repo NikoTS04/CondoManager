@@ -261,7 +261,9 @@ async def test_rollback_alta_y_activacion(api_usuarios):
 async def test_cola_no_simula_identidad_y_proveedor_inyectado_recupera(api_usuarios):
     client, base = api_usuarios
     cuenta = await invitar(client, base)
-    assert await procesar_uno(base.sessions)
+    assert not await procesar_uno(base.sessions)
+    from src.modules.notificaciones.worker import transporte_simulado
+    assert await procesar_uno(base.sessions, transport=transporte_simulado)
     async with base.sessions() as db, db.begin():
         log = await db.get(Notificacion, UUID(cuenta["notificacion_id"]))
         assert (

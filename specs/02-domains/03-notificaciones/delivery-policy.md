@@ -4,6 +4,8 @@ CON-73 persiste la cola antes de enviar. `intentos=0` significa que todavía no
 se ejecutó el transporte; programar un reintento no incrementa este contador.
 Cada intento efectivo conserva su ciclo, inicio, fin, error sanitizado y referencia.
 El transporte SIMULADO solo acredita aceptación (ENVIADO), nunca ENTREGADO.
+Una excepción del simulador es reintentable porque no existe un efecto externo.
+Una excepción de PROVEEDOR se trata como aceptación incierta, nunca como rechazo seguro.
 Un intento interrumpido con aceptación incierta se conserva para revisión sin
 reenviarlo automáticamente. Véase
 [persistencia integrada](../04-reservas/persistencia-sprint-2.md).

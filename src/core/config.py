@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     MAILJET_SECRET: SecretStr = SecretStr("")
     MAILJET_FROM_EMAIL: str = ""
     MAILJET_ENABLED: bool = False
+    MAILJET_WEBHOOK_SECRET: SecretStr = SecretStr("")
     VOUCHER_STORAGE: Literal["local", "supabase"] = "local"
     VOUCHER_MAX_BYTES: int = Field(default=5 * 1024 * 1024, ge=1, le=5 * 1024 * 1024)
     SUPABASE_URL: str = ""
@@ -66,10 +67,11 @@ class Settings(BaseSettings):
             not self.MAILJET_API_KEY.get_secret_value()
             or not self.MAILJET_SECRET.get_secret_value()
             or not self.MAILJET_FROM_EMAIL
+            or len(self.MAILJET_WEBHOOK_SECRET.get_secret_value()) < 32
             or "@" not in self.MAILJET_FROM_EMAIL
             or any(c.isspace() for c in self.MAILJET_FROM_EMAIL)
         ):
-            raise ValueError("Mailjet requiere claves privadas y remitente verificado configurado.")
+            raise ValueError("Mailjet requiere claves privadas, remitente y secreto de callback >=32 caracteres.")
         if self.VOUCHER_STORAGE == "supabase" and (
             not self.SUPABASE_URL.startswith("https://")
             or not self.SUPABASE_SERVICE_ROLE_KEY.get_secret_value()

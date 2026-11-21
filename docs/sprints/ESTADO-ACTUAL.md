@@ -1,5 +1,33 @@
 # Estado actual y prioridades — 18/11/2026
 
+## Incremento PROC-03 — 21/11/2026
+
+Integración Mailjet implementada en `feat/PROC-03-mailjet-produccion`:
+despacho desde cola SQL, callback autenticado, job de Supabase Cron y recordatorios
+deduplicados. Guía de activación: [Mailjet producción](../procesos/MAILJET-PRODUCCION.md).
+Remitente autorizado: nicolas.tarqui@unmsm.edu.pe. Mailjet sigue deshabilitado en
+el archivo privado de despliegue; los recursos remotos no se configuran desde código.
+No se acredita recepción real ni programación remota. WhatsApp/RPA sigue pendiente.
+Las secciones siguientes conservan evidencia histórica del corte anterior.
+
+Validación final de este incremento: **869 pruebas backend aprobadas, 0 fallos,
+0 omitidas**, 350,96 s, Python 3.14/PostgreSQL 18.7 temporal UTF-8.
+JUnit: `/tmp/opencode/mailjet-produccion-final.xml`. **39 pruebas frontend**
+aprobadas. Ruff de los archivos de la integración, verificador SDD, contratos
+YAML/JSON, registro de rutas/rewrites y `git diff --check` correctos.
+No se midió cobertura ni se repitió CI Python 3.12/PostgreSQL 16.
+
+El primer ensayo global usó erróneamente SQL_ASCII: 66 fallos y 15 errores;
+se corrigió únicamente la base temporal. En UTF-8 quedaron dos regresiones de
+timeouts del simulador (866 aprobadas): se restauró su reintento sin debilitar
+la aceptación incierta de PROVEEDOR, con prueba adicional. El pase final anterior
+ya incorpora esa corrección. Se conservan 17 warnings de dependencias/pruebas.
+
+Prueba real controlada: Mailjet aceptó una solicitud para cada uno de los dos
+correos personales autorizados y devolvió MessageID en ambos casos, sin reintentos
+ni consumo de la cola productiva. Esto prueba aceptación del transporte, no
+recepción en bandeja ni callback remoto. `.env.deploy` conserva MAILJET_ENABLED=false.
+
 ## Continuación: Hobby y Supabase
 
 Ver [guía de despliegue Hobby](../procesos/VERCEL-HOBBY.md). Se incorporan Storage

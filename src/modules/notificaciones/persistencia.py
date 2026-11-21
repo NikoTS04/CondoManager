@@ -129,16 +129,16 @@ class NotificacionesPersistentesService:
             )
             if log.estado != "FALLIDO_PERMANENTE":
                 return self.dto(log)
+            if (log.error_mensaje or "").startswith("ACEPTACION_INCIERTA"):
+                raise APIError(
+                    409, "ACEPTACION_INCIERTA", "Verifique el proveedor antes de reenviar."
+                )
             if log.finalidad != "OPERATIVA":
                 if request and request.nuevo_destinatario:
                     raise APIError(
                         422,
                         "DESTINATARIO_NO_AUTORIZADO",
                         "El aviso de identidad no permite cambiar su destinatario.",
-                    )
-                if log.error_mensaje == "ACEPTACION_INCIERTA_REQUIERE_REVISION":
-                    raise APIError(
-                        409, "ACEPTACION_INCIERTA", "Verifique el proveedor antes de reenviar."
                     )
                 from src.modules.usuarios.comunicaciones import destinatario_identidad_valido
 

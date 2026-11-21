@@ -143,9 +143,9 @@ async def test_destinatario_invalido_y_proveedor_no_configurado(api_usuarios):
     nid2, _ = await encolar(client, base, "ana2@ejemplo.test")
     async with base.sessions() as db, db.begin():
         (await db.get(Notificacion, nid2)).transporte = "PROVEEDOR"
-    assert await procesar_uno(base.sessions, lambda *a: pytest.fail("sin transporte"))
-    [alerta2] = await alertas(base, nid2)
-    assert alerta2.tipo == "PROVEEDOR_NO_CONFIGURADO"
+    assert not await procesar_uno(base.sessions)
+    assert await alertas(base, nid2) == []
+    assert await estado(base, nid2) == ("EN_COLA", 0)
 
 
 async def test_sin_duplicados_con_workers_y_sesiones_nuevas(api_usuarios):
