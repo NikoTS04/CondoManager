@@ -346,6 +346,7 @@ class PagosPersistentesService:
             ahora = datetime.now(UTC)
             hoy = fecha_lima()
             anterior = {"estado": comprobante.estado, **self.fotografia(depto, cuotas)}
+            estaba_en_mora = saldo_en_mora(cuotas, condominio.dias_gracia, hoy) > CERO
             total_aplicado, credito = CERO, CERO
             if request.decision == "APROBADO" and comprobante.fecha_operacion > hoy:
                 raise APIError(
@@ -472,6 +473,19 @@ class PagosPersistentesService:
                     "resultado": revision.resultado,
                 },
             )
+            if request.decision == "APROBADO" and estaba_en_mora and resultado.departamento_habilitado_reservas:
+                from src.modules.notificaciones.models import EventoSolvenciaOutbox
+                eid = uuid4()
+                self.session.add(EventoSolvenciaOutbox(
+                    id=eid, comprobante_id=id, payload={
+                        "event_id": str(eid), "event_type": "SolvenciaRestablecidaEvent",
+                        "schema_version": 1, "producer": "service.pagos",
+                        "occurred_at": ahora.isoformat(), "correlation_id": str(id),
+                        "causation_id": str(revision.id),
+                        "data": {"condominio_id": str(condominio.id),
+                                 "departamento_id": str(depto.id), "comprobante_id": str(id)},
+                    },
+                ))
             await self.session.flush()
         return resultado
 

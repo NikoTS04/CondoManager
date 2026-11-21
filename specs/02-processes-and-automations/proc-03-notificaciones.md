@@ -34,6 +34,10 @@ El módulo gestiona plantillas dinámicas, políticas de reintentos ante fallos 
 
 ## 4. Reglas de Negocio y Políticas de Entrega
 
+Cierre EMAIL, selección/confirmación de audiencias, resolución humana de
+aceptaciones inciertas, supresión de contactos y recuperación de recordatorios:
+[contrato](../05-api/notificaciones-completas.md). WhatsApp permanece futuro.
+
 Integración productiva Mailjet, Supabase Cron, semántica de entrega, seguridad,
 límites e idempotencia: [contrato vigente](../05-api/vercel-services-mailjet.md).
 Mailjet sustituye el transporte simulado solo para nuevas notificaciones habilitadas.

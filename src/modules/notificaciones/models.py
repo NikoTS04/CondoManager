@@ -1,10 +1,12 @@
 """Cola durable, historial de intentos y consumo idempotente de CON-73."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -13,6 +15,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
@@ -50,6 +53,8 @@ class Notificacion(Base):
     bloqueado_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     proveedor_message_id: Mapped[str | None] = mapped_column(Text)
     error_mensaje: Mapped[str | None] = mapped_column(Text)
+    recordatorio_vencimiento: Mapped[date | None] = mapped_column(Date)
+    recordatorio_dias: Mapped[int | None] = mapped_column()
     fecha_creacion: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
@@ -71,7 +76,7 @@ class Notificacion(Base):
         ),
         CheckConstraint("intentos BETWEEN 0 AND 4 AND ciclo >= 1", name="ck_notificacion_intentos"),
         CheckConstraint(
-            "estado IN ('EN_COLA','ENVIADO','ENTREGADO','REINTENTANDO','FALLIDO_PERMANENTE')",
+            "estado IN ('EN_COLA','ENVIADO','ENTREGADO','REINTENTANDO','FALLIDO_PERMANENTE','OMITIDO')",
             name="ck_notificacion_estado",
         ),
         CheckConstraint(
@@ -81,6 +86,49 @@ class Notificacion(Base):
         Index("idx_notificacion_contexto_usuario", "condominio_id", "usuario_destinatario_id"),
         Index("idx_notificacion_pendiente", "estado", "proximo_reintento"),
     )
+
+
+class Comunicado(Base):
+    __tablename__ = "comunicados"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    condominio_id: Mapped[UUID] = mapped_column(ForeignKey("condominios.id"), index=True)
+    contenido: Mapped[dict] = mapped_column(JSONB)
+    audiencia: Mapped[list] = mapped_column(JSONB)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    confirmado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PoliticaNotificaciones(Base):
+    __tablename__ = "politicas_notificaciones"
+    condominio_id: Mapped[UUID] = mapped_column(ForeignKey("condominios.id"), primary_key=True)
+    dias: Mapped[list] = mapped_column(JSONB, default=lambda: [3, 0])
+    hora: Mapped[int] = mapped_column(default=8)
+    habilitado: Mapped[bool] = mapped_column(Boolean, default=True)
+    ultima_fecha: Mapped[date | None] = mapped_column(Date)
+    __table_args__ = (CheckConstraint("hora BETWEEN 0 AND 23", name="ck_notificaciones_hora"),)
+
+
+class ContactoBloqueado(Base):
+    __tablename__ = "contactos_bloqueados"
+    condominio_id: Mapped[UUID] = mapped_column(ForeignKey("condominios.id"), primary_key=True)
+    email: Mapped[str] = mapped_column(Text, primary_key=True)
+    motivo: Mapped[str] = mapped_column(String(30))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class EventoSolvenciaOutbox(Base):
+    __tablename__ = "eventos_solvencia_outbox"
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    comprobante_id: Mapped[UUID] = mapped_column(ForeignKey("comprobantes_pago.id"), unique=True)
+    payload: Mapped[dict] = mapped_column(JSONB)
+
+
+class EstadoJobNotificaciones(Base):
+    __tablename__ = "estado_job_notificaciones"
+    nombre: Mapped[str] = mapped_column(String(30), primary_key=True)
+    inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fin: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    estado: Mapped[str] = mapped_column(String(30))
 
 
 class IntentoNotificacion(Base):

@@ -346,7 +346,7 @@ paths:
       parameters:
         - {$ref: '#/parameters/Contexto'}
         - {name: departamento_id, in: query, schema: {type: string, format: uuid}}
-        - {name: estado, in: query, schema: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE]}}
+        - {name: estado, in: query, schema: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE, OMITIDO]}}
         - {name: canal, in: query, schema: {type: string, enum: [EMAIL, WHATSAPP, SMS, PUSH]}}
       responses:
         '200':

@@ -6,7 +6,7 @@ Define los contratos DTO, enums de canales y estados, y modelos de bitácora de 
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Literal, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -24,6 +24,7 @@ class EstadoNotificacionEnum(str, Enum):
     ENTREGADO = "ENTREGADO"
     REINTENTANDO = "REINTENTANDO"
     FALLIDO_PERMANENTE = "FALLIDO_PERMANENTE"
+    OMITIDO = "OMITIDO"
 
 
 class NotificacionLogDTO(BaseModel):
@@ -67,6 +68,48 @@ class EnviarComunicadoMasivoRequest(BaseModel):
     mensaje: str = Field(..., min_length=10)
     canal: CanalNotificacionEnum = CanalNotificacionEnum.EMAIL
     remitente: str = Field(default="Junta Directiva", max_length=150)
+
+
+class PrevisualizarComunicado(EnviarComunicadoMasivoRequest):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    condominio_id: uuid.UUID
+    canal: Literal["EMAIL"] = "EMAIL"
+    edificio_ids: list[uuid.UUID] = Field(default_factory=list, max_length=500)
+    departamento_ids: list[uuid.UUID] = Field(default_factory=list, max_length=500)
+    usuario_ids: list[uuid.UUID] = Field(default_factory=list, max_length=500)
+    mensaje: str = Field(min_length=10, max_length=20000)
+
+
+class ConfiguracionNotificaciones(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    dias: list[Annotated[int, Field(ge=0, le=30, strict=True)]] = Field(
+        default_factory=lambda: [3, 0], min_length=1, max_length=10
+    )
+    hora: int = Field(default=8, ge=0, le=23, strict=True)
+    habilitado: bool = True
+
+    @field_validator("dias")
+    @classmethod
+    def dias_unicos(cls, dias):
+        if len(set(dias)) != len(dias):
+            raise ValueError("No repita días")
+        return sorted(dias, reverse=True)
+
+
+class ReactivarContacto(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    email: str = Field(min_length=3, max_length=320)
+    motivo: str = Field(min_length=10, max_length=500)
+
+
+class ResolverIncierto(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    ciclo: int = Field(ge=1)
+    intento: int = Field(ge=1, le=4)
+    decision: Literal["ACEPTADO", "NO_ACEPTADO", "DESCARTAR"]
+    referencia: str = Field(min_length=10, max_length=500)
+    message_id: str | None = Field(default=None, pattern=r"^[1-9][0-9]{0,30}$")
+    confirmar_no_aceptado: bool = False
 
 
 class EnviarComunicadoMasivoResponse(BaseModel):

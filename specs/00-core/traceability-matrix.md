@@ -8,6 +8,13 @@ Esta matriz vincula cada requerimiento de negocio y directiva de automatización
 
 ### Consolidación local — 18/11/2026
 
+Cierre EMAIL: contrato `05-api/notificaciones-completas.md`, OpenAPI
+`notificaciones-completas.paths.yaml`, migración 0022; código
+`notificaciones/{comunicados,administracion,recordatorios,eventos_mailjet,worker}.py`
+y `pagos/persistencia.py`; interfaz `CorreoOperacion.tsx` y consumidores
+Junta/Residente. Pruebas `test_notificaciones_completas_db.py` y frontend.
+No acredita nueva aceptación remota ni implementa WhatsApp.
+
 PROC-03 Mailjet productivo (21/11/2026): cola PROVEEDOR, job protegido por minuto,
 callback Basic autenticado con correlación y recordatorios deduplicados.
 Código: `notificaciones/{worker,mailjet,eventos_mailjet,recordatorios,repository}.py`,

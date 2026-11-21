@@ -164,7 +164,7 @@ export interface NotificacionLog {
   destinatario: string;
   asunto: string | null;
   cuerpo: string;
-  estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA";
+  estado: "ENTREGADO" | "ENVIADO" | "REINTENTANDO" | "FALLIDO_PERMANENTE" | "EN_COLA" | "OMITIDO";
   intentos: number;
   ciclo: number;
   transporte: "SIMULADO" | "PROVEEDOR";
@@ -1179,4 +1179,60 @@ export async function enviarComunicadoMasivo(titulo: string, mensaje: string, co
   } catch {
     return { ok: false };
   }
+}
+
+export interface DestinoComunicado {
+  usuario_id: string; departamento_id: string; edificio_id: string;
+  edificio?: string;
+  nombre: string; email: string; departamento: string;
+}
+export interface BorradorComunicado {
+  id: string; cantidad: number; creado_en: string; confirmado_en: string | null;
+  contenido: { titulo: string; mensaje: string };
+  destinatarios: DestinoComunicado[];
+  conteos?: Partial<Record<NotificacionLog["estado"], number>>;
+}
+export interface PoliticaCorreo { dias: number[]; hora: number; habilitado: boolean }
+export interface ContactoSuprimido { email: string; motivo: string; creado_en: string }
+export interface OperacionCorreo {
+  habilitado: boolean; conteos: Record<string, number>; inciertos: number;
+  alertas_abiertas: number; pendiente_desde: string | null; requiere_revision: boolean;
+  cola_atrasada: boolean;
+  job: { inicio: string; fin: string | null; estado: string } | null;
+}
+export function audienciaCorreo(cid: string): Promise<DestinoComunicado[]> {
+  return recursoRequest(`/notificaciones/audiencia${contextoQuery(cid)}`);
+}
+export function previsualizarComunicado(datos: {
+  condominio_id: string; titulo: string; mensaje: string;
+  edificio_ids?: string[]; departamento_ids?: string[]; usuario_ids?: string[];
+}): Promise<BorradorComunicado> {
+  return recursoRequest("/notificaciones/comunicados/previsualizar", { method: "POST", body: JSON.stringify(datos) });
+}
+export function confirmarComunicado(id: string): Promise<BorradorComunicado> {
+  return recursoRequest(`/notificaciones/comunicados/${encodeURIComponent(id)}/confirmar`, { method: "POST" });
+}
+export function listarComunicados(cid: string): Promise<BorradorComunicado[]> {
+  return recursoRequest(`/notificaciones/comunicados${contextoQuery(cid)}`);
+}
+export function politicaCorreo(cid: string, datos?: PoliticaCorreo): Promise<PoliticaCorreo> {
+  return recursoRequest(`/notificaciones/configuracion/${encodeURIComponent(cid)}`,
+    datos ? { method: "PUT", body: JSON.stringify(datos) } : {});
+}
+export function contactosSuprimidos(cid: string): Promise<ContactoSuprimido[]> {
+  return recursoRequest(`/notificaciones/contactos-bloqueados${contextoQuery(cid)}`);
+}
+export function reactivarContacto(cid: string, email: string, motivo: string): Promise<{ estado: string }> {
+  return recursoRequest(`/notificaciones/contactos-bloqueados/${encodeURIComponent(cid)}/reactivar`,
+    { method: "POST", body: JSON.stringify({ email, motivo }) });
+}
+export function operacionCorreo(cid: string): Promise<OperacionCorreo> {
+  return recursoRequest(`/notificaciones/operacion${contextoQuery(cid)}`);
+}
+export function resolverCorreoIncierto(id: string, datos: {
+  ciclo: number; intento: number; decision: "ACEPTADO" | "NO_ACEPTADO" | "DESCARTAR";
+  referencia: string; message_id?: string; confirmar_no_aceptado?: boolean;
+}): Promise<{ estado: string; ciclo: number }> {
+  return recursoRequest(`/notificaciones/${encodeURIComponent(id)}/resolver-incierto`,
+    { method: "POST", body: JSON.stringify(datos) });
 }

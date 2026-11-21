@@ -9,6 +9,7 @@ import { EmptyState, SkeletonList } from "@/components/ui/Feedback";
 import { formatDate } from "@/lib/format";
 
 const ESTADOS: Record<NotificacionLog["estado"], string> = {
+  OMITIDO: "Aviso de correo omitido",
   EN_COLA: "En cola", ENVIADO: "Aceptado, entrega sin confirmar", ENTREGADO: "Entrega confirmada",
   REINTENTANDO: "Reintento programado", FALLIDO_PERMANENTE: "Envío fallido: la administración debe revisarlo",
 };

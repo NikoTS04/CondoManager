@@ -3,6 +3,7 @@
 import asyncio
 import os
 import secrets
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Header, Response
 from sqlalchemy import text
@@ -17,6 +18,26 @@ from src.modules.pagos.worker import evaluar_moras_diarias, limpiar_pendientes
 router = APIRouter()
 
 
+async def registrar_job(estado):
+    from sqlalchemy.dialects.postgresql import insert
+
+    from src.modules.notificaciones.models import EstadoJobNotificaciones
+
+    ahora = datetime.now(UTC)
+    async with AsyncSessionLocal() as db, db.begin():
+        if estado == "EN_CURSO":
+            await db.execute(insert(EstadoJobNotificaciones).values(
+                nombre="correo", inicio=ahora, fin=None, estado=estado,
+            ).on_conflict_do_update(
+                index_elements=["nombre"], set_={"inicio": ahora, "fin": None, "estado": estado},
+            ))
+        else:
+            from sqlalchemy import update
+            await db.execute(update(EstadoJobNotificaciones).where(
+                EstadoJobNotificaciones.nombre == "correo"
+            ).values(fin=ahora, estado=estado))
+
+
 async def ejecutar_notificaciones():
     from src.modules.notificaciones.recordatorios import generar_recordatorios
     from src.modules.notificaciones.worker import procesar_uno, recuperar_inciertos
@@ -26,14 +47,20 @@ async def ejecutar_notificaciones():
     async with AsyncSessionLocal() as db, db.begin():
         if not await db.scalar(text("SELECT pg_try_advisory_xact_lock(189561)")):
             raise APIError(409, "JOB_EN_CURSO", "Ya existe una ejecución de notificaciones.")
-        await recuperar_inciertos()
-        await recuperar_eventos()
-        await generar_recordatorios()
-        procesadas = 0
-        for _ in range(20):
-            if not await procesar_uno(solo_proveedor=True):
-                break
-            procesadas += 1
+        await registrar_job("EN_CURSO")
+        try:
+            await recuperar_inciertos()
+            await recuperar_eventos()
+            await generar_recordatorios()
+            procesadas = 0
+            for _ in range(20):
+                if not await procesar_uno(solo_proveedor=True):
+                    break
+                procesadas += 1
+        except BaseException:
+            await registrar_job("INCOMPLETO")
+            raise
+        await registrar_job("COMPLETADO")
         return {"estado": "COMPLETADO", "procesadas": procesadas}
 
 

@@ -1,5 +1,6 @@
 """API de comunicaciones: confirmar cola no equivale a entregar un mensaje."""
 
+import os
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -7,6 +8,7 @@ from fastapi import Depends
 from sqlalchemy import select, update
 
 from src.core.authorization import autorizar_condominio, contexto_consulta
+from src.core.config import settings
 from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.core.security import validar_sesion
@@ -39,6 +41,10 @@ class NotificacionesPersistentesService:
             return [self.dto(n) for n in await self.repo.listar(usuario, cid, did, estado, canal)]
 
     async def despachar(self, request, usuario):
+        if (
+            settings.APP_ENV == "production" or os.getenv("VERCEL_ENV") == "production"
+        ) and request.canal.value != "EMAIL":
+            raise APIError(422, "CANAL_NO_DISPONIBLE", "Solo EMAIL tiene proveedor productivo.")
         try:
             cid, did = UUID(request.condominio_id), UUID(request.departamento_id)
         except ValueError:
@@ -82,6 +88,8 @@ class NotificacionesPersistentesService:
             return self.dto(log)
 
     async def comunicado(self, request, usuario):
+        if settings.APP_ENV == "production" or os.getenv("VERCEL_ENV") == "production":
+            raise APIError(409, "PREVISUALIZACION_REQUERIDA", "Previsualice y confirme el comunicado.")
         try:
             cid = UUID(request.condominio_id)
         except ValueError:

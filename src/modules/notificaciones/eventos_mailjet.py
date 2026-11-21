@@ -9,13 +9,14 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
 from src.core.config import settings
 from src.core.database import AsyncSessionLocal
 from src.core.errors import APIError
 from src.modules.condominios.models import Condominio
 from src.modules.notificaciones.alertas import crear_alerta
-from src.modules.notificaciones.models import IntentoNotificacion, Notificacion
+from src.modules.notificaciones.models import ContactoBloqueado, IntentoNotificacion, Notificacion
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 
 router = APIRouter()
@@ -82,11 +83,21 @@ async def aplicar_evento(evento, session_factory=AsyncSessionLocal):
         log.proximo_reintento = log.bloqueado_hasta = None
         log.fecha_actualizacion = ahora
         if error:
+            await db.execute(insert(ContactoBloqueado).values(
+                condominio_id=cid, email=log.destinatario.strip().lower(),
+                motivo=error, creado_en=ahora,
+            ).on_conflict_do_update(
+                index_elements=["condominio_id", "email"],
+                set_={"motivo": error, "creado_en": ahora},
+            ))
             await crear_alerta(db, log, "ERROR_DEFINITIVO", ahora)
         await SQLAlchemyPagosRepository(db).auditar(
             {"rol": "SISTEMA_AUTOMATICO", "sub": "MAILJET_CALLBACK"},
             cid, log.departamento_id, "NOTIFICACION_RESULTADO_MAILJET",
-            evento.event.upper(), anterior, {"estado": nuevo, "ciclo": log.ciclo},
+            evento.event.upper(), anterior, {
+                "estado": nuevo, "ciclo": log.ciclo, "notificacion_id": str(log.id),
+                "proveedor_message_id": log.proveedor_message_id,
+            },
         )
 
 

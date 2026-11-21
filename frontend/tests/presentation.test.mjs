@@ -29,6 +29,26 @@ const { MorasSection } = loadComponent("features/junta/MorasSection");
 const { ResultadoPago } = loadComponent("components/domain/ResultadoPago");
 const { ConciliacionSection } = loadComponent("features/junta/ConciliacionSection");
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
+const { ComunicadoEditor, ResolucionIncierta, CorreoOperacion } = loadComponent("features/junta/CorreoOperacion");
+
+test("correo exige previsualizar y resolver incertidumbre sin reenvío ciego", () => {
+  const editor = render(ComunicadoEditor, { cid: "cid", onActualizada() {} });
+  assert.match(editor, /Previsualizar audiencia/);
+  assert.doesNotMatch(editor, /Confirmar envío a/);
+  assert.match(editor, /Solo correo/);
+  const resolver = render(ResolucionIncierta, {
+    aviso: { id: "nid", ciclo: 1, intentos: 1 }, onActualizada() {},
+  });
+  assert.match(resolver, /Revisa primero el intento en Mailjet/);
+  assert.match(resolver, /Referencia y motivo de la revisión/);
+  assert.match(resolver, /Registrar resolución auditada/);
+});
+
+test("la supervisión en carga no inventa un estado saludable ni habilita reactivación al auditor", () => {
+  const html = render(CorreoOperacion, { cid: "cid", isAuditor: true });
+  assert.match(html, /Consultando operación/);
+  assert.doesNotMatch(html, /Proveedor habilitado|Reactivar con auditoría|Guardar política/);
+});
 const depto = { id: "unidad-a", numero: "402", piso: 4, coeficiente: "0.6800", saldo_a_favor: "25.50", deuda_vencida: "123.45", estado_financiero: "EN_MORA", activo: true };
 
 test("la bandeja conserva filtros etiquetados durante carga sin mostrar éxitos ni vacíos", () => {

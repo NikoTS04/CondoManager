@@ -186,7 +186,7 @@ schemas:
       expira_en: {type: string, format: date-time}
       creado_en: {type: string, format: date-time}
       notificacion_id: {type: string, format: uuid}
-      estado_correo: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE]}
+      estado_correo: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE, OMITIDO]}
 responses:
   InvitacionCreada:
     description: Identidad, invitación, auditoría y aviso EN_COLA confirmados conjuntamente; no acredita envío.

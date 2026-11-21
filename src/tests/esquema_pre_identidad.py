@@ -13,6 +13,7 @@ from scripts import reconciliar_esquema_20261026, reconciliar_esquema_legacy
 async def fijar_esquema_pre_identidad(conn, monkeypatch):
     def preparar(connection):
         with Operations.context(MigrationContext.configure(connection)):
+            import_module("migrations.versions.20261121_0022_notificaciones_completas").downgrade()
             import_module("migrations.versions.20261113_0021_invitaciones_identidad").downgrade()
         # Fuente independiente del ORM actual: esquema canónico construido por migraciones.
         esperado = MetaData()

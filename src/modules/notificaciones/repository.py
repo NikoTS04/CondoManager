@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from src.core.authorization import contexto_consulta, vinculos_activos
 from src.core.config import settings
-from src.modules.condominios.models import Departamento, Edificio
+from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.notificaciones.models import Notificacion
 from src.modules.notificaciones.templates import PlantillasService
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol
@@ -24,6 +24,7 @@ class NotificacionesRepository:
             .join(UsuarioDepartamento, UsuarioDepartamento.usuario_id == Usuario.id)
             .join(Departamento, Departamento.id == UsuarioDepartamento.departamento_id)
             .join(Edificio, Edificio.id == Departamento.edificio_id)
+            .join(Condominio, Condominio.id == Edificio.condominio_id)
             .join(
                 UsuarioRol,
                 (UsuarioRol.usuario_id == Usuario.id)
@@ -31,6 +32,7 @@ class NotificacionesRepository:
             )
             .where(
                 Edificio.condominio_id == cid,
+                Condominio.activo.is_(True),
                 Usuario.esta_activo.is_(True),
                 UsuarioDepartamento.es_activo.is_(True),
                 Departamento.activo.is_(True),
@@ -47,7 +49,8 @@ class NotificacionesRepository:
         ]
 
     async def encolar(
-        self, *, cid, did, usuario, contacto, evento, operacion, tipo, canal, contexto
+        self, *, cid, did, usuario, contacto, evento, operacion, tipo, canal, contexto,
+        recordatorio_vencimiento=None, recordatorio_dias=None,
     ):
         asunto, cuerpo = PlantillasService.renderizar(tipo, contexto)
         id = uuid4()
@@ -65,6 +68,8 @@ class NotificacionesRepository:
                 destinatario=contacto,
                 asunto=asunto,
                 cuerpo=cuerpo,
+                recordatorio_vencimiento=recordatorio_vencimiento,
+                recordatorio_dias=recordatorio_dias,
                 estado="EN_COLA",
                 transporte="PROVEEDOR" if canal == "EMAIL" and (
                     settings.MAILJET_ENABLED or settings.APP_ENV == "production"
