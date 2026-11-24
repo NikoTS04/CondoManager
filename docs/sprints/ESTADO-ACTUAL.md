@@ -1,5 +1,34 @@
 # Estado actual y prioridades — 18/11/2026
 
+## Cierre EMAIL — trabajo de 21/11/2026
+
+Rama `feat/PROC-03-notificaciones-completas`, basada en la integración Mailjet
+33e4587. Se amplía el flujo con audiencia/previsualización/confirmación idempotente,
+seguimiento de lotes, resolución humana auditada de inciertos, supresión y
+reactivación de contactos, configuración/cursor de recordatorios y actualización
+del saldo al enviar, aviso de rehabilitación de reservas y supervisión del job.
+Requiere **0022** antes del deploy. No se ejecutan migraciones remotas, no se
+modifica `.env` y no se envían correos reales en este incremento.
+WhatsApp permanece futuro. La evidencia final se registra al terminar la validación.
+
+Verificación local: 43 tests frontend, TypeScript/ESLint/build, Ruff de la entrega,
+SDD, referencias OpenAPI y schemas JSON correctos. Primera suite global del cierre:
+877 aprobadas. Un pase ampliado posterior terminó 880 aprobadas/1 fallida por
+una referencia incorrecta a `Edificio.nombre`; corregida a `nombre_bloque`.
+Los 13 casos específicos del cierre pasan después de esa corrección. No se
+declara una repetición global posterior al arreglo ni ejecución de Chromium/CI
+Python 3.12/PostgreSQL 16.
+
+A petición del usuario se aplicó **0021 → 0022 en Supabase**, con respaldo previo
+de public en `/tmp/opencode/condomanager-pre-0022-u9zjej6y/public.dump` (privado).
+Commit SQL verificado desde otra conexión; preservados los IDs originales:
+7 usuarios, 0 cuotas, 1 comprobante y 11 notificaciones. Cinco tablas, dos columnas
+y constraint OMITIDO comprobados. Las cinco tablas nuevas tienen RLS sin políticas
+públicas, verificada bajo anon/authenticated; el propietario SQL conserva acceso.
+No se activaron envíos ni se alteraron `.env`, `.env.deploy` o Docker.
+Esto acredita migración y seguridad de las tablas nuevas, no despliegue/aceptación
+del código del cierre.
+
 ## Incremento PROC-03 — 21/11/2026
 
 Integración Mailjet implementada en `feat/PROC-03-mailjet-produccion`:

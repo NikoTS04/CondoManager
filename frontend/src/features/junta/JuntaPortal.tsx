@@ -26,7 +26,6 @@ import { AreasSection } from "@/features/junta/AreasSection";
 import {
   conciliarComprobante,
   emitirLoteCuotas,
-  enviarComunicadoMasivo,
   fetchComprobantes,
   listarDepartamentos,
   departamentoParaPortal,
@@ -42,8 +41,7 @@ import { RefreshCw } from "lucide-react";
 
 type Confirmacion =
   | { kind: "emitir" }
-  | { kind: "comprobante"; id: string; decision: "APROBADO" | "RECHAZADO" | "OBSERVADO" }
-  | { kind: "comunicado" };
+  | { kind: "comprobante"; id: string; decision: "APROBADO" | "RECHAZADO" | "OBSERVADO" };
 
 export default function JuntaPortal() {
   const { user } = useAuth();
@@ -63,8 +61,6 @@ export default function JuntaPortal() {
   const [feedbackTone, setFeedbackTone] = useState<"success" | "danger" | "warning">("success");
   const [feedbackCode, setFeedbackCode] = useState<string | undefined>();
   const [recibo, setRecibo] = useState<{ id: string; data?: ResultadoRevisionPago } | null>(null);
-  const [titulo, setTitulo] = useState("");
-  const [mensaje, setMensaje] = useState("");
   const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const [motivo, setMotivo] = useState("");
   const [errorMotivo, setErrorMotivo] = useState<string | null>(null);
@@ -122,8 +118,6 @@ export default function JuntaPortal() {
     setRecibo(null);
     setFeedbackCode(undefined);
     setFeedback(null);
-    setTitulo("");
-    setMensaje("");
     setBusy(false);
     accionEnCurso.current = false;
     if (condominioId) {
@@ -202,13 +196,6 @@ export default function JuntaPortal() {
     setConfirmacion({ kind: "emitir" });
   }
 
-  function solicitarComunicado(event: FormEvent) {
-    event.preventDefault();
-    if (titulo.trim() && mensaje.trim()) {
-      setConfirmacion({ kind: "comunicado" });
-    }
-  }
-
   async function confirmarAccion() {
     if (!confirmacion || accionEnCurso.current || !condominioActivoId || contextoActual.current !== condominioActivoId) return;
     const revisionAccion = revisionContexto.current;
@@ -258,23 +245,6 @@ export default function JuntaPortal() {
             ? "No se pudo confirmar la respuesta. El pago podría estar revisado; consulta su resultado antes de volver a decidir."
             : resultado.error);
           if (resultado.incierto || resultado.status === 409) setRecibo({ id: confirmacion.id });
-        }
-      } else if (confirmacion.kind === "comunicado" && condominioActivoId) {
-        const resultado = await enviarComunicadoMasivo(titulo, mensaje, condominioActivoId);
-        if (!sigueEnContexto()) return;
-        if (resultado.ok) {
-          const alcance = resultado.generadas ?? 0;
-          setFeedback(
-            alcance > 0
-              ? `Comunicado en cola para ${alcance} destinatarios. La entrega aún no está confirmada.`
-              : "No hay destinatarios activos para este comunicado.",
-          );
-          setTitulo("");
-          setMensaje("");
-          await loadData();
-        } else {
-          setFeedbackTone("danger");
-          setFeedback("No se pudo enviar el comunicado.");
         }
       }
     } catch (error) {
@@ -456,11 +426,6 @@ export default function JuntaPortal() {
               notificaciones={notificaciones}
               condominioId={condominioActivoId}
               isAuditor={isAuditor}
-              titulo={titulo}
-              mensaje={mensaje}
-              onTituloChange={setTitulo}
-              onMensajeChange={setMensaje}
-              onSubmit={solicitarComunicado}
               onActualizada={() => void loadData()}
             />
           )}
@@ -514,11 +479,6 @@ export default function JuntaPortal() {
             </Field>
           </div>
         )}
-        {confirmacion?.kind === "comunicado" && (
-          <p>
-            Se enviará “{titulo}” a los {departamentos.length} departamentos registrados.
-          </p>
-        )}
       </ConfirmDialog>
     </div>
   );
@@ -527,13 +487,11 @@ export default function JuntaPortal() {
 function tituloConfirmacion(confirmacion: Confirmacion | null) {
   if (!confirmacion) return "Confirmar acción";
   if (confirmacion.kind === "emitir") return "Emitir cuotas";
-  if (confirmacion.kind === "comunicado") return "Enviar comunicado masivo";
   return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : confirmacion.decision === "OBSERVADO" ? "Observar comprobante" : "Rechazar comprobante";
 }
 
 function etiquetaConfirmacion(confirmacion: Confirmacion | null) {
   if (!confirmacion) return "Confirmar";
   if (confirmacion.kind === "emitir") return "Emitir cuotas";
-  if (confirmacion.kind === "comunicado") return "Enviar comunicado";
   return confirmacion.decision === "APROBADO" ? "Aprobar comprobante" : confirmacion.decision === "OBSERVADO" ? "Observar comprobante" : "Rechazar comprobante";
 }

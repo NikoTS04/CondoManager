@@ -466,3 +466,17 @@ anterior; `comprobantes_pago.url_voucher` identifica la evidencia vigente.
 `notas_internas` es TEXT privado. La migración asocia revisiones anteriores a su
 único archivo registrado; deja NULL cuando no existe evidencia verificable.
 No modifica hashes, saldos, auditorías, resultados JSON ni eventos históricos.
+# Extensión 0022 — cierre EMAIL
+
+`comunicados`: UUID de borrador/lote, condominio, contenido y audiencia JSONB
+inmutables por API, creación y confirmación. El mismo UUID identifica los avisos.
+`politicas_notificaciones`: una política por condominio; días, hora de Lima,
+habilitación y cursor diario de recuperación.
+`contactos_bloqueados`: PK (condominio_id, email normalizado); motivo y fecha.
+Reactivación solo administrativa con auditoría.
+`eventos_solvencia_outbox`: UUID, comprobante único y envelope
+SolvenciaRestablecidaEvent v1; se confirma junto con el pago.
+`estado_job_notificaciones`: última ejecución del programador de correo.
+`notificaciones_logs`: añade recordatorio_vencimiento (DATE),
+recordatorio_dias (INTEGER) y estado OMITIDO. No se modifica dinero ni se
+convierte el historial SIMULADO. Downgrade rechaza pérdida de operación.

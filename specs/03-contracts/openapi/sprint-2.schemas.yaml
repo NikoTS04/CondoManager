@@ -212,7 +212,7 @@ schemas:
       destinatario: {type: string}
       asunto: {type: [string, 'null']}
       cuerpo: {type: string}
-      estado: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE]}
+      estado: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE, OMITIDO]}
       ciclo: {type: integer, minimum: 1}
       intentos: {type: integer, minimum: 0, maximum: 4}
       proximo_reintento: {type: [string, 'null'], format: date-time}

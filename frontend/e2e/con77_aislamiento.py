@@ -66,9 +66,19 @@ async def verificar(url):
                     }
                     for cid, nombre in ((A, "Condominio A"), (B, "Condominio B"))
                 ]
-            elif path == "/notificaciones/comunicado-masivo":
+            elif path == "/notificaciones/comunicados/previsualizar":
                 pendientes.append(route)
                 return  # La prueba decide cuándo llega la respuesta tardía.
+            elif path == "/notificaciones/audiencia":
+                data = []
+            elif path.startswith("/notificaciones/configuracion/"):
+                data = {"dias": [3, 0], "hora": 8, "habilitado": True}
+            elif path == "/notificaciones/operacion":
+                data = {
+                    "habilitado": False, "conteos": {}, "inciertos": 0,
+                    "alertas_abiertas": 0, "pendiente_desde": None,
+                    "requiere_revision": False, "cola_atrasada": False, "job": None,
+                }
             elif path == f"/presupuestos/{P}/aprobar":
                 aprobaciones.append(route)
                 return
@@ -118,19 +128,10 @@ async def verificar(url):
         await expect(page.get_by_label("Título", exact=False)).to_have_value("")
         await expect(page.get_by_label("Mensaje", exact=False)).to_have_value("")
 
-        # Iniciar en B, cerrar el modal mientras responde y pasar a A.
+        # Iniciar previsualización en B y pasar a A mientras responde.
         await page.get_by_label("Título", exact=False).fill("Mensaje B")
         await page.get_by_label("Mensaje", exact=False).fill("Contenido exclusivo del condominio B")
-        await page.get_by_role("button", name="Enviar comunicado", exact=True).click()
-        await (
-            page.get_by_role("dialog")
-            .get_by_role("button", name="Enviar comunicado", exact=True)
-            .click()
-        )
-        await expect(
-            page.get_by_role("dialog").get_by_role("button", name="Cerrar", exact=True)
-        ).to_be_visible()
-        await page.get_by_role("dialog").get_by_role("button", name="Cerrar", exact=True).click()
+        await page.get_by_role("button", name="Previsualizar audiencia", exact=True).click()
         await cambiar(A)
         await page.get_by_label("Título", exact=False).fill("Nuevo borrador A")
         await page.get_by_label("Mensaje", exact=False).fill("Este borrador debe conservarse")
@@ -139,9 +140,13 @@ async def verificar(url):
         await page.get_by_label("Mensaje", exact=False).fill("Borrador nuevo de B")
         assert len(pendientes) == 1
         assert pendientes[0].request.post_data_json["condominio_id"] == B
-        async with page.expect_response("**/notificaciones/comunicado-masivo"):
+        async with page.expect_response("**/notificaciones/comunicados/previsualizar"):
             await pendientes[0].fulfill(
-                status=202, json={"generadas": 999, "estado_general": "EN_COLA"}
+                status=201, json={
+                    "id": P, "cantidad": 999, "destinatarios": [],
+                    "contenido": {"titulo": "Mensaje B", "mensaje": "Contenido antiguo"},
+                    "confirmado_en": None, "creado_en": "2026-11-21T13:00:00Z",
+                }
             )
         await page.evaluate(
             "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
@@ -149,7 +154,7 @@ async def verificar(url):
         await expect(page.get_by_label("Título", exact=False)).to_have_value("Segunda visita a B")
         await expect(page.get_by_label("Mensaje", exact=False)).to_have_value("Borrador nuevo de B")
         await expect(
-            page.get_by_text("Comunicado en cola para 999 destinatarios.", exact=False)
+            page.get_by_text("999 destinatarios elegibles", exact=False)
         ).to_have_count(0)
 
         # Cada cambio también descarta los borradores de la visita anterior.

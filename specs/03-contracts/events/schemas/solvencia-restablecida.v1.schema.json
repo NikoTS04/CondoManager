@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SolvenciaRestablecidaEventV1",
+  "allOf": [{"$ref": "./event-envelope.v1.schema.json"}],
+  "properties": {
+    "event_type": {"const": "SolvenciaRestablecidaEvent"},
+    "schema_version": {"const": 1},
+    "producer": {"const": "service.pagos"},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condominio_id", "departamento_id", "comprobante_id"],
+      "properties": {
+        "condominio_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "departamento_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"},
+        "comprobante_id": {"$ref": "./event-envelope.v1.schema.json#/$defs/uuid"}
+      }
+    }
+  },
+  "unevaluatedProperties": false
+}
