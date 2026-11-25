@@ -23,6 +23,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { AvisosList } from "@/features/residente/AvisosList";
 import { EstadoCuenta } from "@/features/residente/EstadoCuenta";
+import { ReportarIncidenciaForm } from "@/features/residente/ReportarIncidenciaForm";
 import {
   ResidenteNav,
   type ResidenteTab,
@@ -222,7 +223,7 @@ function ResidenteContent() {
       )}
 
       {/* Solo mostrar SolvenciaBanner si el departamento está confirmado por backend */}
-      {activeTab !== "cuenta" && deptoActual && !loadingInitial && !errorDeptos && deptoActual.estado_financiero !== "OBSERVADO" && (
+      {["reservas", "pagos", "avisos"].includes(activeTab) && deptoActual && !loadingInitial && !errorDeptos && deptoActual.estado_financiero !== "OBSERVADO" && (
         <SolvenciaBanner
           solvente={deptoActual.estado_financiero === "AL_DIA"}
           deudaVencida={deptoActual.deuda_vencida}
@@ -231,7 +232,7 @@ function ResidenteContent() {
       )}
 
       {/* Navegación responsiva: Tabs en sm+ y barra inferior fija en móvil */}
-      <ResidenteNav activeTab={activeTab} onChangeTab={setActiveTab} />
+      <ResidenteNav activeTab={activeTab} onChangeTab={setActiveTab} mostrarIncidencias={user?.rol === "RESIDENTE"} />
 
       <TabPanel idPrefix="residente" id={activeTab}>
       {/* Contenido según la pestaña activa */}
@@ -297,6 +298,12 @@ function ResidenteContent() {
 
       {activeTab === "avisos" && contextoId && departamentoId && (
         <AvisosList condominioId={contextoId} departamentoId={departamentoId} />
+      )}
+
+      {activeTab === "incidencias" && user?.rol === "RESIDENTE" && (
+        loadingInitial ? <Spinner label="Cargando tu departamento…" /> : departamentoId && (
+          <ReportarIncidenciaForm key={departamentoId} departamentoId={departamentoId} />
+        )
       )}
 
       {activeTab === "cuenta" && (

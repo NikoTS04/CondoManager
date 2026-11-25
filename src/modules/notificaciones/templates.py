@@ -7,6 +7,13 @@ from string import Formatter
 from typing import Any, Dict, Tuple
 
 PLANTILLAS_CONFIG = {
+    "NOTIF_INCIDENCIA_REGISTRADA": {
+        "asunto": "CondoManager: Nueva incidencia",
+        "cuerpo": (
+            "Se registró la incidencia {incidencia_id} en tu condominio.\n\n"
+            "Inicia sesión en el portal de Junta y abre el reporte: {enlace}"
+        ),
+    },
     "NOTIF_RECORDATORIO_RECUPERADO": {
         "asunto": "CondoManager: Recordatorio de cuota pendiente",
         "cuerpo": (

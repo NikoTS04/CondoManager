@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 
-export default function AccessDenied() {
+export default function AccessDenied({ loginHref = "/login" }: { loginHref?: string }) {
   const { user } = useAuth();
 
   return (
@@ -18,7 +18,7 @@ export default function AccessDenied() {
           : "Inicia sesión con tu cuenta para acceder a esta sección."}
       </p>
       <Link
-        href={user ? "/" : "/login"}
+        href={user ? "/" : loginHref}
         className="inline-flex min-h-11 items-center rounded-lg border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-canvas"
       >
         {user ? "Volver al inicio" : "Iniciar sesión"}

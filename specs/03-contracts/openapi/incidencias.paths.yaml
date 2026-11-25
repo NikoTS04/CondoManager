@@ -1,0 +1,105 @@
+paths:
+  /incidencias:
+    post:
+      operationId: registrarIncidencia
+      tags: [Incidencias]
+      summary: Registrar una incidencia desde un departamento vinculado
+      description: Guarda el reporte, su auditoría y el aviso a Junta en la misma transacción.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [departamento_id, ubicacion, categoria, descripcion, urgencia]
+              properties:
+                departamento_id: {type: string, format: uuid}
+                ubicacion: {type: string, minLength: 1, maxLength: 160}
+                categoria: {type: string, minLength: 1, maxLength: 80}
+                descripcion: {type: string, minLength: 1, maxLength: 2000}
+                urgencia: {$ref: '#/components/schemas/Urgencia'}
+                evidencia: {type: string, format: binary, description: Foto JPEG o PNG de hasta 3 MiB.}
+      responses:
+        '201': {$ref: '#/components/responses/Registro'}
+        '200': {$ref: '#/components/responses/Registro'}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '409': {description: Esta clave ya se utilizó con otro reporte.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    get:
+      operationId: consultarIncidencia
+      tags: [Incidencias]
+      summary: Consultar un reporte propio o del condominio administrado
+      description: Requiere un vínculo activo del reportante o un rol de Junta del condominio.
+      responses:
+        '200':
+          description: Reporte privado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Incidencia'}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el contexto autorizado.}
+  /incidencias/{incidencia_id}/evidencia:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    get:
+      operationId: consultarEvidenciaIncidencia
+      tags: [Incidencias]
+      summary: Obtener la foto privada de un reporte autorizado
+      description: Devuelve los bytes de la evidencia sin habilitar caché compartida.
+      responses:
+        '200':
+          description: Foto registrada
+          content:
+            image/jpeg:
+              schema: {type: string, format: binary}
+            image/png:
+              schema: {type: string, format: binary}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: La foto no existe en el contexto autorizado.}
+components:
+  parameters:
+    IncidenciaId:
+      name: incidencia_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Registro:
+      description: Incidencia registrada y advertencia cuando se descarta la foto.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Incidencia'
+              - type: object
+                required: [advertencia_evidencia]
+                properties:
+                  advertencia_evidencia: {type: [string, 'null']}
+  schemas:
+    Urgencia:
+      type: string
+      enum: [BAJA, MEDIA, ALTA, URGENTE]
+    Incidencia:
+      type: object
+      required: [id, departamento_id, ubicacion, categoria, descripcion, urgencia, estado, creado_en, tiene_evidencia]
+      properties:
+        id: {type: string, format: uuid}
+        departamento_id: {type: string, format: uuid}
+        ubicacion: {type: string}
+        categoria: {type: string}
+        descripcion: {type: string}
+        urgencia: {$ref: '#/components/schemas/Urgencia'}
+        estado: {type: string, enum: [REGISTRADO]}
+        creado_en: {type: string, format: date-time}
+        tiene_evidencia: {type: boolean}

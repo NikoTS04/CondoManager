@@ -115,9 +115,7 @@ class AdministracionNotificaciones:
                 if await self.db.get(ContactoBloqueado, (log.condominio_id, log.destinatario.lower())):
                     raise APIError(409, "CONTACTO_BLOQUEADO", "Revise el contacto suprimido.")
                 if log.finalidad == "OPERATIVA":
-                    destinos = await NotificacionesRepository(self.db).destinatarios(
-                        log.condominio_id, log.departamento_id, log.canal
-                    )
+                    destinos = await NotificacionesRepository(self.db).destinatarios_operativos(log)
                     valido = any(u.id == log.usuario_destinatario_id and c == log.destinatario for u, _, c in destinos)
                 else:
                     from src.modules.usuarios.comunicaciones import destinatario_identidad_valido

@@ -545,6 +545,7 @@ async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response
 
 async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   const headers = getAuthHeaders();
+  if (init.body instanceof FormData) delete headers["Content-Type"];
   new Headers(init.headers).forEach((value, key) => { headers[key] = value; });
   const response = await fetchProtegido(ruta, { ...init, headers });
   const data = await response.json();
@@ -554,6 +555,52 @@ async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<
       response.status, obtenerCodigoError(data), payload.detalles);
   }
   return data as T;
+}
+
+export type UrgenciaIncidencia = "BAJA" | "MEDIA" | "ALTA" | "URGENTE";
+
+export interface Incidencia {
+  id: string;
+  departamento_id: string;
+  ubicacion: string;
+  categoria: string;
+  descripcion: string;
+  urgencia: UrgenciaIncidencia;
+  estado: "REGISTRADO";
+  creado_en: string;
+  tiene_evidencia: boolean;
+}
+
+export interface RegistroIncidencia extends Incidencia {
+  advertencia_evidencia: string | null;
+}
+
+export function registrarIncidencia(datos: FormData, clave: string): Promise<RegistroIncidencia> {
+  return recursoRequest("/incidencias", {
+    method: "POST",
+    headers: { "Idempotency-Key": clave },
+    body: datos,
+  });
+}
+
+export function consultarIncidencia(id: string, signal?: AbortSignal): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}`, { signal });
+}
+
+export async function descargarFotoIncidencia(id: string): Promise<void> {
+  const response = await fetchProtegido(`/incidencias/${encodeURIComponent(id)}/evidencia`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error("No pudimos descargar la foto. Inténtalo de nuevo.");
+  const foto = await response.blob();
+  const url = URL.createObjectURL(foto);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `incidencia-${id}.${foto.type === "image/png" ? "png" : "jpg"}`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export class ApiError extends Error {

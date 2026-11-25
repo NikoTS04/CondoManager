@@ -20,6 +20,8 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Modificar estructura, aprobar presupuestos y emitir cuotas | Sí | Su condominio | No | No |
 | Consultar unidades del portal, comprobantes y reservas | Contexto seleccionado | Su condominio | Su condominio | Sus vínculos activos |
 | Reportar pagos, crear/cancelar reservas | Soporte | Soporte de su condominio | No | Sus vínculos activos |
+| Reportar incidencias y adjuntar evidencia | No | No | No | Sus vínculos activos |
+| Consultar incidencia y evidencia por ID | No | Su condominio | No | Sus propios reportes con vínculo activo |
 | Conciliar pagos, evaluar moras y enviar/reintentar comunicados | Sí | Su condominio | No | No |
 | Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | Solo avisos dirigidos a su identidad y vínculos activos |
 | Asignar/revocar ADMIN_JUNTA | Sí, excepto propia asignación o identidad global | No | No | No |

@@ -19,9 +19,17 @@ Permitir a los residentes reportar desperfectos, averías o incidencias en área
 ### Flujo de Estados:
 $$\text{REGISTRADO} \longrightarrow \text{ASIGNADO} \longrightarrow \text{EN\_PROCESO} \longrightarrow \text{RESUELTO} \longrightarrow \text{CERRADO}$$
 
-1. **Apertura por Residente:** El vecino completa el formulario indicando ubicación (Torre/Piso/Área), categoría, nivel de urgencia percibido (Baja, Media, Alta, Urgente) y adjunta fotos de evidencia.
+1. **Apertura por Residente (CON-53):** El vecino indica ubicación (torre, piso o área), categoría, descripción y urgencia percibida (Baja, Media, Alta o Urgente). Puede adjuntar una foto JPEG o PNG de hasta 3 MiB. Se registra la incidencia con un ID único y estado `REGISTRADO` en su departamento activo. Si la foto es inválida, el reporte se guarda sin ella y se informa al residente.
 2. **Asignación por Administración:** El administrador evalúa la falla y asigna el ticket al proveedor correspondiente registrado en PROC-06.
 3. **Resolución y Cierre:** El contratista repara la falla, se ingresa el costo de repuestos si aplica, y el residente confirma su conformidad y calificación de atención.
+
+El registro guarda la auditoría y encola un correo por cada cuenta activa con
+rol `ADMIN_JUNTA` en el condominio del residente, en la misma transacción. El
+correo incluye el identificador y el enlace privado al reporte. Si no hay cuentas
+administrativas elegibles, el registro se conserva y la auditoría registra cero
+avisos encolados. Un reintento con la misma clave y los mismos datos reutiliza
+el ticket y sus avisos. El reportante con vínculo activo y la Junta de su
+condominio pueden consultar el reporte y su foto.
 
 ---
 

@@ -155,9 +155,7 @@ class NotificacionesPersistentesService:
                 nuevo = log.destinatario
             else:
                 nuevo = request.nuevo_destinatario if request else None
-                destinos = await self.repo.destinatarios(
-                    log.condominio_id, log.departamento_id, log.canal
-                )
+                destinos = await self.repo.destinatarios_operativos(log)
                 if not nuevo or nuevo == log.destinatario:
                     raise APIError(
                         409,
