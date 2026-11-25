@@ -24,12 +24,20 @@ from src.core.errors import APIError
 from src.core.roles import RolUsuario
 from src.core.security import validar_sesion
 from src.modules.incidencias.estados import ESTADOS_ASIGNABLES, transicion_permitida
-from src.modules.incidencias.models import AsignacionIncidencia, Incidencia
+from src.modules.incidencias.models import (
+    ActualizacionIncidencia,
+    AsignacionIncidencia,
+    Incidencia,
+)
 from src.modules.incidencias.schemas import (
+    ActualizacionDTO,
     AsignarIncidencia,
     AvisoAsignacionDTO,
     CrearIncidencia,
+    HistorialIncidenciasDTO,
     RechazarIncidencia,
+    RegistrarResolucion,
+    RegistrarSeguimiento,
     RevisarIncidencia,
 )
 from src.modules.notificaciones.avisos_contrato import (
@@ -43,6 +51,7 @@ from src.modules.notificaciones.repository import AVISO_INCIDENCIA, Notificacion
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.pagos.storage import VoucherStorage
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
+from src.shared.decimal_types import redondear_moneda
 
 MAX_EVIDENCIA = 3 * 1024 * 1024
 
@@ -90,7 +99,7 @@ def reportes_propios(usuario: dict):
 async def preparar_evidencia(
     archivo: UploadFile | None,
 ) -> tuple[bytes | None, str | None, str | None]:
-    if archivo is None:
+    if archivo is None or not archivo.filename:
         return None, None, None
     limite = min(MAX_EVIDENCIA, settings.VOUCHER_MAX_BYTES)
     try:
@@ -553,11 +562,176 @@ class IncidenciasService:
                 )
         return {"items": items, "hay_mas": len(asignaciones) > limit}
 
+    async def _incidencia_para_edicion(
+        self, usuario: dict, incidencia_id: UUID, version: int, destino: str
+    ) -> tuple[dict, Incidencia]:
+        cid = contexto_junta(usuario)
+        identidad = SQLAlchemyUsuariosRepository(self.session)
+        if await identidad.contexto(cid, bloquear=True) is None:
+            denegar()
+        vigente = await validar_sesion(usuario, identidad)
+        incidencia = await self.session.scalar(
+            select(Incidencia)
+            .where(Incidencia.id == incidencia_id, Incidencia.condominio_id == cid)
+            .with_for_update()
+        )
+        if incidencia is None:
+            raise APIError(404, "INCIDENCIA_NO_ENCONTRADA", "La incidencia no está disponible.")
+        if not transicion_permitida(incidencia.estado, destino):
+            raise APIError(
+                409, "INCIDENCIA_NO_EDITABLE", "El estado actual no permite esta actualización."
+            )
+        if incidencia.version != version:
+            raise APIError(
+                409, "VERSION_DESACTUALIZADA", "El reporte cambió. Consulta la última versión."
+            )
+        return vigente, incidencia
+
+    async def registrar_avance(
+        self,
+        usuario: dict,
+        incidencia_id: UUID,
+        solicitud: RegistrarSeguimiento,
+        archivo=None,
+    ) -> tuple[Incidencia, str | None]:
+        vigente, incidencia = await self._incidencia_para_edicion(
+            usuario, incidencia_id, solicitud.version, "EN_PROCESO"
+        )
+        if any("\x00" in campo for campo in (solicitud.comentario, solicitud.repuesto or "")):
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        evidencia, mime, advertencia = await preparar_evidencia(archivo)
+        anterior = estado_revision(incidencia)
+        estado_anterior = incidencia.estado
+        if estado_anterior == "ASIGNADO":
+            incidencia.estado = "EN_PROCESO"
+        incidencia.version += 1
+        actualizacion = ActualizacionIncidencia(
+            condominio_id=incidencia.condominio_id,
+            incidencia_id=incidencia.id,
+            actor_id=UUID(str(usuario["sub"])),
+            tipo="COSTO" if solicitud.monto is not None else "COMENTARIO",
+            descripcion=solicitud.comentario,
+            publico=solicitud.publico,
+            repuesto=solicitud.repuesto,
+            monto=redondear_moneda(solicitud.monto) if solicitud.monto is not None else None,
+            estado_anterior=estado_anterior,
+            estado_nuevo=incidencia.estado,
+            evidencia=evidencia,
+            evidencia_mime=mime,
+        )
+        self.session.add(actualizacion)
+        await self.session.flush()
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            vigente,
+            incidencia.condominio_id,
+            incidencia.departamento_id,
+            "SEGUIMIENTO_TICKET_INCIDENCIA",
+            "AVANCE_JUNTA",
+            anterior,
+            {
+                **estado_revision(incidencia),
+                "actualizacion_id": str(actualizacion.id),
+                "monto": str(actualizacion.monto) if actualizacion.monto else None,
+            },
+        )
+        await self.session.commit()
+        return incidencia, advertencia
+
+    async def registrar_resolucion(
+        self,
+        usuario: dict,
+        incidencia_id: UUID,
+        solicitud: RegistrarResolucion,
+        archivo=None,
+    ) -> tuple[Incidencia, str | None]:
+        vigente, incidencia = await self._incidencia_para_edicion(
+            usuario, incidencia_id, solicitud.version, "RESUELTO"
+        )
+        if any("\x00" in campo for campo in (solicitud.descripcion, solicitud.repuesto or "")):
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        evidencia, mime, advertencia = await preparar_evidencia(archivo)
+        anterior = estado_revision(incidencia)
+        estado_anterior = incidencia.estado
+        incidencia.estado = "RESUELTO"
+        incidencia.version += 1
+        actualizacion = ActualizacionIncidencia(
+            condominio_id=incidencia.condominio_id,
+            incidencia_id=incidencia.id,
+            actor_id=UUID(str(usuario["sub"])),
+            tipo="COSTO" if solicitud.monto is not None else "COMENTARIO",
+            descripcion=solicitud.descripcion,
+            publico=solicitud.publico,
+            repuesto=solicitud.repuesto,
+            monto=redondear_moneda(solicitud.monto) if solicitud.monto is not None else None,
+            estado_anterior=estado_anterior,
+            estado_nuevo=incidencia.estado,
+            evidencia=evidencia,
+            evidencia_mime=mime,
+        )
+        self.session.add(actualizacion)
+        await self.session.flush()
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            vigente,
+            incidencia.condominio_id,
+            incidencia.departamento_id,
+            "RESOLUCION_TICKET_INCIDENCIA",
+            "RESOLUCION_JUNTA",
+            anterior,
+            {
+                **estado_revision(incidencia),
+                "actualizacion_id": str(actualizacion.id),
+                "monto": str(actualizacion.monto) if actualizacion.monto else None,
+            },
+        )
+        await self.session.commit()
+        return incidencia, advertencia
+
+    async def historial(
+        self, usuario: dict, incidencia_id: UUID, *, offset: int, limit: int
+    ) -> HistorialIncidenciasDTO:
+        incidencia = await self.consultar(usuario, incidencia_id)
+        consulta = select(ActualizacionIncidencia).where(
+            ActualizacionIncidencia.incidencia_id == incidencia.id
+        )
+        if usuario["rol"] == RolUsuario.RESIDENTE:
+            consulta = consulta.where(ActualizacionIncidencia.publico.is_(True))
+        actualizaciones = (
+            await self.session.scalars(
+                consulta.order_by(
+                    ActualizacionIncidencia.creado_en.desc(), ActualizacionIncidencia.id.desc()
+                )
+                .offset(offset)
+                .limit(limit + 1)
+            )
+        ).all()
+        return HistorialIncidenciasDTO(
+            items=[ActualizacionDTO.model_validate(item) for item in actualizaciones[:limit]],
+            hay_mas=len(actualizaciones) > limit,
+        )
+
+    async def evidencia_actualizacion(
+        self, usuario: dict, incidencia_id: UUID, actualizacion_id: UUID
+    ) -> ActualizacionIncidencia:
+        await self.consultar(usuario, incidencia_id)
+        actualizacion = await self.session.scalar(
+            select(ActualizacionIncidencia)
+            .where(
+                ActualizacionIncidencia.id == actualizacion_id,
+                ActualizacionIncidencia.incidencia_id == incidencia_id,
+            )
+            .options(undefer(ActualizacionIncidencia.evidencia))
+        )
+        if actualizacion is None or (
+            usuario["rol"] == RolUsuario.RESIDENTE and not actualizacion.publico
+        ):
+            raise APIError(404, "EVIDENCIA_NO_ENCONTRADA", "La evidencia no está disponible.")
+        return actualizacion
+
     async def consultar(
         self, usuario: dict, incidencia_id: UUID, *, incluir_evidencia: bool = False
     ) -> Incidencia:
         rol = usuario["rol"]
-        if rol not in (RolUsuario.RESIDENTE, RolUsuario.ADMIN_JUNTA):
+        if rol not in (RolUsuario.RESIDENTE, RolUsuario.ADMIN_JUNTA, RolUsuario.AUDITOR):
             denegar()
         query = select(Incidencia).where(
             Incidencia.id == incidencia_id,

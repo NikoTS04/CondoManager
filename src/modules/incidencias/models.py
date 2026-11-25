@@ -1,13 +1,16 @@
 """Persistencia del reporte original y su evidencia privada."""
 
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     LargeBinary,
+    Numeric,
     Text,
     UniqueConstraint,
     func,
@@ -117,3 +120,41 @@ class AsignacionIncidencia(Base):
     plazo: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     nota: Mapped[str | None] = mapped_column(Text)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ActualizacionIncidencia(Base):
+    """Avance, costo o cambio de estado de una incidencia (CON-56)."""
+
+    __tablename__ = "incidencias_actualizaciones"
+    __table_args__ = (
+        CheckConstraint(
+            "tipo IN ('COMENTARIO','CAMBIO_ESTADO','COSTO')", name="ck_actualizacion_tipo"
+        ),
+        CheckConstraint("monto IS NULL OR monto >= 0", name="ck_actualizacion_monto"),
+        CheckConstraint(
+            "estado_nuevo IS NULL OR estado_nuevo IN "
+            "('REGISTRADO','ASIGNADO','EN_PROCESO','RESUELTO','CERRADO','RECHAZADO')",
+            name="ck_actualizacion_estado",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    condominio_id: Mapped[UUID] = mapped_column(ForeignKey("condominios.id", ondelete="RESTRICT"))
+    incidencia_id: Mapped[UUID] = mapped_column(
+        ForeignKey("incidencias.id", ondelete="RESTRICT"), index=True
+    )
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
+    tipo: Mapped[str] = mapped_column(Text)
+    descripcion: Mapped[str] = mapped_column(Text)
+    publico: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    repuesto: Mapped[str | None] = mapped_column(Text)
+    monto: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    estado_anterior: Mapped[str | None] = mapped_column(Text)
+    estado_nuevo: Mapped[str | None] = mapped_column(Text)
+    evidencia: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
+    evidencia_mime: Mapped[str | None] = mapped_column(Text)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    @property
+    def tiene_evidencia(self) -> bool:
+        return self.evidencia_mime is not None

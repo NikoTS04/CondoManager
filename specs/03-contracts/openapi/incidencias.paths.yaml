@@ -200,6 +200,115 @@ paths:
         '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
         '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
         '404': {description: El reporte no existe en el condominio autorizado.}
+  /incidencias/{incidencia_id}/seguimiento:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: registrarSeguimientoIncidencia
+      tags: [Incidencias]
+      summary: Registrar avance, evidencia y costos de una incidencia asignada
+      description: Guarda la actualización y el cambio a EN_PROCESO en la misma transacción.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, comentario]
+              properties:
+                version: {type: integer, minimum: 1}
+                comentario: {type: string, minLength: 1, maxLength: 2000}
+                publico: {type: boolean, default: true}
+                repuesto: {type: string, maxLength: 120}
+                monto: {type: string, pattern: '^[0-9]+(\.[0-9]{1,2})?$'}
+                evidencia: {type: string, format: binary, description: Foto JPEG o PNG de hasta 3 MiB.}
+      responses:
+        '201': {description: Incidencia en EN_PROCESO, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: Versión desactualizada o estado no editable.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/resolucion:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: resolverIncidencia
+      tags: [Incidencias]
+      summary: Registrar la resolución de una incidencia en proceso
+      description: Pasa el ticket a RESUELTO. Solo Junta del condominio puede invocarlo.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, descripcion]
+              properties:
+                version: {type: integer, minimum: 1}
+                descripcion: {type: string, minLength: 1, maxLength: 2000}
+                publico: {type: boolean, default: true}
+                repuesto: {type: string, maxLength: 120}
+                monto: {type: string, pattern: '^[0-9]+(\.[0-9]{1,2})?$'}
+                evidencia: {type: string, format: binary}
+      responses:
+        '201': {description: Incidencia resuelta, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: Versión desactualizada o estado distinto de EN_PROCESO.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/historial:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    get:
+      operationId: consultarHistorialIncidencia
+      tags: [Incidencias]
+      summary: Consultar avances, costos y cambios de estado
+      description: El residente ve solo las actualizaciones publicadas de su reporte; Junta y Auditor ven todas las del condominio.
+      parameters:
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, maximum: 2147483647, default: 0}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 50, default: 25}
+      responses:
+        '200':
+          description: Historial paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/ActualizacionIncidencia'}}
+                  hay_mas: {type: boolean}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el contexto autorizado.}
+  /incidencias/{incidencia_id}/actualizaciones/{actualizacion_id}/evidencia:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+      - name: actualizacion_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: consultarEvidenciaActualizacion
+      tags: [Incidencias]
+      summary: Obtener la evidencia privada de una actualización
+      responses:
+        '200':
+          description: Foto registrada
+          content:
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: La actualización o su foto no existe en el contexto autorizado.}
   /incidencias/{incidencia_id}/evidencia:
     parameters:
       - $ref: '#/components/parameters/IncidenciaId'
@@ -287,6 +396,22 @@ components:
         estado: {const: ASIGNADO}
         version: {type: integer, minimum: 1}
         avisos_encolados: {type: integer, minimum: 0}
+    ActualizacionIncidencia:
+      type: object
+      required: [id, incidencia_id, actor_id, tipo, descripcion, publico, creado_en]
+      properties:
+        id: {type: string, format: uuid}
+        incidencia_id: {type: string, format: uuid}
+        actor_id: {type: string, format: uuid}
+        tipo: {type: string, enum: [COMENTARIO, CAMBIO_ESTADO, COSTO]}
+        descripcion: {type: string}
+        publico: {type: boolean}
+        repuesto: {type: [string, 'null']}
+        monto: {type: [string, 'null'], pattern: '^[0-9]+(\.[0-9]{1,2})?$'}
+        estado_anterior: {type: [string, 'null']}
+        estado_nuevo: {type: [string, 'null']}
+        tiene_evidencia: {type: boolean}
+        creado_en: {type: string, format: date-time}
     AvisoAsignacion:
       type: object
       required: [asignacion_id, destinatario_tipo, estado]

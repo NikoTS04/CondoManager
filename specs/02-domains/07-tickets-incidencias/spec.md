@@ -79,8 +79,10 @@ compartida está en `src/modules/incidencias/estados.py` y se documenta en
 - **Seguimiento (CON-56).** Solo Junta registra avances, evidencias, repuestos
   y costos, y hace pasar el ticket a `EN_PROCESO` y luego a `RESUELTO`. El
   proveedor nunca cierra el ticket. Cada cambio de estado conserva fecha, actor
-  y observación. Costos y sustentos son visibles para Junta y Auditor del
-  condominio; el residente ve el estado y las actualizaciones publicadas.
+  y observación en el historial. Los importes se guardan en columnas
+  `NUMERIC(12,2)` y se calculan con `Decimal`/`redondear_moneda`, nunca `float`.
+  Costos y sustentos son visibles para Junta y Auditor del condominio; el
+  residente ve el estado y solo las actualizaciones marcadas como públicas.
 - **Cierre y reapertura (CON-57).** El residente con vínculo activo confirma la
   solución con calificación y el ticket pasa a `CERRADO`; si no está conforme,
   lo reabre a `EN_PROCESO` con motivo obligatorio. Junta puede cerrar con una

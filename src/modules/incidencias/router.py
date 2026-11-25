@@ -1,7 +1,8 @@
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Header, Query, Response
+from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
@@ -13,7 +14,10 @@ from src.modules.incidencias.schemas import (
     BandejaAvisosDTO,
     BandejaIncidenciasDTO,
     CrearIncidencia,
+    HistorialIncidenciasDTO,
     IncidenciaDTO,
+    RegistrarResolucion,
+    RegistrarSeguimiento,
     RegistroIncidenciaDTO,
     ReporteIncidenciaDTO,
     RevisarIncidencia,
@@ -122,6 +126,102 @@ async def asignar_incidencia(
         nota=asignacion.nota,
         version=incidencia.version,
         avisos_encolados=avisos,
+    )
+
+
+@router.post("/{incidencia_id}/seguimiento", status_code=201, response_model=IncidenciaDTO)
+async def registrar_seguimiento(
+    incidencia_id: UUID,
+    version: Annotated[int, Form(ge=1)],
+    comentario: Annotated[str, Form(min_length=1, max_length=2000)],
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+    publico: Annotated[bool, Form()] = True,
+    repuesto: Annotated[str | None, Form(max_length=120)] = None,
+    monto: Annotated[str | None, Form()] = None,
+    evidencia: Annotated[UploadFile | None, File()] = None,
+):
+    incidencia, advertencia = await IncidenciasService(session).registrar_avance(
+        usuario,
+        incidencia_id,
+        RegistrarSeguimiento(
+            version=version,
+            comentario=comentario,
+            publico=publico,
+            repuesto=repuesto or None,
+            monto=Decimal(monto) if monto and monto.strip() else None,
+        ),
+        evidencia,
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    if advertencia:
+        response.headers["X-Advertencia-Evidencia"] = advertencia
+    return incidencia
+
+
+@router.post("/{incidencia_id}/resolucion", status_code=201, response_model=IncidenciaDTO)
+async def registrar_resolucion(
+    incidencia_id: UUID,
+    version: Annotated[int, Form(ge=1)],
+    descripcion: Annotated[str, Form(min_length=1, max_length=2000)],
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+    publico: Annotated[bool, Form()] = True,
+    repuesto: Annotated[str | None, Form(max_length=120)] = None,
+    monto: Annotated[str | None, Form()] = None,
+    evidencia: Annotated[UploadFile | None, File()] = None,
+):
+    incidencia, advertencia = await IncidenciasService(session).registrar_resolucion(
+        usuario,
+        incidencia_id,
+        RegistrarResolucion(
+            version=version,
+            descripcion=descripcion,
+            publico=publico,
+            repuesto=repuesto or None,
+            monto=Decimal(monto) if monto and monto.strip() else None,
+        ),
+        evidencia,
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    if advertencia:
+        response.headers["X-Advertencia-Evidencia"] = advertencia
+    return incidencia
+
+
+@router.get("/{incidencia_id}/historial", response_model=HistorialIncidenciasDTO)
+async def consultar_historial(
+    incidencia_id: UUID,
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+    offset: Annotated[int, Query(ge=0, le=2_147_483_647)] = 0,
+    limit: Annotated[int, Query(ge=1, le=50)] = 25,
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return await IncidenciasService(session).historial(
+        usuario, incidencia_id, offset=offset, limit=limit
+    )
+
+
+@router.get(
+    "/{incidencia_id}/actualizaciones/{actualizacion_id}/evidencia",
+    response_class=Response,
+)
+async def consultar_evidencia_actualizacion(
+    incidencia_id: UUID, actualizacion_id: UUID, usuario: UsuarioActual, session: Session
+):
+    actualizacion = await IncidenciasService(session).evidencia_actualizacion(
+        usuario, incidencia_id, actualizacion_id
+    )
+    if not actualizacion.tiene_evidencia:
+        raise APIError(404, "EVIDENCIA_NO_ENCONTRADA", "La actualización no tiene evidencia.")
+    return Response(
+        content=actualizacion.evidencia,
+        media_type=actualizacion.evidencia_mime,
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )
 
 

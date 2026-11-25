@@ -62,3 +62,23 @@
   del condominio consulta `/avisos`, entonces ve por destinatario el estado, los
   intentos y si hay alerta abierta, sin correos ni contenido. Un residente
   recibe 403 y un perfil de otro condominio recibe 404.
+
+## CON-56 — Seguimiento, evidencias, costos y resolución
+
+- **Avance.** Dado un ticket `ASIGNADO`, cuando Junta registra un diagnóstico o
+  avance con versión vigente, entonces pasa a `EN_PROCESO` y el historial guarda
+  fecha, actor, observación y estado anterior y posterior.
+- **Evidencia y costos.** Dado un ticket `EN_PROCESO`, cuando Junta adjunta una
+  foto válida y registra repuestos con monto decimal, entonces ambos quedan
+  asociados al avance, con importe `NUMERIC(12,2)` y sin usar `float`. Un archivo
+  inválido se rechaza sin borrar el avance.
+- **Resolución.** Dado un ticket `EN_PROCESO`, cuando Junta registra la
+  resolución, entonces pasa a `RESUELTO`; una resolución desde otro estado se
+  rechaza con 409 y una versión desactualizada también.
+- **Visibilidad.** Dado un avance con sustento interno, cuando el residente
+  consulta el historial, entonces ve solo las actualizaciones publicadas y el
+  estado vigente; Junta y Auditor del condominio ven también costos y evidencias.
+  Otro condominio recibe 404.
+- **Auditoría.** Dado cualquier cambio de estado, cuando se guarda, entonces se
+  registra con los siete campos obligatorios, actor y contexto, en la misma
+  transacción que el avance.

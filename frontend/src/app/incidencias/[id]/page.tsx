@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/Feedback";
 import { useAuth } from "@/context/AuthContext";
 import { AsignacionIncidenciaForm } from "@/features/junta/AsignacionIncidenciaForm";
 import { RevisionIncidenciaForm } from "@/features/junta/RevisionIncidenciaForm";
+import { SeguimientoIncidencia } from "@/features/junta/SeguimientoIncidencia";
 import {
   consultarAvisosAsignacion,
   consultarIncidencia,
@@ -182,6 +183,19 @@ function DetalleIncidencia({ id }: { id: string }) {
                 </ul>
               </CardBody>
             </Card>
+          )}
+          {["ASIGNADO", "EN_PROCESO", "RESUELTO", "CERRADO"].includes(incidencia.estado) && (
+            <SeguimientoIncidencia
+              incidencia={incidencia}
+              esJunta={esJunta}
+              onActualizada={(detalle) => {
+                setIncidencia(detalle);
+                setConfirmacion(
+                  detalle.estado === "RESUELTO" ? "Incidencia resuelta." : "Avance guardado.",
+                );
+                setRevisionConsulta((actual) => actual + 1);
+              }}
+            />
           )}
           {esJunta && ["REGISTRADO", "ASIGNADO"].includes(incidencia.estado) && (
             <AsignacionIncidenciaForm

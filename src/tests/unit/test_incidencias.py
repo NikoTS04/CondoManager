@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -12,6 +13,7 @@ from src.modules.incidencias.schemas import (
     ClasificarIncidencia,
     CrearIncidencia,
     RechazarIncidencia,
+    RegistrarSeguimiento,
 )
 
 
@@ -81,7 +83,16 @@ def test_la_asignacion_exige_un_solo_responsable_y_plazo_con_zona():
         )
 
 
-def test_migracion_0027_es_la_cabeza_sobre_la_0026():
+def test_el_seguimiento_exige_un_monto_decimal_de_dos_decimales():
+    avance = RegistrarSeguimiento(version=1, comentario="Reparación iniciada", monto="45.50")
+    assert avance.monto == Decimal("45.50")
+    with pytest.raises(ValidationError):
+        RegistrarSeguimiento(version=1, comentario="Costo", monto="45.567")
+    with pytest.raises(ValidationError):
+        RegistrarSeguimiento(version=1, comentario="Costo", monto=45.5)
+
+
+def test_migracion_0028_es_la_cabeza_sobre_la_0027():
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert scripts.get_revision("20261127_0027").down_revision == "20261126_0026"
-    assert scripts.get_heads() == ["20261127_0027"]
+    assert scripts.get_revision("20261128_0028").down_revision == "20261127_0027"
+    assert scripts.get_heads() == ["20261128_0028"]

@@ -21,11 +21,13 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Consultar unidades del portal, comprobantes y reservas | Contexto seleccionado | Su condominio | Su condominio | Sus vínculos activos |
 | Reportar pagos, crear/cancelar reservas | Soporte | Soporte de su condominio | No | Sus vínculos activos |
 | Reportar incidencias y adjuntar evidencia | No | No | No | Sus vínculos activos |
-| Consultar incidencia y evidencia por ID | No | Su condominio | No | Sus propios reportes con vínculo activo |
+| Consultar incidencia y evidencia por ID | No | Su condominio | Su condominio, solo lectura | Sus propios reportes con vínculo activo |
 | Listar mis reportes de incidencias | No | No | No | Sus propios reportes con vínculo activo |
 | Listar, clasificar, priorizar o rechazar incidencias | No | Su condominio | No | No |
 | Asignar y reasignar incidencias (CON-55) | No | Su condominio | No | No |
 | Consultar avisos de asignación (CON-55) | No | Su condominio | Su condominio, solo lectura | No |
+| Registrar avances, evidencias, costos y resolución (CON-56) | No | Su condominio | No | No |
+| Consultar historial completo con costos y sustentos (CON-56) | No | Su condominio | Su condominio, solo lectura | Solo actualizaciones publicadas de sus reportes |
 | Confirmar, calificar y reabrir un reporte propio (CON-57) | No | No | No | Sus propios reportes con vínculo activo |
 | Consultar y resolver excepciones operativas | No | Su condominio | No | No |
 | Conciliar pagos, evaluar moras y enviar/reintentar comunicados | Sí | Su condominio | No | No |

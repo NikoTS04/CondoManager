@@ -88,6 +88,29 @@ original conserva la categoría y urgencia que declaró el residente. El detalle
 incluye la categoría confirmada, la prioridad, el motivo de rechazo y la versión.
 Reenviar el reporte de CON-53 devuelve el comprobante original de registro.
 
+### Seguimiento y resolución de incidencias (CON-56)
+
+- `POST /incidencias/{incidencia_id}/seguimiento` (`ADMIN_JUNTA` del condominio,
+  multipart): `version`, `comentario` (1–2000), `publico` (por defecto `true`),
+  `repuesto` opcional y `monto` decimal opcional (`NUMERIC(12,2)`, sin `float`),
+  además de una `evidencia` JPEG/PNG de hasta 3 MiB. Guarda la actualización y, si
+  el ticket estaba `ASIGNADO`, lo pasa a `EN_PROCESO`. Un archivo inválido se
+  descarta con advertencia y el avance se conserva. Devuelve `201` y el DTO del
+  ticket.
+- `POST /incidencias/{incidencia_id}/resolucion` (`ADMIN_JUNTA`, multipart):
+  `version`, `descripcion` (1–2000) y los mismos campos opcionales de costo y
+  evidencia. Solo aplica desde `EN_PROCESO`; en otro estado responde `409`.
+  Pasa el ticket a `RESUELTO`. El proveedor no puede invocar ninguna de estas
+  rutas.
+- `GET /incidencias/{incidencia_id}/historial`: Junta y Auditor del condominio
+  ven todas las actualizaciones, incluidos costos y sustentos; el residente ve
+  solo las marcadas `publico: true` de su propio reporte. Devuelve `items` y
+  `hay_mas` paginados. Otro condominio recibe `404`.
+- `GET /incidencias/{incidencia_id}/actualizaciones/{actualizacion_id}/evidencia`:
+  bytes privados, `private, no-store`, `nosniff`; mismo alcance que el historial.
+- Cada cambio de estado registra en la misma transacción la auditoría de siete
+  campos con actor, motivo, estado anterior y estado posterior.
+
 ### Avisos de bloqueos e incidencias (contrato del Sprint 4)
 
 El contrato de CON-55 está implementado; el de CON-47 sigue siendo objetivo

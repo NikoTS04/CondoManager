@@ -684,6 +684,57 @@ export function consultarAvisosAsignacion(
   return recursoRequest(`/incidencias/${encodeURIComponent(id)}/avisos`, { signal });
 }
 
+export interface ActualizacionIncidencia {
+  id: string;
+  incidencia_id: string;
+  actor_id: string;
+  tipo: "COMENTARIO" | "CAMBIO_ESTADO" | "COSTO";
+  descripcion: string;
+  publico: boolean;
+  repuesto: string | null;
+  monto: string | null;
+  estado_anterior: string | null;
+  estado_nuevo: string | null;
+  tiene_evidencia: boolean;
+  creado_en: string;
+}
+
+export function registrarSeguimientoIncidencia(
+  id: string, datos: FormData,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/seguimiento`, {
+    method: "POST", body: datos,
+  });
+}
+
+export function resolverIncidencia(id: string, datos: FormData): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/resolucion`, {
+    method: "POST", body: datos,
+  });
+}
+
+export function consultarHistorialIncidencia(
+  id: string, signal?: AbortSignal,
+): Promise<{ items: ActualizacionIncidencia[]; hay_mas: boolean }> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/historial`, { signal });
+}
+
+export async function descargarEvidenciaActualizacion(
+  incidenciaId: string, actualizacionId: string,
+): Promise<void> {
+  const respuesta = await fetchProtegido(
+    `/incidencias/${encodeURIComponent(incidenciaId)}/actualizaciones/${encodeURIComponent(actualizacionId)}/evidencia`,
+    { headers: getAuthHeaders() },
+  );
+  if (!respuesta.ok) throw new Error("No pudimos descargar la evidencia.");
+  const datos = await respuesta.blob();
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(datos);
+  enlace.download = `evidencia-${actualizacionId}`;
+  enlace.click();
+  enlace.remove();
+}
+
 export async function descargarFotoIncidencia(id: string): Promise<void> {
   const response = await fetchProtegido(`/incidencias/${encodeURIComponent(id)}/evidencia`, {
     headers: getAuthHeaders(),

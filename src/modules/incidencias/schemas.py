@@ -1,10 +1,19 @@
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import UploadFile
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    condecimal,
+    field_validator,
+    model_validator,
+)
 
 
 class Urgencia(StrEnum):
@@ -167,4 +176,66 @@ class AvisoAsignacionDTO(BaseModel):
 
 class BandejaAvisosDTO(BaseModel):
     items: list[AvisoAsignacionDTO]
+    hay_mas: bool
+
+
+MontoIncidencia = Annotated[
+    condecimal(ge=Decimal("0.00"), max_digits=12, decimal_places=2),
+    Field(description="Importe decimal de repuestos o servicios; nunca float."),
+]
+
+
+def rechazar_float(valor):
+    if isinstance(valor, (float, bool)):
+        raise ValueError("El importe debe ser Decimal o cadena; nunca float.")
+    return valor
+
+
+class RegistrarSeguimiento(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Annotated[int, Field(ge=1, strict=True)]
+    comentario: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+    ]
+    publico: bool = True
+    repuesto: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] | None = None
+    monto: MontoIncidencia | None = None
+
+    _validar_monto = field_validator("monto", mode="before")(rechazar_float)
+
+
+class RegistrarResolucion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Annotated[int, Field(ge=1, strict=True)]
+    descripcion: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+    ]
+    publico: bool = True
+    repuesto: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] | None = None
+    monto: MontoIncidencia | None = None
+
+    _validar_monto = field_validator("monto", mode="before")(rechazar_float)
+
+
+class ActualizacionDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    incidencia_id: UUID
+    actor_id: UUID
+    tipo: Literal["COMENTARIO", "CAMBIO_ESTADO", "COSTO"]
+    descripcion: str
+    publico: bool
+    repuesto: str | None
+    monto: Decimal | None
+    estado_anterior: str | None
+    estado_nuevo: str | None
+    tiene_evidencia: bool
+    creado_en: datetime
+
+
+class HistorialIncidenciasDTO(BaseModel):
+    items: list[ActualizacionDTO]
     hay_mas: bool
