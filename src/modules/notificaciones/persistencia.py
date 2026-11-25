@@ -207,10 +207,13 @@ class NotificacionesPersistentesService:
         return AlertaNotificacionDTO(
             id=alerta.id,
             notificacion_id=alerta.notificacion_id,
-            condominio_id=str(alerta.condominio_id),
+            origen_tipo=alerta.origen_tipo,
+            origen_id=alerta.origen_id,
+            referencia_correlacion=alerta.referencia_correlacion,
+            condominio_id=str(alerta.condominio_id) if alerta.condominio_id else None,
             departamento_id=str(alerta.departamento_id) if alerta.departamento_id else None,
             departamento_numero=numero or "Identidad",
-            tipo_evento=tipo_evento,
+            tipo_evento=tipo_evento or alerta.origen_id,
             ciclo=alerta.ciclo,
             tipo=alerta.tipo,
             mensaje=alerta.mensaje,
@@ -224,7 +227,7 @@ class NotificacionesPersistentesService:
         return (
             select(AlertaNotificacion, Departamento.numero, Notificacion.tipo_evento)
             .outerjoin(Departamento, Departamento.id == AlertaNotificacion.departamento_id)
-            .join(Notificacion, Notificacion.id == AlertaNotificacion.notificacion_id)
+            .outerjoin(Notificacion, Notificacion.id == AlertaNotificacion.notificacion_id)
         )
 
     async def listar_alertas(self, usuario, cid=None, estado="ABIERTA"):
@@ -245,7 +248,8 @@ class NotificacionesPersistentesService:
     async def atender_alerta(self, alerta_id, usuario):
         async with self.session.begin():
             alerta = await self.session.get(AlertaNotificacion, alerta_id)
-            if alerta is None:
+            if alerta is None or alerta.condominio_id is None:
+                # Las alertas de job no tienen condominio; su gestión pertenece a CON-66/68.
                 raise APIError(404, "ALERTA_NO_HALLADA", "No existe la alerta.")
             autorizar_condominio(usuario, alerta.condominio_id, escritura=True)
             identidad = SQLAlchemyUsuariosRepository(self.session)
