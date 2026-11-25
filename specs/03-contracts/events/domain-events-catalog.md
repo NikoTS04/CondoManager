@@ -38,6 +38,69 @@ correo dentro de la transacción del reporte. `evento_id` y `operacion_id`
 usan el ID de la incidencia. Cada cuenta activa de Junta del mismo condominio
 recibe un aviso con el ID y un enlace privado al reporte.
 
+### Avisos del Sprint 4 (CON-47 / CON-53 / CON-55) — contrato
+
+Contrato de avisos de correo sobre la cola SQL existente (`notificaciones_logs`).
+Son avisos persistidos en la misma transacción del hecho, como CON-53; no son
+envelopes del Stream. Las claves se calculan con
+`src.modules.notificaciones.avisos_contrato`. La unicidad lógica de la cola es
+`(evento_id, operacion_id, usuario_destinatario_id, canal)`. Todos usan canal
+EMAIL, nunca se encolan antes del commit del hecho, y un dato obligatorio ausente
+produce `PlantillaIncompletaError` (no se crea el aviso ni se inventa el dato).
+
+| Evento | Productor | Plantilla | `evento_id` | `operacion_id` | Destinatarios | Estado |
+|---|---|---|---|---|---|---|
+| `ReservaAfectadaPorBloqueoEvent` | CON-47 (reservas, al confirmar bloqueo y cancelaciones) | `NOTIF_RESERVA_AFECTADA_BLOQUEO` | ID del bloqueo | ID de la reserva | Titular de la reserva (`reservas.usuario_id`); uno por reserva | Contrato; productor pendiente |
+| `IncidenciaRegistradaEvent` | CON-53 (incidencias) | `NOTIF_INCIDENCIA_REGISTRADA` | ID de la incidencia | ID de la incidencia | Cada cuenta activa de Junta del condominio | Implementado |
+| `IncidenciaAsignadaEvent` | CON-55 (incidencias, al confirmar la asignación) | `NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE` | ID de la asignación | derivado de (asignación, `RESIDENTE`) | Reportante de la incidencia | Contrato; productor pendiente |
+| `IncidenciaAsignadaEvent` | CON-55 | `NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR` | ID de la asignación | derivado de (asignación, `PROVEEDOR`) | Contacto de correo del proveedor externo del directorio | Contrato; requiere decisión de esquema (ver abajo) |
+
+**Payloads lógicos** (cuerpo del hecho; el aviso solo usa lo listado, resuelto
+desde registros autorizados y sin datos sensibles):
+
+- `ReservaAfectadaPorBloqueoEvent`: `condominio_id`, `bloqueo_id`, `reserva_id`,
+  `departamento_id`, `usuario_id` (titular), `area_nombre`, `fecha_reserva`,
+  `hora_inicio`, `hora_fin`, `zona_horaria`, `motivo` (del bloqueo), `occurred_at`.
+  Variables de plantilla: `nombre`, `dpto`, `area`, `fecha`, `horario`, `motivo`,
+  `enlace` (pantalla de reservas del portal). Sin tarifa ni ajuste económico: esos
+  datos pertenecen a la cancelación y no se prometen en este aviso.
+- `IncidenciaRegistradaEvent`: `incidencia_id`, `condominio_id`; variables
+  `incidencia_id`, `enlace` (ya vigente).
+- `IncidenciaAsignadaEvent`: `condominio_id`, `incidencia_id`, `asignacion_id`,
+  `proveedor_id`, `plazo`, `occurred_at`. Plantilla al residente: `nombre`, `dpto`,
+  `codigo_ticket`, `estado`, `enlace`. Plantilla al proveedor: `proveedor`,
+  `codigo_ticket`, `condominio`, `ubicacion`, `categoria`, `prioridad`,
+  `descripcion`, `plazo`. El aviso al proveedor no incluye nombre, unidad ni
+  contacto del residente. `codigo_ticket` es el ID de la incidencia mientras no
+  exista otro código visible.
+
+**Deduplicación**
+
+- Repetir el mismo bloqueo, la misma cancelación o la misma confirmación de
+  asignación reutiliza las mismas claves y no crea avisos nuevos; reentregar permite
+  completar los que falten (regla 4 de Publicación y consumo).
+- Reasignar crea otra asignación y, por tanto, otros avisos. Corregir un dato sin
+  crear asignación no reenvía.
+- La clave del proveedor incluye el rol, de modo que residente y proveedor de una
+  misma asignación no se bloquean entre sí.
+
+**Visibilidad para Junta.** El resultado se consulta desde `notificaciones_logs`
+(estados vigentes `EN_COLA`, `ENVIADO`, `ENTREGADO`, `REINTENTANDO`,
+`FALLIDO_PERMANENTE`, `OMITIDO`; `ENVIADO` no acredita entrega) y las alertas de
+[delivery-policy](../../02-domains/03-notificaciones/delivery-policy.md). Un contacto
+ausente no genera fila en la cola: la vista lo deriva y lo informa como
+`CONTACTO_FALTANTE`. Contrato de lectura en
+[api-contracts](../../05-api/api-contracts.md#avisos-de-bloqueos-e-incidencias-contrato-del-sprint-4).
+
+**Restricciones de esquema detectadas (sin migración en esta entrega).**
+`notificaciones_logs.usuario_destinatario_id` es NOT NULL con FK a `usuarios` y
+forma parte de la unicidad: un contacto externo de proveedor no cabe sin cambio.
+Además `notificaciones_alertas.notificacion_id` es NOT NULL, de modo que
+`CONTACTO_FALTANTE` no puede persistirse como alerta sin migración. Decisión
+pendiente del responsable de la cadena de migraciones: columna de destinatario
+externo con unicidad que contemple NULL, o registro de proveedor como usuario sin
+acceso. Hasta entonces el aviso al proveedor no puede encolarse.
+
 ### Identidad CON-76/7 — cola SQL transaccional
 
 `UsuarioInvitadoEvent` y `AccesoUsuarioCambiadoEvent` identifican avisos internos

@@ -35,6 +35,10 @@ El dominio de Notificaciones es responsable de:
 | `PagoConciliadoEvent` | Email | WhatsApp | `tpl_pago_exitoso` | `nombre`, `dpto`, `monto_abonado`, `saldo_restante`, `recibo_url` |
 | `PagoRechazadoEvent` | Email | WhatsApp | `tpl_pago_rechazado` | `nombre`, `dpto`, `motivo_rechazo`, `enlace_subir_nuevo` |
 | `ReservaConfirmadaEvent` | Email | WhatsApp | `tpl_reserva_aprobada` | `nombre`, `area`, `fecha`, `horario`, `normas_convivencia` |
+| `ReservaAfectadaPorBloqueoEvent` (CON-47) | Email | — | `NOTIF_RESERVA_AFECTADA_BLOQUEO` | `nombre`, `dpto`, `area`, `fecha`, `horario`, `motivo`, `enlace` |
+| `IncidenciaRegistradaEvent` (CON-53) | Email | — | `NOTIF_INCIDENCIA_REGISTRADA` | `incidencia_id`, `enlace` |
+| `IncidenciaAsignadaEvent` (CON-55, residente) | Email | — | `NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE` | `nombre`, `dpto`, `codigo_ticket`, `estado`, `enlace` |
+| `IncidenciaAsignadaEvent` (CON-55, proveedor) | Email | — | `NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR` | `proveedor`, `codigo_ticket`, `condominio`, `ubicacion`, `categoria`, `prioridad`, `descripcion`, `plazo` |
 
 ---
 
@@ -78,3 +82,9 @@ Los escenarios ejecutables del `.feature` cubren el despacho y los reintentos; l
 verifican en `src/tests/integration/test_alertas_notificaciones_db.py`. Detalle en
 [delivery-policy.md](delivery-policy.md) y en la
 [entrega](../../../docs/sprints/CON-32-34-36-37-notificaciones.md).
+
+## 7. Avisos del Sprint 4
+
+Los avisos de CON-47, CON-53 y CON-55 usan la cola existente y sus claves están
+definidas en el [catálogo de eventos](../../03-contracts/events/domain-events-catalog.md).
+Escenarios: [avisos del Sprint 4](../../04-acceptance-criteria/avisos-sprint-4.feature.md).

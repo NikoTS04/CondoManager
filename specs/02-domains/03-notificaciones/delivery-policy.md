@@ -54,6 +54,20 @@ es idempotente y registra la auditoría `NOTIFICACION_ALERTA_ATENDIDA`. El reenv
 manual con contacto corregido (`POST /api/v1/notificaciones/reenviar/{log_id}`)
 atiende en la misma transacción las alertas abiertas de esa notificación.
 
+## 3.1 Avisos con destinatario externo o contacto faltante (Sprint 4)
+
+Contrato de CON-47 y CON-55; ver el [catálogo](../../03-contracts/events/domain-events-catalog.md).
+
+- Un aviso a un contacto de proveedor sigue la misma política de reintentos (1, +2, +10
+  y +30 min), de aceptación incierta y de alertas que cualquier otro correo.
+- Un destinatario sin correo utilizable no se encola ni se inventa: la vista de Junta
+  lo informa como `CONTACTO_FALTANTE`. Junta corrige el dato en el directorio o en el
+  usuario; el aviso se genera con el flujo de reenvío, no con un duplicado automático.
+- Un rebote definitivo conserva `ERROR_DEFINITIVO` y se muestra junto al ticket o
+  bloqueo de origen; el mensaje de la alerta no contiene contactos.
+- `ENVIADO` solo acredita aceptación del transporte. El resumen de un bloqueo o de
+  una asignación nunca lo presenta como entregado.
+
 ## 4. Transporte Simulado Determinista
 
 Mientras no exista proveedor real, el transporte `SIMULADO` interpreta el destinatario:

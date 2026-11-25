@@ -75,6 +75,22 @@ original conserva la categoría y urgencia que declaró el residente. El detalle
 incluye la categoría confirmada, la prioridad, el motivo de rechazo y la versión.
 Reenviar el reporte de CON-53 devuelve el comprobante original de registro.
 
+### Avisos de bloqueos e incidencias (contrato del Sprint 4)
+
+Contrato objetivo, aún no implementado; quien implemente cada ticket actualiza
+OpenAPI. Eventos y claves: [catálogo](../03-contracts/events/domain-events-catalog.md).
+
+- `GET /incidencias/{incidencia_id}/avisos` (CON-55; `ADMIN_JUNTA` del condominio,
+  Auditor solo lectura; Residente 403; otro condominio 404). Devuelve `items` con
+  `asignacion_id`, `destinatario_tipo` (`RESIDENTE` | `PROVEEDOR`), `estado` y, si
+  existe, `aviso_id`, `intentos`, `fecha_actualizacion` y `alerta_abierta`.
+- `GET /condominios/{cid}/areas/{aid}/bloqueos/{bid}/avisos` (CON-47; mismos
+  permisos). Devuelve `reservas_canceladas`, `avisos_por_estado` y `items` por reserva.
+- `estado` es el de `notificaciones_logs` (`EN_COLA`, `ENVIADO`, `ENTREGADO`,
+  `REINTENTANDO`, `FALLIDO_PERMANENTE`, `OMITIDO`) o `CONTACTO_FALTANTE`, derivado
+  cuando no hay correo utilizable. No expone correos ni contenido del mensaje.
+- Reintentar una confirmación no cambia los totales ni duplica avisos.
+
 ### CON-81 — disponibilidad del despliegue
 
 GET `/health` y `/api/v1/health` conservan su respuesta de liveness HTTP.
