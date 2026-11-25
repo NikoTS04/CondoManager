@@ -133,7 +133,8 @@ async def procesar_uno(
     from src.modules.notificaciones.mailjet import transporte_mailjet
 
     solo_proveedor = (
-        solo_proveedor or settings.APP_ENV == "production"
+        solo_proveedor
+        or settings.APP_ENV == "production"
         or os.getenv("VERCEL_ENV") == "production"
     )
     if solo_proveedor and not settings.MAILJET_ENABLED:
@@ -160,7 +161,8 @@ async def procesar_uno(
                 *([Notificacion.transporte == "PROVEEDOR"] if solo_proveedor else []),
                 *(
                     [Notificacion.transporte == "SIMULADO"]
-                    if not settings.MAILJET_ENABLED and not transporte_inyectado else []
+                    if not settings.MAILJET_ENABLED and not transporte_inyectado
+                    else []
                 ),
             )
             .order_by(Notificacion.fecha_creacion, Notificacion.id)
@@ -170,6 +172,7 @@ async def procesar_uno(
         if log is None:
             return False
         from src.modules.notificaciones.models import ContactoBloqueado
+
         if log.canal == "EMAIL" and await db.get(
             ContactoBloqueado, (log.condominio_id, log.destinatario.strip().lower())
         ):
@@ -177,12 +180,12 @@ async def procesar_uno(
             log.error_mensaje = "CONTACTO_SUPRIMIDO"
             log.proximo_reintento = None
             return True
-        if log.finalidad == "OPERATIVA":
-            destinos = await NotificacionesRepository(db).destinatarios(
-                log.condominio_id,
-                log.departamento_id,
-                log.canal,
-            )
+        if log.destinatario_externo_id is not None:
+            # CON-55: el contacto del proveedor se validó al confirmar la asignación
+            # y no depende de un vínculo de usuario que pueda revocarse.
+            valido = bool(log.destinatario and "@" in log.destinatario)
+        elif log.finalidad == "OPERATIVA":
+            destinos = await NotificacionesRepository(db).destinatarios_operativos(log)
             valido = any(
                 u.id == log.usuario_destinatario_id and c == log.destinatario
                 for u, _, c in destinos
@@ -208,16 +211,30 @@ async def procesar_uno(
         if log.tipo_evento in ("NOTIF_RECORDATORIO_PREVIO", "NOTIF_CORTE_HOY"):
             from src.modules.cuotas.models import CuotaMantenimiento
 
-            cuota = await db.get(CuotaMantenimiento, log.operacion_id)
+            # CON-33: la elegibilidad se decide bajo FOR SHARE de la cuota. Un pago que ya
+            # modificó la fila (sin confirmar) hace esperar al worker y, al confirmarse, se
+            # relee el saldo vigente; así nunca se avisa una deuda saldada en paralelo.
+            cuota = await db.get(
+                CuotaMantenimiento,
+                log.operacion_id,
+                with_for_update={"read": True},
+                populate_existing=True,
+            )
             from src.modules.notificaciones.models import PoliticaNotificaciones
+
             politica = await db.get(PoliticaNotificaciones, log.condominio_id)
             if politica and not politica.habilitado:
                 log.estado = "OMITIDO"
                 log.error_mensaje = "RECORDATORIOS_DESHABILITADOS"
                 log.proximo_reintento = None
                 return True
-            if cuota is None or cuota.monto_pendiente <= 0 or (
-                log.recordatorio_vencimiento and cuota.fecha_vencimiento != log.recordatorio_vencimiento
+            if (
+                cuota is None
+                or cuota.monto_pendiente <= 0
+                or (
+                    log.recordatorio_vencimiento
+                    and cuota.fecha_vencimiento != log.recordatorio_vencimiento
+                )
             ):
                 log.estado = "OMITIDO"
                 log.error_mensaje = "RECORDATORIO_SIN_DEUDA"
@@ -227,16 +244,24 @@ async def procesar_uno(
 
             from src.modules.condominios.models import Condominio
             from src.modules.notificaciones.templates import PlantillasService
+
             condominio = await db.get(Condominio, log.condominio_id)
             u, d, _ = next((u, d, c) for u, d, c in destinos if u.id == log.usuario_destinatario_id)
-            tipo = "NOTIF_RECORDATORIO_RECUPERADO" if (
-                cuota.fecha_vencimiento < ahora.astimezone(ZoneInfo("America/Lima")).date()
-            ) else log.tipo_evento
-            log.asunto, log.cuerpo = PlantillasService.renderizar(tipo, {
-                "nombre": u.nombre, "dpto": d.numero, "moneda": condominio.moneda,
-                "fecha_corte": cuota.fecha_vencimiento.isoformat(),
-                "monto_pendiente": f"{cuota.monto_pendiente:.2f}",
-            })
+            tipo = (
+                "NOTIF_RECORDATORIO_RECUPERADO"
+                if (cuota.fecha_vencimiento < ahora.astimezone(ZoneInfo("America/Lima")).date())
+                else log.tipo_evento
+            )
+            log.asunto, log.cuerpo = PlantillasService.renderizar(
+                tipo,
+                {
+                    "nombre": u.nombre,
+                    "dpto": d.numero,
+                    "moneda": condominio.moneda,
+                    "fecha_corte": cuota.fecha_vencimiento.isoformat(),
+                    "monto_pendiente": f"{cuota.monto_pendiente:.2f}",
+                },
+            )
         log.intentos += 1
         # Cambiar la fila impide adquirirla desde una instantánea anterior al commit.
         log.bloqueado_hasta = ahora + timedelta(minutes=5)

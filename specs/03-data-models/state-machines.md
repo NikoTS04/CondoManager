@@ -76,3 +76,41 @@
 
 ### Invariante Crítica:
 - No es posible realizar una transición de `SOLICITADA` a `CONFIRMADA` si la consulta `SELECT COUNT(*) FROM cuotas_mantenimiento WHERE departamento_id = :id AND estado = 'EN_MORA'` es mayor a cero, a menos que exista un token de autorización forzada por la Junta Directiva.
+
+---
+
+## 4. Máquina de Estados: Incidencia (`incidencias`)
+
+```
+ [ REGISTRADO ] ──(rechazo con motivo)──> [ RECHAZADO ]  (terminal)
+        │
+        └──(asignar responsable + plazo)──> [ ASIGNADO ]
+                    │                            ▲
+                    │                            └──(reasignar)
+                    ▼
+              [ EN_PROCESO ]
+                    │
+                    ▼
+              [ RESUELTO ]
+               ┌────┴──────────────────┐
+               ▼                       ▼
+          [ CERRADO ]            [ EN_PROCESO ]
+       (confirmación del          (reapertura con motivo)
+        residente o decisión
+        administrativa autorizada)
+
+```
+
+### Tabla de Transiciones Legales
+
+| Estado origen | Evento | Estado destino | Pre-condiciones |
+| :--- | :--- | :--- | :--- |
+| `REGISTRADO` | `RECHAZAR_TICKET` | `RECHAZADO` | Motivo obligatorio y visible para el reportante (CON-54). |
+| `REGISTRADO` | `ASIGNAR_TICKET` | `ASIGNADO` | Responsable interno vigente del condominio o proveedor con contacto, y plazo futuro (CON-55). |
+| `ASIGNADO` | `REASIGNAR_TICKET` | `ASIGNADO` | Nueva asignación con nueva clave; los avisos anteriores se conservan (CON-55). |
+| `ASIGNADO` | `INICIAR_SEGUIMIENTO` | `EN_PROCESO` | Junta registra diagnóstico o avance (CON-56). |
+| `EN_PROCESO` | `RESOLVER_TICKET` | `RESUELTO` | Junta registra la resolución; el proveedor no cierra el ticket (CON-56). |
+| `RESUELTO` | `CONFIRMAR_TICKET` | `CERRADO` | Confirmación del residente con calificación o decisión administrativa autorizada (CON-57). |
+| `RESUELTO` | `REABRIR_TICKET` | `EN_PROCESO` | Motivo obligatorio del residente (CON-57). |
+
+`RECHAZADO` y `CERRADO` son terminales. Toda transición exige versión vigente, actor autenticado, fecha y observación, y registra auditoría inmutable con los siete campos obligatorios.

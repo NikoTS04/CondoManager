@@ -23,6 +23,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { AvisosList } from "@/features/residente/AvisosList";
 import { EstadoCuenta } from "@/features/residente/EstadoCuenta";
+import { IncidenciasResidente } from "@/features/residente/MisReportes";
 import {
   ResidenteNav,
   type ResidenteTab,
@@ -47,7 +48,9 @@ function ResidenteContent() {
   const departamentoId = user ? seleccionarUnidad(user, dptoParam, activeDepartment, departamentos.map((d) => d.id)) : "";
   const [contextoId] = useState(() => user?.condominio_id ||
     (user?.rol === "SUPERADMIN" ? localStorage.getItem("condo_active_id") : null));
-  const [activeTab, setActiveTab] = useState<ResidenteTab>("cuenta");
+  const [activeTab, setActiveTab] = useState<ResidenteTab>(() =>
+    user?.rol === "RESIDENTE" && searchParams.get("seccion") === "incidencias" ? "incidencias" : "cuenta"
+  );
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
@@ -222,7 +225,7 @@ function ResidenteContent() {
       )}
 
       {/* Solo mostrar SolvenciaBanner si el departamento está confirmado por backend */}
-      {activeTab !== "cuenta" && deptoActual && !loadingInitial && !errorDeptos && deptoActual.estado_financiero !== "OBSERVADO" && (
+      {["reservas", "pagos", "avisos"].includes(activeTab) && deptoActual && !loadingInitial && !errorDeptos && deptoActual.estado_financiero !== "OBSERVADO" && (
         <SolvenciaBanner
           solvente={deptoActual.estado_financiero === "AL_DIA"}
           deudaVencida={deptoActual.deuda_vencida}
@@ -231,7 +234,7 @@ function ResidenteContent() {
       )}
 
       {/* Navegación responsiva: Tabs en sm+ y barra inferior fija en móvil */}
-      <ResidenteNav activeTab={activeTab} onChangeTab={setActiveTab} />
+      <ResidenteNav activeTab={activeTab} onChangeTab={setActiveTab} mostrarIncidencias={user?.rol === "RESIDENTE"} />
 
       <TabPanel idPrefix="residente" id={activeTab}>
       {/* Contenido según la pestaña activa */}
@@ -297,6 +300,10 @@ function ResidenteContent() {
 
       {activeTab === "avisos" && contextoId && departamentoId && (
         <AvisosList condominioId={contextoId} departamentoId={departamentoId} />
+      )}
+
+      {activeTab === "incidencias" && user?.rol === "RESIDENTE" && (
+        <IncidenciasResidente departamentoId={departamentoId} cargandoDepartamento={loadingInitial} />
       )}
 
       {activeTab === "cuenta" && (

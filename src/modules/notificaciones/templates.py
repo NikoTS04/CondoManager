@@ -7,6 +7,45 @@ from string import Formatter
 from typing import Any, Dict, Tuple
 
 PLANTILLAS_CONFIG = {
+    "NOTIF_INCIDENCIA_REGISTRADA": {
+        "asunto": "CondoManager: Nueva incidencia",
+        "cuerpo": (
+            "Se registró la incidencia {incidencia_id} en tu condominio.\n\n"
+            "Inicia sesión en el portal de Junta y abre el reporte: {enlace}"
+        ),
+    },
+    "NOTIF_RESERVA_AFECTADA_BLOQUEO": {
+        "asunto": "CondoManager: Su reserva de {area} fue cancelada por un bloqueo",
+        "cuerpo": (
+            "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
+            "El área {area} quedó bloqueada y su reserva del {fecha} ({horario}) fue cancelada.\n"
+            "• Motivo del bloqueo: {motivo}\n\n"
+            "Para elegir otro turno ingrese a: {enlace}\n"
+            "Atentamente,\nAdministración"
+        ),
+    },
+    "NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE": {
+        "asunto": "CondoManager: Su incidencia {codigo_ticket} fue asignada",
+        "cuerpo": (
+            "Estimado(a) {nombre} (Dpto. {dpto}):\n\n"
+            "Su incidencia {codigo_ticket} cambió al estado {estado}.\n"
+            "Puede consultar su seguimiento en el portal: {enlace}\n"
+            "Atentamente,\nAdministración"
+        ),
+    },
+    "NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR": {
+        "asunto": "CondoManager: Incidencia {codigo_ticket} asignada a {proveedor}",
+        "cuerpo": (
+            "Estimado(a) {proveedor}:\n\n"
+            "Se le asignó la incidencia {codigo_ticket} del condominio {condominio}.\n"
+            "• Ubicación: {ubicacion}\n"
+            "• Categoría: {categoria}\n"
+            "• Prioridad: {prioridad}\n"
+            "• Descripción: {descripcion}\n"
+            "• Plazo de atención: {plazo}\n\n"
+            "Atentamente,\nAdministración"
+        ),
+    },
     "NOTIF_RECORDATORIO_RECUPERADO": {
         "asunto": "CondoManager: Recordatorio de cuota pendiente",
         "cuerpo": (

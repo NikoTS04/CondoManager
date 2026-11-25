@@ -35,6 +35,10 @@ El dominio de Notificaciones es responsable de:
 | `PagoConciliadoEvent` | Email | WhatsApp | `tpl_pago_exitoso` | `nombre`, `dpto`, `monto_abonado`, `saldo_restante`, `recibo_url` |
 | `PagoRechazadoEvent` | Email | WhatsApp | `tpl_pago_rechazado` | `nombre`, `dpto`, `motivo_rechazo`, `enlace_subir_nuevo` |
 | `ReservaConfirmadaEvent` | Email | WhatsApp | `tpl_reserva_aprobada` | `nombre`, `area`, `fecha`, `horario`, `normas_convivencia` |
+| `ReservaAfectadaPorBloqueoEvent` (CON-47) | Email | — | `NOTIF_RESERVA_AFECTADA_BLOQUEO` | `nombre`, `dpto`, `area`, `fecha`, `horario`, `motivo`, `enlace` |
+| `IncidenciaRegistradaEvent` (CON-53) | Email | — | `NOTIF_INCIDENCIA_REGISTRADA` | `incidencia_id`, `enlace` |
+| `IncidenciaAsignadaEvent` (CON-55, residente) | Email | — | `NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE` | `nombre`, `dpto`, `codigo_ticket`, `estado`, `enlace` |
+| `IncidenciaAsignadaEvent` (CON-55, proveedor) | Email | — | `NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR` | `proveedor`, `codigo_ticket`, `condominio`, `ubicacion`, `categoria`, `prioridad`, `descripcion`, `plazo` |
 
 ---
 
@@ -78,3 +82,83 @@ Los escenarios ejecutables del `.feature` cubren el despacho y los reintentos; l
 verifican en `src/tests/integration/test_alertas_notificaciones_db.py`. Detalle en
 [delivery-policy.md](delivery-policy.md) y en la
 [entrega](../../../docs/sprints/CON-32-34-36-37-notificaciones.md).
+
+## 7. Avisos del Sprint 4
+
+Los avisos de CON-47, CON-53 y CON-55 usan la cola existente y sus claves están
+definidas en el [catálogo de eventos](../../03-contracts/events/domain-events-catalog.md).
+Escenarios: [avisos del Sprint 4](../../04-acceptance-criteria/avisos-sprint-4.feature.md).
+
+## 8. Alertas de Fallos Definitivos con Origen (CON-84)
+
+La alerta de `notificaciones_alertas` se generaliza: una por fallo definitivo, ya sea de un
+correo o de un job, una vez agotados los reintentos aplicables. Cada alerta guarda su origen:
+
+- `origen_tipo`: `CORREO` o `JOB`.
+- `origen_id`: para `CORREO`, el id de la notificación; para `JOB`, el nombre del job
+  (`notificaciones`, `diario`).
+- `referencia_correlacion`: texto opcional (máx. 64) que enlaza la alerta con la petición o
+  ejecución que la originó. Es nullable; CON-82 la completará. Este ticket no la genera.
+- `ciclo`: para `CORREO`, el ciclo de la notificación; para `JOB`, la fecha UTC de la ejecución
+  como entero `AAAAMMDD`.
+
+Idempotencia: `(origen_tipo, origen_id, ciclo, tipo)` es único. Repetir el registro del mismo
+fallo (reintento del worker, callback duplicado, reejecución del cron) no crea otra alerta.
+
+Tipo nuevo `JOB_FALLO_DEFINITIVO`: un job agotó sus intentos. Solo se crea cuando
+`intentos >= maximo_intentos`; un fallo con reintentos pendientes no genera alerta. El mensaje
+nombra el proceso y no incluye trazas, URLs ni credenciales.
+
+Aislamiento: la alerta de `CORREO` conserva su condominio. Un job es transversal, por lo que su
+alerta tiene `condominio_id` nulo y nunca aparece en la consulta por condominio de
+`GET /api/v1/notificaciones/alertas`; la vista global de salud/bandeja pertenece a CON-68/66.
+
+Escenarios en [alertas-fallos-definitivos](../../04-acceptance-criteria/alertas-fallos-definitivos.feature.md).
+Cambio de esquema: migración `20261125_0025_alertas_fallos_definitivos`.
+
+## 9. Vista de Salud y Alertas para Administración (CON-68)
+
+Pantalla de solo lectura del portal de administración. No resuelve ni cierra alertas (eso es
+CON-66/86) ni genera correlación (CON-82) ni registra ejecuciones (CON-83).
+
+### 9.1 Estado de componentes por perfil
+
+`GET /api/v1/monitoreo/salud` reutiliza las comprobaciones de `src/core/health.py` y su regla de
+no filtrar URLs, credenciales ni mensajes del driver. Cada componente informa `ok`, `error` o
+`deshabilitado`:
+
+| Componente | Criterio |
+|---|---|
+| `api` | `ok` si la petición fue atendida. |
+| `postgresql` | `SELECT 1` con tope de 2 s; `ok` o `error`. |
+| `redis` | `deshabilitado` si el perfil tiene `REDIS_REQUIRED=false`; si no, `PING` con tope de 2 s. |
+| `correo` | `deshabilitado` si `MAILJET_ENABLED=false`; si no, `ok` por configuración. No se contacta al proveedor desde esta vista. |
+
+La respuesta incluye `perfil` (`APP_ENV`), `estado_general` (`ok` si ningún componente está en
+`error`, si no `degradado`) y `generado_en`. La consulta responde siempre 200 y nunca 503: la
+vista debe poder mostrar la caída.
+
+### 9.2 Ejecución de jobs
+
+La respuesta lista, por cada job conocido (`notificaciones`, `diario`), el último `inicio`, `fin`,
+`duracion_segundos` y `resultado` (`EN_CURSO`, `COMPLETADO`, `INCOMPLETO` o `SIN_REGISTRO`).
+`duracion_segundos` es nulo mientras no hay `fin`. Hoy la fuente es `estado_job_notificaciones`,
+que solo registra `notificaciones`; `diario` figura `SIN_REGISTRO`. La lectura vive tras
+`listar_ejecuciones_jobs(db)` (`src/core/salud_operativa.py`) para que CON-83 la sustituya sin
+cambiar el contrato: debe devolver `EjecucionJob(nombre, inicio, fin, duracion_segundos,
+resultado)` con la última ejecución por job.
+
+### 9.3 Alertas visibles
+
+`GET /api/v1/monitoreo/alertas` lista alertas de `notificaciones_alertas` (CON-84), por defecto
+`ABIERTA`, con paginación `limit` (1–100, 50) y `offset`. Cada una muestra:
+
+- `componente`: `correo` o `job`.
+- `operacion`: tipo de evento del aviso (correo) o nombre del job.
+- `referencia_diagnostico`: `origen_tipo`, `origen_id` y `referencia_correlacion` (nulo hasta CON-82).
+
+Visibilidad: `SUPERADMIN` ve todas, incluidas las de job (condominio nulo), y puede filtrar por
+`condominio_id`; `ADMIN_JUNTA` y `AUDITOR` ven solo las de su condominio y nunca las de job ni las
+ajenas (403 si piden otro condominio). `RESIDENTE` no accede. La salud y los jobs son globales y
+solo los ve `SUPERADMIN`. Escenarios en
+[salud-y-alertas-visibles](../../04-acceptance-criteria/salud-y-alertas-visibles.feature.md).

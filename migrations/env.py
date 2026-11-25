@@ -12,11 +12,13 @@ from src.core.database import Base
 
 # Registra los metadatos conocidos para futuras revisiones autogeneradas.
 from src.core.models_audit import AuditoriaLogORM  # noqa: F401
+from src.modules.alertas_contratos.models import AvisoContrato  # noqa: F401
 from src.modules.condominios.models import Condominio  # noqa: F401
 from src.modules.cuotas.distribucion.models import ConfiguracionDistribucion  # noqa: F401
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, LoteCuotas  # noqa: F401
 from src.modules.cuotas.presupuestos.models import PresupuestoMensual  # noqa: F401
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor  # noqa: F401
+from src.modules.incidencias.models import Incidencia  # noqa: F401
 from src.modules.notificaciones.models import (  # noqa: F401
     AlertaNotificacion,
     EventoConsumido,
@@ -50,7 +52,10 @@ from src.modules.reservas.models import (  # noqa: F401
     EventoReservaOutbox,
     Reserva,
 )
-from src.modules.usuarios.invitaciones_models import InvitacionUsuario, OperacionIdentidad  # noqa: F401
+from src.modules.usuarios.invitaciones_models import (  # noqa: F401
+    InvitacionUsuario,
+    OperacionIdentidad,
+)
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol  # noqa: F401
 
 config = context.config

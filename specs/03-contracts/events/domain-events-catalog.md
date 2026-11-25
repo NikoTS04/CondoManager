@@ -31,6 +31,84 @@ Base acordada el 20/10/2026. Los contratos HTTP y las reglas asociadas están en
 
 ## Productores, consumidores y esquemas
 
+### Incidencias CON-53 — cola SQL transaccional
+
+El alta de un ticket inserta `NOTIF_INCIDENCIA_REGISTRADA` en la cola SQL de
+correo dentro de la transacción del reporte. `evento_id` y `operacion_id`
+usan el ID de la incidencia. Cada cuenta activa de Junta del mismo condominio
+recibe un aviso con el ID y un enlace privado al reporte.
+
+### Avisos del Sprint 4 (CON-47 / CON-53 / CON-55) — contrato
+
+Contrato de avisos de correo sobre la cola SQL existente (`notificaciones_logs`).
+Son avisos persistidos en la misma transacción del hecho, como CON-53; no son
+envelopes del Stream. Las claves se calculan con
+`src.modules.notificaciones.avisos_contrato`. La unicidad lógica de la cola es
+`(evento_id, operacion_id, usuario_destinatario_id, canal)` para destinatarios
+internos y `(evento_id, operacion_id, destinatario_externo_id, canal)` para
+contactos externos. Todos usan canal
+EMAIL, nunca se encolan antes del commit del hecho, y un dato obligatorio ausente
+produce `PlantillaIncompletaError` (no se crea el aviso ni se inventa el dato).
+
+| Evento | Productor | Plantilla | `evento_id` | `operacion_id` | Destinatarios | Estado |
+|---|---|---|---|---|---|---|
+| `ReservaAfectadaPorBloqueoEvent` | CON-47 (reservas, al confirmar bloqueo y cancelaciones) | `NOTIF_RESERVA_AFECTADA_BLOQUEO` | ID del bloqueo | ID de la reserva | Titular de la reserva (`reservas.usuario_id`); uno por reserva | Contrato; productor pendiente |
+| `IncidenciaRegistradaEvent` | CON-53 (incidencias) | `NOTIF_INCIDENCIA_REGISTRADA` | ID de la incidencia | ID de la incidencia | Cada cuenta activa de Junta del condominio | Implementado |
+| `IncidenciaAsignadaEvent` | CON-55 (incidencias, al confirmar la asignación) | `NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE` | ID de la asignación | derivado de (asignación, `RESIDENTE`) | Reportante de la incidencia | Implementado |
+| `IncidenciaAsignadaEvent` | CON-55 | `NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR` | ID de la asignación | derivado de (asignación, `PROVEEDOR`) | Contacto de correo del proveedor externo | Implementado (migración `20261127_0027`) |
+
+**Payloads lógicos** (cuerpo del hecho; el aviso solo usa lo listado, resuelto
+desde registros autorizados y sin datos sensibles):
+
+- `ReservaAfectadaPorBloqueoEvent`: `condominio_id`, `bloqueo_id`, `reserva_id`,
+  `departamento_id`, `usuario_id` (titular), `area_nombre`, `fecha_reserva`,
+  `hora_inicio`, `hora_fin`, `zona_horaria`, `motivo` (del bloqueo), `occurred_at`.
+  Variables de plantilla: `nombre`, `dpto`, `area`, `fecha`, `horario`, `motivo`,
+  `enlace` (pantalla de reservas del portal). Sin tarifa ni ajuste económico: esos
+  datos pertenecen a la cancelación y no se prometen en este aviso.
+- `IncidenciaRegistradaEvent`: `incidencia_id`, `condominio_id`; variables
+  `incidencia_id`, `enlace` (ya vigente).
+- `IncidenciaAsignadaEvent`: `condominio_id`, `incidencia_id`, `asignacion_id`,
+  `proveedor_id`, `plazo`, `occurred_at`. Plantilla al residente: `nombre`, `dpto`,
+  `codigo_ticket`, `estado`, `enlace`. Plantilla al proveedor: `proveedor`,
+  `codigo_ticket`, `condominio`, `ubicacion`, `categoria`, `prioridad`,
+  `descripcion`, `plazo`. El aviso al proveedor no incluye nombre, unidad ni
+  contacto del residente. `codigo_ticket` es el ID de la incidencia mientras no
+  exista otro código visible.
+
+**Deduplicación**
+
+- Repetir el mismo bloqueo, la misma cancelación o la misma confirmación de
+  asignación reutiliza las mismas claves y no crea avisos nuevos; reentregar permite
+  completar los que falten (regla 4 de Publicación y consumo).
+- Reasignar crea otra asignación y, por tanto, otros avisos. Corregir un dato sin
+  crear asignación no reenvía.
+- La clave del proveedor incluye el rol, de modo que residente y proveedor de una
+  misma asignación no se bloquean entre sí.
+
+**Visibilidad para Junta.** El resultado se consulta desde `notificaciones_logs`
+(estados vigentes `EN_COLA`, `ENVIADO`, `ENTREGADO`, `REINTENTANDO`,
+`FALLIDO_PERMANENTE`, `OMITIDO`; `ENVIADO` no acredita entrega) y las alertas de
+[delivery-policy](../../02-domains/03-notificaciones/delivery-policy.md). Un contacto
+ausente no genera fila en la cola: la vista lo deriva y lo informa como
+`CONTACTO_FALTANTE`. Contrato de lectura en
+[api-contracts](../../05-api/api-contracts.md#avisos-de-bloqueos-e-incidencias-contrato-del-sprint-4).
+
+**Restricciones de esquema resueltas en CON-55.** La migración
+`20261127_0027` hace nullable `notificaciones_logs.usuario_destinatario_id`,
+añade `destinatario_externo_id` con unicidad parcial por `NULL` y exige exactamente
+uno de los dos destinatarios. El contacto externo se valida al confirmar la
+asignación y se revalida al reenviar. `CONTACTO_FALTANTE` sigue derivándose en la
+lectura: un proveedor sin correo no genera fila en la cola ni alerta persistida.
+
+### Alertas de contrato CON-50 — registro SQL, sin envelope
+
+`AvisoContratoGeneradoEvent` y `AvisoContratoOmitidoEvent` son hechos internos persistidos en
+`avisos_contrato` y auditados como `ALERTA_VENCIMIENTO_CONTRATO` en la misma transacción de la
+revisión diaria. No se publican en el Stream ni tienen consumidor externo todavía. Clave lógica:
+(`contrato_id`, `vigencia`, `umbral_dias`). Contrato: [alertas de contratos](../../02-domains/06-egresos-proveedores/alertas-contratos.md).
+El envío de correo a la Junta queda pendiente de decisión.
+
 ### Identidad CON-76/7 — cola SQL transaccional
 
 `UsuarioInvitadoEvent` y `AccesoUsuarioCambiadoEvent` identifican avisos internos
@@ -162,3 +240,11 @@ el envelope por schema_version frente a version y mantiene los mensajes CON-70
 persistidos, sus importes y deduplicación por event_id. Las pruebas validan cada
 nuevo payload contra su esquema .v1 y reentregan históricos sin modificarlos.
 Consumidores externos deben adoptar el formato canónico antes del despliegue.
+
+## Alertas de fallos definitivos (CON-84)
+
+La generación de una alerta de fallo definitivo (correo o job) no publica un evento de dominio
+nuevo: es un registro persistente en `notificaciones_alertas`, idempotente por
+`(origen_tipo, origen_id, ciclo, tipo)`, que consultan CON-66/68. Los eventos existentes no
+cambian de payload. La referencia de correlación (CON-82) es opcional y no forma parte de
+ningún evento todavía.

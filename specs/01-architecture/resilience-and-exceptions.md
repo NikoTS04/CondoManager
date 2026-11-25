@@ -47,3 +47,43 @@ En la reserva de áreas comunes (ej. dos residentes intentando reservar la zona 
 | **Voucher Ilegible o Monto Discordante:** La imagen no coincide con el monto declarado. | El sistema coloca el comprobante en estado `OBSERVADO`. No modifica los saldos del departamento. | El administrador hace clic en `Rechazar Comprobante`, ingresando el motivo (ej. "Voucher borroso"), lo que dispara un email solicitando el comprobante legible. |
 | **Reclamo por Mora Indebida:** El residente pagó antes del corte, pero reportó el voucher tarde. | El sistema aplicó la mora en la fecha de corte por no haber registro previo. | El administrador cuenta con la función `Exonerar Mora / Revertir Penalidad`, la cual anula la mora mediante un asiento compensatorio auditado. |
 | **Falla en Notificaciones Masivas:** La cuota mensual no pudo ser enviada a 10 departamentos por caída de correo. | El sistema identifica los 10 envíos fallidos y los aisla en la cola de contingencia. | El administrador visualiza el botón `Reintentar Envíos Pendientes` en el módulo de comunicaciones. |
+
+## 4. Bandeja de Junta para fallos de correo (CON-66)
+
+El primer recorrido usa alertas de correo operativo persistidas. Junta consulta
+el origen, el motivo, la prioridad, el estado, la referencia de la notificación
+y su ciclo. El detalle incluye la evidencia y las decisiones registradas en
+auditoría. El acceso se limita al condominio activo de `ADMIN_JUNTA`.
+
+Un fallo definitivo admite **Cerrar con motivo**, que marca el aviso omitido,
+o **Reenviar a un contacto autorizado** cuando la causa admite corregir el
+contacto. Durante el nuevo envío el caso figura `EN_PROCESO`; se muestra
+`RESUELTA` cuando el proveedor acepta el envío y `FALLIDA` cuando se agota o
+se omite el nuevo intento. La evidencia distingue `ENVIADO` de `ENTREGADO`.
+La aceptación incierta se consulta en el flujo de revisión de correo existente.
+
+La decisión, el efecto sobre el aviso, el actor y el motivo se guardan juntos.
+Una repetición con la misma clave recupera la decisión original sin iniciar
+otro ciclo.
+
+## 5. Persistencia y ejecución de resoluciones (CON-86)
+
+CON-86 convierte cada alerta en un caso persistido con evidencia autorizada,
+historial de decisiones y ejecución de acciones sobre el proceso de origen.
+Además de los fallos de correo, la bandeja incluye los
+`JOB_FALLO_DEFINITIVO` (`origen_tipo = JOB`), que no tienen condominio:
+`SUPERADMIN` los consulta y resuelve de forma global. Para conservar la
+bitácora inmutable con los siete campos, esas decisiones se registran con el
+condominio centinela `3709ed64-791a-5cd8-99c7-142ab3ee590c`, creado por la
+migración `20261130_0030` y sin usuarios ni roles asociados.
+
+Las acciones permitidas son `CERRAR_CON_MOTIVO` para cualquier causa y
+`REENVIAR_CORREO` o `REINTENTAR_JOB` solo cuando el origen admite repetir con
+seguridad. `REINTENTAR_JOB` está restringido a procesos idempotentes registrados
+en `JOBES_REINTENTABLES`; el job `diario` queda fuera hasta CON-85. La ejecución
+revalida el estado del proceso de origen bajo bloqueo pesimista, guarda el
+resultado **real** de la acción y lo muestra en la bandeja. Una decisión se
+guarda en `excepciones_resoluciones` con clave de idempotencia y huella única
+por caso; repetir la clave devuelve la decisión original y no ejecuta dos veces
+la acción. La evidencia conserva componente, operación, ciclo, referencia de
+correlación y error saneado del proveedor, sin correos ni secretos.

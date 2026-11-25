@@ -1,0 +1,508 @@
+paths:
+  /incidencias:
+    get:
+      operationId: listarIncidencias
+      tags: [Incidencias]
+      summary: Consultar la bandeja de Junta
+      description: Solo Junta del condominio. Ordena primero los tickets urgentes pendientes.
+      parameters:
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, maximum: 2147483647, default: 0}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 50, default: 25}
+      responses:
+        '200':
+          description: Página de incidencias del condominio
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Incidencia'}}
+                  hay_mas: {type: boolean}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+    post:
+      operationId: registrarIncidencia
+      tags: [Incidencias]
+      summary: Registrar una incidencia desde un departamento vinculado
+      description: Guarda el reporte, su auditoría y el aviso a Junta en la misma transacción.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [departamento_id, ubicacion, categoria, descripcion, urgencia]
+              properties:
+                departamento_id: {type: string, format: uuid}
+                ubicacion: {type: string, minLength: 1, maxLength: 160}
+                categoria: {type: string, minLength: 1, maxLength: 80}
+                descripcion: {type: string, minLength: 1, maxLength: 2000}
+                urgencia: {$ref: '#/components/schemas/Urgencia'}
+                evidencia: {type: string, format: binary, description: Foto JPEG o PNG de hasta 3 MiB.}
+      responses:
+        '201': {$ref: '#/components/responses/Registro'}
+        '200': {$ref: '#/components/responses/Registro'}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '409': {description: Esta clave ya se utilizó con otro reporte.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/mis-reportes:
+    get:
+      operationId: listarMisReportes
+      tags: [Incidencias]
+      summary: Consultar las incidencias del residente
+      description: Lista los reportes propios del condominio activo, del más reciente al más antiguo.
+      parameters:
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, maximum: 2147483647, default: 0}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 50, default: 25}
+      responses:
+        '200':
+          description: Página de reportes propios con el estado vigente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Incidencia'}}
+                  hay_mas: {type: boolean}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    get:
+      operationId: consultarIncidencia
+      tags: [Incidencias]
+      summary: Consultar un reporte propio o del condominio administrado
+      description: Requiere un vínculo activo del reportante o un rol de Junta del condominio.
+      responses:
+        '200':
+          description: Reporte privado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Incidencia'}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el contexto autorizado.}
+  /incidencias/{incidencia_id}/revision:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    patch:
+      operationId: revisarIncidencia
+      tags: [Incidencias]
+      summary: Clasificar o rechazar un reporte registrado
+      description: Actualiza la revisión de forma atómica y registra la decisión en auditoría.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [accion, version, categoria, prioridad]
+                  properties:
+                    accion: {const: CLASIFICAR}
+                    version: {type: integer, minimum: 1}
+                    categoria: {type: string, minLength: 1, maxLength: 80}
+                    prioridad: {$ref: '#/components/schemas/Urgencia'}
+                - type: object
+                  additionalProperties: false
+                  required: [accion, version, motivo]
+                  properties:
+                    accion: {const: RECHAZAR}
+                    version: {type: integer, minimum: 1}
+                    motivo: {type: string, minLength: 1, maxLength: 1000}
+      responses:
+        '200':
+          description: Reporte y revisión vigentes
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Incidencia'}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: El estado o versión actual impide la revisión.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/asignacion:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: asignarIncidencia
+      tags: [Incidencias]
+      summary: Asignar responsable y plazo a un ticket
+      description: Guarda la asignación, el cambio de estado, la auditoría y los avisos en una sola transacción.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, plazo]
+              properties:
+                version: {type: integer, minimum: 1}
+                responsable_usuario_id: {type: string, format: uuid}
+                responsable_proveedor_id: {type: string, format: uuid}
+                proveedor_nombre: {type: string, minLength: 1, maxLength: 120}
+                correo_proveedor: {type: string, maxLength: 320}
+                plazo: {type: string, format: date-time}
+                nota: {type: string, maxLength: 500}
+      responses:
+        '200': {description: Asignación previa recuperada por idempotencia, content: {application/json: {schema: {$ref: '#/components/schemas/AsignacionIncidencia'}}}}
+        '201': {description: Asignación confirmada, content: {application/json: {schema: {$ref: '#/components/schemas/AsignacionIncidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: Clave reutilizada con otros datos, versión desactualizada o estado no asignable.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/avisos:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    get:
+      operationId: consultarAvisosAsignacion
+      tags: [Incidencias]
+      summary: Consultar el resultado de los avisos de asignación
+      description: Solo Junta y Auditor del condominio. No expone correos ni contenido de los mensajes.
+      responses:
+        '200':
+          description: Avisos por asignación y destinatario
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/AvisoAsignacion'}}
+                  hay_mas: {type: boolean}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+  /incidencias/{incidencia_id}/seguimiento:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: registrarSeguimientoIncidencia
+      tags: [Incidencias]
+      summary: Registrar avance, evidencia y costos de una incidencia asignada
+      description: Guarda la actualización y el cambio a EN_PROCESO en la misma transacción.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, comentario]
+              properties:
+                version: {type: integer, minimum: 1}
+                comentario: {type: string, minLength: 1, maxLength: 2000}
+                publico: {type: boolean, default: true}
+                repuesto: {type: string, maxLength: 120}
+                monto: {type: string, pattern: '^[0-9]+(\.[0-9]{1,2})?$'}
+                evidencia: {type: string, format: binary, description: Foto JPEG o PNG de hasta 3 MiB.}
+      responses:
+        '201': {description: Incidencia en EN_PROCESO, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: Versión desactualizada o estado no editable.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/resolucion:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: resolverIncidencia
+      tags: [Incidencias]
+      summary: Registrar la resolución de una incidencia en proceso
+      description: Pasa el ticket a RESUELTO. Solo Junta del condominio puede invocarlo.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, descripcion]
+              properties:
+                version: {type: integer, minimum: 1}
+                descripcion: {type: string, minLength: 1, maxLength: 2000}
+                publico: {type: boolean, default: true}
+                repuesto: {type: string, maxLength: 120}
+                monto: {type: string, pattern: '^[0-9]+(\.[0-9]{1,2})?$'}
+                evidencia: {type: string, format: binary}
+      responses:
+        '201': {description: Incidencia resuelta, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: Versión desactualizada o estado distinto de EN_PROCESO.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/historial:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    get:
+      operationId: consultarHistorialIncidencia
+      tags: [Incidencias]
+      summary: Consultar avances, costos y cambios de estado
+      description: El residente ve solo las actualizaciones publicadas de su reporte; Junta y Auditor ven todas las del condominio.
+      parameters:
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, maximum: 2147483647, default: 0}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 50, default: 25}
+      responses:
+        '200':
+          description: Historial paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/ActualizacionIncidencia'}}
+                  hay_mas: {type: boolean}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el contexto autorizado.}
+  /incidencias/{incidencia_id}/confirmacion:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: confirmarIncidencia
+      tags: [Incidencias]
+      summary: Confirmar la solución y calificar la atención
+      description: Solo el residente reportante con vínculo activo, desde RESUELTO.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, calificacion]
+              properties:
+                version: {type: integer, minimum: 1}
+                calificacion: {type: integer, minimum: 1, maximum: 5}
+                comentario: {type: string, maxLength: 1000}
+      responses:
+        '200': {description: Incidencia cerrada, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no pertenece al residente en su condominio.}
+        '409': {description: Versión desactualizada o estado distinto de RESUELTO.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/reapertura:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: reabrirIncidencia
+      tags: [Incidencias]
+      summary: Reabrir una incidencia resuelta con motivo
+      description: Solo el residente reportante; el ticket vuelve a EN_PROCESO.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, motivo]
+              properties:
+                version: {type: integer, minimum: 1}
+                motivo: {type: string, minLength: 1, maxLength: 1000}
+      responses:
+        '200': {description: Incidencia reabierta, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no pertenece al residente en su condominio.}
+        '409': {description: Versión desactualizada o estado distinto de RESUELTO.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/cierre-administrativo:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: cerrarIncidenciaAdministrativamente
+      tags: [Incidencias]
+      summary: Cerrar una incidencia resuelta por decisión de Junta
+      description: Solo ADMIN_JUNTA del condominio; exige motivo y deja actor y fecha.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, motivo]
+              properties:
+                version: {type: integer, minimum: 1}
+                motivo: {type: string, minLength: 1, maxLength: 1000}
+      responses:
+        '200': {description: Incidencia cerrada, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: Versión desactualizada o estado distinto de RESUELTO.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/actualizaciones/{actualizacion_id}/evidencia:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+      - name: actualizacion_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: consultarEvidenciaActualizacion
+      tags: [Incidencias]
+      summary: Obtener la evidencia privada de una actualización
+      responses:
+        '200':
+          description: Foto registrada
+          content:
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: La actualización o su foto no existe en el contexto autorizado.}
+  /incidencias/{incidencia_id}/evidencia:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    get:
+      operationId: consultarEvidenciaIncidencia
+      tags: [Incidencias]
+      summary: Obtener la foto privada de un reporte autorizado
+      description: Devuelve los bytes de la evidencia sin habilitar caché compartida.
+      responses:
+        '200':
+          description: Foto registrada
+          content:
+            image/jpeg:
+              schema: {type: string, format: binary}
+            image/png:
+              schema: {type: string, format: binary}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: La foto no existe en el contexto autorizado.}
+components:
+  parameters:
+    IncidenciaId:
+      name: incidencia_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Registro:
+      description: Incidencia registrada y advertencia cuando se descarta la foto.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ReporteIncidencia'
+              - type: object
+                required: [estado, advertencia_evidencia]
+                properties:
+                  estado: {const: REGISTRADO}
+                  advertencia_evidencia: {type: [string, 'null']}
+  schemas:
+    Urgencia:
+      type: string
+      enum: [BAJA, MEDIA, ALTA, URGENTE]
+    ReporteIncidencia:
+      type: object
+      required: [id, departamento_id, ubicacion, categoria, descripcion, urgencia, creado_en, tiene_evidencia]
+      properties:
+        id: {type: string, format: uuid}
+        departamento_id: {type: string, format: uuid}
+        ubicacion: {type: string}
+        categoria: {type: string}
+        descripcion: {type: string}
+        urgencia: {$ref: '#/components/schemas/Urgencia'}
+        creado_en: {type: string, format: date-time}
+        tiene_evidencia: {type: boolean}
+    Incidencia:
+      allOf:
+        - $ref: '#/components/schemas/ReporteIncidencia'
+        - type: object
+          required: [estado, categoria_confirmada, prioridad, motivo_rechazo, version, asignacion_actual_id, responsable_usuario_id, responsable_proveedor_id, fecha_asignacion, plazo, calificacion, motivo_reapertura, fecha_cierre, cerrado_por]
+          properties:
+            estado: {type: string, enum: [REGISTRADO, RECHAZADO, ASIGNADO, EN_PROCESO, RESUELTO, CERRADO]}
+            categoria_confirmada: {type: [string, 'null']}
+            prioridad:
+              oneOf:
+                - $ref: '#/components/schemas/Urgencia'
+                - type: 'null'
+            motivo_rechazo: {type: [string, 'null']}
+            version: {type: integer, minimum: 1}
+            asignacion_actual_id: {type: [string, 'null'], format: uuid}
+            responsable_usuario_id: {type: [string, 'null'], format: uuid}
+            responsable_proveedor_id: {type: [string, 'null'], format: uuid}
+            fecha_asignacion: {type: [string, 'null'], format: date-time}
+            plazo: {type: [string, 'null'], format: date-time}
+            calificacion: {type: [integer, 'null'], minimum: 1, maximum: 5}
+            motivo_reapertura: {type: [string, 'null']}
+            fecha_cierre: {type: [string, 'null'], format: date-time}
+            cerrado_por: {type: [string, 'null'], format: uuid}
+    AsignacionIncidencia:
+      type: object
+      required: [asignacion_id, incidencia_id, estado, version, avisos_encolados]
+      properties:
+        asignacion_id: {type: string, format: uuid}
+        incidencia_id: {type: string, format: uuid}
+        responsable_usuario_id: {type: [string, 'null'], format: uuid}
+        responsable_proveedor_id: {type: [string, 'null'], format: uuid}
+        plazo: {type: string, format: date-time}
+        nota: {type: [string, 'null']}
+        estado: {const: ASIGNADO}
+        version: {type: integer, minimum: 1}
+        avisos_encolados: {type: integer, minimum: 0}
+    ActualizacionIncidencia:
+      type: object
+      required: [id, incidencia_id, actor_id, tipo, descripcion, publico, creado_en]
+      properties:
+        id: {type: string, format: uuid}
+        incidencia_id: {type: string, format: uuid}
+        actor_id: {type: string, format: uuid}
+        tipo: {type: string, enum: [COMENTARIO, CAMBIO_ESTADO, COSTO]}
+        descripcion: {type: string}
+        publico: {type: boolean}
+        repuesto: {type: [string, 'null']}
+        monto: {type: [string, 'null'], pattern: '^[0-9]+(\.[0-9]{1,2})?$'}
+        estado_anterior: {type: [string, 'null']}
+        estado_nuevo: {type: [string, 'null']}
+        tiene_evidencia: {type: boolean}
+        creado_en: {type: string, format: date-time}
+    AvisoAsignacion:
+      type: object
+      required: [asignacion_id, destinatario_tipo, estado]
+      properties:
+        asignacion_id: {type: string, format: uuid}
+        destinatario_tipo: {type: string, enum: [RESIDENTE, PROVEEDOR]}
+        estado: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE, OMITIDO, CONTACTO_FALTANTE]}
+        aviso_id: {type: [string, 'null'], format: uuid}
+        intentos: {type: [integer, 'null'], minimum: 0}
+        fecha_actualizacion: {type: [string, 'null'], format: date-time}
+        alerta_abierta: {type: boolean}

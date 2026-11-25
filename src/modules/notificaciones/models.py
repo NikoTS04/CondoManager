@@ -31,9 +31,10 @@ class Notificacion(Base):
     departamento_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("departamentos.id", ondelete="RESTRICT"), nullable=True
     )
-    usuario_destinatario_id: Mapped[UUID] = mapped_column(
-        ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=False
+    usuario_destinatario_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=True
     )
+    destinatario_externo_id: Mapped[UUID | None] = mapped_column(nullable=True)
     evento_id: Mapped[UUID] = mapped_column(nullable=False)
     operacion_id: Mapped[UUID] = mapped_column(nullable=False)
     tipo_evento: Mapped[str] = mapped_column(Text, nullable=False)
@@ -73,6 +74,17 @@ class Notificacion(Base):
             "usuario_destinatario_id",
             "canal",
             name="uq_notificacion_logica",
+        ),
+        UniqueConstraint(
+            "evento_id",
+            "operacion_id",
+            "destinatario_externo_id",
+            "canal",
+            name="uq_notificacion_logica_externa",
+        ),
+        CheckConstraint(
+            "(usuario_destinatario_id IS NOT NULL) <> (destinatario_externo_id IS NOT NULL)",
+            name="ck_notificacion_destinatario",
         ),
         CheckConstraint("intentos BETWEEN 0 AND 4 AND ciclo >= 1", name="ck_notificacion_intentos"),
         CheckConstraint(
@@ -173,22 +185,27 @@ TIPOS_ALERTA = (
     "ACEPTACION_INCIERTA",
     "DESTINATARIO_INVALIDO",
     "PROVEEDOR_NO_CONFIGURADO",
+    "JOB_FALLO_DEFINITIVO",
 )
+ORIGENES_ALERTA = ("CORREO", "JOB")
 
 
 class AlertaNotificacion(Base):
     __tablename__ = "notificaciones_alertas"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    notificacion_id: Mapped[UUID] = mapped_column(
-        ForeignKey("notificaciones_logs.id", ondelete="RESTRICT"), nullable=False
+    notificacion_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("notificaciones_logs.id", ondelete="RESTRICT"), nullable=True
     )
-    condominio_id: Mapped[UUID] = mapped_column(
-        ForeignKey("condominios.id", ondelete="RESTRICT"), nullable=False
+    condominio_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("condominios.id", ondelete="RESTRICT"), nullable=True
     )
     departamento_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("departamentos.id", ondelete="RESTRICT"), nullable=True
     )
+    origen_tipo: Mapped[str] = mapped_column(String(10), nullable=False)
+    origen_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    referencia_correlacion: Mapped[str | None] = mapped_column(String(64))
     ciclo: Mapped[int] = mapped_column(nullable=False)
     tipo: Mapped[str] = mapped_column(String(40), nullable=False)
     mensaje: Mapped[str] = mapped_column(Text, nullable=False)
@@ -201,8 +218,15 @@ class AlertaNotificacion(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("notificacion_id", "ciclo", "tipo", name="uq_alerta_notificacion_tipo"),
+        UniqueConstraint("origen_tipo", "origen_id", "ciclo", "tipo", name="uq_alerta_origen_tipo"),
         CheckConstraint("tipo IN ('" + "','".join(TIPOS_ALERTA) + "')", name="ck_alerta_tipo"),
+        CheckConstraint(
+            "origen_tipo IN ('" + "','".join(ORIGENES_ALERTA) + "')", name="ck_alerta_origen_tipo"
+        ),
+        CheckConstraint(
+            "origen_tipo <> 'CORREO' OR (notificacion_id IS NOT NULL AND condominio_id IS NOT NULL)",
+            name="ck_alerta_origen",
+        ),
         CheckConstraint(
             "(atendida_en IS NULL) = (atendida_por IS NULL)", name="ck_alerta_atencion"
         ),

@@ -89,7 +89,9 @@ class NotificacionesPersistentesService:
 
     async def comunicado(self, request, usuario):
         if settings.APP_ENV == "production" or os.getenv("VERCEL_ENV") == "production":
-            raise APIError(409, "PREVISUALIZACION_REQUERIDA", "Previsualice y confirme el comunicado.")
+            raise APIError(
+                409, "PREVISUALIZACION_REQUERIDA", "Previsualice y confirme el comunicado."
+            )
         try:
             cid = UUID(request.condominio_id)
         except ValueError:
@@ -135,84 +137,95 @@ class NotificacionesPersistentesService:
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
-            if log.estado != "FALLIDO_PERMANENTE":
-                return self.dto(log)
-            if (log.error_mensaje or "").startswith("ACEPTACION_INCIERTA"):
-                raise APIError(
-                    409, "ACEPTACION_INCIERTA", "Verifique el proveedor antes de reenviar."
-                )
-            if log.finalidad != "OPERATIVA":
-                if request and request.nuevo_destinatario:
-                    raise APIError(
-                        422,
-                        "DESTINATARIO_NO_AUTORIZADO",
-                        "El aviso de identidad no permite cambiar su destinatario.",
-                    )
-                from src.modules.usuarios.comunicaciones import destinatario_identidad_valido
+            return await self.reencolar_bajo_bloqueo(log, request, usuario)
 
-                if not await destinatario_identidad_valido(self.session, log, datetime.now(UTC)):
-                    raise APIError(409, "DESTINATARIO_NO_AUTORIZADO", "El aviso ya no es elegible.")
-                nuevo = log.destinatario
-            else:
-                nuevo = request.nuevo_destinatario if request else None
-                destinos = await self.repo.destinatarios(
-                    log.condominio_id, log.departamento_id, log.canal
-                )
-                if not nuevo or nuevo == log.destinatario:
-                    raise APIError(
-                        409,
-                        "INTENTOS_AGOTADOS",
-                        "Corrija el contacto autorizado antes de iniciar otro ciclo.",
-                    )
-                if not any(
-                    u.id == log.usuario_destinatario_id and c == nuevo for u, _, c in destinos
-                ):
-                    raise APIError(
-                        422,
-                        "DESTINATARIO_NO_AUTORIZADO",
-                        "El contacto no pertenece al destinatario activo.",
-                    )
-            anterior = {"ciclo": log.ciclo, "estado": log.estado}
-            ahora = datetime.now(UTC)
-            await self.session.execute(
-                update(AlertaNotificacion)
-                .where(
-                    AlertaNotificacion.notificacion_id == log.id,
-                    AlertaNotificacion.atendida_en.is_(None),
-                )
-                .values(atendida_en=ahora, atendida_por=UUID(str(usuario["sub"])))
-            )
-            log.destinatario = nuevo
-            log.ciclo += 1
-            log.intentos = 0
-            log.estado = "EN_COLA"
-            log.proximo_reintento = None
-            log.bloqueado_hasta = None
-            log.error_mensaje = None
-            log.proveedor_message_id = None
-            log.fecha_actualizacion = ahora
-            await SQLAlchemyPagosRepository(self.session).auditar(
-                usuario,
-                log.condominio_id,
-                log.departamento_id,
-                "NOTIFICACION_REENVIO_MANUAL",
-                "REENVIO_IDENTIDAD_AUTORIZADO"
-                if log.finalidad != "OPERATIVA"
-                else "CONTACTO_AUTORIZADO_CORREGIDO",
-                anterior,
-                {"ciclo": log.ciclo, "estado": log.estado},
-            )
+    async def reencolar_bajo_bloqueo(self, log, request, usuario):
+        """Reutiliza las reglas de correo con el aviso y su condominio bloqueados."""
+        if log.estado != "FALLIDO_PERMANENTE":
             return self.dto(log)
+        if (log.error_mensaje or "").startswith("ACEPTACION_INCIERTA"):
+            raise APIError(409, "ACEPTACION_INCIERTA", "Verifique el proveedor antes de reenviar.")
+        if log.finalidad != "OPERATIVA":
+            if request and request.nuevo_destinatario:
+                raise APIError(
+                    422,
+                    "DESTINATARIO_NO_AUTORIZADO",
+                    "El aviso de identidad no permite cambiar su destinatario.",
+                )
+            from src.modules.usuarios.comunicaciones import destinatario_identidad_valido
+
+            if not await destinatario_identidad_valido(self.session, log, datetime.now(UTC)):
+                raise APIError(409, "DESTINATARIO_NO_AUTORIZADO", "El aviso ya no es elegible.")
+            nuevo = log.destinatario
+        elif log.destinatario_externo_id is not None:
+            # CON-55: el contacto del proveedor se corrige dentro del mismo
+            # destinatario externo; no existe un vínculo de usuario que validar.
+            nuevo = request.nuevo_destinatario if request else None
+            if not nuevo or nuevo == log.destinatario or "@" not in nuevo:
+                raise APIError(
+                    409,
+                    "INTENTOS_AGOTADOS",
+                    "Corrija el contacto del proveedor antes de iniciar otro ciclo.",
+                )
+        else:
+            nuevo = request.nuevo_destinatario if request else None
+            destinos = await self.repo.destinatarios_operativos(log)
+            if not nuevo or nuevo == log.destinatario:
+                raise APIError(
+                    409,
+                    "INTENTOS_AGOTADOS",
+                    "Corrija el contacto autorizado antes de iniciar otro ciclo.",
+                )
+            if not any(u.id == log.usuario_destinatario_id and c == nuevo for u, _, c in destinos):
+                raise APIError(
+                    422,
+                    "DESTINATARIO_NO_AUTORIZADO",
+                    "El contacto no pertenece al destinatario activo.",
+                )
+        anterior = {"ciclo": log.ciclo, "estado": log.estado}
+        ahora = datetime.now(UTC)
+        await self.session.execute(
+            update(AlertaNotificacion)
+            .where(
+                AlertaNotificacion.notificacion_id == log.id,
+                AlertaNotificacion.atendida_en.is_(None),
+            )
+            .values(atendida_en=ahora, atendida_por=UUID(str(usuario["sub"])))
+        )
+        log.destinatario = nuevo
+        log.ciclo += 1
+        log.intentos = 0
+        log.estado = "EN_COLA"
+        log.proximo_reintento = None
+        log.bloqueado_hasta = None
+        log.error_mensaje = None
+        log.proveedor_message_id = None
+        log.fecha_actualizacion = ahora
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            usuario,
+            log.condominio_id,
+            log.departamento_id,
+            "NOTIFICACION_REENVIO_MANUAL",
+            "REENVIO_IDENTIDAD_AUTORIZADO"
+            if log.finalidad != "OPERATIVA"
+            else "CONTACTO_AUTORIZADO_CORREGIDO",
+            anterior,
+            {"ciclo": log.ciclo, "estado": log.estado},
+        )
+        return self.dto(log)
 
     @staticmethod
     def alerta_dto(alerta, numero, tipo_evento):
         return AlertaNotificacionDTO(
             id=alerta.id,
             notificacion_id=alerta.notificacion_id,
-            condominio_id=str(alerta.condominio_id),
+            origen_tipo=alerta.origen_tipo,
+            origen_id=alerta.origen_id,
+            referencia_correlacion=alerta.referencia_correlacion,
+            condominio_id=str(alerta.condominio_id) if alerta.condominio_id else None,
             departamento_id=str(alerta.departamento_id) if alerta.departamento_id else None,
             departamento_numero=numero or "Identidad",
-            tipo_evento=tipo_evento,
+            tipo_evento=tipo_evento or alerta.origen_id,
             ciclo=alerta.ciclo,
             tipo=alerta.tipo,
             mensaje=alerta.mensaje,
@@ -226,7 +239,7 @@ class NotificacionesPersistentesService:
         return (
             select(AlertaNotificacion, Departamento.numero, Notificacion.tipo_evento)
             .outerjoin(Departamento, Departamento.id == AlertaNotificacion.departamento_id)
-            .join(Notificacion, Notificacion.id == AlertaNotificacion.notificacion_id)
+            .outerjoin(Notificacion, Notificacion.id == AlertaNotificacion.notificacion_id)
         )
 
     async def listar_alertas(self, usuario, cid=None, estado="ABIERTA"):
@@ -247,7 +260,8 @@ class NotificacionesPersistentesService:
     async def atender_alerta(self, alerta_id, usuario):
         async with self.session.begin():
             alerta = await self.session.get(AlertaNotificacion, alerta_id)
-            if alerta is None:
+            if alerta is None or alerta.condominio_id is None:
+                # Las alertas de job no tienen condominio; su gestión pertenece a CON-66/68.
                 raise APIError(404, "ALERTA_NO_HALLADA", "No existe la alerta.")
             autorizar_condominio(usuario, alerta.condominio_id, escritura=True)
             identidad = SQLAlchemyUsuariosRepository(self.session)

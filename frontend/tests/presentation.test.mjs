@@ -125,3 +125,69 @@ test("observación y rechazo muestran instrucciones distintas y escapan el motiv
   assert.match(rechazado, /decisión es definitiva/);
   assert.doesNotMatch(rechazado, /Subsanar voucher/);
 });
+
+// CON-68: salud y alertas visibles
+const { PanelSalud, ListaAlertas, SaludAlertasSection, formatDuracion } = loadComponent("features/junta/SaludAlertasSection");
+const salud = {
+  perfil: "production", estado_general: "degradado", generado_en: "2026-11-24T15:00:00Z",
+  componentes: [
+    { componente: "api", estado: "ok" }, { componente: "postgresql", estado: "error" },
+    { componente: "redis", estado: "deshabilitado" }, { componente: "correo", estado: "ok" },
+  ],
+  jobs: [
+    { nombre: "notificaciones", inicio: "2026-11-24T03:00:00Z", fin: "2026-11-24T03:01:05Z", duracion_segundos: 65, resultado: "COMPLETADO" },
+    { nombre: "diario", inicio: null, fin: null, duracion_segundos: null, resultado: "SIN_REGISTRO" },
+  ],
+};
+
+test("la salud distingue componente caído de deshabilitado y muestra el resultado de los jobs", () => {
+  const html = render(PanelSalud, { salud, cargando: false, error: null });
+  assert.match(html, /PostgreSQL/);
+  assert.match(html, /Con error/);
+  assert.match(html, /Deshabilitado en este perfil/);
+  assert.match(html, /Hay componentes con error/);
+  assert.match(html, /Completado/);
+  assert.match(html, /1 min 5 s/);
+  assert.match(html, /Sin registro/);
+});
+
+test("la salud en carga o con error no inventa un estado operativo", () => {
+  const cargando = render(PanelSalud, { salud: null, cargando: true, error: null });
+  assert.match(cargando, /Consultando salud/);
+  assert.doesNotMatch(cargando, /Operativo/);
+  assert.match(render(PanelSalud, { salud: null, cargando: false, error: "No pudimos consultar la salud del sistema." }), /No pudimos consultar/);
+});
+
+test("cada alerta muestra componente, operación y referencia de diagnóstico", () => {
+  const base = { estado: "ABIERTA", atendida_en: null, creada_en: "2026-11-24T15:00:00Z", tipo: "X", condominio_id: null };
+  const html = render(ListaAlertas, {
+    cargando: false, error: null, alertas: [
+      { ...base, id: "1", componente: "job", operacion: "diario", departamento_numero: null, mensaje: "El proceso «diario» falló.",
+        referencia_diagnostico: { origen_tipo: "JOB", origen_id: "diario", referencia_correlacion: null } },
+      { ...base, id: "2", componente: "correo", operacion: "NOTIF_COMUNICADO_GENERAL", departamento_numero: "402", mensaje: "Sin entrega.",
+        referencia_diagnostico: { origen_tipo: "CORREO", origen_id: "abc", referencia_correlacion: "corr-82" } },
+    ],
+  });
+  assert.match(html, /Proceso programado/);
+  assert.match(html, /JOB:diario/);
+  assert.match(html, /Sin correlación aún/);
+  assert.match(html, /NOTIF_COMUNICADO_GENERAL/);
+  assert.match(html, /Dpto\. 402/);
+  assert.match(html, /CORREO:abc/);
+  assert.match(html, /corr-82/);
+});
+
+test("las alertas vacías o en carga no se confunden", () => {
+  assert.match(render(ListaAlertas, { alertas: [], cargando: false, error: null }), /Sin alertas/);
+  const cargando = render(ListaAlertas, { alertas: null, cargando: true, error: null });
+  assert.match(cargando, /Cargando alertas/);
+  assert.doesNotMatch(cargando, /Sin alertas/);
+});
+
+test("solo el rol global ve el panel de salud", () => {
+  assert.match(render(SaludAlertasSection, { esSuperAdmin: true, condominioId: null }), /Estado de componentes/);
+  const junta = render(SaludAlertasSection, { esSuperAdmin: false, condominioId: "cid" });
+  assert.doesNotMatch(junta, /Estado de componentes/);
+  assert.match(junta, /Alertas/);
+  assert.equal(formatDuracion(null), "—");
+});

@@ -545,6 +545,7 @@ async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response
 
 async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   const headers = getAuthHeaders();
+  if (init.body instanceof FormData) delete headers["Content-Type"];
   new Headers(init.headers).forEach((value, key) => { headers[key] = value; });
   const response = await fetchProtegido(ruta, { ...init, headers });
   const data = await response.json();
@@ -556,11 +557,289 @@ async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<
   return data as T;
 }
 
+export type UrgenciaIncidencia = "BAJA" | "MEDIA" | "ALTA" | "URGENTE";
+
+export const NIVELES_INCIDENCIA: Record<UrgenciaIncidencia, string> = {
+  BAJA: "Baja", MEDIA: "Media", ALTA: "Alta", URGENTE: "Urgente",
+};
+
+interface ReporteIncidencia {
+  id: string;
+  departamento_id: string;
+  ubicacion: string;
+  categoria: string;
+  descripcion: string;
+  urgencia: UrgenciaIncidencia;
+  creado_en: string;
+  tiene_evidencia: boolean;
+}
+
+export type EstadoIncidencia =
+  | "REGISTRADO" | "RECHAZADO" | "ASIGNADO" | "EN_PROCESO" | "RESUELTO" | "CERRADO";
+
+export interface Incidencia extends ReporteIncidencia {
+  estado: EstadoIncidencia;
+  categoria_confirmada: string | null;
+  prioridad: UrgenciaIncidencia | null;
+  motivo_rechazo: string | null;
+  version: number;
+  asignacion_actual_id: string | null;
+  responsable_usuario_id: string | null;
+  responsable_proveedor_id: string | null;
+  fecha_asignacion: string | null;
+  plazo: string | null;
+}
+
+export interface RegistroIncidencia extends ReporteIncidencia {
+  estado: "REGISTRADO";
+  advertencia_evidencia: string | null;
+}
+
+export interface BandejaIncidencias {
+  items: Incidencia[];
+  hay_mas: boolean;
+}
+
+export type RevisionIncidencia =
+  | { accion: "CLASIFICAR"; version: number; categoria: string; prioridad: UrgenciaIncidencia }
+  | { accion: "RECHAZAR"; version: number; motivo: string };
+
+export function registrarIncidencia(datos: FormData, clave: string): Promise<RegistroIncidencia> {
+  return recursoRequest("/incidencias", {
+    method: "POST",
+    headers: { "Idempotency-Key": clave },
+    body: datos,
+  });
+}
+
+export function consultarIncidencia(id: string, signal?: AbortSignal): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}`, { signal });
+}
+
+export function listarIncidencias(
+  offset: number, limit: number, signal?: AbortSignal,
+): Promise<BandejaIncidencias> {
+  return recursoRequest(`/incidencias?offset=${offset}&limit=${limit}`, { signal });
+}
+
+export function listarMisReportes(
+  offset: number, limit: number, signal?: AbortSignal,
+): Promise<BandejaIncidencias> {
+  return recursoRequest(`/incidencias/mis-reportes?offset=${offset}&limit=${limit}`, { signal });
+}
+
+export function revisarIncidencia(id: string, revision: RevisionIncidencia): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/revision`, {
+    method: "PATCH",
+    body: JSON.stringify(revision),
+  });
+}
+
+export interface SolicitudAsignacion {
+  version: number;
+  responsable_usuario_id?: string;
+  responsable_proveedor_id?: string;
+  proveedor_nombre?: string;
+  correo_proveedor?: string;
+  plazo: string;
+  nota?: string;
+}
+
+export interface AsignacionIncidencia {
+  asignacion_id: string;
+  incidencia_id: string;
+  responsable_usuario_id: string | null;
+  responsable_proveedor_id: string | null;
+  plazo: string;
+  nota: string | null;
+  estado: "ASIGNADO";
+  version: number;
+  avisos_encolados: number;
+}
+
+export interface AvisoAsignacion {
+  asignacion_id: string;
+  destinatario_tipo: "RESIDENTE" | "PROVEEDOR";
+  estado: "EN_COLA" | "ENVIADO" | "ENTREGADO" | "REINTENTANDO"
+    | "FALLIDO_PERMANENTE" | "OMITIDO" | "CONTACTO_FALTANTE";
+  aviso_id: string | null;
+  intentos: number | null;
+  fecha_actualizacion: string | null;
+  alerta_abierta: boolean;
+}
+
+export function asignarIncidencia(
+  id: string, solicitud: SolicitudAsignacion, clave: string,
+): Promise<AsignacionIncidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/asignacion`, {
+    method: "POST",
+    headers: { "Idempotency-Key": clave },
+    body: JSON.stringify(solicitud),
+  });
+}
+
+export function consultarAvisosAsignacion(
+  id: string, signal?: AbortSignal,
+): Promise<{ items: AvisoAsignacion[]; hay_mas: boolean }> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/avisos`, { signal });
+}
+
+export interface ActualizacionIncidencia {
+  id: string;
+  incidencia_id: string;
+  actor_id: string;
+  tipo: "COMENTARIO" | "CAMBIO_ESTADO" | "COSTO";
+  descripcion: string;
+  publico: boolean;
+  repuesto: string | null;
+  monto: string | null;
+  estado_anterior: string | null;
+  estado_nuevo: string | null;
+  tiene_evidencia: boolean;
+  creado_en: string;
+}
+
+export function registrarSeguimientoIncidencia(
+  id: string, datos: FormData,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/seguimiento`, {
+    method: "POST", body: datos,
+  });
+}
+
+export function resolverIncidencia(id: string, datos: FormData): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/resolucion`, {
+    method: "POST", body: datos,
+  });
+}
+
+export function consultarHistorialIncidencia(
+  id: string, signal?: AbortSignal,
+): Promise<{ items: ActualizacionIncidencia[]; hay_mas: boolean }> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/historial`, { signal });
+}
+
+export function confirmarIncidencia(
+  id: string, version: number, calificacion: number, comentario?: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/confirmacion`, {
+    method: "POST",
+    body: JSON.stringify({ version, calificacion, ...(comentario ? { comentario } : {}) }),
+  });
+}
+
+export function reabrirIncidencia(
+  id: string, version: number, motivo: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/reapertura`, {
+    method: "POST",
+    body: JSON.stringify({ version, motivo }),
+  });
+}
+
+export function cerrarAdministrativamenteIncidencia(
+  id: string, version: number, motivo: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/cierre-administrativo`, {
+    method: "POST",
+    body: JSON.stringify({ version, motivo }),
+  });
+}
+
+export async function descargarEvidenciaActualizacion(
+  incidenciaId: string, actualizacionId: string,
+): Promise<void> {
+  const respuesta = await fetchProtegido(
+    `/incidencias/${encodeURIComponent(incidenciaId)}/actualizaciones/${encodeURIComponent(actualizacionId)}/evidencia`,
+    { headers: getAuthHeaders() },
+  );
+  if (!respuesta.ok) throw new Error("No pudimos descargar la evidencia.");
+  const datos = await respuesta.blob();
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(datos);
+  enlace.download = `evidencia-${actualizacionId}`;
+  enlace.click();
+  enlace.remove();
+}
+
+export async function descargarFotoIncidencia(id: string): Promise<void> {
+  const response = await fetchProtegido(`/incidencias/${encodeURIComponent(id)}/evidencia`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error("No pudimos descargar la foto. Inténtalo de nuevo.");
+  const foto = await response.blob();
+  const url = URL.createObjectURL(foto);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `incidencia-${id}.${foto.type === "image/png" ? "png" : "jpg"}`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export class ApiError extends Error {
   constructor(message: string, public status: number, public errorCode?: string,
     public detalles?: Record<string, unknown>) {
     super(message);
   }
+}
+
+export type AccionExcepcion = "REENVIAR_CORREO" | "REINTENTAR_JOB" | "CERRAR_CON_MOTIVO";
+type EstadoExcepcion = "ABIERTA" | "EN_PROCESO" | "RESUELTA" | "FALLIDA";
+
+export interface Excepcion {
+  id: string;
+  origen: "CORREO" | "JOB";
+  operacion_id: string;
+  causa: string;
+  prioridad: "ALTA" | "MEDIA";
+  estado: EstadoExcepcion;
+  creada_en: string;
+}
+
+interface ResolucionExcepcion {
+  id: string;
+  accion: AccionExcepcion;
+  motivo: string;
+  actor_id: string;
+  fecha: string;
+  estado: EstadoExcepcion;
+  efecto: { operacion_id?: string; ciclo?: number; estado_operacion?: string; nombre?: string; estado_proceso?: string; reintentado?: boolean };
+}
+
+export interface DetalleExcepcion extends Excepcion {
+  evidencia: { tipo_evento: string; ciclo_fallido: number; ciclo_actual: number; estado_operacion: string; origen: "CORREO" | "JOB"; operacion_id: string; referencia_correlacion: string | null; detalle: Record<string, unknown> };
+  historial: ResolucionExcepcion[];
+  acciones_permitidas: AccionExcepcion[];
+  requiere_revision_correo: boolean;
+}
+
+export interface PaginaExcepciones {
+  items: Excepcion[];
+  hay_mas: boolean;
+}
+
+export interface SolicitudResolucionExcepcion {
+  accion: AccionExcepcion;
+  motivo: string;
+  nuevo_destinatario?: string;
+}
+
+export function listarExcepciones(offset: number, limit: number, signal?: AbortSignal): Promise<PaginaExcepciones> {
+  return recursoRequest(`/excepciones?offset=${offset}&limit=${limit}`, { signal });
+}
+
+export function consultarExcepcion(id: string, signal?: AbortSignal): Promise<DetalleExcepcion> {
+  return recursoRequest(`/excepciones/${encodeURIComponent(id)}`, { signal });
+}
+
+export function resolverExcepcion(
+  id: string, solicitud: SolicitudResolucionExcepcion, clave: string,
+): Promise<ResolucionExcepcion> {
+  return recursoRequest(`/excepciones/${encodeURIComponent(id)}/resoluciones`, {
+    method: "POST", headers: { "Idempotency-Key": clave }, body: JSON.stringify(solicitud),
+  });
 }
 
 function contextoQuery(condominioId?: string | null): string {
@@ -1235,4 +1514,33 @@ export function resolverCorreoIncierto(id: string, datos: {
 }): Promise<{ estado: string; ciclo: number }> {
   return recursoRequest(`/notificaciones/${encodeURIComponent(id)}/resolver-incierto`,
     { method: "POST", body: JSON.stringify(datos) });
+}
+
+// CON-68: vista de salud y alertas visibles (solo lectura).
+export type EstadoComponente = "ok" | "error" | "deshabilitado";
+export interface ComponenteSalud { componente: "api" | "postgresql" | "redis" | "correo"; estado: EstadoComponente }
+export interface EjecucionJob {
+  nombre: string; inicio: string | null; fin: string | null;
+  duracion_segundos: number | null;
+  resultado: "EN_CURSO" | "COMPLETADO" | "INCOMPLETO" | "SIN_REGISTRO";
+}
+export interface SaludOperativa {
+  perfil: "development" | "production"; estado_general: "ok" | "degradado";
+  generado_en: string; componentes: ComponenteSalud[]; jobs: EjecucionJob[];
+}
+export interface AlertaVisible {
+  id: string; componente: "correo" | "job"; operacion: string;
+  referencia_diagnostico: { origen_tipo: "CORREO" | "JOB"; origen_id: string; referencia_correlacion: string | null };
+  condominio_id: string | null; departamento_numero: string | null; tipo: string; mensaje: string;
+  estado: "ABIERTA" | "ATENDIDA"; creada_en: string; atendida_en: string | null;
+}
+export function consultarSaludOperativa(): Promise<SaludOperativa> {
+  return recursoRequest("/monitoreo/salud");
+}
+export function listarAlertasMonitoreo(
+  condominioId: string | null, estado: "ABIERTA" | "ATENDIDA" = "ABIERTA", offset = 0, limit = 50,
+): Promise<AlertaVisible[]> {
+  const q = new URLSearchParams({ estado, offset: String(offset), limit: String(limit) });
+  if (condominioId) q.set("condominio_id", condominioId);
+  return recursoRequest(`/monitoreo/alertas?${q}`);
 }

@@ -4,6 +4,7 @@ import {
   Bell,
   Building2,
   ClipboardCheck,
+  ClipboardList,
   Coins,
   FileCheck2,
   LayoutDashboard,
@@ -11,6 +12,8 @@ import {
   Clock3,
   Users,
   CalendarDays,
+  Activity,
+  CircleAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
@@ -25,7 +28,10 @@ export type JuntaSection =
   | "cuotas"
   | "conciliacion"
   | "moras"
-  | "comunicados";
+  | "incidencias"
+  | "excepciones"
+  | "comunicados"
+  | "salud";
 
 const NAV_ITEMS = [
   { id: "resumen", label: "Resumen", Icon: LayoutDashboard },
@@ -37,7 +43,10 @@ const NAV_ITEMS = [
   { id: "cuotas", label: "Distribución y emisión", Icon: Coins },
   { id: "conciliacion", label: "Conciliación", Icon: FileCheck2 },
   { id: "moras", label: "Moras", Icon: Clock3 },
+  { id: "incidencias", label: "Incidencias", Icon: ClipboardList },
+  { id: "excepciones", label: "Excepciones", Icon: CircleAlert },
   { id: "comunicados", label: "Comunicados", Icon: Bell },
+  { id: "salud", label: "Salud y alertas", Icon: Activity },
 ] as const;
 
 interface JuntaNavProps {
@@ -49,7 +58,12 @@ interface JuntaNavProps {
 }
 
 export function JuntaNav({ section, isSuperAdmin, isAuditor, pendientes, onNavigate }: JuntaNavProps) {
-  const items = NAV_ITEMS.filter((item) => (!("superAdmin" in item) || isSuperAdmin) && (!("administracion" in item) || !isAuditor));
+  const items = NAV_ITEMS.filter((item) =>
+    (!("superAdmin" in item) || isSuperAdmin) &&
+    (!("administracion" in item) || !isAuditor) &&
+    (item.id !== "incidencias" || (!isSuperAdmin && !isAuditor)) &&
+    (item.id !== "excepciones" || !isAuditor),
+  );
 
   return (
     <nav
