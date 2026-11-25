@@ -51,8 +51,11 @@ function DetalleIncidencia({ id }: { id: string }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <Link className="text-sm font-medium text-brand-700 underline" href={esJunta ? "/junta#incidencias" : "/residente"}>
-        {esJunta ? "Volver a incidencias" : "Volver a mi portal"}
+      <Link
+        className="text-sm font-medium text-brand-700 underline"
+        href={esJunta ? "/junta#incidencias" : "/residente?seccion=incidencias"}
+      >
+        {esJunta ? "Volver a incidencias" : "Volver a mis reportes"}
       </Link>
       {error ? <Alert tone="danger">{error}</Alert> : !incidencia ? (
         <Spinner label="Cargando reporte…" />

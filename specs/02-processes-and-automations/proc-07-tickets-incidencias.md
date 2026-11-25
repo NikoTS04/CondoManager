@@ -33,6 +33,12 @@ avisos encolados. Un reintento con la misma clave y los mismos datos reutiliza
 el ticket y sus avisos. El reportante con vínculo activo y la Junta de su
 condominio pueden consultar el reporte y su foto.
 
+En **Mis reportes**, el residente puede volver a consultar sus incidencias
+del condominio activo, ordenadas de la más reciente a la más antigua. El
+listado muestra la fecha, el estado vigente y el motivo de rechazo cuando
+corresponde. Cada reporte abre su detalle y conserva las reglas de acceso
+por autor y vínculo activo.
+
 ---
 
 ## 4. Mejora Futura Propuesta: Clasificación y Asignación con IA + RPA

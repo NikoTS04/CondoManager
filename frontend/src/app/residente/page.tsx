@@ -23,7 +23,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { AvisosList } from "@/features/residente/AvisosList";
 import { EstadoCuenta } from "@/features/residente/EstadoCuenta";
-import { ReportarIncidenciaForm } from "@/features/residente/ReportarIncidenciaForm";
+import { IncidenciasResidente } from "@/features/residente/MisReportes";
 import {
   ResidenteNav,
   type ResidenteTab,
@@ -48,7 +48,9 @@ function ResidenteContent() {
   const departamentoId = user ? seleccionarUnidad(user, dptoParam, activeDepartment, departamentos.map((d) => d.id)) : "";
   const [contextoId] = useState(() => user?.condominio_id ||
     (user?.rol === "SUPERADMIN" ? localStorage.getItem("condo_active_id") : null));
-  const [activeTab, setActiveTab] = useState<ResidenteTab>("cuenta");
+  const [activeTab, setActiveTab] = useState<ResidenteTab>(() =>
+    user?.rol === "RESIDENTE" && searchParams.get("seccion") === "incidencias" ? "incidencias" : "cuenta"
+  );
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
@@ -301,9 +303,7 @@ function ResidenteContent() {
       )}
 
       {activeTab === "incidencias" && user?.rol === "RESIDENTE" && (
-        loadingInitial ? <Spinner label="Cargando tu departamento…" /> : departamentoId && (
-          <ReportarIncidenciaForm key={departamentoId} departamentoId={departamentoId} />
-        )
+        <IncidenciasResidente departamentoId={departamentoId} cargandoDepartamento={loadingInitial} />
       )}
 
       {activeTab === "cuenta" && (

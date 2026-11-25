@@ -12,7 +12,7 @@ from src.modules.notificaciones.models import Notificacion
 from src.modules.notificaciones.repository import AVISO_INCIDENCIA
 from src.modules.notificaciones.worker import procesar_uno
 from src.modules.usuarios.demo import id_demo
-from src.modules.usuarios.models import UsuarioRol
+from src.modules.usuarios.models import UsuarioDepartamento, UsuarioRol
 from src.modules.usuarios.piloto import vinculo_piloto
 from src.tests.integration.test_alta_usuarios_db import login, otro_condominio
 
@@ -121,6 +121,8 @@ async def test_detalle_y_foto_se_restringen_al_condominio(api_usuarios):
     sesion_otro = await residente(client, condominio_id=str(otro))
     for recurso in (ruta, f"{ruta}/evidencia"):
         assert (await client.get(recurso, headers=sesion_otro)).status_code == 404
+    listado = await client.get(f"{RUTA}/mis-reportes", headers=sesion_otro)
+    assert listado.json() == {"items": [], "hay_mas": False}
 
 
 async def test_foto_corrupta_conserva_el_reporte(api_usuarios):
@@ -211,6 +213,9 @@ async def test_rechazo_es_terminal_y_el_residente_ve_el_motivo(api_usuarios):
     detalle = await client.get(ruta, headers=headers)
     assert detalle.json()["estado"] == "RECHAZADO"
     assert detalle.json()["motivo_rechazo"] == motivo
+    listado = await client.get(f"{RUTA}/mis-reportes", headers=headers)
+    assert listado.json()["items"] == [detalle.json()]
+    assert (await client.get(f"{RUTA}/mis-reportes", headers=junta)).status_code == 403
     revision = await client.patch(
         f"{ruta}/revision",
         headers=junta,
@@ -273,3 +278,38 @@ async def test_dos_revisiones_de_la_misma_version_guardan_una_decision(api_usuar
             )
             == 1
         )
+
+
+async def test_mis_reportes_solo_lista_al_autor_incluso_en_una_unidad_compartida(api_usuarios):
+    client, base = api_usuarios
+    ruta = f"{RUTA}/mis-reportes"
+    propios = await residente(client)
+    primero = await reportar(client, propios)
+    assert primero.status_code == 201, primero.text
+
+    vecino = "moroso402@villabonita3.pe"
+    async with base.sessions() as db, db.begin():
+        db.add(
+            UsuarioDepartamento(
+                usuario_id=id_demo(vecino),
+                departamento_id=UUID(primero.json()["departamento_id"]),
+                tipo_relacion="COPROPIETARIO",
+            )
+        )
+    sesion_vecino = await login(client, vecino, "Moroso123!")
+    ajeno = await reportar(client, {**sesion_vecino, "Idempotency-Key": str(uuid4())})
+    assert ajeno.status_code == 201, ajeno.text
+
+    segundo = await reportar(client, {**propios, "Idempotency-Key": str(uuid4())})
+    assert segundo.status_code == 201, segundo.text
+    pagina = await client.get(ruta, headers=propios, params={"limit": 1})
+    assert pagina.status_code == 200, pagina.text
+    assert pagina.headers["cache-control"] == "private, no-store"
+    assert [item["id"] for item in pagina.json()["items"]] == [segundo.json()["id"]]
+    assert pagina.json()["hay_mas"] is True
+
+    otra_pagina = await client.get(ruta, headers=propios, params={"limit": 1, "offset": 1})
+    assert [item["id"] for item in otra_pagina.json()["items"]] == [primero.json()["id"]]
+    assert otra_pagina.json()["hay_mas"] is False
+    reportes_vecino = await client.get(ruta, headers=sesion_vecino)
+    assert [item["id"] for item in reportes_vecino.json()["items"]] == [ajeno.json()["id"]]

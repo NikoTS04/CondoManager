@@ -614,6 +614,12 @@ export function listarIncidencias(
   return recursoRequest(`/incidencias?offset=${offset}&limit=${limit}`, { signal });
 }
 
+export function listarMisReportes(
+  offset: number, limit: number, signal?: AbortSignal,
+): Promise<BandejaIncidencias> {
+  return recursoRequest(`/incidencias/mis-reportes?offset=${offset}&limit=${limit}`, { signal });
+}
+
 export function revisarIncidencia(id: string, revision: RevisionIncidencia): Promise<Incidencia> {
   return recursoRequest(`/incidencias/${encodeURIComponent(id)}/revision`, {
     method: "PATCH",

@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 from uuid import UUID
 
 from fastapi import UploadFile
-from sqlalchemy import case, func, select
+from sqlalchemy import Select, and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
@@ -46,6 +46,13 @@ def estado_revision(incidencia: Incidencia) -> dict:
         "motivo_rechazo": incidencia.motivo_rechazo,
         "version": incidencia.version,
     }
+
+
+def reportes_propios(usuario: dict):
+    return and_(
+        Incidencia.reportante_id == UUID(usuario["sub"]),
+        Incidencia.departamento_id.in_([UUID(did) for did in vinculos_activos(usuario)]),
+    )
 
 
 async def preparar_evidencia(
@@ -183,11 +190,24 @@ class IncidenciasService:
             (prioridad == "URGENTE", 0),
             else_=1,
         )
+        consulta = select(Incidencia).where(Incidencia.condominio_id == cid).order_by(orden)
+        return await self._paginar(consulta, offset=offset, limit=limit)
+
+    async def listar_propias(self, usuario: dict, *, offset: int, limit: int) -> dict:
+        if usuario["rol"] != RolUsuario.RESIDENTE:
+            denegar("Solo el residente puede consultar sus reportes.")
+        consulta = select(Incidencia).where(
+            Incidencia.condominio_id == contexto_consulta(usuario),
+            reportes_propios(usuario),
+        )
+        return await self._paginar(consulta, offset=offset, limit=limit)
+
+    async def _paginar(
+        self, consulta: Select[tuple[Incidencia]], *, offset: int, limit: int
+    ) -> dict:
         registros = (
             await self.session.scalars(
-                select(Incidencia)
-                .where(Incidencia.condominio_id == cid)
-                .order_by(orden, Incidencia.creado_en.desc(), Incidencia.id.desc())
+                consulta.order_by(Incidencia.creado_en.desc(), Incidencia.id.desc())
                 .offset(offset)
                 .limit(limit + 1)
             )
@@ -258,10 +278,7 @@ class IncidenciasService:
             Incidencia.condominio_id == contexto_consulta(usuario),
         )
         if rol == RolUsuario.RESIDENTE:
-            query = query.where(
-                Incidencia.reportante_id == UUID(usuario["sub"]),
-                Incidencia.departamento_id.in_([UUID(did) for did in vinculos_activos(usuario)]),
-            )
+            query = query.where(reportes_propios(usuario))
         if incluir_evidencia:
             query = query.options(undefer(Incidencia.evidencia))
         incidencia = await self.session.scalar(query)

@@ -57,6 +57,33 @@ paths:
         '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
         '409': {description: Esta clave ya se utilizó con otro reporte.}
         '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/mis-reportes:
+    get:
+      operationId: listarMisReportes
+      tags: [Incidencias]
+      summary: Consultar las incidencias del residente
+      description: Lista los reportes propios del condominio activo, del más reciente al más antiguo.
+      parameters:
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, maximum: 2147483647, default: 0}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 50, default: 25}
+      responses:
+        '200':
+          description: Página de reportes propios con el estado vigente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Incidencia'}}
+                  hay_mas: {type: boolean}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
   /incidencias/{incidencia_id}:
     parameters:
       - $ref: '#/components/parameters/IncidenciaId'

@@ -59,6 +59,18 @@ async def listar_incidencias(
     return await IncidenciasService(session).listar(usuario, offset=offset, limit=limit)
 
 
+@router.get("/mis-reportes", response_model=BandejaIncidenciasDTO)
+async def listar_mis_reportes(
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+    offset: Annotated[int, Query(ge=0, le=2_147_483_647)] = 0,
+    limit: Annotated[int, Query(ge=1, le=50)] = 25,
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return await IncidenciasService(session).listar_propias(usuario, offset=offset, limit=limit)
+
+
 @router.get("/{incidencia_id}", response_model=IncidenciaDTO)
 async def consultar_incidencia(
     incidencia_id: UUID, response: Response, usuario: UsuarioActual, session: Session

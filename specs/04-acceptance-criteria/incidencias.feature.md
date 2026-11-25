@@ -15,6 +15,10 @@
 - **Evidencia inválida.** Dado un reporte completo con una foto inválida,
   cuando se envía, entonces el archivo se rechaza, el reporte se conserva
   sin foto y se muestra el motivo en la confirmación.
+- **Mis reportes.** Dado un residente con reportes propios, cuando vuelve al
+  portal, entonces encuentra sus incidencias de la más reciente a la más
+  antigua y puede abrir cada detalle. Si Junta rechazó una, ve el motivo.
+  No aparecen reportes de otros residentes, aunque compartan unidad.
 
 ## CON-54 — Clasificar y priorizar tickets
 

@@ -33,6 +33,8 @@ tags:
 paths:
   /incidencias:
     $ref: './incidencias.paths.yaml#/paths/~1incidencias'
+  /incidencias/mis-reportes:
+    $ref: './incidencias.paths.yaml#/paths/~1incidencias~1mis-reportes'
   /incidencias/{incidencia_id}:
     $ref: './incidencias.paths.yaml#/paths/~1incidencias~1%7Bincidencia_id%7D'
   /incidencias/{incidencia_id}/revision:

@@ -55,6 +55,12 @@ que exceda 3 MiB se descarta y la respuesta informa `advertencia_evidencia`.
 solicitante sea el reportante con vínculo activo o Junta del mismo condominio.
 Los reportes fuera de alcance devuelven 404. [OpenAPI de incidencias](../03-contracts/openapi/incidencias.paths.yaml).
 
+`GET /incidencias/mis-reportes?offset=0&limit=25` devuelve `items` y
+`hay_mas`. Solo se admiten residentes. La página se ordena por fecha de
+creación descendente y contiene únicamente reportes del usuario en el
+condominio activo y en sus unidades con vínculo activo. Cada elemento
+incluye el estado y el motivo de rechazo vigentes.
+
 ### Clasificación de incidencias (CON-54)
 
 `GET /incidencias?offset=0&limit=25` lista tickets del condominio de Junta.
