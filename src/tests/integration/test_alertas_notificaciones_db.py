@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import func, select
 
 from src.core.models_audit import AuditoriaLogORM
-from src.modules.notificaciones.alertas import crear_alerta
+from src.modules.notificaciones.alertas import crear_alerta, crear_alerta_job
 from src.modules.notificaciones.models import (
     AlertaNotificacion,
     IntentoNotificacion,
@@ -273,3 +273,44 @@ async def test_despachar_con_contexto_incompleto_no_reproduce_valores(api_usuari
     assert "secreto-xyz" not in r.text
     async with base.sessions() as db:
         assert await db.scalar(select(func.count()).select_from(Notificacion)) == 0
+
+
+async def test_alerta_de_correo_guarda_origen_y_la_de_job_es_idempotente_y_aislada(api_usuarios):
+    client, base = api_usuarios
+    nid, junta = await encolar(client, base, "ana+rebote@ejemplo.test")
+    assert await procesar_uno(base.sessions, ahora=datetime.now(UTC))
+    [correo] = await alertas(base, nid)
+    assert (correo.origen_tipo, correo.origen_id) == ("CORREO", str(nid))
+    assert correo.referencia_correlacion is None
+    ahora = datetime.now(UTC)
+
+    async def registrar():
+        async with base.sessions() as db, db.begin():
+            return await crear_alerta_job(db, "diario", 1, 1, ahora, "corr-84")
+
+    resultados = await asyncio.gather(registrar(), registrar(), registrar())
+    assert sorted(resultados) == [False, False, True]
+    async with base.sessions() as db, db.begin():
+        assert not await crear_alerta_job(db, "diario", 1, 3, ahora)  # con reintentos pendientes
+    async with base.sessions() as db:
+        trabajos = list(
+            await db.scalars(
+                select(AlertaNotificacion).where(AlertaNotificacion.origen_tipo == "JOB")
+            )
+        )
+    [job] = trabajos
+    assert job.origen_id == "diario" and job.tipo == "JOB_FALLO_DEFINITIVO"
+    assert job.condominio_id is None and job.notificacion_id is None
+    assert job.referencia_correlacion == "corr-84"
+    # La alerta de job no aparece en la consulta por condominio ni se puede atender allí.
+    lista = (await client.get(f"{RUTA}/alertas", headers=junta)).json()
+    assert [a["origen_tipo"] for a in lista] == ["CORREO"]
+    assert lista[0]["origen_id"] == str(nid) and lista[0]["referencia_correlacion"] is None
+    r = await client.post(f"{RUTA}/alertas/{job.id}/atender", headers=junta)
+    assert r.status_code == 404
+    otro = await otro_condominio(base)
+    superadmin = await login(client)
+    vacio = await client.get(
+        f"{RUTA}/alertas", headers=superadmin, params={"condominio_id": str(otro)}
+    )
+    assert vacio.json() == []

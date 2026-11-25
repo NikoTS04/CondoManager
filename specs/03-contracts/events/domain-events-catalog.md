@@ -232,3 +232,11 @@ el envelope por schema_version frente a version y mantiene los mensajes CON-70
 persistidos, sus importes y deduplicación por event_id. Las pruebas validan cada
 nuevo payload contra su esquema .v1 y reentregan históricos sin modificarlos.
 Consumidores externos deben adoptar el formato canónico antes del despliegue.
+
+## Alertas de fallos definitivos (CON-84)
+
+La generación de una alerta de fallo definitivo (correo o job) no publica un evento de dominio
+nuevo: es un registro persistente en `notificaciones_alertas`, idempotente por
+`(origen_tipo, origen_id, ciclo, tipo)`, que consultan CON-66/68. Los eventos existentes no
+cambian de payload. La referencia de correlación (CON-82) es opcional y no forma parte de
+ningún evento todavía.

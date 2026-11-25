@@ -88,3 +88,30 @@ verifican en `src/tests/integration/test_alertas_notificaciones_db.py`. Detalle 
 Los avisos de CON-47, CON-53 y CON-55 usan la cola existente y sus claves están
 definidas en el [catálogo de eventos](../../03-contracts/events/domain-events-catalog.md).
 Escenarios: [avisos del Sprint 4](../../04-acceptance-criteria/avisos-sprint-4.feature.md).
+
+## 8. Alertas de Fallos Definitivos con Origen (CON-84)
+
+La alerta de `notificaciones_alertas` se generaliza: una por fallo definitivo, ya sea de un
+correo o de un job, una vez agotados los reintentos aplicables. Cada alerta guarda su origen:
+
+- `origen_tipo`: `CORREO` o `JOB`.
+- `origen_id`: para `CORREO`, el id de la notificación; para `JOB`, el nombre del job
+  (`notificaciones`, `diario`).
+- `referencia_correlacion`: texto opcional (máx. 64) que enlaza la alerta con la petición o
+  ejecución que la originó. Es nullable; CON-82 la completará. Este ticket no la genera.
+- `ciclo`: para `CORREO`, el ciclo de la notificación; para `JOB`, la fecha UTC de la ejecución
+  como entero `AAAAMMDD`.
+
+Idempotencia: `(origen_tipo, origen_id, ciclo, tipo)` es único. Repetir el registro del mismo
+fallo (reintento del worker, callback duplicado, reejecución del cron) no crea otra alerta.
+
+Tipo nuevo `JOB_FALLO_DEFINITIVO`: un job agotó sus intentos. Solo se crea cuando
+`intentos >= maximo_intentos`; un fallo con reintentos pendientes no genera alerta. El mensaje
+nombra el proceso y no incluye trazas, URLs ni credenciales.
+
+Aislamiento: la alerta de `CORREO` conserva su condominio. Un job es transversal, por lo que su
+alerta tiene `condominio_id` nulo y nunca aparece en la consulta por condominio de
+`GET /api/v1/notificaciones/alertas`; la vista global de salud/bandeja pertenece a CON-68/66.
+
+Escenarios en [alertas-fallos-definitivos](../../04-acceptance-criteria/alertas-fallos-definitivos.feature.md).
+Cambio de esquema: migración `20261125_0025_alertas_fallos_definitivos`.
