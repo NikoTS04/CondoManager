@@ -785,7 +785,7 @@ export class ApiError extends Error {
   }
 }
 
-export type AccionExcepcion = "REENVIAR_CORREO" | "CERRAR_CON_MOTIVO";
+export type AccionExcepcion = "REENVIAR_CORREO" | "REINTENTAR_JOB" | "CERRAR_CON_MOTIVO";
 type EstadoExcepcion = "ABIERTA" | "EN_PROCESO" | "RESUELTA" | "FALLIDA";
 
 export interface Excepcion {
@@ -805,11 +805,11 @@ interface ResolucionExcepcion {
   actor_id: string;
   fecha: string;
   estado: EstadoExcepcion;
-  efecto: { operacion_id: string; ciclo: number; estado_operacion: string };
+  efecto: { operacion_id?: string; ciclo?: number; estado_operacion?: string; nombre?: string; estado_proceso?: string; reintentado?: boolean };
 }
 
 export interface DetalleExcepcion extends Excepcion {
-  evidencia: { tipo_evento: string; ciclo_fallido: number; ciclo_actual: number; estado_operacion: string };
+  evidencia: { tipo_evento: string; ciclo_fallido: number; ciclo_actual: number; estado_operacion: string; origen: "CORREO" | "JOB"; operacion_id: string; referencia_correlacion: string | null; detalle: Record<string, unknown> };
   historial: ResolucionExcepcion[];
   acciones_permitidas: AccionExcepcion[];
   requiere_revision_correo: boolean;

@@ -29,7 +29,8 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Registrar avances, evidencias, costos y resolución (CON-56) | No | Su condominio | No | No |
 | Consultar historial completo con costos y sustentos (CON-56) | No | Su condominio | Su condominio, solo lectura | Solo actualizaciones publicadas de sus reportes |
 | Confirmar, calificar y reabrir un reporte propio (CON-57) | No | No | No | Sus propios reportes con vínculo activo |
-| Consultar y resolver excepciones operativas | No | Su condominio | No | No |
+| Consultar y resolver excepciones de correo (CON-66) | No | Su condominio | No | No |
+| Consultar y resolver excepciones de job (CON-86) | Todas, con auditoría en condominio centinela | No | No | No |
 | Conciliar pagos, evaluar moras y enviar/reintentar comunicados | Sí | Su condominio | No | No |
 | Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | Solo avisos dirigidos a su identidad y vínculos activos |
 | Consultar salud de componentes y ejecución de jobs (CON-68) | Sí | No | No | No |

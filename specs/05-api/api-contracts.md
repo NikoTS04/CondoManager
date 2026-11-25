@@ -43,18 +43,24 @@ Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y res
 
 ## 2. Contratos Principales por Módulo
 
-### Bandeja de excepciones (CON-66)
+### Bandeja de excepciones (CON-66 / CON-86)
 
-`GET /excepciones` devuelve una página con `items` y `hay_mas`.
-`GET /excepciones/{id}` añade `evidencia`, `historial`,
+`GET /excepciones` devuelve una página con `items` y `hay_mas`. `ADMIN_JUNTA`
+ve los fallos de correo de su condominio; `SUPERADMIN` también ve los
+`JOB_FALLO_DEFINITIVO`, sin condominio, con componente, operación y referencia
+de diagnóstico. `GET /excepciones/{id}` añade `evidencia` (origen, ciclo,
+referencia de correlación y estado real del proceso), `historial`,
 `acciones_permitidas` y `requiere_revision_correo`.
-`POST /excepciones/{id}/resoluciones` exige `Idempotency-Key` UUID,
-`accion`, `motivo` y `nuevo_destinatario` cuando la acción es
-`REENVIAR_CORREO`. El otro caso admite `CERRAR_CON_MOTIVO`. Devuelve la
-decisión guardada y el efecto inmediato sobre la operación de origen. El
-detalle muestra posteriormente su resultado vigente. La API devuelve 404
-para casos de otro condominio y 409 si la acción ya no procede o la clave
-se reutiliza con otros datos.
+
+`POST /excepciones/{id}/resoluciones` exige `Idempotency-Key` UUID, `accion`,
+`motivo` y `nuevo_destinatario` cuando la acción es `REENVIAR_CORREO`. Las
+acciones son `REENVIAR_CORREO`, `REINTENTAR_JOB` (solo para procesos
+idempotentes registrados en `JOBES_REINTENTABLES`) y `CERRAR_CON_MOTIVO`.
+Devuelve la decisión persistida, con actor, motivo, clave, huella y el efecto
+**real** sobre el proceso de origen. El detalle muestra después su resultado
+vigente. Una repetición con la misma clave devuelve la decisión original sin
+repetir la acción; con otra huella responde 409. La API devuelve 404 para
+casos fuera de alcance y 409 si la acción ya no procede.
 
 ### Registro de incidencias (CON-53)
 

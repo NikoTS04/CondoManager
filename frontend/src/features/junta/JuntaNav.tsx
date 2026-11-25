@@ -61,7 +61,8 @@ export function JuntaNav({ section, isSuperAdmin, isAuditor, pendientes, onNavig
   const items = NAV_ITEMS.filter((item) =>
     (!("superAdmin" in item) || isSuperAdmin) &&
     (!("administracion" in item) || !isAuditor) &&
-    (!["incidencias", "excepciones"].includes(item.id) || (!isSuperAdmin && !isAuditor)),
+    (item.id !== "incidencias" || (!isSuperAdmin && !isAuditor)) &&
+    (item.id !== "excepciones" || !isAuditor),
   );
 
   return (

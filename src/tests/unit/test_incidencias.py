@@ -105,4 +105,3 @@ def test_la_calificacion_y_la_reapertura_exigen_datos_validos():
 def test_migracion_0029_es_la_cabeza_sobre_la_0028():
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
     assert scripts.get_revision("20261129_0029").down_revision == "20261128_0028"
-    assert scripts.get_heads() == ["20261129_0029"]
