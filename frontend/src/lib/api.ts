@@ -574,12 +574,20 @@ interface ReporteIncidencia {
   tiene_evidencia: boolean;
 }
 
+export type EstadoIncidencia =
+  | "REGISTRADO" | "RECHAZADO" | "ASIGNADO" | "EN_PROCESO" | "RESUELTO" | "CERRADO";
+
 export interface Incidencia extends ReporteIncidencia {
-  estado: "REGISTRADO" | "RECHAZADO";
+  estado: EstadoIncidencia;
   categoria_confirmada: string | null;
   prioridad: UrgenciaIncidencia | null;
   motivo_rechazo: string | null;
   version: number;
+  asignacion_actual_id: string | null;
+  responsable_usuario_id: string | null;
+  responsable_proveedor_id: string | null;
+  fecha_asignacion: string | null;
+  plazo: string | null;
 }
 
 export interface RegistroIncidencia extends ReporteIncidencia {
@@ -627,6 +635,133 @@ export function revisarIncidencia(id: string, revision: RevisionIncidencia): Pro
   });
 }
 
+export interface SolicitudAsignacion {
+  version: number;
+  responsable_usuario_id?: string;
+  responsable_proveedor_id?: string;
+  proveedor_nombre?: string;
+  correo_proveedor?: string;
+  plazo: string;
+  nota?: string;
+}
+
+export interface AsignacionIncidencia {
+  asignacion_id: string;
+  incidencia_id: string;
+  responsable_usuario_id: string | null;
+  responsable_proveedor_id: string | null;
+  plazo: string;
+  nota: string | null;
+  estado: "ASIGNADO";
+  version: number;
+  avisos_encolados: number;
+}
+
+export interface AvisoAsignacion {
+  asignacion_id: string;
+  destinatario_tipo: "RESIDENTE" | "PROVEEDOR";
+  estado: "EN_COLA" | "ENVIADO" | "ENTREGADO" | "REINTENTANDO"
+    | "FALLIDO_PERMANENTE" | "OMITIDO" | "CONTACTO_FALTANTE";
+  aviso_id: string | null;
+  intentos: number | null;
+  fecha_actualizacion: string | null;
+  alerta_abierta: boolean;
+}
+
+export function asignarIncidencia(
+  id: string, solicitud: SolicitudAsignacion, clave: string,
+): Promise<AsignacionIncidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/asignacion`, {
+    method: "POST",
+    headers: { "Idempotency-Key": clave },
+    body: JSON.stringify(solicitud),
+  });
+}
+
+export function consultarAvisosAsignacion(
+  id: string, signal?: AbortSignal,
+): Promise<{ items: AvisoAsignacion[]; hay_mas: boolean }> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/avisos`, { signal });
+}
+
+export interface ActualizacionIncidencia {
+  id: string;
+  incidencia_id: string;
+  actor_id: string;
+  tipo: "COMENTARIO" | "CAMBIO_ESTADO" | "COSTO";
+  descripcion: string;
+  publico: boolean;
+  repuesto: string | null;
+  monto: string | null;
+  estado_anterior: string | null;
+  estado_nuevo: string | null;
+  tiene_evidencia: boolean;
+  creado_en: string;
+}
+
+export function registrarSeguimientoIncidencia(
+  id: string, datos: FormData,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/seguimiento`, {
+    method: "POST", body: datos,
+  });
+}
+
+export function resolverIncidencia(id: string, datos: FormData): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/resolucion`, {
+    method: "POST", body: datos,
+  });
+}
+
+export function consultarHistorialIncidencia(
+  id: string, signal?: AbortSignal,
+): Promise<{ items: ActualizacionIncidencia[]; hay_mas: boolean }> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/historial`, { signal });
+}
+
+export function confirmarIncidencia(
+  id: string, version: number, calificacion: number, comentario?: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/confirmacion`, {
+    method: "POST",
+    body: JSON.stringify({ version, calificacion, ...(comentario ? { comentario } : {}) }),
+  });
+}
+
+export function reabrirIncidencia(
+  id: string, version: number, motivo: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/reapertura`, {
+    method: "POST",
+    body: JSON.stringify({ version, motivo }),
+  });
+}
+
+export function cerrarAdministrativamenteIncidencia(
+  id: string, version: number, motivo: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/cierre-administrativo`, {
+    method: "POST",
+    body: JSON.stringify({ version, motivo }),
+  });
+}
+
+export async function descargarEvidenciaActualizacion(
+  incidenciaId: string, actualizacionId: string,
+): Promise<void> {
+  const respuesta = await fetchProtegido(
+    `/incidencias/${encodeURIComponent(incidenciaId)}/actualizaciones/${encodeURIComponent(actualizacionId)}/evidencia`,
+    { headers: getAuthHeaders() },
+  );
+  if (!respuesta.ok) throw new Error("No pudimos descargar la evidencia.");
+  const datos = await respuesta.blob();
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(datos);
+  enlace.download = `evidencia-${actualizacionId}`;
+  enlace.click();
+  enlace.remove();
+}
+
 export async function descargarFotoIncidencia(id: string): Promise<void> {
   const response = await fetchProtegido(`/incidencias/${encodeURIComponent(id)}/evidencia`, {
     headers: getAuthHeaders(),
@@ -650,7 +785,7 @@ export class ApiError extends Error {
   }
 }
 
-export type AccionExcepcion = "REENVIAR_CORREO" | "CERRAR_CON_MOTIVO";
+export type AccionExcepcion = "REENVIAR_CORREO" | "REINTENTAR_JOB" | "CERRAR_CON_MOTIVO";
 type EstadoExcepcion = "ABIERTA" | "EN_PROCESO" | "RESUELTA" | "FALLIDA";
 
 export interface Excepcion {
@@ -670,11 +805,11 @@ interface ResolucionExcepcion {
   actor_id: string;
   fecha: string;
   estado: EstadoExcepcion;
-  efecto: { operacion_id: string; ciclo: number; estado_operacion: string };
+  efecto: { operacion_id?: string; ciclo?: number; estado_operacion?: string; nombre?: string; estado_proceso?: string; reintentado?: boolean };
 }
 
 export interface DetalleExcepcion extends Excepcion {
-  evidencia: { tipo_evento: string; ciclo_fallido: number; ciclo_actual: number; estado_operacion: string };
+  evidencia: { tipo_evento: string; ciclo_fallido: number; ciclo_actual: number; estado_operacion: string; origen: "CORREO" | "JOB"; operacion_id: string; referencia_correlacion: string | null; detalle: Record<string, unknown> };
   historial: ResolucionExcepcion[];
   acciones_permitidas: AccionExcepcion[];
   requiere_revision_correo: boolean;

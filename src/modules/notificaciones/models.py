@@ -31,9 +31,10 @@ class Notificacion(Base):
     departamento_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("departamentos.id", ondelete="RESTRICT"), nullable=True
     )
-    usuario_destinatario_id: Mapped[UUID] = mapped_column(
-        ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=False
+    usuario_destinatario_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=True
     )
+    destinatario_externo_id: Mapped[UUID | None] = mapped_column(nullable=True)
     evento_id: Mapped[UUID] = mapped_column(nullable=False)
     operacion_id: Mapped[UUID] = mapped_column(nullable=False)
     tipo_evento: Mapped[str] = mapped_column(Text, nullable=False)
@@ -73,6 +74,17 @@ class Notificacion(Base):
             "usuario_destinatario_id",
             "canal",
             name="uq_notificacion_logica",
+        ),
+        UniqueConstraint(
+            "evento_id",
+            "operacion_id",
+            "destinatario_externo_id",
+            "canal",
+            name="uq_notificacion_logica_externa",
+        ),
+        CheckConstraint(
+            "(usuario_destinatario_id IS NOT NULL) <> (destinatario_externo_id IS NOT NULL)",
+            name="ck_notificacion_destinatario",
         ),
         CheckConstraint("intentos BETWEEN 0 AND 4 AND ciclo >= 1", name="ck_notificacion_intentos"),
         CheckConstraint(

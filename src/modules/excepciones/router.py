@@ -15,7 +15,7 @@ from src.modules.excepciones.service import (
 )
 
 router = APIRouter(prefix="/excepciones", tags=["Excepciones"])
-UsuarioJunta = Annotated[dict, Depends(require_role(["ADMIN_JUNTA"]))]
+UsuarioJunta = Annotated[dict, Depends(require_role(["ADMIN_JUNTA", "SUPERADMIN"]))]
 Sesion = Annotated[AsyncSession, Depends(get_db_session, use_cache=False)]
 
 

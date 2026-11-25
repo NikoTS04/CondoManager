@@ -38,7 +38,7 @@ paths:
                   - type: object
                     required: [evidencia, historial, acciones_permitidas, requiere_revision_correo]
                     properties:
-                      evidencia: {type: object, description: Evidencia operativa sin cuerpo ni contacto del correo.}
+                      evidencia: {$ref: '#/components/schemas/Evidencia'}
                       historial: {type: array, items: {$ref: '#/components/schemas/Resolucion'}}
                       acciones_permitidas: {type: array, items: {$ref: '#/components/schemas/Accion'}}
                       requiere_revision_correo: {type: boolean}
@@ -80,7 +80,7 @@ components:
   schemas:
     Accion:
       type: string
-      enum: [REENVIAR_CORREO, CERRAR_CON_MOTIVO]
+      enum: [REENVIAR_CORREO, REINTENTAR_JOB, CERRAR_CON_MOTIVO]
     Excepcion:
       type: object
       required: [id, origen, operacion_id, causa, prioridad, estado, creada_en]
@@ -105,4 +105,38 @@ components:
         actor_id: {type: string}
         fecha: {type: string, format: date-time}
         estado: {$ref: '#/components/schemas/Estado'}
-        efecto: {type: object, description: Operación afectada y resultado al registrar la decisión.}
+        efecto:
+          oneOf:
+            - $ref: '#/components/schemas/EfectoCorreo'
+            - $ref: '#/components/schemas/EfectoJob'
+            - $ref: '#/components/schemas/EfectoCierre'
+    EfectoCorreo:
+      type: object
+      required: [operacion_id, ciclo, estado_operacion]
+      properties:
+        operacion_id: {type: string}
+        ciclo: {type: integer}
+        estado_operacion: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE, OMITIDO]}
+    EfectoJob:
+      type: object
+      required: [nombre, estado_proceso, reintentado]
+      properties:
+        nombre: {type: string}
+        estado_proceso: {type: string}
+        reintentado: {type: boolean}
+    EfectoCierre:
+      type: object
+      required: [operacion_id, estado_operacion]
+      properties:
+        operacion_id: {type: string}
+        estado_operacion: {type: string}
+    Evidencia:
+      type: object
+      required: [origen, operacion_id, ciclo]
+      properties:
+        origen: {type: string, enum: [CORREO, JOB]}
+        operacion_id: {type: string}
+        ciclo: {type: integer}
+        referencia_correlacion: {type: [string, 'null'], maxLength: 64}
+        estado_operacion: {type: string}
+        detalle: {type: object}

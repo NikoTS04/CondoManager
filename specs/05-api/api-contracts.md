@@ -43,18 +43,24 @@ Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y res
 
 ## 2. Contratos Principales por Módulo
 
-### Bandeja de excepciones (CON-66)
+### Bandeja de excepciones (CON-66 / CON-86)
 
-`GET /excepciones` devuelve una página con `items` y `hay_mas`.
-`GET /excepciones/{id}` añade `evidencia`, `historial`,
+`GET /excepciones` devuelve una página con `items` y `hay_mas`. `ADMIN_JUNTA`
+ve los fallos de correo de su condominio; `SUPERADMIN` también ve los
+`JOB_FALLO_DEFINITIVO`, sin condominio, con componente, operación y referencia
+de diagnóstico. `GET /excepciones/{id}` añade `evidencia` (origen, ciclo,
+referencia de correlación y estado real del proceso), `historial`,
 `acciones_permitidas` y `requiere_revision_correo`.
-`POST /excepciones/{id}/resoluciones` exige `Idempotency-Key` UUID,
-`accion`, `motivo` y `nuevo_destinatario` cuando la acción es
-`REENVIAR_CORREO`. El otro caso admite `CERRAR_CON_MOTIVO`. Devuelve la
-decisión guardada y el efecto inmediato sobre la operación de origen. El
-detalle muestra posteriormente su resultado vigente. La API devuelve 404
-para casos de otro condominio y 409 si la acción ya no procede o la clave
-se reutiliza con otros datos.
+
+`POST /excepciones/{id}/resoluciones` exige `Idempotency-Key` UUID, `accion`,
+`motivo` y `nuevo_destinatario` cuando la acción es `REENVIAR_CORREO`. Las
+acciones son `REENVIAR_CORREO`, `REINTENTAR_JOB` (solo para procesos
+idempotentes registrados en `JOBES_REINTENTABLES`) y `CERRAR_CON_MOTIVO`.
+Devuelve la decisión persistida, con actor, motivo, clave, huella y el efecto
+**real** sobre el proceso de origen. El detalle muestra después su resultado
+vigente. Una repetición con la misma clave devuelve la decisión original sin
+repetir la acción; con otra huella responde 409. La API devuelve 404 para
+casos fuera de alcance y 409 si la acción ya no procede.
 
 ### Registro de incidencias (CON-53)
 
@@ -88,11 +94,60 @@ original conserva la categoría y urgencia que declaró el residente. El detalle
 incluye la categoría confirmada, la prioridad, el motivo de rechazo y la versión.
 Reenviar el reporte de CON-53 devuelve el comprobante original de registro.
 
+### Seguimiento y resolución de incidencias (CON-56)
+
+- `POST /incidencias/{incidencia_id}/seguimiento` (`ADMIN_JUNTA` del condominio,
+  multipart): `version`, `comentario` (1–2000), `publico` (por defecto `true`),
+  `repuesto` opcional y `monto` decimal opcional (`NUMERIC(12,2)`, sin `float`),
+  además de una `evidencia` JPEG/PNG de hasta 3 MiB. Guarda la actualización y, si
+  el ticket estaba `ASIGNADO`, lo pasa a `EN_PROCESO`. Un archivo inválido se
+  descarta con advertencia y el avance se conserva. Devuelve `201` y el DTO del
+  ticket.
+- `POST /incidencias/{incidencia_id}/resolucion` (`ADMIN_JUNTA`, multipart):
+  `version`, `descripcion` (1–2000) y los mismos campos opcionales de costo y
+  evidencia. Solo aplica desde `EN_PROCESO`; en otro estado responde `409`.
+  Pasa el ticket a `RESUELTO`. El proveedor no puede invocar ninguna de estas
+  rutas.
+- `GET /incidencias/{incidencia_id}/historial`: Junta y Auditor del condominio
+  ven todas las actualizaciones, incluidos costos y sustentos; el residente ve
+  solo las marcadas `publico: true` de su propio reporte. Devuelve `items` y
+  `hay_mas` paginados. Otro condominio recibe `404`.
+- `GET /incidencias/{incidencia_id}/actualizaciones/{actualizacion_id}/evidencia`:
+  bytes privados, `private, no-store`, `nosniff`; mismo alcance que el historial.
+- Cada cambio de estado registra en la misma transacción la auditoría de siete
+  campos con actor, motivo, estado anterior y estado posterior.
+
+### Confirmación y cierre de incidencias (CON-57)
+
+- `POST /incidencias/{incidencia_id}/confirmacion` (`RESIDENTE` con vínculo activo
+  sobre su reporte): `version` y `calificacion` entera entre 1 y 5, con
+  `comentario` opcional. Solo desde `RESUELTO`; pasa a `CERRADO`, guarda fecha y
+  actor de cierre y registra `CIERRE_CONFORME_TICKET` con auditoría de siete
+  campos. Otro condominio o reporte ajeno responde 404; versión desactualizada o
+  estado distinto responde 409; calificación fuera de rango responde 422.
+- `POST /incidencias/{incidencia_id}/reapertura` (`RESIDENTE`): `version` y
+  `motivo` obligatorio. Solo desde `RESUELTO`; vuelve a `EN_PROCESO`, conserva el
+  motivo y audita `REAPERTURA_TICKET_INCIDENCIA`.
+- `POST /incidencias/{incidencia_id}/cierre-administrativo` (`ADMIN_JUNTA` del
+  condominio): `version` y `motivo` obligatorio. Solo desde `RESUELTO`; pasa a
+  `CERRADO` y audita `CIERRE_ADMINISTRATIVO_TICKET`. Ninguna ruta permite que un
+  proveedor cierre el ticket.
+- Las tres rutas devuelven la incidencia vigente con `Cache-Control: private, no-store`.
+
 ### Avisos de bloqueos e incidencias (contrato del Sprint 4)
 
-Contrato objetivo, aún no implementado; quien implemente cada ticket actualiza
-OpenAPI. Eventos y claves: [catálogo](../03-contracts/events/domain-events-catalog.md).
+El contrato de CON-55 está implementado; el de CON-47 sigue siendo objetivo
+hasta que Brandon actualice OpenAPI. Eventos y claves:
+[catálogo](../03-contracts/events/domain-events-catalog.md).
 
+- `POST /incidencias/{incidencia_id}/asignacion` (CON-55; `ADMIN_JUNTA` del
+  condominio). Cuerpo con `version`, uno de `responsable_usuario_id` o
+  `responsable_proveedor_id` (con `proveedor_nombre` y `correo_proveedor` cuando
+  aplica), `plazo` futuro y `nota` opcional. Header `Idempotency-Key` UUID.
+  Devuelve la incidencia en `ASIGNADO`, con `asignacion_id` y `avisos_encolados`.
+  Repetir la clave con los mismos datos devuelve la asignación original (200);
+  con otros datos responde 409. Un responsable inactivo o ajeno responde 403 y
+  una versión desactualizada o un estado no asignable responde 409.
 - `GET /incidencias/{incidencia_id}/avisos` (CON-55; `ADMIN_JUNTA` del condominio,
   Auditor solo lectura; Residente 403; otro condominio 404). Devuelve `items` con
   `asignacion_id`, `destinatario_tipo` (`RESIDENTE` | `PROVEEDOR`), `estado` y, si

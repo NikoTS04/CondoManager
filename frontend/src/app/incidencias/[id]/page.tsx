@@ -10,8 +10,27 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Feedback";
 import { useAuth } from "@/context/AuthContext";
+import { AsignacionIncidenciaForm } from "@/features/junta/AsignacionIncidenciaForm";
+import { CierreIncidencia } from "@/features/junta/CierreIncidencia";
 import { RevisionIncidenciaForm } from "@/features/junta/RevisionIncidenciaForm";
-import { consultarIncidencia, descargarFotoIncidencia, NIVELES_INCIDENCIA, type Incidencia } from "@/lib/api";
+import { SeguimientoIncidencia } from "@/features/junta/SeguimientoIncidencia";
+import {
+  consultarAvisosAsignacion,
+  consultarIncidencia,
+  descargarFotoIncidencia,
+  NIVELES_INCIDENCIA,
+  type AvisoAsignacion,
+  type Incidencia,
+} from "@/lib/api";
+
+const ETIQUETAS_ESTADO: Record<Incidencia["estado"], string> = {
+  REGISTRADO: "Registrado",
+  RECHAZADO: "Rechazado",
+  ASIGNADO: "Asignado",
+  EN_PROCESO: "En proceso",
+  RESUELTO: "Resuelto",
+  CERRADO: "Cerrado",
+};
 
 function DetalleIncidencia({ id }: { id: string }) {
   const { user } = useAuth();
@@ -21,6 +40,7 @@ function DetalleIncidencia({ id }: { id: string }) {
   const [descargando, setDescargando] = useState(false);
   const [revisionConsulta, setRevisionConsulta] = useState(0);
   const [confirmacion, setConfirmacion] = useState("");
+  const [avisos, setAvisos] = useState<AvisoAsignacion[]>([]);
   const esJunta = user?.rol === "ADMIN_JUNTA";
 
   useEffect(() => {
@@ -36,6 +56,17 @@ function DetalleIncidencia({ id }: { id: string }) {
       });
     return () => solicitud.abort();
   }, [id, revisionConsulta]);
+
+  useEffect(() => {
+    if (!esJunta) return;
+    const solicitud = new AbortController();
+    consultarAvisosAsignacion(id, solicitud.signal)
+      .then((lista) => {
+        if (!solicitud.signal.aborted) setAvisos(lista.items);
+      })
+      .catch(() => undefined);
+    return () => solicitud.abort();
+  }, [id, esJunta, revisionConsulta]);
 
   async function descargar() {
     setErrorFoto("");
@@ -67,7 +98,7 @@ function DetalleIncidencia({ id }: { id: string }) {
               title="Detalle de la incidencia"
               actions={
                 <Badge tone={incidencia.estado === "RECHAZADO" ? "warning" : "info"}>
-                  {incidencia.estado === "RECHAZADO" ? "Rechazado" : "Registrado"}
+                  {ETIQUETAS_ESTADO[incidencia.estado]}
                 </Badge>
               }
             />
@@ -116,9 +147,82 @@ function DetalleIncidencia({ id }: { id: string }) {
                   Descargar foto
                 </Button>
               )}
-              {errorFoto && <Alert tone="danger">{errorFoto}</Alert>}
+               {errorFoto && <Alert tone="danger">{errorFoto}</Alert>}
+               {incidencia.responsable_usuario_id || incidencia.responsable_proveedor_id ? (
+                 <div className="rounded-lg border border-line bg-surface p-4 text-sm">
+                   <p className="font-semibold">Responsable asignado</p>
+                   <p className="break-all text-muted">
+                     {incidencia.responsable_usuario_id
+                       ? incidencia.responsable_usuario_id
+                       : "Proveedor externo"}
+                   </p>
+                   {incidencia.plazo && (
+                     <p className="mt-2 text-muted">
+                       Plazo: {new Date(incidencia.plazo).toLocaleString("es-PE")}
+                     </p>
+                   )}
+                 </div>
+               ) : null}
             </CardBody>
           </Card>
+          {esJunta && avisos.length > 0 && (
+            <Card>
+              <CardHeader title="Avisos de la asignación" description="El estado ENVIADO no prueba entrega." />
+              <CardBody>
+                <ul className="space-y-2 text-sm">
+                  {avisos.map((aviso, indice) => (
+                    <li key={`${aviso.asignacion_id}-${aviso.destinatario_tipo}-${indice}`} className="flex flex-wrap justify-between gap-2 border-b border-line py-1 last:border-0">
+                      <span className="font-medium">
+                        {aviso.destinatario_tipo === "RESIDENTE" ? "Residente" : "Proveedor"}
+                      </span>
+                      <span className="text-muted">
+                        {aviso.estado === "CONTACTO_FALTANTE" ? "Contacto faltante" : aviso.estado}
+                        {aviso.alerta_abierta ? " · alerta abierta" : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            </Card>
+          )}
+          {["ASIGNADO", "EN_PROCESO", "RESUELTO", "CERRADO"].includes(incidencia.estado) && (
+            <SeguimientoIncidencia
+              incidencia={incidencia}
+              esJunta={esJunta}
+              onActualizada={(detalle) => {
+                setIncidencia(detalle);
+                setConfirmacion(
+                  detalle.estado === "RESUELTO" ? "Incidencia resuelta." : "Avance guardado.",
+                );
+                setRevisionConsulta((actual) => actual + 1);
+              }}
+            />
+          )}
+          {esJunta && ["REGISTRADO", "ASIGNADO"].includes(incidencia.estado) && (
+            <AsignacionIncidenciaForm
+              key={`${incidencia.id}-${incidencia.version}`}
+              incidencia={incidencia}
+              onAsignada={() => {
+                setConfirmacion("Asignación guardada y avisos encolados.");
+                setRevisionConsulta((actual) => actual + 1);
+              }}
+            />
+          )}
+          {incidencia.estado === "RESUELTO" && (
+            <CierreIncidencia
+              incidencia={incidencia}
+              esJunta={esJunta}
+              onActualizada={(detalle) => {
+                setIncidencia(detalle);
+                setConfirmacion(
+                  detalle.estado === "CERRADO"
+                    ? "Incidencia cerrada."
+                    : "Incidencia reabierta.",
+                );
+                setRevisionConsulta((actual) => actual + 1);
+              }}
+            />
+          )}
           {esJunta && incidencia.estado === "REGISTRADO" && (
             <RevisionIncidenciaForm
               key={incidencia.version}

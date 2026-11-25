@@ -64,4 +64,26 @@ La aceptación incierta se consulta en el flujo de revisión de correo existente
 
 La decisión, el efecto sobre el aviso, el actor y el motivo se guardan juntos.
 Una repetición con la misma clave recupera la decisión original sin iniciar
-otro ciclo. El origen job y sus acciones se integran con CON-86.
+otro ciclo.
+
+## 5. Persistencia y ejecución de resoluciones (CON-86)
+
+CON-86 convierte cada alerta en un caso persistido con evidencia autorizada,
+historial de decisiones y ejecución de acciones sobre el proceso de origen.
+Además de los fallos de correo, la bandeja incluye los
+`JOB_FALLO_DEFINITIVO` (`origen_tipo = JOB`), que no tienen condominio:
+`SUPERADMIN` los consulta y resuelve de forma global. Para conservar la
+bitácora inmutable con los siete campos, esas decisiones se registran con el
+condominio centinela `3709ed64-791a-5cd8-99c7-142ab3ee590c`, creado por la
+migración `20261130_0030` y sin usuarios ni roles asociados.
+
+Las acciones permitidas son `CERRAR_CON_MOTIVO` para cualquier causa y
+`REENVIAR_CORREO` o `REINTENTAR_JOB` solo cuando el origen admite repetir con
+seguridad. `REINTENTAR_JOB` está restringido a procesos idempotentes registrados
+en `JOBES_REINTENTABLES`; el job `diario` queda fuera hasta CON-85. La ejecución
+revalida el estado del proceso de origen bajo bloqueo pesimista, guarda el
+resultado **real** de la acción y lo muestra en la bandeja. Una decisión se
+guarda en `excepciones_resoluciones` con clave de idempotencia y huella única
+por caso; repetir la clave devuelve la decisión original y no ejecuta dos veces
+la acción. La evidencia conserva componente, operación, ciclo, referencia de
+correlación y error saneado del proveedor, sin correos ni secretos.
