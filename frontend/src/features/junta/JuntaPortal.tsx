@@ -16,6 +16,7 @@ import { CuotasSection } from "@/features/junta/CuotasSection";
 import { AsistenteEmision } from "@/features/junta/AsistenteEmision";
 import { distribucionValida } from "@/features/junta/calculos";
 import { EstructuraCondominio } from "@/features/junta/EstructuraCondominio";
+import { ExcepcionesSection } from "@/features/junta/ExcepcionesSection";
 import { IncidenciasSection } from "@/features/junta/IncidenciasSection";
 import { JuntaNav, JUNTA_NAV_ITEMS, type JuntaSection } from "@/features/junta/JuntaNav";
 import { MorasSection } from "@/features/junta/MorasSection";
@@ -75,14 +76,16 @@ export default function JuntaPortal() {
   contextoActual.current = condominioActivoId;
 
   useEffect(() => {
-    if (esJunta && window.location.hash === "#incidencias") setSection("incidencias");
+    const seccion = window.location.hash.slice(1);
+    if (esJunta && (seccion === "incidencias" || seccion === "excepciones")) setSection(seccion);
   }, [esJunta]);
 
   function navegar(destino: JuntaSection) {
     setSection(destino);
-    if (destino === "incidencias" || window.location.hash === "#incidencias") {
+    const usaAncla = destino === "incidencias" || destino === "excepciones";
+    if (usaAncla || ["#incidencias", "#excepciones"].includes(window.location.hash)) {
       const url = new URL(window.location.href);
-      url.hash = destino === "incidencias" ? "incidencias" : "";
+      url.hash = usaAncla ? destino : "";
       window.history.replaceState(window.history.state, "", url);
     }
   }
@@ -279,6 +282,7 @@ export default function JuntaPortal() {
   }
 
   const seccionTitulo = navActual?.label ?? "Resumen";
+  const cargaIndependiente = section === "incidencias" || section === "excepciones";
   const comprobanteConfirmado = confirmacion?.kind === "comprobante"
     ? comprobantes.find((comprobante) => comprobante.id === confirmacion.id)
     : undefined;
@@ -312,11 +316,11 @@ export default function JuntaPortal() {
           <PageHeader
             title={seccionTitulo}
             description={condominioActivoId ? isSuperAdmin ? <span className="break-all text-xs">Condominio · {condominioActivoId}</span> : undefined : "Selecciona un condominio en Configuración para consultar sus datos."}
-            actions={section !== "incidencias" && (
+            actions={!cargaIndependiente && (
               <Button variant="secondary" loading={loading} onClick={() => void loadData()} icon={<RefreshCw className="h-4 w-4" aria-hidden />}>Actualizar</Button>
             )}
           />
-          {loadError && section !== "incidencias" && (
+          {loadError && !cargaIndependiente && (
             <Alert
               tone="danger"
               title="No se pudieron cargar los datos"
@@ -329,7 +333,7 @@ export default function JuntaPortal() {
               {loadError}
             </Alert>
           )}
-          {feedback && section !== "incidencias" && (
+          {feedback && !cargaIndependiente && (
             <Alert
               key={`${feedbackTone}:${feedback}`}
               tone={feedbackTone}
@@ -438,6 +442,9 @@ export default function JuntaPortal() {
           )}
           {section === "incidencias" && esJunta && condominioActivoId && (
             <IncidenciasSection key={condominioActivoId} />
+          )}
+          {section === "excepciones" && esJunta && condominioActivoId && (
+            <ExcepcionesSection key={condominioActivoId} onRevisarCorreo={() => navegar("comunicados")} />
           )}
           {section === "comunicados" && (
             <ComunicadosSection

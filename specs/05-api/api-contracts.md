@@ -43,6 +43,19 @@ Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y res
 
 ## 2. Contratos Principales por Módulo
 
+### Bandeja de excepciones (CON-66)
+
+`GET /excepciones` devuelve una página con `items` y `hay_mas`.
+`GET /excepciones/{id}` añade `evidencia`, `historial`,
+`acciones_permitidas` y `requiere_revision_correo`.
+`POST /excepciones/{id}/resoluciones` exige `Idempotency-Key` UUID,
+`accion`, `motivo` y `nuevo_destinatario` cuando la acción es
+`REENVIAR_CORREO`. El otro caso admite `CERRAR_CON_MOTIVO`. Devuelve la
+decisión guardada y el efecto inmediato sobre la operación de origen. El
+detalle muestra posteriormente su resultado vigente. La API devuelve 404
+para casos de otro condominio y 409 si la acción ya no procede o la clave
+se reutiliza con otros datos.
+
 ### Registro de incidencias (CON-53)
 
 `POST /incidencias` admite multipart con `departamento_id`, `ubicacion`,
