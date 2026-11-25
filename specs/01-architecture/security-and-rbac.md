@@ -27,6 +27,8 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Consultar y resolver excepciones operativas | No | Su condominio | No | No |
 | Conciliar pagos, evaluar moras y enviar/reintentar comunicados | Sí | Su condominio | No | No |
 | Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | Solo avisos dirigidos a su identidad y vínculos activos |
+| Consultar salud de componentes y ejecución de jobs (CON-68) | Sí | No | No | No |
+| Consultar alertas visibles de monitoreo (CON-68) | Todas, incluidas las de job | Las de su condominio | Las de su condominio | No |
 | Asignar/revocar ADMIN_JUNTA | Sí, excepto propia asignación o identidad global | No | No | No |
 | Asignar/revocar AUDITOR y RESIDENTE | Sí | Su condominio, sin modificar Junta ni su propia asignación | No | No |
 | Crear/cambiar/revocar vínculos de departamentos | Contexto seleccionado | Su condominio | No | No |

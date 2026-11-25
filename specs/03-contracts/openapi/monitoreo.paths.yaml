@@ -1,0 +1,92 @@
+# CON-68: vista de salud y alertas visibles. Solo lectura; sin mutaciones ni caché.
+paths:
+  /monitoreo/salud:
+    get:
+      operationId: consultarSaludOperativa
+      tags: [Sistema]
+      summary: Estado de componentes por perfil y última ejecución de los jobs
+      description: Solo SUPERADMIN. Siempre responde 200 aunque un componente falle, para poder mostrar la caída. No expone URLs, credenciales ni errores del driver. Redis y correo figuran deshabilitado cuando el perfil prescinde de ellos.
+      x-historias: [CON-68]
+      x-implementation-status: implementado
+      responses:
+        '200':
+          description: Salud operativa.
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/SaludOperativa'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /monitoreo/alertas:
+    get:
+      operationId: listarAlertasMonitoreo
+      tags: [Sistema]
+      summary: Alertas visibles con componente, operación y referencia de diagnóstico
+      description: SUPERADMIN ve todas (incluidas las de job, sin condominio) y puede filtrar por condominio; ADMIN_JUNTA y AUDITOR solo las de su condominio. El RESIDENTE no accede. Sin estado se devuelven las ABIERTAS.
+      x-historias: [CON-68, CON-84]
+      x-implementation-status: implementado
+      parameters:
+        - {$ref: './sprint-2.paths.yaml#/parameters/Contexto'}
+        - {name: estado, in: query, schema: {type: string, enum: [ABIERTA, ATENDIDA], default: ABIERTA}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200':
+          description: Alertas, de la más reciente a la más antigua.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/schemas/AlertaVisible'}}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+schemas:
+  ComponenteSalud:
+    type: object
+    additionalProperties: false
+    required: [componente, estado]
+    properties:
+      componente: {type: string, enum: [api, postgresql, redis, correo]}
+      estado: {type: string, enum: [ok, error, deshabilitado]}
+  EjecucionJob:
+    type: object
+    additionalProperties: false
+    required: [nombre, inicio, fin, duracion_segundos, resultado]
+    properties:
+      nombre: {type: string}
+      inicio: {type: [string, 'null'], format: date-time}
+      fin: {type: [string, 'null'], format: date-time}
+      duracion_segundos: {type: [number, 'null'], minimum: 0}
+      resultado: {type: string, enum: [EN_CURSO, COMPLETADO, INCOMPLETO, SIN_REGISTRO]}
+  SaludOperativa:
+    type: object
+    additionalProperties: false
+    required: [perfil, estado_general, generado_en, componentes, jobs]
+    properties:
+      perfil: {type: string, enum: [development, production]}
+      estado_general: {type: string, enum: [ok, degradado]}
+      generado_en: {type: string, format: date-time}
+      componentes: {type: array, items: {$ref: '#/schemas/ComponenteSalud'}}
+      jobs: {type: array, items: {$ref: '#/schemas/EjecucionJob'}}
+  ReferenciaDiagnostico:
+    type: object
+    additionalProperties: false
+    required: [origen_tipo, origen_id, referencia_correlacion]
+    properties:
+      origen_tipo: {type: string, enum: [CORREO, JOB]}
+      origen_id: {type: string, maxLength: 100}
+      referencia_correlacion: {type: [string, 'null'], maxLength: 64, description: Nula hasta CON-82.}
+  AlertaVisible:
+    type: object
+    additionalProperties: false
+    required: [id, componente, operacion, referencia_diagnostico, condominio_id, departamento_numero, tipo, mensaje, estado, creada_en, atendida_en]
+    properties:
+      id: {type: string, format: uuid}
+      componente: {type: string, enum: [correo, job]}
+      operacion: {type: string, description: Tipo de evento del aviso o nombre del job.}
+      referencia_diagnostico: {$ref: '#/schemas/ReferenciaDiagnostico'}
+      condominio_id: {type: [string, 'null'], format: uuid}
+      departamento_numero: {type: [string, 'null']}
+      tipo: {type: string}
+      mensaje: {type: string, description: Texto operativo sin contactos ni trazas.}
+      estado: {type: string, enum: [ABIERTA, ATENDIDA]}
+      creada_en: {type: string, format: date-time}
+      atendida_en: {type: [string, 'null'], format: date-time}

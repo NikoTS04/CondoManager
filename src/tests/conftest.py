@@ -33,7 +33,12 @@ from src.tests.reservas_contrato import (
     ReservasRepositoryFake,
 )
 
-pytest_plugins = ["src.tests.usuarios_db", "src.tests.finanzas_contrato", "src.tests.pagos_db"]
+pytest_plugins = [
+    "src.tests.rendimiento",
+    "src.tests.usuarios_db",
+    "src.tests.finanzas_contrato",
+    "src.tests.pagos_db",
+]
 
 
 @pytest.fixture

@@ -28,3 +28,7 @@ ejecutado de un proveedor ni acredita directorio, contratos o alertas implementa
 - Cron diario a las 01:00 UTC evalúa `contratos_proveedor.fecha_fin`.
 - A los 60 días: Alerta informativa para abrir proceso de cotización o renovación.
 - A los 30 días: Alerta prioritaria en el dashboard para firma de addenda o nuevo contrato marco.
+
+Reglas de prioridad, destinatarios, deduplicación y recuperación (CON-50):
+[alertas de contratos](alertas-contratos.md). Dependen de CON-49 para el origen
+de los contratos; sin él, la revisión diaria no encuentra contratos y no genera avisos.

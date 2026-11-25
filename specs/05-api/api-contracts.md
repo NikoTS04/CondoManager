@@ -88,6 +88,22 @@ original conserva la categoría y urgencia que declaró el residente. El detalle
 incluye la categoría confirmada, la prioridad, el motivo de rechazo y la versión.
 Reenviar el reporte de CON-53 devuelve el comprobante original de registro.
 
+### Avisos de bloqueos e incidencias (contrato del Sprint 4)
+
+Contrato objetivo, aún no implementado; quien implemente cada ticket actualiza
+OpenAPI. Eventos y claves: [catálogo](../03-contracts/events/domain-events-catalog.md).
+
+- `GET /incidencias/{incidencia_id}/avisos` (CON-55; `ADMIN_JUNTA` del condominio,
+  Auditor solo lectura; Residente 403; otro condominio 404). Devuelve `items` con
+  `asignacion_id`, `destinatario_tipo` (`RESIDENTE` | `PROVEEDOR`), `estado` y, si
+  existe, `aviso_id`, `intentos`, `fecha_actualizacion` y `alerta_abierta`.
+- `GET /condominios/{cid}/areas/{aid}/bloqueos/{bid}/avisos` (CON-47; mismos
+  permisos). Devuelve `reservas_canceladas`, `avisos_por_estado` y `items` por reserva.
+- `estado` es el de `notificaciones_logs` (`EN_COLA`, `ENVIADO`, `ENTREGADO`,
+  `REINTENTANDO`, `FALLIDO_PERMANENTE`, `OMITIDO`) o `CONTACTO_FALTANTE`, derivado
+  cuando no hay correo utilizable. No expone correos ni contenido del mensaje.
+- Reintentar una confirmación no cambia los totales ni duplica avisos.
+
 ### CON-81 — disponibilidad del despliegue
 
 GET `/health` y `/api/v1/health` conservan su respuesta de liveness HTTP.
@@ -472,6 +488,12 @@ Contrato y reglas de entrega/reintento: [comunicaciones del Sprint 2](sprint-2-c
 
 `GET /notificaciones/logs` filtra contexto y destinatario autorizado; `POST /notificaciones/despachar` y `/comunicado-masivo` confirman registros en cola con `202`; `/reenviar/{log_id}` devuelve `200` sin duplicar avisos entregados o aceptados por proveedor. `EN_COLA`, `ENVIADO`, `ENTREGADO`, `REINTENTANDO` y `FALLIDO_PERMANENTE` distinguen persistencia, aceptación y confirmación. El log identifica transporte simulado o real y conserva ciclos/intentos.
 
+#### Alertas de contratos (CON-50)
+
+No expone endpoints nuevos: la revisión corre dentro de `GET /jobs/diario` y no cambia su
+respuesta. La consulta de avisos para el panel de Junta queda pendiente de definir con CON-49.
+Contrato interno: [alertas de contratos](../02-domains/06-egresos-proveedores/alertas-contratos.md).
+
 ### 2.7 Módulo de Autenticación y RBAC (PROC-05)
 
 Roles canónicos: `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`. Los tres
@@ -623,3 +645,12 @@ Contrato de job Supabase Cron y callback autenticado Mailjet:
 [Mailjet productivo](vercel-services-mailjet.md). OpenAPI:
 [`mailjet.paths.yaml`](../03-contracts/openapi/mailjet.paths.yaml).
 La API de despacho conserva 202: confirma persistencia en cola, no recepción.
+# CON-68 — Salud y alertas visibles
+
+`GET /api/v1/monitoreo/salud` (solo SUPERADMIN): estado de `api`, `postgresql`, `redis` y
+`correo` según el perfil (`ok`/`error`/`deshabilitado`) y último inicio, fin, duración y
+resultado de cada job. Siempre 200; nunca expone URLs ni credenciales. Sin caché.
+`GET /api/v1/monitoreo/alertas` (SUPERADMIN, ADMIN_JUNTA, AUDITOR): alertas con `componente`,
+`operacion` y `referencia_diagnostico`; las de job solo las ve SUPERADMIN. `limit`, `offset`,
+`estado`, `condominio_id`. Detalle: [notificaciones §9](../02-domains/03-notificaciones/spec.md)
+y [`monitoreo.paths.yaml`](../03-contracts/openapi/monitoreo.paths.yaml).

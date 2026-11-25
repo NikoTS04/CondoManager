@@ -32,10 +32,28 @@ Dependabot (`.github/dependabot.yml`) propone cada semana, hacia `develop`, actu
 
 ```bash
 uv run --extra dev ruff check .
-uv run --extra dev python -m pytest -q --cov
+./scripts/pg_pruebas.sh && eval "$(./scripts/pg_pruebas.sh env)"   # PostgreSQL de pruebas en RAM
+uv run --extra dev python -m pytest -q -n auto --dist worksteal --cov
 cd frontend && npm ci && npm run lint && npx tsc --noEmit && npm run build
 uvx --from actionlint-py actionlint      # sintaxis de los workflows
 ```
+
+Las pruebas con PostgreSQL crean una base plantilla una sola vez (clave derivada de `REVISIONES_API` y los scripts demo) y la clonan por prueba/worker (`PYTEST_XDIST_WORKER`); si el rol no tiene permiso `CREATEDB`, hacen fallback automático a esquemas por prueba. Para depuración secuencial puede omitirse `-n auto`.
+
+Otras aceleraciones, ninguna cambia lo que verifica una prueba:
+
+- **PostgreSQL desechable sin durabilidad** (`scripts/pg_pruebas.sh` en local; paso «Afinar PostgreSQL efímero» en CI): `fsync`, `synchronous_commit` y `full_page_writes` apagados, y datos en `tmpfs` en local. Clonar y borrar una base por prueba deja de esperar al disco.
+- **`--dist worksteal`**: los workers libres toman pruebas pendientes de los ocupados, así las pruebas largas no dejan una cola al final.
+- **`src/tests/rendimiento.py`**: memoriza `verify_password`, una función pura que hace 100 000 iteraciones PBKDF2, por par exacto (texto, hash), y congela el GC tras la colección. `hash_password` no se memoriza. Se desactiva con `CONDOMANAGER_PRUEBAS_SIN_ACELERAR=1`.
+
+| Medición local (10 CPU, 810 pruebas) | Tiempo |
+|---|---|
+| Antes: esquema + 22 migraciones + datos demo por prueba, en serie | ~709 s |
+| Base plantilla + `-n auto` | ~64–77 s |
+| + PostgreSQL sin durabilidad en RAM | ~46 s |
+| + memo de `verify_password`, GC congelado y `worksteal` | ~39–40 s |
+
+Descartados tras medirlos: más workers que CPU (14 → 54 s, 20 → 64 s), autenticación `trust`, `uvloop` y `COVERAGE_CORE=sysmon`, que no mejoran o empeoran.
 
 ## Branch protection (requiere permisos de administrador del repositorio)
 

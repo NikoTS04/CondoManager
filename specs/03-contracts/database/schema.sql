@@ -369,17 +369,22 @@ CREATE TABLE notificaciones_incidencias (
 );
 CREATE TABLE notificaciones_alertas (
     id UUID PRIMARY KEY,
-    notificacion_id UUID NOT NULL REFERENCES notificaciones_logs(id) ON DELETE RESTRICT,
-    condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE RESTRICT,
-    departamento_id UUID NOT NULL REFERENCES departamentos(id) ON DELETE RESTRICT,
+    notificacion_id UUID REFERENCES notificaciones_logs(id) ON DELETE RESTRICT,
+    condominio_id UUID REFERENCES condominios(id) ON DELETE RESTRICT,
+    departamento_id UUID REFERENCES departamentos(id) ON DELETE RESTRICT,
+    origen_tipo VARCHAR(10) NOT NULL DEFAULT 'CORREO',
+    origen_id VARCHAR(100) NOT NULL,
+    referencia_correlacion VARCHAR(64),
     ciclo INTEGER NOT NULL,
     tipo VARCHAR(40) NOT NULL,
     mensaje TEXT NOT NULL,
     creada_en TIMESTAMPTZ NOT NULL,
     atendida_en TIMESTAMPTZ,
     atendida_por UUID REFERENCES usuarios(id) ON DELETE RESTRICT,
-    CONSTRAINT uq_alerta_notificacion_tipo UNIQUE(notificacion_id, ciclo, tipo),
-    CONSTRAINT ck_alerta_tipo CHECK (tipo IN ('ERROR_DEFINITIVO','INTENTOS_AGOTADOS','ACEPTACION_INCIERTA','DESTINATARIO_INVALIDO','PROVEEDOR_NO_CONFIGURADO')),
+    CONSTRAINT uq_alerta_origen_tipo UNIQUE(origen_tipo, origen_id, ciclo, tipo),
+    CONSTRAINT ck_alerta_tipo CHECK (tipo IN ('ERROR_DEFINITIVO','INTENTOS_AGOTADOS','ACEPTACION_INCIERTA','DESTINATARIO_INVALIDO','PROVEEDOR_NO_CONFIGURADO','JOB_FALLO_DEFINITIVO')),
+    CONSTRAINT ck_alerta_origen_tipo CHECK (origen_tipo IN ('CORREO','JOB')),
+    CONSTRAINT ck_alerta_origen CHECK (origen_tipo <> 'CORREO' OR (notificacion_id IS NOT NULL AND condominio_id IS NOT NULL)),
     CONSTRAINT ck_alerta_atencion CHECK ((atendida_en IS NULL) = (atendida_por IS NULL))
 );
 CREATE INDEX idx_alerta_abierta ON notificaciones_alertas(condominio_id, creada_en) WHERE atendida_en IS NULL;

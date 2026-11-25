@@ -383,6 +383,12 @@ La exclusión concurrente utiliza lock SQL estable sobre el área, no solo un í
   `uq_alerta_notificacion_tipo (notificacion_id, ciclo, tipo)`, que hace idempotente
   la creación. Índice parcial `idx_alerta_abierta (condominio_id, creada_en)
   WHERE atendida_en IS NULL`. RLS habilitado.
+  CON-84 (migración `20261125_0025`): `origen_tipo` VARCHAR(10) NOT NULL (`CORREO`|`JOB`),
+  `origen_id` VARCHAR(100) NOT NULL (id de la notificación o nombre del job),
+  `referencia_correlacion` VARCHAR(64) nullable (la llena CON-82); `notificacion_id` y
+  `condominio_id` pasan a admitir NULL solo para `JOB` (`ck_alerta_origen`); nuevo tipo
+  `JOB_FALLO_DEFINITIVO`; la unicidad pasa a `uq_alerta_origen_tipo
+  (origen_tipo, origen_id, ciclo, tipo)`.
 
 Las tablas tienen RLS habilitado sin políticas públicas: el acceso del prototipo
 se realiza exclusivamente por la API con conexión privilegiada y autorización
@@ -481,8 +487,16 @@ SolvenciaRestablecidaEvent v1; se confirma junto con el pago.
 recordatorio_dias (INTEGER) y estado OMITIDO. No se modifica dinero ni se
 convierte el historial SIMULADO. Downgrade rechaza pérdida de operación.
 
+# Extensión 0026 — alertas de contratos (CON-50)
 
-# Extensión 0025 — Directorio de Proveedores y Contratos (CON-48, CON-49)
+`avisos_contrato`: UUID PK; condominio_id FK RESTRICT; contrato_id UUID **sin llave
+foránea** hasta que exista la tabla de contratos (CON-49); vigencia TEXT; umbral_dias
+INTEGER (60/30); estado (GENERADO/OMITIDO); prioridad (INFORMATIVA/PRIORITARIA);
+destinatario_rol; fecha_fin DATE y dias_restantes INTEGER observados; motivo TEXT;
+omitido_por_umbral INTEGER nullable; fecha_evaluacion DATE; creado_en TIMESTAMPTZ.
+Única por (contrato_id, vigencia, umbral_dias). Sin importes. Downgrade elimina la tabla.
+
+# Extensión 0027 — Directorio de Proveedores y Contratos (CON-48, CON-49)
 
 - `proveedores`: UUID PK, `condominio_id` FK RESTRICT indexado, `ruc` VARCHAR(11) indexado,
   `razon_social` VARCHAR(200), `nombre_comercial` VARCHAR(200) nullable, `rubro` VARCHAR(100),
