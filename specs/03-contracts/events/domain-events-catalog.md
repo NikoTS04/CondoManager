@@ -38,6 +38,14 @@ correo dentro de la transacción del reporte. `evento_id` y `operacion_id`
 usan el ID de la incidencia. Cada cuenta activa de Junta del mismo condominio
 recibe un aviso con el ID y un enlace privado al reporte.
 
+### Alertas de contrato CON-50 — registro SQL, sin envelope
+
+`AvisoContratoGeneradoEvent` y `AvisoContratoOmitidoEvent` son hechos internos persistidos en
+`avisos_contrato` y auditados como `ALERTA_VENCIMIENTO_CONTRATO` en la misma transacción de la
+revisión diaria. No se publican en el Stream ni tienen consumidor externo todavía. Clave lógica:
+(`contrato_id`, `vigencia`, `umbral_dias`). Contrato: [alertas de contratos](../../02-domains/06-egresos-proveedores/alertas-contratos.md).
+El envío de correo a la Junta queda pendiente de decisión.
+
 ### Identidad CON-76/7 — cola SQL transaccional
 
 `UsuarioInvitadoEvent` y `AccesoUsuarioCambiadoEvent` identifican avisos internos

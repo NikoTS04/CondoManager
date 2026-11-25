@@ -78,6 +78,24 @@ tesorería/auditoría, no por residentes ajenos; conservar versiones históricas
   - A los **60 días** antes del vencimiento: Notificación preventiva a la Junta para evaluar renovación o cotización con otros postores.
   - A los **30 días** antes del vencimiento: Alerta prioritaria en el dashboard administrativo para gestión de addenda o nuevo acuerdo.
 
+#### 4.2.1 Alertas contractuales de 60 y 30 días (CON-50)
+
+Detalle completo, estados y recuperación en
+[alertas de contratos](../02-domains/06-egresos-proveedores/alertas-contratos.md);
+escenarios en [alertas-contratos.feature.md](../04-acceptance-criteria/alertas-contratos.feature.md).
+
+- **Destinatarios:** la Junta (`ADMIN_JUNTA`) del condominio dueño del contrato. Nunca otra Junta.
+- **Prioridad:** el aviso de 60 días es `INFORMATIVA` (preventivo); el de 30 días es `PRIORITARIA`.
+- **Calendario por vigencia:** cada vigencia del contrato tiene su propio calendario. Una
+  renovación abre una vigencia nueva y conserva intacto el historial de la anterior.
+- **Deduplicación:** un único aviso por (contrato, vigencia, umbral), sea `GENERADO` u `OMITIDO`.
+- **Recuperación:** un umbral se considera vencido cuando faltan `<=` 60 (o 30) días y no tiene
+  registro. Si el job se perdió y vuelve con 59 días, emite el de 60 una sola vez. Si vuelve con
+  29 días y ambos están pendientes, emite solo el de 30 y registra el de 60 como `OMITIDO`
+  por prioridad. Un contrato ya vencido (menos de 0 días) no genera avisos nuevos.
+- **Auditoría:** cada aviso registra `ALERTA_VENCIMIENTO_CONTRATO` en `auditoria_logs` con actor
+  `SISTEMA_AUTOMATICO`.
+
 ---
 
 ## 5. Ciclo de Automatización
