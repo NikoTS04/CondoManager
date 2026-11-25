@@ -28,9 +28,7 @@ class Proveedor(Base):
 
     __tablename__ = "proveedores"
     __table_args__ = (
-        UniqueConstraint(
-            "condominio_id", "ruc", name="uq_proveedor_condominio_ruc"
-        ),
+        UniqueConstraint("condominio_id", "ruc", name="uq_proveedor_condominio_ruc"),
         CheckConstraint("length(ruc) = 11", name="ck_proveedor_ruc_longitud"),
         CheckConstraint("version >= 1", name="ck_proveedor_version"),
     )
@@ -51,12 +49,8 @@ class Proveedor(Base):
     notas: Mapped[str | None] = mapped_column(Text, default=None)
 
     # Auditoría inmutable
-    creado_por: Mapped[UUID] = mapped_column(
-        ForeignKey("usuarios.id", ondelete="RESTRICT")
-    )
-    creado_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    creado_por: Mapped[UUID] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     actualizado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -96,30 +90,20 @@ class ContratoProveedor(Base):
         ForeignKey("proveedores.id", ondelete="RESTRICT"), index=True
     )
     numero_contrato: Mapped[str] = mapped_column(String(100))
-    tipo_documento: Mapped[str] = mapped_column(
-        String(50), default="CONTRATO_SERVICIO"
-    )
+    tipo_documento: Mapped[str] = mapped_column(String(50), default="CONTRATO_SERVICIO")
     descripcion: Mapped[str] = mapped_column(Text)
-    monto_mensual: Mapped[Decimal | None] = mapped_column(
-        Numeric(12, 2), default=None
-    )
+    monto_mensual: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     moneda: Mapped[str] = mapped_column(String(3), server_default="PEN", default="PEN")
     fecha_inicio: Mapped[date] = mapped_column(Date)
     fecha_fin: Mapped[date] = mapped_column(Date, index=True)
     contacto_emergencia: Mapped[str | None] = mapped_column(String(150), default=None)
     contacto_emergencia_telefono: Mapped[str | None] = mapped_column(String(50), default=None)
-    estado: Mapped[str] = mapped_column(
-        String(30), server_default="VIGENTE", default="VIGENTE"
-    )
+    estado: Mapped[str] = mapped_column(String(30), server_default="VIGENTE", default="VIGENTE")
     version_actual: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
 
     # Auditoría
-    creado_por: Mapped[UUID] = mapped_column(
-        ForeignKey("usuarios.id", ondelete="RESTRICT")
-    )
-    creado_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    creado_por: Mapped[UUID] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     actualizado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -139,9 +123,7 @@ class DocumentoContratoVersion(Base):
 
     __tablename__ = "documentos_contrato_version"
     __table_args__ = (
-        UniqueConstraint(
-            "contrato_id", "version", name="uq_documento_contrato_version"
-        ),
+        UniqueConstraint("contrato_id", "version", name="uq_documento_contrato_version"),
         CheckConstraint("version >= 1", name="ck_doc_version_positiva"),
         CheckConstraint("archivo_tamano_bytes > 0", name="ck_doc_tamano_positivo"),
     )
@@ -158,11 +140,7 @@ class DocumentoContratoVersion(Base):
     archivo_binario: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
     motivo_reemplazo: Mapped[str | None] = mapped_column(Text, default=None)
 
-    subido_por: Mapped[UUID] = mapped_column(
-        ForeignKey("usuarios.id", ondelete="RESTRICT")
-    )
-    subido_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    subido_por: Mapped[UUID] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
+    subido_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     contrato = relationship("ContratoProveedor", back_populates="versiones")

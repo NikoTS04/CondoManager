@@ -49,9 +49,7 @@ class SQLAlchemyProveedoresRepository:
         await self.session.flush()
         return proveedor
 
-    async def obtener_por_id(
-        self, condominio_id: UUID, proveedor_id: UUID
-    ) -> Proveedor | None:
+    async def obtener_por_id(self, condominio_id: UUID, proveedor_id: UUID) -> Proveedor | None:
         query = (
             select(Proveedor)
             .where(
@@ -62,9 +60,7 @@ class SQLAlchemyProveedoresRepository:
         )
         return await self.session.scalar(query)
 
-    async def obtener_por_ruc(
-        self, condominio_id: UUID, ruc: str
-    ) -> Proveedor | None:
+    async def obtener_por_ruc(self, condominio_id: UUID, ruc: str) -> Proveedor | None:
         if not ruc or "\x00" in ruc:
             return None
         query = select(Proveedor).where(
@@ -107,7 +103,9 @@ class SQLAlchemyProveedoresRepository:
         if request.razon_social is not None:
             proveedor.razon_social = request.razon_social.strip()
         if request.nombre_comercial is not None:
-            proveedor.nombre_comercial = request.nombre_comercial.strip() if request.nombre_comercial else None
+            proveedor.nombre_comercial = (
+                request.nombre_comercial.strip() if request.nombre_comercial else None
+            )
         if request.rubro is not None:
             proveedor.rubro = request.rubro.strip().upper()
         if request.contacto_nombre is not None:
@@ -146,8 +144,12 @@ class SQLAlchemyProveedoresRepository:
             moneda=request.moneda,
             fecha_inicio=request.fecha_inicio,
             fecha_fin=request.fecha_fin,
-            contacto_emergencia=request.contacto_emergencia.strip() if request.contacto_emergencia else None,
-            contacto_emergencia_telefono=request.contacto_emergencia_telefono.strip() if request.contacto_emergencia_telefono else None,
+            contacto_emergencia=request.contacto_emergencia.strip()
+            if request.contacto_emergencia
+            else None,
+            contacto_emergencia_telefono=request.contacto_emergencia_telefono.strip()
+            if request.contacto_emergencia_telefono
+            else None,
             estado="VIGENTE",
             version_actual=1,
             creado_por=creado_por,
@@ -204,9 +206,15 @@ class SQLAlchemyProveedoresRepository:
         if request.fecha_fin is not None:
             contrato.fecha_fin = request.fecha_fin
         if request.contacto_emergencia is not None:
-            contrato.contacto_emergencia = request.contacto_emergencia.strip() if request.contacto_emergencia else None
+            contrato.contacto_emergencia = (
+                request.contacto_emergencia.strip() if request.contacto_emergencia else None
+            )
         if request.contacto_emergencia_telefono is not None:
-            contrato.contacto_emergencia_telefono = request.contacto_emergencia_telefono.strip() if request.contacto_emergencia_telefono else None
+            contrato.contacto_emergencia_telefono = (
+                request.contacto_emergencia_telefono.strip()
+                if request.contacto_emergencia_telefono
+                else None
+            )
         if request.estado is not None:
             contrato.estado = request.estado
 
@@ -257,12 +265,8 @@ class SQLAlchemyProveedoresRepository:
         )
         return await self.session.scalar(query)
 
-    async def obtener_version_por_id(
-        self, version_id: UUID
-    ) -> DocumentoContratoVersion | None:
-        query = select(DocumentoContratoVersion).where(
-            DocumentoContratoVersion.id == version_id
-        )
+    async def obtener_version_por_id(self, version_id: UUID) -> DocumentoContratoVersion | None:
+        query = select(DocumentoContratoVersion).where(DocumentoContratoVersion.id == version_id)
         return await self.session.scalar(query)
 
 

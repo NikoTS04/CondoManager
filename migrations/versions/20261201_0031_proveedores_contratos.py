@@ -3,8 +3,8 @@
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20261127_0027"
-down_revision = "20261126_0026"
+revision = "20261201_0031"
+down_revision = "20261130_0030"
 branch_labels = None
 depends_on = None
 
@@ -94,7 +94,9 @@ def upgrade():
         ),
         sa.CheckConstraint("version_actual >= 1", name="ck_contrato_version_actual"),
     )
-    op.create_index("ix_contratos_proveedor_condominio_id", "contratos_proveedor", ["condominio_id"])
+    op.create_index(
+        "ix_contratos_proveedor_condominio_id", "contratos_proveedor", ["condominio_id"]
+    )
     op.create_index("ix_contratos_proveedor_proveedor_id", "contratos_proveedor", ["proveedor_id"])
     op.create_index("ix_contratos_proveedor_fecha_fin", "contratos_proveedor", ["fecha_fin"])
 

@@ -1516,8 +1516,6 @@ export function resolverCorreoIncierto(id: string, datos: {
     { method: "POST", body: JSON.stringify(datos) });
 }
 
-}
-
 // ==============================================================================
 // PROVEEDORES Y CONTRATOS (CON-48, CON-49)
 // ==============================================================================
@@ -1695,6 +1693,30 @@ export function obtenerContrato(
   return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}`);
 }
 
+export interface ActualizarContratoPayload {
+  descripcion?: string;
+  monto_mensual?: string | null;
+  fecha_inicio?: string;
+  fecha_fin?: string;
+  contacto_emergencia?: string | null;
+  contacto_emergencia_telefono?: string | null;
+  estado?: "VIGENTE" | "POR_VENCER" | "VENCIDO" | "RENOVADO" | "CANCELADO";
+}
+
+export function actualizarContrato(
+  condominioId: string,
+  contratoId: string,
+  payload: ActualizarContratoPayload
+): Promise<Contrato> {
+  return recursoRequest(
+    `/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
 export async function subirDocumentoContrato(
   condominioId: string,
   contratoId: string,
@@ -1759,5 +1781,4 @@ export function listarAlertasMonitoreo(
   const q = new URLSearchParams({ estado, offset: String(offset), limit: String(limit) });
   if (condominioId) q.set("condominio_id", condominioId);
   return recursoRequest(`/monitoreo/alertas?${q}`);
-}
 }

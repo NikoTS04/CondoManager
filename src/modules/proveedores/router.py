@@ -13,13 +13,13 @@ from src.modules.proveedores.repository import (
 from src.modules.proveedores.schemas import (
     ActualizarContratoRequest,
     ActualizarProveedorRequest,
-    ContratoDTO,
     ContratoDetalleDTO,
+    ContratoDTO,
     CrearContratoRequest,
     CrearProveedorRequest,
     DocumentoVersionDTO,
-    ProveedorDTO,
     ProveedorDetalleDTO,
+    ProveedorDTO,
 )
 from src.modules.proveedores.service import ProveedoresService
 
@@ -35,6 +35,7 @@ def _servicio(
 # ==============================================================================
 # PROVEEDORES (CON-48)
 # ==============================================================================
+
 
 @router.post(
     "/condominios/{cid}/proveedores",
@@ -66,9 +67,7 @@ async def listar_proveedores(
     service: ProveedoresService = Depends(_servicio),
 ):
     autorizar_condominio(actor, cid, escritura=False)
-    return await service.listar_proveedores(
-        cid, activo=activo, rubro=rubro, buscar=buscar
-    )
+    return await service.listar_proveedores(cid, activo=activo, rubro=rubro, buscar=buscar)
 
 
 @router.get(
@@ -106,6 +105,7 @@ async def actualizar_proveedor(
 # CONTRATOS Y PÓLIZAS (CON-49)
 # ==============================================================================
 
+
 @router.post(
     "/condominios/{cid}/proveedores/{proveedor_id}/contratos",
     response_model=ContratoDTO,
@@ -120,9 +120,7 @@ async def registrar_contrato(
     service: ProveedoresService = Depends(_servicio),
 ):
     autorizar_condominio(actor, cid, escritura=True)
-    return await service.registrar_contrato(
-        cid, proveedor_id, payload, UUID(actor["sub"])
-    )
+    return await service.registrar_contrato(cid, proveedor_id, payload, UUID(actor["sub"]))
 
 
 @router.get(
@@ -223,9 +221,7 @@ async def descargar_documento_version(
     service: ProveedoresService = Depends(_servicio),
 ):
     autorizar_condominio(actor, cid, escritura=False)
-    contenido, mime, nombre = await service.descargar_documento_version(
-        cid, contrato_id, version
-    )
+    contenido, mime, nombre = await service.descargar_documento_version(cid, contrato_id, version)
     return Response(
         content=contenido,
         media_type=mime,

@@ -297,8 +297,8 @@ export function ProveedoresSection({ condominioId }: Props) {
         </button>
       </div>
 
-      {error && <Alert variant="error" title="Error" message={error} onClose={() => setError(null)} />}
-      {exito && <Alert variant="success" title="Completado" message={exito} onClose={() => setExito(null)} />}
+      {error && <Alert tone="danger" title="Error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {exito && <Alert tone="success" title="Completado" onDismiss={() => setExito(null)}>{exito}</Alert>}
 
       {/* ==================================================================== */}
       {/* TAB 1: DIRECTORIO DE PROVEEDORES (CON-48) */}
@@ -382,14 +382,14 @@ export function ProveedoresSection({ condominioId }: Props) {
                           )}
                         </td>
                         <td className="p-3">
-                          <Badge variant="neutral">{p.rubro.replace(/_/g, " ")}</Badge>
+                          <Badge tone="neutral">{p.rubro.replace(/_/g, " ")}</Badge>
                         </td>
                         <td className="p-3">
                           <div>{p.contacto_nombre}</div>
                           <div className="text-xs text-muted">{p.contacto_telefono} · {p.contacto_email}</div>
                         </td>
                         <td className="p-3">
-                          <Badge variant={p.activo ? "success" : "neutral"}>
+                          <Badge tone={p.activo ? "success" : "neutral"}>
                             {p.activo ? "ACTIVO" : "INACTIVO"}
                           </Badge>
                         </td>
@@ -456,7 +456,7 @@ export function ProveedoresSection({ condominioId }: Props) {
                             {c.numero_contrato}
                           </td>
                           <td className="p-3">
-                            <Badge variant="neutral">{c.tipo_documento.replace(/_/g, " ")}</Badge>
+                            <Badge tone="neutral">{c.tipo_documento.replace(/_/g, " ")}</Badge>
                           </td>
                           <td className="p-3">
                             <div className="max-w-xs truncate">{c.descripcion}</div>
@@ -475,13 +475,13 @@ export function ProveedoresSection({ condominioId }: Props) {
                           </td>
                           <td className="p-3">
                             {esVencido ? (
-                              <Badge variant="error">VENCIDO</Badge>
+                              <Badge tone="danger">VENCIDO</Badge>
                             ) : esCritico ? (
-                              <Badge variant="error">{c.dias_restantes} DÍAS (CRÍTICO 30D)</Badge>
+                              <Badge tone="danger">{c.dias_restantes} DÍAS (CRÍTICO 30D)</Badge>
                             ) : esPreventivo ? (
-                              <Badge variant="warning">{c.dias_restantes} DÍAS (PREVENTIVO 60D)</Badge>
+                              <Badge tone="warning">{c.dias_restantes} DÍAS (PREVENTIVO 60D)</Badge>
                             ) : (
-                              <Badge variant="success">VIGENTE ({c.dias_restantes}d)</Badge>
+                              <Badge tone="success">VIGENTE ({c.dias_restantes}d)</Badge>
                             )}
                           </td>
                           <td className="p-3 text-right">

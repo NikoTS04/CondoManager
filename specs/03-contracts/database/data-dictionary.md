@@ -496,7 +496,7 @@ destinatario_rol; fecha_fin DATE y dias_restantes INTEGER observados; motivo TEX
 omitido_por_umbral INTEGER nullable; fecha_evaluacion DATE; creado_en TIMESTAMPTZ.
 Única por (contrato_id, vigencia, umbral_dias). Sin importes. Downgrade elimina la tabla.
 
-# Extensión 0027 — Directorio de Proveedores y Contratos (CON-48, CON-49)
+# Extensión 0031 — Directorio de Proveedores y Contratos (CON-48, CON-49)
 
 - `proveedores`: UUID PK, `condominio_id` FK RESTRICT indexado, `ruc` VARCHAR(11) indexado,
   `razon_social` VARCHAR(200), `nombre_comercial` VARCHAR(200) nullable, `rubro` VARCHAR(100),

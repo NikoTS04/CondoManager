@@ -7,13 +7,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-TipoDocumentoContrato = Literal[
-    "CONTRATO_SERVICIO", "POLIZA_SEGURO", "ADDENDA", "ACTA_CONFORMIDAD"
-]
+TipoDocumentoContrato = Literal["CONTRATO_SERVICIO", "POLIZA_SEGURO", "ADDENDA", "ACTA_CONFORMIDAD"]
 
-EstadoContrato = Literal[
-    "VIGENTE", "POR_VENCER", "VENCIDO", "RENOVADO", "CANCELADO"
-]
+EstadoContrato = Literal["VIGENTE", "POR_VENCER", "VENCIDO", "RENOVADO", "CANCELADO"]
 
 PATRON_EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
@@ -81,6 +77,7 @@ class ProveedorDetalleDTO(ProveedorDTO):
 
 
 # CONTRATOS (CON-49)
+
 
 class CrearContratoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)

@@ -4,7 +4,6 @@ import hashlib
 import os
 import re
 from datetime import date
-from decimal import Decimal
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -12,20 +11,18 @@ from fastapi import UploadFile
 from src.core.errors import APIError
 from src.modules.proveedores.models import (
     ContratoProveedor,
-    DocumentoContratoVersion,
-    Proveedor,
 )
 from src.modules.proveedores.repository import SQLAlchemyProveedoresRepository
 from src.modules.proveedores.schemas import (
     ActualizarContratoRequest,
     ActualizarProveedorRequest,
-    ContratoDTO,
     ContratoDetalleDTO,
+    ContratoDTO,
     CrearContratoRequest,
     CrearProveedorRequest,
     DocumentoVersionDTO,
-    ProveedorDTO,
     ProveedorDetalleDTO,
+    ProveedorDTO,
 )
 
 # Límite de archivo para entorno Vercel Hobby / Demo: 3 MiB
@@ -156,9 +153,7 @@ class ProveedoresService:
                 "No se puede asociar un contrato a un proveedor inexistente.",
             )
 
-        contrato = await self.repo.crear_contrato(
-            condominio_id, proveedor_id, request, usuario_id
-        )
+        contrato = await self.repo.crear_contrato(condominio_id, proveedor_id, request, usuario_id)
         estado, dias = self._calcular_estado_y_dias(contrato)
         contrato.estado = estado
 
@@ -167,9 +162,7 @@ class ProveedoresService:
         dto.tiene_documento = False
         return dto
 
-    async def obtener_contrato(
-        self, condominio_id: UUID, contrato_id: UUID
-    ) -> ContratoDetalleDTO:
+    async def obtener_contrato(self, condominio_id: UUID, contrato_id: UUID) -> ContratoDetalleDTO:
         contrato = await self.repo.obtener_contrato_por_id(condominio_id, contrato_id)
         if contrato is None:
             raise APIError(
@@ -181,9 +174,7 @@ class ProveedoresService:
         estado, dias = self._calcular_estado_y_dias(contrato)
         contrato.estado = estado
 
-        versiones_dto = [
-            DocumentoVersionDTO.model_validate(v) for v in contrato.versiones
-        ]
+        versiones_dto = [DocumentoVersionDTO.model_validate(v) for v in contrato.versiones]
 
         return ContratoDetalleDTO(
             id=contrato.id,
