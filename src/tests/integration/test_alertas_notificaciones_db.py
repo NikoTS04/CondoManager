@@ -314,3 +314,31 @@ async def test_alerta_de_correo_guarda_origen_y_la_de_job_es_idempotente_y_aisla
         f"{RUTA}/alertas", headers=superadmin, params={"condominio_id": str(otro)}
     )
     assert vacio.json() == []
+
+
+async def test_vista_monitoreo_respeta_rol_y_aislamiento_entre_condominios(api_usuarios):
+    """CON-68: SuperAdmin ve job y todo; la Junta solo su condominio y nunca el job."""
+    client, base = api_usuarios
+    nid, junta = await encolar(client, base, "ana+rebote@ejemplo.test")
+    assert await procesar_uno(base.sessions, ahora=datetime.now(UTC))
+    async with base.sessions() as db, db.begin():
+        await crear_alerta_job(db, "diario", 1, 1, datetime.now(UTC))
+    ruta = "/api/v1/monitoreo/alertas"
+    de_junta = (await client.get(ruta, headers=junta)).json()
+    assert [(a["componente"], a["referencia_diagnostico"]["origen_id"]) for a in de_junta] == [
+        ("correo", str(nid))
+    ]
+    superadmin = await login(client)
+    todas = (await client.get(ruta, headers=superadmin)).json()
+    assert sorted(a["componente"] for a in todas) == ["correo", "job"]
+    job = next(a for a in todas if a["componente"] == "job")
+    assert job["operacion"] == "diario" and job["condominio_id"] is None
+    otro = await otro_condominio(base)
+    assert (await client.get(ruta, headers=superadmin, params={"condominio_id": str(otro)})).json() == []
+    assert (await client.get(ruta, headers=junta, params={"condominio_id": str(otro)})).status_code == 403
+    assert (await client.get("/api/v1/monitoreo/salud", headers=junta)).status_code == 403
+    salud = await client.get("/api/v1/monitoreo/salud", headers=superadmin)
+    assert salud.status_code == 200
+    assert {c["componente"] for c in salud.json()["componentes"]} == {
+        "api", "postgresql", "redis", "correo"
+    }

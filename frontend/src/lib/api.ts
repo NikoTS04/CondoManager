@@ -1323,3 +1323,32 @@ export function resolverCorreoIncierto(id: string, datos: {
   return recursoRequest(`/notificaciones/${encodeURIComponent(id)}/resolver-incierto`,
     { method: "POST", body: JSON.stringify(datos) });
 }
+
+// CON-68: vista de salud y alertas visibles (solo lectura).
+export type EstadoComponente = "ok" | "error" | "deshabilitado";
+export interface ComponenteSalud { componente: "api" | "postgresql" | "redis" | "correo"; estado: EstadoComponente }
+export interface EjecucionJob {
+  nombre: string; inicio: string | null; fin: string | null;
+  duracion_segundos: number | null;
+  resultado: "EN_CURSO" | "COMPLETADO" | "INCOMPLETO" | "SIN_REGISTRO";
+}
+export interface SaludOperativa {
+  perfil: "development" | "production"; estado_general: "ok" | "degradado";
+  generado_en: string; componentes: ComponenteSalud[]; jobs: EjecucionJob[];
+}
+export interface AlertaVisible {
+  id: string; componente: "correo" | "job"; operacion: string;
+  referencia_diagnostico: { origen_tipo: "CORREO" | "JOB"; origen_id: string; referencia_correlacion: string | null };
+  condominio_id: string | null; departamento_numero: string | null; tipo: string; mensaje: string;
+  estado: "ABIERTA" | "ATENDIDA"; creada_en: string; atendida_en: string | null;
+}
+export function consultarSaludOperativa(): Promise<SaludOperativa> {
+  return recursoRequest("/monitoreo/salud");
+}
+export function listarAlertasMonitoreo(
+  condominioId: string | null, estado: "ABIERTA" | "ATENDIDA" = "ABIERTA", offset = 0, limit = 50,
+): Promise<AlertaVisible[]> {
+  const q = new URLSearchParams({ estado, offset: String(offset), limit: String(limit) });
+  if (condominioId) q.set("condominio_id", condominioId);
+  return recursoRequest(`/monitoreo/alertas?${q}`);
+}

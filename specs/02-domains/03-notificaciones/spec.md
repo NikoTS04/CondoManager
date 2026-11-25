@@ -115,3 +115,50 @@ alerta tiene `condominio_id` nulo y nunca aparece en la consulta por condominio 
 
 Escenarios en [alertas-fallos-definitivos](../../04-acceptance-criteria/alertas-fallos-definitivos.feature.md).
 Cambio de esquema: migración `20261125_0025_alertas_fallos_definitivos`.
+
+## 9. Vista de Salud y Alertas para Administración (CON-68)
+
+Pantalla de solo lectura del portal de administración. No resuelve ni cierra alertas (eso es
+CON-66/86) ni genera correlación (CON-82) ni registra ejecuciones (CON-83).
+
+### 9.1 Estado de componentes por perfil
+
+`GET /api/v1/monitoreo/salud` reutiliza las comprobaciones de `src/core/health.py` y su regla de
+no filtrar URLs, credenciales ni mensajes del driver. Cada componente informa `ok`, `error` o
+`deshabilitado`:
+
+| Componente | Criterio |
+|---|---|
+| `api` | `ok` si la petición fue atendida. |
+| `postgresql` | `SELECT 1` con tope de 2 s; `ok` o `error`. |
+| `redis` | `deshabilitado` si el perfil tiene `REDIS_REQUIRED=false`; si no, `PING` con tope de 2 s. |
+| `correo` | `deshabilitado` si `MAILJET_ENABLED=false`; si no, `ok` por configuración. No se contacta al proveedor desde esta vista. |
+
+La respuesta incluye `perfil` (`APP_ENV`), `estado_general` (`ok` si ningún componente está en
+`error`, si no `degradado`) y `generado_en`. La consulta responde siempre 200 y nunca 503: la
+vista debe poder mostrar la caída.
+
+### 9.2 Ejecución de jobs
+
+La respuesta lista, por cada job conocido (`notificaciones`, `diario`), el último `inicio`, `fin`,
+`duracion_segundos` y `resultado` (`EN_CURSO`, `COMPLETADO`, `INCOMPLETO` o `SIN_REGISTRO`).
+`duracion_segundos` es nulo mientras no hay `fin`. Hoy la fuente es `estado_job_notificaciones`,
+que solo registra `notificaciones`; `diario` figura `SIN_REGISTRO`. La lectura vive tras
+`listar_ejecuciones_jobs(db)` (`src/core/salud_operativa.py`) para que CON-83 la sustituya sin
+cambiar el contrato: debe devolver `EjecucionJob(nombre, inicio, fin, duracion_segundos,
+resultado)` con la última ejecución por job.
+
+### 9.3 Alertas visibles
+
+`GET /api/v1/monitoreo/alertas` lista alertas de `notificaciones_alertas` (CON-84), por defecto
+`ABIERTA`, con paginación `limit` (1–100, 50) y `offset`. Cada una muestra:
+
+- `componente`: `correo` o `job`.
+- `operacion`: tipo de evento del aviso (correo) o nombre del job.
+- `referencia_diagnostico`: `origen_tipo`, `origen_id` y `referencia_correlacion` (nulo hasta CON-82).
+
+Visibilidad: `SUPERADMIN` ve todas, incluidas las de job (condominio nulo), y puede filtrar por
+`condominio_id`; `ADMIN_JUNTA` y `AUDITOR` ven solo las de su condominio y nunca las de job ni las
+ajenas (403 si piden otro condominio). `RESIDENTE` no accede. La salud y los jobs son globales y
+solo los ve `SUPERADMIN`. Escenarios en
+[salud-y-alertas-visibles](../../04-acceptance-criteria/salud-y-alertas-visibles.feature.md).
