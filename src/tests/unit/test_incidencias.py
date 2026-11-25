@@ -11,7 +11,9 @@ from src.modules.incidencias.estados import transicion_permitida
 from src.modules.incidencias.schemas import (
     AsignarIncidencia,
     ClasificarIncidencia,
+    ConfirmarIncidencia,
     CrearIncidencia,
+    ReabrirIncidencia,
     RechazarIncidencia,
     RegistrarSeguimiento,
 )
@@ -92,7 +94,15 @@ def test_el_seguimiento_exige_un_monto_decimal_de_dos_decimales():
         RegistrarSeguimiento(version=1, comentario="Costo", monto=45.5)
 
 
-def test_migracion_0028_es_la_cabeza_sobre_la_0027():
+def test_la_calificacion_y_la_reapertura_exigen_datos_validos():
+    assert ConfirmarIncidencia(version=1, calificacion=5).calificacion == 5
+    with pytest.raises(ValidationError):
+        ConfirmarIncidencia(version=1, calificacion=6)
+    with pytest.raises(ValidationError):
+        ReabrirIncidencia(version=1, motivo="   ")
+
+
+def test_migracion_0029_es_la_cabeza_sobre_la_0028():
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert scripts.get_revision("20261128_0028").down_revision == "20261127_0027"
-    assert scripts.get_heads() == ["20261128_0028"]
+    assert scripts.get_revision("20261129_0029").down_revision == "20261128_0028"
+    assert scripts.get_heads() == ["20261129_0029"]

@@ -13,9 +13,12 @@ from src.modules.incidencias.schemas import (
     AsignarIncidencia,
     BandejaAvisosDTO,
     BandejaIncidenciasDTO,
+    CerrarAdministrativamente,
+    ConfirmarIncidencia,
     CrearIncidencia,
     HistorialIncidenciasDTO,
     IncidenciaDTO,
+    ReabrirIncidencia,
     RegistrarResolucion,
     RegistrarSeguimiento,
     RegistroIncidenciaDTO,
@@ -189,6 +192,44 @@ async def registrar_resolucion(
     if advertencia:
         response.headers["X-Advertencia-Evidencia"] = advertencia
     return incidencia
+
+
+@router.post("/{incidencia_id}/confirmacion", response_model=IncidenciaDTO)
+async def confirmar_incidencia(
+    incidencia_id: UUID,
+    solicitud: ConfirmarIncidencia,
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return await IncidenciasService(session).confirmar(usuario, incidencia_id, solicitud)
+
+
+@router.post("/{incidencia_id}/reapertura", response_model=IncidenciaDTO)
+async def reabrir_incidencia(
+    incidencia_id: UUID,
+    solicitud: ReabrirIncidencia,
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return await IncidenciasService(session).reabrir(usuario, incidencia_id, solicitud)
+
+
+@router.post("/{incidencia_id}/cierre-administrativo", response_model=IncidenciaDTO)
+async def cerrar_administrativamente(
+    incidencia_id: UUID,
+    solicitud: CerrarAdministrativamente,
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return await IncidenciasService(session).cerrar_administrativamente(
+        usuario, incidencia_id, solicitud
+    )
 
 
 @router.get("/{incidencia_id}/historial", response_model=HistorialIncidenciasDTO)

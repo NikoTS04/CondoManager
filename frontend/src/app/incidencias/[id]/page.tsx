@@ -11,6 +11,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Feedback";
 import { useAuth } from "@/context/AuthContext";
 import { AsignacionIncidenciaForm } from "@/features/junta/AsignacionIncidenciaForm";
+import { CierreIncidencia } from "@/features/junta/CierreIncidencia";
 import { RevisionIncidenciaForm } from "@/features/junta/RevisionIncidenciaForm";
 import { SeguimientoIncidencia } from "@/features/junta/SeguimientoIncidencia";
 import {
@@ -203,6 +204,21 @@ function DetalleIncidencia({ id }: { id: string }) {
               incidencia={incidencia}
               onAsignada={() => {
                 setConfirmacion("Asignación guardada y avisos encolados.");
+                setRevisionConsulta((actual) => actual + 1);
+              }}
+            />
+          )}
+          {incidencia.estado === "RESUELTO" && (
+            <CierreIncidencia
+              incidencia={incidencia}
+              esJunta={esJunta}
+              onActualizada={(detalle) => {
+                setIncidencia(detalle);
+                setConfirmacion(
+                  detalle.estado === "CERRADO"
+                    ? "Incidencia cerrada."
+                    : "Incidencia reabierta.",
+                );
                 setRevisionConsulta((actual) => actual + 1);
               }}
             />

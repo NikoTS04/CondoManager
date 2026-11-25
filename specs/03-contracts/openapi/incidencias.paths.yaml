@@ -289,6 +289,85 @@ paths:
         '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
         '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
         '404': {description: El reporte no existe en el contexto autorizado.}
+  /incidencias/{incidencia_id}/confirmacion:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: confirmarIncidencia
+      tags: [Incidencias]
+      summary: Confirmar la solución y calificar la atención
+      description: Solo el residente reportante con vínculo activo, desde RESUELTO.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, calificacion]
+              properties:
+                version: {type: integer, minimum: 1}
+                calificacion: {type: integer, minimum: 1, maximum: 5}
+                comentario: {type: string, maxLength: 1000}
+      responses:
+        '200': {description: Incidencia cerrada, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no pertenece al residente en su condominio.}
+        '409': {description: Versión desactualizada o estado distinto de RESUELTO.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/reapertura:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: reabrirIncidencia
+      tags: [Incidencias]
+      summary: Reabrir una incidencia resuelta con motivo
+      description: Solo el residente reportante; el ticket vuelve a EN_PROCESO.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, motivo]
+              properties:
+                version: {type: integer, minimum: 1}
+                motivo: {type: string, minLength: 1, maxLength: 1000}
+      responses:
+        '200': {description: Incidencia reabierta, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no pertenece al residente en su condominio.}
+        '409': {description: Versión desactualizada o estado distinto de RESUELTO.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/cierre-administrativo:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: cerrarIncidenciaAdministrativamente
+      tags: [Incidencias]
+      summary: Cerrar una incidencia resuelta por decisión de Junta
+      description: Solo ADMIN_JUNTA del condominio; exige motivo y deja actor y fecha.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, motivo]
+              properties:
+                version: {type: integer, minimum: 1}
+                motivo: {type: string, minLength: 1, maxLength: 1000}
+      responses:
+        '200': {description: Incidencia cerrada, content: {application/json: {schema: {$ref: '#/components/schemas/Incidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: Versión desactualizada o estado distinto de RESUELTO.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
   /incidencias/{incidencia_id}/actualizaciones/{actualizacion_id}/evidencia:
     parameters:
       - $ref: '#/components/parameters/IncidenciaId'
@@ -368,7 +447,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/ReporteIncidencia'
         - type: object
-          required: [estado, categoria_confirmada, prioridad, motivo_rechazo, version, asignacion_actual_id, responsable_usuario_id, responsable_proveedor_id, fecha_asignacion, plazo]
+          required: [estado, categoria_confirmada, prioridad, motivo_rechazo, version, asignacion_actual_id, responsable_usuario_id, responsable_proveedor_id, fecha_asignacion, plazo, calificacion, motivo_reapertura, fecha_cierre, cerrado_por]
           properties:
             estado: {type: string, enum: [REGISTRADO, RECHAZADO, ASIGNADO, EN_PROCESO, RESUELTO, CERRADO]}
             categoria_confirmada: {type: [string, 'null']}
@@ -383,6 +462,10 @@ components:
             responsable_proveedor_id: {type: [string, 'null'], format: uuid}
             fecha_asignacion: {type: [string, 'null'], format: date-time}
             plazo: {type: [string, 'null'], format: date-time}
+            calificacion: {type: [integer, 'null'], minimum: 1, maximum: 5}
+            motivo_reapertura: {type: [string, 'null']}
+            fecha_cierre: {type: [string, 'null'], format: date-time}
+            cerrado_por: {type: [string, 'null'], format: uuid}
     AsignacionIncidencia:
       type: object
       required: [asignacion_id, incidencia_id, estado, version, avisos_encolados]

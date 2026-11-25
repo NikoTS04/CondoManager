@@ -82,3 +82,22 @@
 - **Auditoría.** Dado cualquier cambio de estado, cuando se guarda, entonces se
   registra con los siete campos obligatorios, actor y contexto, en la misma
   transacción que el avance.
+
+## CON-57 — Confirmar, calificar, cerrar o reabrir
+
+- **Cierre conforme.** Dado un ticket `RESUELTO`, cuando el residente confirma con
+  calificación de 1 a 5, entonces pasa a `CERRADO`, queda fecha y actor de cierre
+  y se registra `CIERRE_CONFORME_TICKET` con los siete campos de auditoría.
+- **Reapertura.** Dado un ticket `RESUELTO`, cuando el residente indica que no
+  está conforme con motivo, entonces vuelve a `EN_PROCESO`, el motivo queda
+  visible para Junta y el reportante, y se registra la decisión con actor y fecha.
+- **Cierre administrativo.** Dado un ticket `RESUELTO` sin confirmación del
+  residente, cuando Junta cierra con una decisión autorizada y motivo, entonces
+  pasa a `CERRADO` y queda trazable el actor y el motivo. El proveedor nunca cierra.
+- **Calificación inválida.** Dado un residente que envía una calificación fuera
+  de 1 a 5 o un motivo vacío, cuando intenta cerrar o reabrir, entonces la API
+  rechaza la solicitud sin modificar el ticket.
+- **Permisos y versión.** Dado un ticket de otro condominio o de otro residente,
+  cuando se intenta confirmar o reabrir, entonces se recibe 404; una versión
+  desactualizada o un estado distinto de `RESUELTO` se rechaza con 409. Un ticket
+  `CERRADO` es terminal.

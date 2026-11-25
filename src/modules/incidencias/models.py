@@ -46,6 +46,14 @@ class Incidencia(Base):
             "NOT (responsable_usuario_id IS NOT NULL AND responsable_proveedor_id IS NOT NULL)",
             name="ck_incidencia_responsable",
         ),
+        CheckConstraint(
+            "calificacion IS NULL OR calificacion BETWEEN 1 AND 5",
+            name="ck_incidencia_calificacion",
+        ),
+        CheckConstraint(
+            "(estado = 'CERRADO') = (fecha_cierre IS NOT NULL AND cerrado_por IS NOT NULL)",
+            name="ck_incidencia_cierre",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -79,6 +87,12 @@ class Incidencia(Base):
     correo_proveedor: Mapped[str | None] = mapped_column(Text)
     fecha_asignacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     plazo: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    calificacion: Mapped[int | None] = mapped_column(nullable=True)
+    motivo_reapertura: Mapped[str | None] = mapped_column(Text)
+    fecha_cierre: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cerrado_por: Mapped[UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=True
+    )
 
     @property
     def tiene_evidencia(self) -> bool:

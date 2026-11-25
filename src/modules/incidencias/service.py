@@ -33,8 +33,11 @@ from src.modules.incidencias.schemas import (
     ActualizacionDTO,
     AsignarIncidencia,
     AvisoAsignacionDTO,
+    CerrarAdministrativamente,
+    ConfirmarIncidencia,
     CrearIncidencia,
     HistorialIncidenciasDTO,
+    ReabrirIncidencia,
     RechazarIncidencia,
     RegistrarResolucion,
     RegistrarSeguimiento,
@@ -80,6 +83,9 @@ def estado_revision(incidencia: Incidencia) -> dict:
         if incidencia.responsable_proveedor_id
         else None,
         "plazo": incidencia.plazo.isoformat() if incidencia.plazo else None,
+        "calificacion": incidencia.calificacion,
+        "motivo_reapertura": incidencia.motivo_reapertura,
+        "fecha_cierre": incidencia.fecha_cierre.isoformat() if incidencia.fecha_cierre else None,
     }
 
 
@@ -726,6 +732,153 @@ class IncidenciasService:
         ):
             raise APIError(404, "EVIDENCIA_NO_ENCONTRADA", "La evidencia no está disponible.")
         return actualizacion
+
+    async def _incidencia_residente(
+        self, usuario: dict, incidencia_id: UUID, version: int, destino: str
+    ) -> tuple[dict, Incidencia]:
+        if usuario["rol"] != RolUsuario.RESIDENTE:
+            denegar("Solo el reportante puede confirmar o reabrir su incidencia.")
+        cid = contexto_consulta(usuario)
+        identidad = SQLAlchemyUsuariosRepository(self.session)
+        if await identidad.contexto(cid, bloquear=True) is None:
+            denegar()
+        vigente = await validar_sesion(usuario, identidad)
+        incidencia = await self.session.scalar(
+            select(Incidencia)
+            .where(
+                Incidencia.id == incidencia_id,
+                Incidencia.condominio_id == cid,
+                reportes_propios(vigente),
+            )
+            .with_for_update()
+        )
+        if incidencia is None:
+            raise APIError(404, "INCIDENCIA_NO_ENCONTRADA", "La incidencia no está disponible.")
+        if incidencia.estado != "RESUELTO" or not transicion_permitida(incidencia.estado, destino):
+            raise APIError(
+                409, "INCIDENCIA_NO_EDITABLE", "El ticket no está listo para esta decisión."
+            )
+        if incidencia.version != version:
+            raise APIError(
+                409, "VERSION_DESACTUALIZADA", "El reporte cambió. Consulta la última versión."
+            )
+        return vigente, incidencia
+
+    async def _decidir(
+        self,
+        *,
+        vigente: dict,
+        incidencia: Incidencia,
+        actor_id: UUID,
+        destino: str,
+        descripcion: str,
+        publico: bool,
+        accion: str,
+        motivo: str,
+        calificacion: int | None = None,
+        reapertura: str | None = None,
+    ) -> Incidencia:
+        anterior = estado_revision(incidencia)
+        ahora = datetime.now(UTC)
+        estado_anterior = incidencia.estado
+        incidencia.estado = destino
+        incidencia.version += 1
+        if destino == "CERRADO":
+            incidencia.fecha_cierre = ahora
+            incidencia.cerrado_por = actor_id
+            if calificacion is not None:
+                incidencia.calificacion = calificacion
+        if destino == "EN_PROCESO":
+            incidencia.motivo_reapertura = reapertura
+        actualizacion = ActualizacionIncidencia(
+            condominio_id=incidencia.condominio_id,
+            incidencia_id=incidencia.id,
+            actor_id=actor_id,
+            tipo="CAMBIO_ESTADO",
+            descripcion=descripcion,
+            publico=publico,
+            estado_anterior=estado_anterior,
+            estado_nuevo=destino,
+        )
+        self.session.add(actualizacion)
+        await self.session.flush()
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            vigente,
+            incidencia.condominio_id,
+            incidencia.departamento_id,
+            accion,
+            motivo,
+            anterior,
+            {
+                **estado_revision(incidencia),
+                "actualizacion_id": str(actualizacion.id),
+                "actor_id": str(actor_id),
+            },
+        )
+        await self.session.commit()
+        return incidencia
+
+    async def confirmar(
+        self, usuario: dict, incidencia_id: UUID, solicitud: ConfirmarIncidencia
+    ) -> Incidencia:
+        if "\x00" in (solicitud.comentario or ""):
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        vigente, incidencia = await self._incidencia_residente(
+            usuario, incidencia_id, solicitud.version, "CERRADO"
+        )
+        descripcion = f"Confirmación del residente. Calificación: {solicitud.calificacion}/5."
+        if solicitud.comentario:
+            descripcion = f"{descripcion} {solicitud.comentario}"
+        return await self._decidir(
+            vigente=vigente,
+            incidencia=incidencia,
+            actor_id=UUID(str(usuario["sub"])),
+            destino="CERRADO",
+            descripcion=descripcion,
+            publico=True,
+            accion="CIERRE_CONFORME_TICKET",
+            motivo="CONFIRMACION_RESIDENTE",
+            calificacion=solicitud.calificacion,
+        )
+
+    async def reabrir(
+        self, usuario: dict, incidencia_id: UUID, solicitud: ReabrirIncidencia
+    ) -> Incidencia:
+        if "\x00" in solicitud.motivo:
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        vigente, incidencia = await self._incidencia_residente(
+            usuario, incidencia_id, solicitud.version, "EN_PROCESO"
+        )
+        return await self._decidir(
+            vigente=vigente,
+            incidencia=incidencia,
+            actor_id=UUID(str(usuario["sub"])),
+            destino="EN_PROCESO",
+            descripcion=f"Reapertura del residente: {solicitud.motivo}",
+            publico=True,
+            accion="REAPERTURA_TICKET_INCIDENCIA",
+            motivo=solicitud.motivo,
+            reapertura=solicitud.motivo,
+        )
+
+    async def cerrar_administrativamente(
+        self, usuario: dict, incidencia_id: UUID, solicitud: CerrarAdministrativamente
+    ) -> Incidencia:
+        if "\x00" in solicitud.motivo:
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        vigente, incidencia = await self._incidencia_para_edicion(
+            usuario, incidencia_id, solicitud.version, "CERRADO"
+        )
+        return await self._decidir(
+            vigente=vigente,
+            incidencia=incidencia,
+            actor_id=UUID(str(usuario["sub"])),
+            destino="CERRADO",
+            descripcion=f"Cierre administrativo: {solicitud.motivo}",
+            publico=True,
+            accion="CIERRE_ADMINISTRATIVO_TICKET",
+            motivo=solicitud.motivo,
+        )
 
     async def consultar(
         self, usuario: dict, incidencia_id: UUID, *, incluir_evidencia: bool = False

@@ -111,6 +111,23 @@ Reenviar el reporte de CON-53 devuelve el comprobante original de registro.
 - Cada cambio de estado registra en la misma transacción la auditoría de siete
   campos con actor, motivo, estado anterior y estado posterior.
 
+### Confirmación y cierre de incidencias (CON-57)
+
+- `POST /incidencias/{incidencia_id}/confirmacion` (`RESIDENTE` con vínculo activo
+  sobre su reporte): `version` y `calificacion` entera entre 1 y 5, con
+  `comentario` opcional. Solo desde `RESUELTO`; pasa a `CERRADO`, guarda fecha y
+  actor de cierre y registra `CIERRE_CONFORME_TICKET` con auditoría de siete
+  campos. Otro condominio o reporte ajeno responde 404; versión desactualizada o
+  estado distinto responde 409; calificación fuera de rango responde 422.
+- `POST /incidencias/{incidencia_id}/reapertura` (`RESIDENTE`): `version` y
+  `motivo` obligatorio. Solo desde `RESUELTO`; vuelve a `EN_PROCESO`, conserva el
+  motivo y audita `REAPERTURA_TICKET_INCIDENCIA`.
+- `POST /incidencias/{incidencia_id}/cierre-administrativo` (`ADMIN_JUNTA` del
+  condominio): `version` y `motivo` obligatorio. Solo desde `RESUELTO`; pasa a
+  `CERRADO` y audita `CIERRE_ADMINISTRATIVO_TICKET`. Ninguna ruta permite que un
+  proveedor cierre el ticket.
+- Las tres rutas devuelven la incidencia vigente con `Cache-Control: private, no-store`.
+
 ### Avisos de bloqueos e incidencias (contrato del Sprint 4)
 
 El contrato de CON-55 está implementado; el de CON-47 sigue siendo objetivo

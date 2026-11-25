@@ -719,6 +719,33 @@ export function consultarHistorialIncidencia(
   return recursoRequest(`/incidencias/${encodeURIComponent(id)}/historial`, { signal });
 }
 
+export function confirmarIncidencia(
+  id: string, version: number, calificacion: number, comentario?: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/confirmacion`, {
+    method: "POST",
+    body: JSON.stringify({ version, calificacion, ...(comentario ? { comentario } : {}) }),
+  });
+}
+
+export function reabrirIncidencia(
+  id: string, version: number, motivo: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/reapertura`, {
+    method: "POST",
+    body: JSON.stringify({ version, motivo }),
+  });
+}
+
+export function cerrarAdministrativamenteIncidencia(
+  id: string, version: number, motivo: string,
+): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/cierre-administrativo`, {
+    method: "POST",
+    body: JSON.stringify({ version, motivo }),
+  });
+}
+
 export async function descargarEvidenciaActualizacion(
   incidenciaId: string, actualizacionId: string,
 ): Promise<void> {

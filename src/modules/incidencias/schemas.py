@@ -73,6 +73,10 @@ class IncidenciaDTO(ReporteIncidenciaDTO):
     responsable_proveedor_id: UUID | None = None
     fecha_asignacion: datetime | None = None
     plazo: datetime | None = None
+    calificacion: int | None = None
+    motivo_reapertura: str | None = None
+    fecha_cierre: datetime | None = None
+    cerrado_por: UUID | None = None
 
 
 class BandejaIncidenciasDTO(BaseModel):
@@ -217,6 +221,35 @@ class RegistrarResolucion(BaseModel):
     monto: MontoIncidencia | None = None
 
     _validar_monto = field_validator("monto", mode="before")(rechazar_float)
+
+
+MotivoCierre = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)
+]
+
+
+class ConfirmarIncidencia(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Annotated[int, Field(ge=1, strict=True)]
+    calificacion: Annotated[int, Field(ge=1, le=5, strict=True)]
+    comentario: Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)] | None = (
+        None
+    )
+
+
+class ReabrirIncidencia(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Annotated[int, Field(ge=1, strict=True)]
+    motivo: MotivoCierre
+
+
+class CerrarAdministrativamente(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Annotated[int, Field(ge=1, strict=True)]
+    motivo: MotivoCierre
 
 
 class ActualizacionDTO(BaseModel):
