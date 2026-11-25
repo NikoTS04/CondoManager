@@ -650,8 +650,8 @@ export class ApiError extends Error {
   }
 }
 
-export type AccionExcepcion = "REENVIAR_CORREO" | "CERRAR_CON_MOTIVO";
-type EstadoExcepcion = "ABIERTA" | "EN_PROCESO" | "RESUELTA" | "FALLIDA";
+export type AccionExcepcion = "REENVIAR_CORREO" | "CERRAR_CON_MOTIVO" | "REINTENTAR_JOB" | "SOLICITAR_INFORMACION";
+type EstadoExcepcion = "ABIERTA" | "EN_PROCESO" | "PENDIENTE_INFORMACION" | "RESUELTA" | "FALLIDA";
 
 export interface Excepcion {
   id: string;
@@ -670,11 +670,16 @@ interface ResolucionExcepcion {
   actor_id: string;
   fecha: string;
   estado: EstadoExcepcion;
-  efecto: { operacion_id: string; ciclo: number; estado_operacion: string };
+  efecto: { operacion_id: string; estado_operacion: string } & (
+    { ciclo: number } | { intento_id: string | null; responsable: string | null }
+  );
 }
 
 export interface DetalleExcepcion extends Excepcion {
-  evidencia: { tipo_evento: string; ciclo_fallido: number; ciclo_actual: number; estado_operacion: string };
+  evidencia: { ciclo_fallido: number; estado_operacion: string } & (
+    { tipo_evento: string; ciclo_actual: number }
+    | { nombre: string; referencia_correlacion: string | null; intento_id: string | null }
+  );
   historial: ResolucionExcepcion[];
   acciones_permitidas: AccionExcepcion[];
   requiere_revision_correo: boolean;
@@ -689,6 +694,7 @@ export interface SolicitudResolucionExcepcion {
   accion: AccionExcepcion;
   motivo: string;
   nuevo_destinatario?: string;
+  responsable?: string;
 }
 
 export function listarExcepciones(offset: number, limit: number, signal?: AbortSignal): Promise<PaginaExcepciones> {
