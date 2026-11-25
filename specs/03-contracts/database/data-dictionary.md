@@ -486,3 +486,12 @@ SolvenciaRestablecidaEvent v1; se confirma junto con el pago.
 `notificaciones_logs`: añade recordatorio_vencimiento (DATE),
 recordatorio_dias (INTEGER) y estado OMITIDO. No se modifica dinero ni se
 convierte el historial SIMULADO. Downgrade rechaza pérdida de operación.
+
+# Extensión 0026 — alertas de contratos (CON-50)
+
+`avisos_contrato`: UUID PK; condominio_id FK RESTRICT; contrato_id UUID **sin llave
+foránea** hasta que exista la tabla de contratos (CON-49); vigencia TEXT; umbral_dias
+INTEGER (60/30); estado (GENERADO/OMITIDO); prioridad (INFORMATIVA/PRIORITARIA);
+destinatario_rol; fecha_fin DATE y dias_restantes INTEGER observados; motivo TEXT;
+omitido_por_umbral INTEGER nullable; fecha_evaluacion DATE; creado_en TIMESTAMPTZ.
+Única por (contrato_id, vigencia, umbral_dias). Sin importes. Downgrade elimina la tabla.

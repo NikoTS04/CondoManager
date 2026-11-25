@@ -101,6 +101,14 @@ pendiente del responsable de la cadena de migraciones: columna de destinatario
 externo con unicidad que contemple NULL, o registro de proveedor como usuario sin
 acceso. Hasta entonces el aviso al proveedor no puede encolarse.
 
+### Alertas de contrato CON-50 — registro SQL, sin envelope
+
+`AvisoContratoGeneradoEvent` y `AvisoContratoOmitidoEvent` son hechos internos persistidos en
+`avisos_contrato` y auditados como `ALERTA_VENCIMIENTO_CONTRATO` en la misma transacción de la
+revisión diaria. No se publican en el Stream ni tienen consumidor externo todavía. Clave lógica:
+(`contrato_id`, `vigencia`, `umbral_dias`). Contrato: [alertas de contratos](../../02-domains/06-egresos-proveedores/alertas-contratos.md).
+El envío de correo a la Junta queda pendiente de decisión.
+
 ### Identidad CON-76/7 — cola SQL transaccional
 
 `UsuarioInvitadoEvent` y `AccesoUsuarioCambiadoEvent` identifican avisos internos

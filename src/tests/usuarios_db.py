@@ -60,6 +60,7 @@ REVISIONES_API = (
     "20261124_0023_incidencias",
     "20261124_0024_clasificacion_incidencias",
     "20261125_0025_alertas_fallos_definitivos",
+    "20261126_0026_alertas_contratos",
 )
 
 _ROOT = Path(__file__).resolve().parents[2]

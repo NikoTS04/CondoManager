@@ -475,6 +475,12 @@ Contrato y reglas de entrega/reintento: [comunicaciones del Sprint 2](sprint-2-c
 
 `GET /notificaciones/logs` filtra contexto y destinatario autorizado; `POST /notificaciones/despachar` y `/comunicado-masivo` confirman registros en cola con `202`; `/reenviar/{log_id}` devuelve `200` sin duplicar avisos entregados o aceptados por proveedor. `EN_COLA`, `ENVIADO`, `ENTREGADO`, `REINTENTANDO` y `FALLIDO_PERMANENTE` distinguen persistencia, aceptación y confirmación. El log identifica transporte simulado o real y conserva ciclos/intentos.
 
+#### Alertas de contratos (CON-50)
+
+No expone endpoints nuevos: la revisión corre dentro de `GET /jobs/diario` y no cambia su
+respuesta. La consulta de avisos para el panel de Junta queda pendiente de definir con CON-49.
+Contrato interno: [alertas de contratos](../02-domains/06-egresos-proveedores/alertas-contratos.md).
+
 ### 2.7 Módulo de Autenticación y RBAC (PROC-05)
 
 Roles canónicos: `SUPERADMIN`, `ADMIN_JUNTA`, `AUDITOR`, `RESIDENTE`. Los tres
