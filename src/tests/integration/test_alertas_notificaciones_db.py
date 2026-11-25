@@ -334,11 +334,18 @@ async def test_vista_monitoreo_respeta_rol_y_aislamiento_entre_condominios(api_u
     job = next(a for a in todas if a["componente"] == "job")
     assert job["operacion"] == "diario" and job["condominio_id"] is None
     otro = await otro_condominio(base)
-    assert (await client.get(ruta, headers=superadmin, params={"condominio_id": str(otro)})).json() == []
-    assert (await client.get(ruta, headers=junta, params={"condominio_id": str(otro)})).status_code == 403
+    assert (
+        await client.get(ruta, headers=superadmin, params={"condominio_id": str(otro)})
+    ).json() == []
+    assert (
+        await client.get(ruta, headers=junta, params={"condominio_id": str(otro)})
+    ).status_code == 403
     assert (await client.get("/api/v1/monitoreo/salud", headers=junta)).status_code == 403
     salud = await client.get("/api/v1/monitoreo/salud", headers=superadmin)
     assert salud.status_code == 200
     assert {c["componente"] for c in salud.json()["componentes"]} == {
-        "api", "postgresql", "redis", "correo"
+        "api",
+        "postgresql",
+        "redis",
+        "correo",
     }
