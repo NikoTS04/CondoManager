@@ -11,6 +11,7 @@ from sqlalchemy import text
 from src.core.config import settings
 from src.core.database import AsyncSessionLocal
 from src.core.errors import APIError
+from src.modules.alertas_contratos.service import evaluar_contratos
 from src.modules.cuotas.worker import emitir_pendientes
 from src.modules.notificaciones.worker import recuperar_eventos
 from src.modules.pagos.worker import evaluar_moras_diarias, limpiar_pendientes
@@ -90,6 +91,7 @@ async def ejecutar_diario():
         await emitir_pendientes(estricto=True)
         await evaluar_moras_diarias(estricto=True)
         await recuperar_eventos()
+        await evaluar_contratos(estricto=True)
         await limpiar_pendientes()
 
 

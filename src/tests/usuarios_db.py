@@ -54,6 +54,7 @@ REVISIONES_API = (
     "20261121_0022_notificaciones_completas",
     "20261124_0023_incidencias",
     "20261124_0024_clasificacion_incidencias",
+    "20261126_0026_alertas_contratos",
 )
 
 
