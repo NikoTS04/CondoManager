@@ -21,8 +21,11 @@ AHORA = datetime(2026, 11, 21, 13, tzinfo=UTC)
 async def recordatorios_en_cola(base, monkeypatch):
     monkeypatch.setattr(settings, "MAILJET_ENABLED", True)
     cuota = CuotaMantenimiento(
-        departamento_id=did("102"), periodo="2026-11", monto_ordinario=100,
-        monto_total_exigible=100, fecha_emision=AHORA.date(),
+        departamento_id=did("102"),
+        periodo="2026-11",
+        monto_ordinario=100,
+        monto_total_exigible=100,
+        fecha_emision=AHORA.date(),
         fecha_vencimiento=AHORA.date() + timedelta(days=3),
     )
     async with base.sessions() as db, db.begin():
@@ -43,7 +46,9 @@ async def assert_suprimidos_sin_transporte(base, total, motivo):
         assert await db.scalar(select(func.count()).select_from(AlertaNotificacion)) == 0
 
 
-async def test_cuota_pagada_deja_estado_terminal_explicito_sin_transporte(api_usuarios, monkeypatch):
+async def test_cuota_pagada_deja_estado_terminal_explicito_sin_transporte(
+    api_usuarios, monkeypatch
+):
     _, base = api_usuarios
     cuota_id, total = await recordatorios_en_cola(base, monkeypatch)
     async with base.sessions() as db, db.begin():
