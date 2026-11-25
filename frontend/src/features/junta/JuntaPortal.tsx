@@ -455,8 +455,11 @@ export default function JuntaPortal() {
           {section === "incidencias" && esJunta && condominioActivoId && (
             <IncidenciasSection key={condominioActivoId} />
           )}
-          {section === "excepciones" && esJunta && condominioActivoId && (
-            <ExcepcionesSection key={condominioActivoId} onRevisarCorreo={() => navegar("comunicados")} />
+          {section === "excepciones" && (esJunta || isSuperAdmin) && (
+            <ExcepcionesSection
+              key={esJunta ? condominioActivoId ?? "junta" : "global"}
+              onRevisarCorreo={() => navegar("comunicados")}
+            />
           )}
           {section === "salud" && (
             <SaludAlertasSection

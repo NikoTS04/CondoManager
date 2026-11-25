@@ -52,18 +52,20 @@ class NotificacionesRepository:
         ]
 
     async def destinatarios_junta(self, cid):
-        return list(await self.session.scalars(
-            select(Usuario)
-            .join(UsuarioRol)
-            .join(Condominio, Condominio.id == UsuarioRol.condominio_id)
-            .where(
-                UsuarioRol.condominio_id == cid,
-                UsuarioRol.rol == RolUsuario.ADMIN_JUNTA,
-                UsuarioRol.es_activo.is_(True),
-                Usuario.esta_activo.is_(True),
-                Condominio.activo.is_(True),
+        return list(
+            await self.session.scalars(
+                select(Usuario)
+                .join(UsuarioRol)
+                .join(Condominio, Condominio.id == UsuarioRol.condominio_id)
+                .where(
+                    UsuarioRol.condominio_id == cid,
+                    UsuarioRol.rol == RolUsuario.ADMIN_JUNTA,
+                    UsuarioRol.es_activo.is_(True),
+                    Usuario.esta_activo.is_(True),
+                    Condominio.activo.is_(True),
+                )
             )
-        ))
+        )
 
     async def destinatarios_operativos(self, aviso):
         if aviso.tipo_evento == AVISO_INCIDENCIA:
@@ -71,9 +73,23 @@ class NotificacionesRepository:
         return await self.destinatarios(aviso.condominio_id, aviso.departamento_id, aviso.canal)
 
     async def encolar(
-        self, *, cid, did, usuario, contacto, evento, operacion, tipo, canal, contexto,
-        recordatorio_vencimiento=None, recordatorio_dias=None,
+        self,
+        *,
+        cid,
+        did,
+        usuario,
+        contacto,
+        evento,
+        operacion,
+        tipo,
+        canal,
+        contexto,
+        recordatorio_vencimiento=None,
+        recordatorio_dias=None,
+        externo=None,
     ):
+        if (usuario is None) == (externo is None):
+            raise ValueError("La cola exige un destinatario: usuario interno o contacto externo.")
         asunto, cuerpo = PlantillasService.renderizar(tipo, contexto)
         id = uuid4()
         await self.session.execute(
@@ -82,7 +98,8 @@ class NotificacionesRepository:
                 id=id,
                 condominio_id=cid,
                 departamento_id=did,
-                usuario_destinatario_id=usuario.id,
+                usuario_destinatario_id=usuario.id if usuario is not None else None,
+                destinatario_externo_id=externo,
                 evento_id=evento,
                 operacion_id=operacion,
                 tipo_evento=tipo,
@@ -93,10 +110,14 @@ class NotificacionesRepository:
                 recordatorio_vencimiento=recordatorio_vencimiento,
                 recordatorio_dias=recordatorio_dias,
                 estado="EN_COLA",
-                transporte="PROVEEDOR" if canal == "EMAIL" and (
-                    settings.MAILJET_ENABLED or settings.APP_ENV == "production"
+                transporte="PROVEEDOR"
+                if canal == "EMAIL"
+                and (
+                    settings.MAILJET_ENABLED
+                    or settings.APP_ENV == "production"
                     or os.getenv("VERCEL_ENV") == "production"
-                ) else "SIMULADO",
+                )
+                else "SIMULADO",
                 ciclo=1,
                 intentos=0,
             )
@@ -106,7 +127,8 @@ class NotificacionesRepository:
             select(Notificacion).where(
                 Notificacion.evento_id == evento,
                 Notificacion.operacion_id == operacion,
-                Notificacion.usuario_destinatario_id == usuario.id,
+                Notificacion.usuario_destinatario_id == (usuario.id if usuario else None),
+                Notificacion.destinatario_externo_id == externo,
                 Notificacion.canal == canal,
             )
         )

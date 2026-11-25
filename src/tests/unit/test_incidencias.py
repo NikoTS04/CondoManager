@@ -1,12 +1,21 @@
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from pydantic import ValidationError
 
+from src.modules.incidencias.estados import transicion_permitida
 from src.modules.incidencias.schemas import (
+    AsignarIncidencia,
     ClasificarIncidencia,
+    ConfirmarIncidencia,
     CrearIncidencia,
+    ReabrirIncidencia,
     RechazarIncidencia,
+    RegistrarSeguimiento,
 )
 
 
@@ -34,3 +43,65 @@ def test_clasificacion_rechaza_una_prioridad_fuera_del_catalogo():
             accion="CLASIFICAR", version=1, categoria="Mantenimiento", prioridad="CRITICA"
         )
     assert [detalle["loc"] for detalle in error.value.errors()] == [("prioridad",)]
+
+
+def test_la_maquina_de_estados_solo_admite_las_transiciones_definidas():
+    assert transicion_permitida("REGISTRADO", "ASIGNADO")
+    assert transicion_permitida("ASIGNADO", "ASIGNADO")
+    assert transicion_permitida("RESUELTO", "EN_PROCESO")
+    assert not transicion_permitida("RECHAZADO", "ASIGNADO")
+    assert not transicion_permitida("CERRADO", "RESUELTO")
+
+
+def test_la_asignacion_exige_un_solo_responsable_y_plazo_con_zona():
+    plazo = datetime.now(UTC) + timedelta(days=2)
+    con_interno = AsignarIncidencia(version=1, responsable_usuario_id=uuid4(), plazo=plazo)
+    assert con_interno.responsable_proveedor_id is None
+    con_proveedor = AsignarIncidencia(
+        version=1,
+        responsable_proveedor_id=uuid4(),
+        proveedor_nombre="Servicios del Norte",
+        correo_proveedor="contacto@ejemplo.test",
+        plazo=plazo,
+    )
+    assert con_proveedor.responsable_usuario_id is None
+    with pytest.raises(ValidationError):
+        AsignarIncidencia(
+            version=1,
+            responsable_usuario_id=uuid4(),
+            responsable_proveedor_id=uuid4(),
+            plazo=plazo,
+        )
+    sin_correo = AsignarIncidencia(
+        version=1,
+        responsable_proveedor_id=uuid4(),
+        proveedor_nombre="Servicios del Norte",
+        plazo=plazo,
+    )
+    assert sin_correo.correo_proveedor is None
+    with pytest.raises(ValidationError):
+        AsignarIncidencia(
+            version=1, responsable_usuario_id=uuid4(), plazo=plazo.replace(tzinfo=None)
+        )
+
+
+def test_el_seguimiento_exige_un_monto_decimal_de_dos_decimales():
+    avance = RegistrarSeguimiento(version=1, comentario="Reparación iniciada", monto="45.50")
+    assert avance.monto == Decimal("45.50")
+    with pytest.raises(ValidationError):
+        RegistrarSeguimiento(version=1, comentario="Costo", monto="45.567")
+    with pytest.raises(ValidationError):
+        RegistrarSeguimiento(version=1, comentario="Costo", monto=45.5)
+
+
+def test_la_calificacion_y_la_reapertura_exigen_datos_validos():
+    assert ConfirmarIncidencia(version=1, calificacion=5).calificacion == 5
+    with pytest.raises(ValidationError):
+        ConfirmarIncidencia(version=1, calificacion=6)
+    with pytest.raises(ValidationError):
+        ReabrirIncidencia(version=1, motivo="   ")
+
+
+def test_migracion_0029_es_la_cabeza_sobre_la_0028():
+    scripts = ScriptDirectory.from_config(Config("alembic.ini"))
+    assert scripts.get_revision("20261129_0029").down_revision == "20261128_0028"

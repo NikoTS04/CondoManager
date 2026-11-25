@@ -23,6 +23,7 @@ const ESTADOS: Record<Excepcion["estado"], { etiqueta: string; tono: Tone }> = {
 };
 const ACCIONES: Record<AccionExcepcion, string> = {
   REENVIAR_CORREO: "Reenviar correo",
+  REINTENTAR_JOB: "Reintentar job",
   CERRAR_CON_MOTIVO: "Cerrar caso",
 };
 const RESULTADOS: Record<string, string> = {
@@ -156,9 +157,23 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
                 <dd>{caso.evidencia.ciclo_fallido}</dd>
               </div>
               <div>
-                <dt className="text-muted">Resultado del correo</dt>
+                <dt className="text-muted">{caso.origen === "JOB" ? "Estado del job" : "Resultado del envío"}</dt>
                 <dd>{RESULTADOS[caso.evidencia.estado_operacion] ?? caso.evidencia.estado_operacion}</dd>
               </div>
+              {caso.evidencia.referencia_correlacion && (
+                <div className="sm:col-span-2">
+                  <dt className="text-muted">Referencia de diagnóstico</dt>
+                  <dd className="break-all font-medium">{caso.evidencia.referencia_correlacion}</dd>
+                </div>
+              )}
+              {caso.historial[0] && (
+                <div className="sm:col-span-2">
+                  <dt className="text-muted">Resultado real de la última decisión</dt>
+                  <dd className="break-all font-medium">
+                    {caso.historial[0].efecto.estado_operacion ?? caso.historial[0].efecto.estado_proceso ?? "Registrado"}
+                  </dd>
+                </div>
+              )}
             </dl>
             {caso.requiere_revision_correo && (
               <Alert
@@ -220,7 +235,13 @@ function DecidirCaso({ caso, onGuardada }: { caso: DetalleExcepcion; onGuardada:
     try {
       await resolverExcepcion(caso.id, datos, clave.current.id);
       setAccion(undefined);
-      onGuardada(reenvio ? "Reenvío en cola. Actualiza para consultar el resultado." : "Caso cerrado.");
+      onGuardada(
+        reenvio
+          ? "Reenvío en cola. Actualiza para consultar el resultado."
+          : accion === "REINTENTAR_JOB"
+            ? "Job marcado para reintento. Actualiza para ver el resultado."
+            : "Caso cerrado.",
+      );
     } catch (causa) {
       setError(causa instanceof ApiError ? causa.message : "No pudimos registrar la decisión. Inténtalo de nuevo.");
     } finally {
