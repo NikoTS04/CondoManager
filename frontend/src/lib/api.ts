@@ -650,6 +650,63 @@ export class ApiError extends Error {
   }
 }
 
+export type AccionExcepcion = "REENVIAR_CORREO" | "CERRAR_CON_MOTIVO";
+type EstadoExcepcion = "ABIERTA" | "EN_PROCESO" | "RESUELTA" | "FALLIDA";
+
+export interface Excepcion {
+  id: string;
+  origen: "CORREO" | "JOB";
+  operacion_id: string;
+  causa: string;
+  prioridad: "ALTA" | "MEDIA";
+  estado: EstadoExcepcion;
+  creada_en: string;
+}
+
+interface ResolucionExcepcion {
+  id: string;
+  accion: AccionExcepcion;
+  motivo: string;
+  actor_id: string;
+  fecha: string;
+  estado: EstadoExcepcion;
+  efecto: { operacion_id: string; ciclo: number; estado_operacion: string };
+}
+
+export interface DetalleExcepcion extends Excepcion {
+  evidencia: { tipo_evento: string; ciclo_fallido: number; ciclo_actual: number; estado_operacion: string };
+  historial: ResolucionExcepcion[];
+  acciones_permitidas: AccionExcepcion[];
+  requiere_revision_correo: boolean;
+}
+
+export interface PaginaExcepciones {
+  items: Excepcion[];
+  hay_mas: boolean;
+}
+
+export interface SolicitudResolucionExcepcion {
+  accion: AccionExcepcion;
+  motivo: string;
+  nuevo_destinatario?: string;
+}
+
+export function listarExcepciones(offset: number, limit: number, signal?: AbortSignal): Promise<PaginaExcepciones> {
+  return recursoRequest(`/excepciones?offset=${offset}&limit=${limit}`, { signal });
+}
+
+export function consultarExcepcion(id: string, signal?: AbortSignal): Promise<DetalleExcepcion> {
+  return recursoRequest(`/excepciones/${encodeURIComponent(id)}`, { signal });
+}
+
+export function resolverExcepcion(
+  id: string, solicitud: SolicitudResolucionExcepcion, clave: string,
+): Promise<ResolucionExcepcion> {
+  return recursoRequest(`/excepciones/${encodeURIComponent(id)}/resoluciones`, {
+    method: "POST", headers: { "Idempotency-Key": clave }, body: JSON.stringify(solicitud),
+  });
+}
+
 function contextoQuery(condominioId?: string | null): string {
   return condominioId ? `?condominio_id=${encodeURIComponent(condominioId)}` : "";
 }

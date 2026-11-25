@@ -13,6 +13,7 @@ import {
   Users,
   CalendarDays,
   Activity,
+  CircleAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
@@ -28,6 +29,7 @@ export type JuntaSection =
   | "conciliacion"
   | "moras"
   | "incidencias"
+  | "excepciones"
   | "comunicados"
   | "salud";
 
@@ -42,6 +44,7 @@ const NAV_ITEMS = [
   { id: "conciliacion", label: "Conciliación", Icon: FileCheck2 },
   { id: "moras", label: "Moras", Icon: Clock3 },
   { id: "incidencias", label: "Incidencias", Icon: ClipboardList },
+  { id: "excepciones", label: "Excepciones", Icon: CircleAlert },
   { id: "comunicados", label: "Comunicados", Icon: Bell },
   { id: "salud", label: "Salud y alertas", Icon: Activity },
 ] as const;
@@ -58,7 +61,7 @@ export function JuntaNav({ section, isSuperAdmin, isAuditor, pendientes, onNavig
   const items = NAV_ITEMS.filter((item) =>
     (!("superAdmin" in item) || isSuperAdmin) &&
     (!("administracion" in item) || !isAuditor) &&
-    (item.id !== "incidencias" || (!isSuperAdmin && !isAuditor)),
+    (!["incidencias", "excepciones"].includes(item.id) || (!isSuperAdmin && !isAuditor)),
   );
 
   return (

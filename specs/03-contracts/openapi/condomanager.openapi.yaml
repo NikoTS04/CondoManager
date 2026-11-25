@@ -30,7 +30,15 @@ tags:
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
   - name: Incidencias
     description: Registro por residentes y consulta privada por el reportante y Junta.
+  - name: Excepciones
+    description: Consulta y resolución contextual de fallos operativos.
 paths:
+  /excepciones:
+    $ref: './excepciones.paths.yaml#/paths/~1excepciones'
+  /excepciones/{id}:
+    $ref: './excepciones.paths.yaml#/paths/~1excepciones~1%7Bid%7D'
+  /excepciones/{id}/resoluciones:
+    $ref: './excepciones.paths.yaml#/paths/~1excepciones~1%7Bid%7D~1resoluciones'
   /incidencias:
     $ref: './incidencias.paths.yaml#/paths/~1incidencias'
   /incidencias/mis-reportes:
