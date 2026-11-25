@@ -545,6 +545,7 @@ async function fetchProtegido(ruta: string, init: RequestInit): Promise<Response
 
 async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   const headers = getAuthHeaders();
+  if (init.body instanceof FormData) delete headers["Content-Type"];
   new Headers(init.headers).forEach((value, key) => { headers[key] = value; });
   const response = await fetchProtegido(ruta, { ...init, headers });
   const data = await response.json();
@@ -554,6 +555,92 @@ async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<
       response.status, obtenerCodigoError(data), payload.detalles);
   }
   return data as T;
+}
+
+export type UrgenciaIncidencia = "BAJA" | "MEDIA" | "ALTA" | "URGENTE";
+
+export const NIVELES_INCIDENCIA: Record<UrgenciaIncidencia, string> = {
+  BAJA: "Baja", MEDIA: "Media", ALTA: "Alta", URGENTE: "Urgente",
+};
+
+interface ReporteIncidencia {
+  id: string;
+  departamento_id: string;
+  ubicacion: string;
+  categoria: string;
+  descripcion: string;
+  urgencia: UrgenciaIncidencia;
+  creado_en: string;
+  tiene_evidencia: boolean;
+}
+
+export interface Incidencia extends ReporteIncidencia {
+  estado: "REGISTRADO" | "RECHAZADO";
+  categoria_confirmada: string | null;
+  prioridad: UrgenciaIncidencia | null;
+  motivo_rechazo: string | null;
+  version: number;
+}
+
+export interface RegistroIncidencia extends ReporteIncidencia {
+  estado: "REGISTRADO";
+  advertencia_evidencia: string | null;
+}
+
+export interface BandejaIncidencias {
+  items: Incidencia[];
+  hay_mas: boolean;
+}
+
+export type RevisionIncidencia =
+  | { accion: "CLASIFICAR"; version: number; categoria: string; prioridad: UrgenciaIncidencia }
+  | { accion: "RECHAZAR"; version: number; motivo: string };
+
+export function registrarIncidencia(datos: FormData, clave: string): Promise<RegistroIncidencia> {
+  return recursoRequest("/incidencias", {
+    method: "POST",
+    headers: { "Idempotency-Key": clave },
+    body: datos,
+  });
+}
+
+export function consultarIncidencia(id: string, signal?: AbortSignal): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}`, { signal });
+}
+
+export function listarIncidencias(
+  offset: number, limit: number, signal?: AbortSignal,
+): Promise<BandejaIncidencias> {
+  return recursoRequest(`/incidencias?offset=${offset}&limit=${limit}`, { signal });
+}
+
+export function listarMisReportes(
+  offset: number, limit: number, signal?: AbortSignal,
+): Promise<BandejaIncidencias> {
+  return recursoRequest(`/incidencias/mis-reportes?offset=${offset}&limit=${limit}`, { signal });
+}
+
+export function revisarIncidencia(id: string, revision: RevisionIncidencia): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/revision`, {
+    method: "PATCH",
+    body: JSON.stringify(revision),
+  });
+}
+
+export async function descargarFotoIncidencia(id: string): Promise<void> {
+  const response = await fetchProtegido(`/incidencias/${encodeURIComponent(id)}/evidencia`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error("No pudimos descargar la foto. Inténtalo de nuevo.");
+  const foto = await response.blob();
+  const url = URL.createObjectURL(foto);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `incidencia-${id}.${foto.type === "image/png" ? "png" : "jpg"}`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export class ApiError extends Error {

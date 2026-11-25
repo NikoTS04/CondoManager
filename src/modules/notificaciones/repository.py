@@ -8,10 +8,13 @@ from sqlalchemy.dialects.postgresql import insert
 
 from src.core.authorization import contexto_consulta, vinculos_activos
 from src.core.config import settings
+from src.core.roles import RolUsuario
 from src.modules.condominios.models import Condominio, Departamento, Edificio
 from src.modules.notificaciones.models import Notificacion
 from src.modules.notificaciones.templates import PlantillasService
 from src.modules.usuarios.models import Usuario, UsuarioDepartamento, UsuarioRol
+
+AVISO_INCIDENCIA = "NOTIF_INCIDENCIA_REGISTRADA"
 
 
 class NotificacionesRepository:
@@ -47,6 +50,25 @@ class NotificacionesRepository:
             for u, d in (await self.session.execute(query)).all()
             if (u.email if canal == "EMAIL" else u.telefono)
         ]
+
+    async def destinatarios_junta(self, cid):
+        return list(await self.session.scalars(
+            select(Usuario)
+            .join(UsuarioRol)
+            .join(Condominio, Condominio.id == UsuarioRol.condominio_id)
+            .where(
+                UsuarioRol.condominio_id == cid,
+                UsuarioRol.rol == RolUsuario.ADMIN_JUNTA,
+                UsuarioRol.es_activo.is_(True),
+                Usuario.esta_activo.is_(True),
+                Condominio.activo.is_(True),
+            )
+        ))
+
+    async def destinatarios_operativos(self, aviso):
+        if aviso.tipo_evento == AVISO_INCIDENCIA:
+            return [(u, None, u.email) for u in await self.destinatarios_junta(aviso.condominio_id)]
+        return await self.destinatarios(aviso.condominio_id, aviso.departamento_id, aviso.canal)
 
     async def encolar(
         self, *, cid, did, usuario, contacto, evento, operacion, tipo, canal, contexto,

@@ -1,31 +1,34 @@
 "use client";
 
-import { Calendar, CreditCard, Coins, Bell } from "lucide-react";
+import { Calendar, CreditCard, Coins, Bell, ClipboardList } from "lucide-react";
 import { Tabs, type TabItem } from "@/components/ui/Tabs";
 import { cn } from "@/lib/cn";
 
-export type ResidenteTab = "reservas" | "pagos" | "cuenta" | "avisos";
+export type ResidenteTab = "reservas" | "pagos" | "cuenta" | "avisos" | "incidencias";
 
 const TAB_ITEMS: TabItem<ResidenteTab>[] = [
   { id: "cuenta", label: "Resumen", icon: Coins },
   { id: "pagos", label: "Pagos", icon: CreditCard },
   { id: "reservas", label: "Reservas", icon: Calendar },
+  { id: "incidencias", label: "Incidencias", icon: ClipboardList },
   { id: "avisos", label: "Avisos", icon: Bell },
 ];
 
 export interface ResidenteNavProps {
   activeTab: ResidenteTab;
   onChangeTab: (tab: ResidenteTab) => void;
+  mostrarIncidencias: boolean;
   className?: string;
 }
 
-export function ResidenteNav({ activeTab, onChangeTab, className }: ResidenteNavProps) {
+export function ResidenteNav({ activeTab, onChangeTab, mostrarIncidencias, className }: ResidenteNavProps) {
+  const items = mostrarIncidencias ? TAB_ITEMS : TAB_ITEMS.filter((item) => item.id !== "incidencias");
   return (
     <>
       {/* Navegación superior para sm y pantallas mayores usando el componente Tabs */}
       <div className={cn("hidden sm:block", className)}>
         <Tabs<ResidenteTab>
-          items={TAB_ITEMS}
+          items={items}
           value={activeTab}
           onChange={onChangeTab}
           idPrefix="residente"
@@ -38,8 +41,8 @@ export function ResidenteNav({ activeTab, onChangeTab, className }: ResidenteNav
         aria-label="Navegación móvil del residente"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface shadow-lg sm:hidden pb-[env(safe-area-inset-bottom)]"
       >
-        <div className="grid grid-cols-4">
-          {TAB_ITEMS.map((item) => {
+        <div className={cn("grid", mostrarIncidencias ? "grid-cols-5" : "grid-cols-4")}>
+          {items.map((item) => {
             const isSelected = activeTab === item.id;
             const Icon = item.icon;
             return (

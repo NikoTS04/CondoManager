@@ -19,6 +19,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ message: string; code: string | null } | null>(null);
   const goToPortal = (role: UserRole) => {
+    const incidencia = new URLSearchParams(window.location.search).get("incidencia");
+    if (
+      (role === "RESIDENTE" || role === "ADMIN_JUNTA") &&
+      incidencia && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(incidencia)
+    ) {
+      router.push(`/incidencias/${incidencia}`);
+      return;
+    }
     router.push(portalInicial(role));
   };
 

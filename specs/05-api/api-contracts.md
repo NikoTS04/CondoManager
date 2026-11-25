@@ -43,6 +43,38 @@ Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y res
 
 ## 2. Contratos Principales por Módulo
 
+### Registro de incidencias (CON-53)
+
+`POST /incidencias` admite multipart con `departamento_id`, `ubicacion`,
+`categoria`, `descripcion`, `urgencia` y una `evidencia` opcional. Exige una
+sesión de residente con vínculo activo y `Idempotency-Key` UUID. Devuelve 201
+con el reporte `REGISTRADO` y 200 al repetir los mismos datos con la misma clave.
+Reutilizar la clave con otros datos devuelve 409. Una foto PNG o JPEG inválida o
+que exceda 3 MiB se descarta y la respuesta informa `advertencia_evidencia`.
+`GET /incidencias/{incidencia_id}` y su subruta `/evidencia` exigen que el
+solicitante sea el reportante con vínculo activo o Junta del mismo condominio.
+Los reportes fuera de alcance devuelven 404. [OpenAPI de incidencias](../03-contracts/openapi/incidencias.paths.yaml).
+
+`GET /incidencias/mis-reportes?offset=0&limit=25` devuelve `items` y
+`hay_mas`. Solo se admiten residentes. La página se ordena por fecha de
+creación descendente y contiene únicamente reportes del usuario en el
+condominio activo y en sus unidades con vínculo activo. Cada elemento
+incluye el estado y el motivo de rechazo vigentes.
+
+### Clasificación de incidencias (CON-54)
+
+`GET /incidencias?offset=0&limit=25` lista tickets del condominio de Junta.
+Devuelve `items` y `hay_mas`. Ordena primero los tickets urgentes pendientes,
+luego los demás pendientes y por último los rechazados, con los más recientes
+primero dentro de cada grupo.
+`PATCH /incidencias/{incidencia_id}/revision` requiere `ADMIN_JUNTA` y recibe
+`accion`, `version` y los datos de la acción. `CLASIFICAR` recibe `categoria`
+y `prioridad`. `RECHAZAR` recibe `motivo` obligatorio. Una versión
+desactualizada o un estado distinto de `REGISTRADO` devuelve 409. El reporte
+original conserva la categoría y urgencia que declaró el residente. El detalle
+incluye la categoría confirmada, la prioridad, el motivo de rechazo y la versión.
+Reenviar el reporte de CON-53 devuelve el comprobante original de registro.
+
 ### CON-81 — disponibilidad del despliegue
 
 GET `/health` y `/api/v1/health` conservan su respuesta de liveness HTTP.

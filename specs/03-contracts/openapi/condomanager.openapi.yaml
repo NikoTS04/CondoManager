@@ -28,7 +28,19 @@ tags:
     description: Evidencia privada, revisión financiera y solvencia persistentes.
   - name: Notificaciones y Comunicaciones
     description: Avisos persistidos, reenvíos y alertas administrativas de fallos.
+  - name: Incidencias
+    description: Registro por residentes y consulta privada por el reportante y Junta.
 paths:
+  /incidencias:
+    $ref: './incidencias.paths.yaml#/paths/~1incidencias'
+  /incidencias/mis-reportes:
+    $ref: './incidencias.paths.yaml#/paths/~1incidencias~1mis-reportes'
+  /incidencias/{incidencia_id}:
+    $ref: './incidencias.paths.yaml#/paths/~1incidencias~1%7Bincidencia_id%7D'
+  /incidencias/{incidencia_id}/revision:
+    $ref: './incidencias.paths.yaml#/paths/~1incidencias~1%7Bincidencia_id%7D~1revision'
+  /incidencias/{incidencia_id}/evidencia:
+    $ref: './incidencias.paths.yaml#/paths/~1incidencias~1%7Bincidencia_id%7D~1evidencia'
   /notificaciones/audiencia:
     $ref: './notificaciones-completas.paths.yaml#/paths/~1notificaciones~1audiencia'
   /notificaciones/comunicados/previsualizar:

@@ -31,6 +31,13 @@ Base acordada el 20/10/2026. Los contratos HTTP y las reglas asociadas están en
 
 ## Productores, consumidores y esquemas
 
+### Incidencias CON-53 — cola SQL transaccional
+
+El alta de un ticket inserta `NOTIF_INCIDENCIA_REGISTRADA` en la cola SQL de
+correo dentro de la transacción del reporte. `evento_id` y `operacion_id`
+usan el ID de la incidencia. Cada cuenta activa de Junta del mismo condominio
+recibe un aviso con el ID y un enlace privado al reporte.
+
 ### Identidad CON-76/7 — cola SQL transaccional
 
 `UsuarioInvitadoEvent` y `AccesoUsuarioCambiadoEvent` identifican avisos internos

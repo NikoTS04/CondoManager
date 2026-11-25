@@ -178,11 +178,7 @@ async def procesar_uno(
             log.proximo_reintento = None
             return True
         if log.finalidad == "OPERATIVA":
-            destinos = await NotificacionesRepository(db).destinatarios(
-                log.condominio_id,
-                log.departamento_id,
-                log.canal,
-            )
+            destinos = await NotificacionesRepository(db).destinatarios_operativos(log)
             valido = any(
                 u.id == log.usuario_destinatario_id and c == log.destinatario
                 for u, _, c in destinos

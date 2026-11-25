@@ -61,6 +61,8 @@ def test_renderizado_todas_las_plantillas():
         "titulo": "Corte de Agua Programado",
         "mensaje": "Se suspenderá el servicio de agua de 09:00 a 13:00 por mantenimiento.",
         "remitente": "Junta Directiva Villa Bonita 3",
+        "incidencia_id": "c782fd84-5ee1-4b5d-b7ff-114a2ed9f8e7",
+        "enlace": "https://condominio.example/incidencias/c782fd84-5ee1-4b5d-b7ff-114a2ed9f8e7",
     }
 
     for tipo_evento in PLANTILLAS_CONFIG.keys():

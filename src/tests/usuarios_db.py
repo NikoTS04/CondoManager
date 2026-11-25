@@ -52,6 +52,8 @@ REVISIONES_API = (
     "20261025_0020_fondos_moras",
     "20261113_0021_invitaciones_identidad",
     "20261121_0022_notificaciones_completas",
+    "20261124_0023_incidencias",
+    "20261124_0024_clasificacion_incidencias",
 )
 
 
