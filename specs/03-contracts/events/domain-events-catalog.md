@@ -44,7 +44,9 @@ Contrato de avisos de correo sobre la cola SQL existente (`notificaciones_logs`)
 Son avisos persistidos en la misma transacción del hecho, como CON-53; no son
 envelopes del Stream. Las claves se calculan con
 `src.modules.notificaciones.avisos_contrato`. La unicidad lógica de la cola es
-`(evento_id, operacion_id, usuario_destinatario_id, canal)`. Todos usan canal
+`(evento_id, operacion_id, usuario_destinatario_id, canal)` para destinatarios
+internos y `(evento_id, operacion_id, destinatario_externo_id, canal)` para
+contactos externos. Todos usan canal
 EMAIL, nunca se encolan antes del commit del hecho, y un dato obligatorio ausente
 produce `PlantillaIncompletaError` (no se crea el aviso ni se inventa el dato).
 
@@ -52,8 +54,8 @@ produce `PlantillaIncompletaError` (no se crea el aviso ni se inventa el dato).
 |---|---|---|---|---|---|---|
 | `ReservaAfectadaPorBloqueoEvent` | CON-47 (reservas, al confirmar bloqueo y cancelaciones) | `NOTIF_RESERVA_AFECTADA_BLOQUEO` | ID del bloqueo | ID de la reserva | Titular de la reserva (`reservas.usuario_id`); uno por reserva | Contrato; productor pendiente |
 | `IncidenciaRegistradaEvent` | CON-53 (incidencias) | `NOTIF_INCIDENCIA_REGISTRADA` | ID de la incidencia | ID de la incidencia | Cada cuenta activa de Junta del condominio | Implementado |
-| `IncidenciaAsignadaEvent` | CON-55 (incidencias, al confirmar la asignación) | `NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE` | ID de la asignación | derivado de (asignación, `RESIDENTE`) | Reportante de la incidencia | Contrato; productor pendiente |
-| `IncidenciaAsignadaEvent` | CON-55 | `NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR` | ID de la asignación | derivado de (asignación, `PROVEEDOR`) | Contacto de correo del proveedor externo del directorio | Contrato; requiere decisión de esquema (ver abajo) |
+| `IncidenciaAsignadaEvent` | CON-55 (incidencias, al confirmar la asignación) | `NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE` | ID de la asignación | derivado de (asignación, `RESIDENTE`) | Reportante de la incidencia | Implementado |
+| `IncidenciaAsignadaEvent` | CON-55 | `NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR` | ID de la asignación | derivado de (asignación, `PROVEEDOR`) | Contacto de correo del proveedor externo | Implementado (migración `20261127_0027`) |
 
 **Payloads lógicos** (cuerpo del hecho; el aviso solo usa lo listado, resuelto
 desde registros autorizados y sin datos sensibles):
@@ -92,14 +94,12 @@ ausente no genera fila en la cola: la vista lo deriva y lo informa como
 `CONTACTO_FALTANTE`. Contrato de lectura en
 [api-contracts](../../05-api/api-contracts.md#avisos-de-bloqueos-e-incidencias-contrato-del-sprint-4).
 
-**Restricciones de esquema detectadas (sin migración en esta entrega).**
-`notificaciones_logs.usuario_destinatario_id` es NOT NULL con FK a `usuarios` y
-forma parte de la unicidad: un contacto externo de proveedor no cabe sin cambio.
-Además `notificaciones_alertas.notificacion_id` es NOT NULL, de modo que
-`CONTACTO_FALTANTE` no puede persistirse como alerta sin migración. Decisión
-pendiente del responsable de la cadena de migraciones: columna de destinatario
-externo con unicidad que contemple NULL, o registro de proveedor como usuario sin
-acceso. Hasta entonces el aviso al proveedor no puede encolarse.
+**Restricciones de esquema resueltas en CON-55.** La migración
+`20261127_0027` hace nullable `notificaciones_logs.usuario_destinatario_id`,
+añade `destinatario_externo_id` con unicidad parcial por `NULL` y exige exactamente
+uno de los dos destinatarios. El contacto externo se valida al confirmar la
+asignación y se revalida al reenviar. `CONTACTO_FALTANTE` sigue derivándose en la
+lectura: un proveedor sin correo no genera fila en la cola ni alerta persistida.
 
 ### Alertas de contrato CON-50 — registro SQL, sin envelope
 

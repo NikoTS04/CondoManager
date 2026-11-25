@@ -75,7 +75,9 @@ export function IncidenciasSection() {
                         {NIVELES_INCIDENCIA[prioridad]}{incidencia.prioridad === null ? " · reportada" : ""}
                       </Badge>
                       <Badge tone={rechazada ? "warning" : "info"}>
-                        {rechazada ? "Rechazado" : "Registrado"}
+                        {incidencia.estado === "RECHAZADO"
+                          ? "Rechazado"
+                          : incidencia.estado.charAt(0) + incidencia.estado.slice(1).toLowerCase().replace("_", " ")}
                       </Badge>
                     </div>
                   </Link>

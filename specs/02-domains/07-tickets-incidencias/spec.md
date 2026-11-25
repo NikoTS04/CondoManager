@@ -62,6 +62,38 @@ RPA aplica reglas determinísticas sobre la recomendación y el contexto del dom
 
 ---
 
+## 4.1 Gestión manual del ciclo de vida (CON-55 a CON-57)
+
+El módulo de código es `src/modules/incidencias/`. La máquina de estados
+compartida está en `src/modules/incidencias/estados.py` y se documenta en
+[state-machines.md](../../03-data-models/state-machines.md#4-máquina-de-estados-incidencia-incidencias).
+
+- **Asignación (CON-55).** Junta del condominio puede asignar un ticket
+  `REGISTRADO` o reasignar uno `ASIGNADO` a un usuario activo con rol vigente en
+  el condominio, o a un proveedor externo del directorio de CON-48 con correo
+  registrado. El plazo debe ser futuro. Cada confirmación crea una asignación
+  con clave de idempotencia: repetir la clave con los mismos datos devuelve la
+  asignación original y no duplica avisos; otra clave crea una asignación nueva
+  y conserva las anteriores. La transición y sus avisos se guardan en la misma
+  transacción, con el evento de asignación como `evento_id` de la cola.
+- **Seguimiento (CON-56).** Solo Junta registra avances, evidencias, repuestos
+  y costos, y hace pasar el ticket a `EN_PROCESO` y luego a `RESUELTO`. El
+  proveedor nunca cierra el ticket. Cada cambio de estado conserva fecha, actor
+  y observación. Costos y sustentos son visibles para Junta y Auditor del
+  condominio; el residente ve el estado y las actualizaciones publicadas.
+- **Cierre y reapertura (CON-57).** El residente con vínculo activo confirma la
+  solución con calificación y el ticket pasa a `CERRADO`; si no está conforme,
+  lo reabre a `EN_PROCESO` con motivo obligatorio. Junta puede cerrar con una
+  decisión administrativa autorizada y motivada.
+- **Permisos.** `ADMIN_JUNTA` gestiona en su condominio; `AUDITOR` solo consulta
+  dentro del suyo; `RESIDENTE` consulta sus propios reportes y puede confirmar
+  o reabrir solo los suyos; cualquier otro condominio recibe 404.
+- **Avisos.** La lectura `GET /incidencias/{id}/avisos` expone estado por
+  destinatario, sin correos ni contenido del mensaje, y distingue
+  `CONTACTO_FALTANTE` de un aviso encolado.
+
+---
+
 ## 5. Guardas e Invariantes
 
 - Una incidencia crítica nunca se asigna exclusivamente por recomendación probabilística.

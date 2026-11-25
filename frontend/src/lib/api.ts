@@ -574,12 +574,20 @@ interface ReporteIncidencia {
   tiene_evidencia: boolean;
 }
 
+export type EstadoIncidencia =
+  | "REGISTRADO" | "RECHAZADO" | "ASIGNADO" | "EN_PROCESO" | "RESUELTO" | "CERRADO";
+
 export interface Incidencia extends ReporteIncidencia {
-  estado: "REGISTRADO" | "RECHAZADO";
+  estado: EstadoIncidencia;
   categoria_confirmada: string | null;
   prioridad: UrgenciaIncidencia | null;
   motivo_rechazo: string | null;
   version: number;
+  asignacion_actual_id: string | null;
+  responsable_usuario_id: string | null;
+  responsable_proveedor_id: string | null;
+  fecha_asignacion: string | null;
+  plazo: string | null;
 }
 
 export interface RegistroIncidencia extends ReporteIncidencia {
@@ -625,6 +633,55 @@ export function revisarIncidencia(id: string, revision: RevisionIncidencia): Pro
     method: "PATCH",
     body: JSON.stringify(revision),
   });
+}
+
+export interface SolicitudAsignacion {
+  version: number;
+  responsable_usuario_id?: string;
+  responsable_proveedor_id?: string;
+  proveedor_nombre?: string;
+  correo_proveedor?: string;
+  plazo: string;
+  nota?: string;
+}
+
+export interface AsignacionIncidencia {
+  asignacion_id: string;
+  incidencia_id: string;
+  responsable_usuario_id: string | null;
+  responsable_proveedor_id: string | null;
+  plazo: string;
+  nota: string | null;
+  estado: "ASIGNADO";
+  version: number;
+  avisos_encolados: number;
+}
+
+export interface AvisoAsignacion {
+  asignacion_id: string;
+  destinatario_tipo: "RESIDENTE" | "PROVEEDOR";
+  estado: "EN_COLA" | "ENVIADO" | "ENTREGADO" | "REINTENTANDO"
+    | "FALLIDO_PERMANENTE" | "OMITIDO" | "CONTACTO_FALTANTE";
+  aviso_id: string | null;
+  intentos: number | null;
+  fecha_actualizacion: string | null;
+  alerta_abierta: boolean;
+}
+
+export function asignarIncidencia(
+  id: string, solicitud: SolicitudAsignacion, clave: string,
+): Promise<AsignacionIncidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/asignacion`, {
+    method: "POST",
+    headers: { "Idempotency-Key": clave },
+    body: JSON.stringify(solicitud),
+  });
+}
+
+export function consultarAvisosAsignacion(
+  id: string, signal?: AbortSignal,
+): Promise<{ items: AvisoAsignacion[]; hay_mas: boolean }> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/avisos`, { signal });
 }
 
 export async function descargarFotoIncidencia(id: string): Promise<void> {

@@ -89,7 +89,9 @@ class NotificacionesPersistentesService:
 
     async def comunicado(self, request, usuario):
         if settings.APP_ENV == "production" or os.getenv("VERCEL_ENV") == "production":
-            raise APIError(409, "PREVISUALIZACION_REQUERIDA", "Previsualice y confirme el comunicado.")
+            raise APIError(
+                409, "PREVISUALIZACION_REQUERIDA", "Previsualice y confirme el comunicado."
+            )
         try:
             cid = UUID(request.condominio_id)
         except ValueError:
@@ -142,9 +144,7 @@ class NotificacionesPersistentesService:
         if log.estado != "FALLIDO_PERMANENTE":
             return self.dto(log)
         if (log.error_mensaje or "").startswith("ACEPTACION_INCIERTA"):
-            raise APIError(
-                409, "ACEPTACION_INCIERTA", "Verifique el proveedor antes de reenviar."
-            )
+            raise APIError(409, "ACEPTACION_INCIERTA", "Verifique el proveedor antes de reenviar.")
         if log.finalidad != "OPERATIVA":
             if request and request.nuevo_destinatario:
                 raise APIError(
@@ -157,6 +157,16 @@ class NotificacionesPersistentesService:
             if not await destinatario_identidad_valido(self.session, log, datetime.now(UTC)):
                 raise APIError(409, "DESTINATARIO_NO_AUTORIZADO", "El aviso ya no es elegible.")
             nuevo = log.destinatario
+        elif log.destinatario_externo_id is not None:
+            # CON-55: el contacto del proveedor se corrige dentro del mismo
+            # destinatario externo; no existe un vínculo de usuario que validar.
+            nuevo = request.nuevo_destinatario if request else None
+            if not nuevo or nuevo == log.destinatario or "@" not in nuevo:
+                raise APIError(
+                    409,
+                    "INTENTOS_AGOTADOS",
+                    "Corrija el contacto del proveedor antes de iniciar otro ciclo.",
+                )
         else:
             nuevo = request.nuevo_destinatario if request else None
             destinos = await self.repo.destinatarios_operativos(log)
@@ -166,9 +176,7 @@ class NotificacionesPersistentesService:
                     "INTENTOS_AGOTADOS",
                     "Corrija el contacto autorizado antes de iniciar otro ciclo.",
                 )
-            if not any(
-                u.id == log.usuario_destinatario_id and c == nuevo for u, _, c in destinos
-            ):
+            if not any(u.id == log.usuario_destinatario_id and c == nuevo for u, _, c in destinos):
                 raise APIError(
                     422,
                     "DESTINATARIO_NO_AUTORIZADO",

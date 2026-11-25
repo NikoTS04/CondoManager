@@ -90,9 +90,18 @@ Reenviar el reporte de CON-53 devuelve el comprobante original de registro.
 
 ### Avisos de bloqueos e incidencias (contrato del Sprint 4)
 
-Contrato objetivo, aún no implementado; quien implemente cada ticket actualiza
-OpenAPI. Eventos y claves: [catálogo](../03-contracts/events/domain-events-catalog.md).
+El contrato de CON-55 está implementado; el de CON-47 sigue siendo objetivo
+hasta que Brandon actualice OpenAPI. Eventos y claves:
+[catálogo](../03-contracts/events/domain-events-catalog.md).
 
+- `POST /incidencias/{incidencia_id}/asignacion` (CON-55; `ADMIN_JUNTA` del
+  condominio). Cuerpo con `version`, uno de `responsable_usuario_id` o
+  `responsable_proveedor_id` (con `proveedor_nombre` y `correo_proveedor` cuando
+  aplica), `plazo` futuro y `nota` opcional. Header `Idempotency-Key` UUID.
+  Devuelve la incidencia en `ASIGNADO`, con `asignacion_id` y `avisos_encolados`.
+  Repetir la clave con los mismos datos devuelve la asignación original (200);
+  con otros datos responde 409. Un responsable inactivo o ajeno responde 403 y
+  una versión desactualizada o un estado no asignable responde 409.
 - `GET /incidencias/{incidencia_id}/avisos` (CON-55; `ADMIN_JUNTA` del condominio,
   Auditor solo lectura; Residente 403; otro condominio 404). Devuelve `items` con
   `asignacion_id`, `destinatario_tipo` (`RESIDENTE` | `PROVEEDOR`), `estado` y, si

@@ -141,6 +141,65 @@ paths:
         '404': {description: El reporte no existe en el condominio autorizado.}
         '409': {description: El estado o versión actual impide la revisión.}
         '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/asignacion:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    post:
+      operationId: asignarIncidencia
+      tags: [Incidencias]
+      summary: Asignar responsable y plazo a un ticket
+      description: Guarda la asignación, el cambio de estado, la auditoría y los avisos en una sola transacción.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, plazo]
+              properties:
+                version: {type: integer, minimum: 1}
+                responsable_usuario_id: {type: string, format: uuid}
+                responsable_proveedor_id: {type: string, format: uuid}
+                proveedor_nombre: {type: string, minLength: 1, maxLength: 120}
+                correo_proveedor: {type: string, maxLength: 320}
+                plazo: {type: string, format: date-time}
+                nota: {type: string, maxLength: 500}
+      responses:
+        '200': {description: Asignación previa recuperada por idempotencia, content: {application/json: {schema: {$ref: '#/components/schemas/AsignacionIncidencia'}}}}
+        '201': {description: Asignación confirmada, content: {application/json: {schema: {$ref: '#/components/schemas/AsignacionIncidencia'}}}}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
+        '409': {description: Clave reutilizada con otros datos, versión desactualizada o estado no asignable.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  /incidencias/{incidencia_id}/avisos:
+    parameters:
+      - $ref: '#/components/parameters/IncidenciaId'
+    get:
+      operationId: consultarAvisosAsignacion
+      tags: [Incidencias]
+      summary: Consultar el resultado de los avisos de asignación
+      description: Solo Junta y Auditor del condominio. No expone correos ni contenido de los mensajes.
+      responses:
+        '200':
+          description: Avisos por asignación y destinatario
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/AvisoAsignacion'}}
+                  hay_mas: {type: boolean}
+        '401': {$ref: './condomanager.openapi.yaml#/components/responses/Error401'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: El reporte no existe en el condominio autorizado.}
   /incidencias/{incidencia_id}/evidencia:
     parameters:
       - $ref: '#/components/parameters/IncidenciaId'
@@ -200,9 +259,9 @@ components:
       allOf:
         - $ref: '#/components/schemas/ReporteIncidencia'
         - type: object
-          required: [estado, categoria_confirmada, prioridad, motivo_rechazo, version]
+          required: [estado, categoria_confirmada, prioridad, motivo_rechazo, version, asignacion_actual_id, responsable_usuario_id, responsable_proveedor_id, fecha_asignacion, plazo]
           properties:
-            estado: {type: string, enum: [REGISTRADO, RECHAZADO]}
+            estado: {type: string, enum: [REGISTRADO, RECHAZADO, ASIGNADO, EN_PROCESO, RESUELTO, CERRADO]}
             categoria_confirmada: {type: [string, 'null']}
             prioridad:
               oneOf:
@@ -210,3 +269,32 @@ components:
                 - type: 'null'
             motivo_rechazo: {type: [string, 'null']}
             version: {type: integer, minimum: 1}
+            asignacion_actual_id: {type: [string, 'null'], format: uuid}
+            responsable_usuario_id: {type: [string, 'null'], format: uuid}
+            responsable_proveedor_id: {type: [string, 'null'], format: uuid}
+            fecha_asignacion: {type: [string, 'null'], format: date-time}
+            plazo: {type: [string, 'null'], format: date-time}
+    AsignacionIncidencia:
+      type: object
+      required: [asignacion_id, incidencia_id, estado, version, avisos_encolados]
+      properties:
+        asignacion_id: {type: string, format: uuid}
+        incidencia_id: {type: string, format: uuid}
+        responsable_usuario_id: {type: [string, 'null'], format: uuid}
+        responsable_proveedor_id: {type: [string, 'null'], format: uuid}
+        plazo: {type: string, format: date-time}
+        nota: {type: [string, 'null']}
+        estado: {const: ASIGNADO}
+        version: {type: integer, minimum: 1}
+        avisos_encolados: {type: integer, minimum: 0}
+    AvisoAsignacion:
+      type: object
+      required: [asignacion_id, destinatario_tipo, estado]
+      properties:
+        asignacion_id: {type: string, format: uuid}
+        destinatario_tipo: {type: string, enum: [RESIDENTE, PROVEEDOR]}
+        estado: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE, OMITIDO, CONTACTO_FALTANTE]}
+        aviso_id: {type: [string, 'null'], format: uuid}
+        intentos: {type: [integer, 'null'], minimum: 0}
+        fecha_actualizacion: {type: [string, 'null'], format: date-time}
+        alerta_abierta: {type: boolean}

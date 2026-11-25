@@ -35,3 +35,30 @@
 - **Permisos y concurrencia.** Dado un reporte registrado, cuando lo revisa un
   residente, una Junta ajena o una Junta con una versión desactualizada, la
   decisión se rechaza y se conserva la última versión válida.
+
+## CON-55 — Asignar responsable y plazo
+
+- **Asignación válida.** Dado un ticket registrado o asignado, cuando Junta
+  confirma un responsable vigente del condominio y un plazo futuro, entonces el
+  ticket pasa a `ASIGNADO`, se guarda la asignación con actor y fecha y se
+  registran los siete campos de auditoría.
+- **Responsable incompatible.** Dado un usuario inactivo o ajeno al condominio,
+  cuando Junta intenta asignarlo, entonces la solicitud se rechaza sin crear la
+  asignación ni cambiar el estado del ticket.
+- **Reintento y reasignación.** Dada una asignación confirmada, cuando se repite
+  la misma clave y datos, entonces se devuelve la asignación original sin avisos
+  nuevos; cuando se usa otra clave, entonces se crea otra asignación y se
+  conservan los avisos anteriores. Una clave distinta con los mismos datos se
+  rechaza con 409.
+- **Avisos.** Dada una asignación confirmada, cuando se guarda, entonces se
+  encola un aviso al residente con código, estado `ASIGNADO` y enlace; si el
+  responsable es un proveedor externo con correo, se encola otro aviso con
+  código, ubicación, categoría, prioridad, descripción y plazo, sin datos
+  personales del residente. Ambos usan el ID de la asignación como evento.
+- **Contacto faltante.** Dado un proveedor sin correo, cuando se confirma la
+  asignación, entonces solo se encola el aviso al residente y Junta ve
+  `CONTACTO_FALTANTE` para el proveedor.
+- **Consulta de avisos.** Dada una asignación con avisos, cuando Junta o Auditor
+  del condominio consulta `/avisos`, entonces ve por destinatario el estado, los
+  intentos y si hay alerta abierta, sin correos ni contenido. Un residente
+  recibe 403 y un perfil de otro condominio recibe 404.

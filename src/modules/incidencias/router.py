@@ -8,6 +8,9 @@ from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.core.security import get_current_user
 from src.modules.incidencias.schemas import (
+    AsignacionDTO,
+    AsignarIncidencia,
+    BandejaAvisosDTO,
     BandejaIncidenciasDTO,
     CrearIncidencia,
     IncidenciaDTO,
@@ -89,6 +92,52 @@ async def revisar_incidencia(
 ):
     response.headers["Cache-Control"] = "private, no-store"
     return await IncidenciasService(session).revisar(usuario, incidencia_id, revision)
+
+
+@router.post(
+    "/{incidencia_id}/asignacion",
+    status_code=201,
+    response_model=AsignacionDTO,
+    responses={200: {"model": AsignacionDTO}},
+)
+async def asignar_incidencia(
+    incidencia_id: UUID,
+    solicitud: AsignarIncidencia,
+    clave: Annotated[UUID, Header(alias="Idempotency-Key")],
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+):
+    incidencia, asignacion, avisos, creada = await IncidenciasService(session).asignar(
+        usuario, incidencia_id, solicitud, clave
+    )
+    response.status_code = 201 if creada else 200
+    response.headers["Cache-Control"] = "private, no-store"
+    return AsignacionDTO(
+        asignacion_id=asignacion.id,
+        incidencia_id=incidencia.id,
+        responsable_usuario_id=asignacion.responsable_usuario_id,
+        responsable_proveedor_id=asignacion.responsable_proveedor_id,
+        plazo=asignacion.plazo,
+        nota=asignacion.nota,
+        version=incidencia.version,
+        avisos_encolados=avisos,
+    )
+
+
+@router.get("/{incidencia_id}/avisos", response_model=BandejaAvisosDTO)
+async def consultar_avisos_asignacion(
+    incidencia_id: UUID,
+    response: Response,
+    usuario: UsuarioActual,
+    session: Session,
+    offset: Annotated[int, Query(ge=0, le=2_147_483_647)] = 0,
+    limit: Annotated[int, Query(ge=1, le=50)] = 25,
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return await IncidenciasService(session).listar_avisos(
+        usuario, incidencia_id, offset=offset, limit=limit
+    )
 
 
 @router.get(

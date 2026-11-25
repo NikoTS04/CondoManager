@@ -24,6 +24,9 @@ Contrato detallado: [identidad-y-alcances.md](../02-domains/05-usuarios-rbac/ide
 | Consultar incidencia y evidencia por ID | No | Su condominio | No | Sus propios reportes con vínculo activo |
 | Listar mis reportes de incidencias | No | No | No | Sus propios reportes con vínculo activo |
 | Listar, clasificar, priorizar o rechazar incidencias | No | Su condominio | No | No |
+| Asignar y reasignar incidencias (CON-55) | No | Su condominio | No | No |
+| Consultar avisos de asignación (CON-55) | No | Su condominio | Su condominio, solo lectura | No |
+| Confirmar, calificar y reabrir un reporte propio (CON-57) | No | No | No | Sus propios reportes con vínculo activo |
 | Consultar y resolver excepciones operativas | No | Su condominio | No | No |
 | Conciliar pagos, evaluar moras y enviar/reintentar comunicados | Sí | Su condominio | No | No |
 | Consultar bitácora de comunicaciones | Contexto seleccionado | Su condominio | Su condominio | Solo avisos dirigidos a su identidad y vínculos activos |
