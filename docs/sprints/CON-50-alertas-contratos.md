@@ -25,6 +25,8 @@ Responsable: Alejandro. Revisa: Nicolás. Sprint 4, [PROC-06](../../specs/02-pro
 |---|---|
 | `src/tests/unit/test_alertas_contratos.py` (59, 29, 60, 30, vencido, idempotencia, renovación) | 18 aprobadas |
 | `src/tests/integration/test_alertas_contratos_db.py` (59, 29, renovación, dos condominios; PostgreSQL 16) | 4 aprobadas |
+| Unitarias, BDD y las integraciones de CON-50, incidencias y migración CON-73 (PostgreSQL 16) | 478 aprobadas, 4 fallan por `KeyError: 20261125_0025` (la 0025 no está en esta rama); con `down_revision` temporal en 0024 pasan (13/13 en merge y readiness) |
+| Suite completa con cobertura | No se completó localmente (≈2 h por esquema por prueba); queda para el CI |
 | Alembic `upgrade head`, `downgrade base`, `upgrade head` | Correcto (con `down_revision` temporal en 0024; ver abajo) |
 | `alembic check` | Falla por diferencias previas (comentarios e índices); ninguna menciona `avisos_contrato` |
 | `scripts/verify_sdd_compliance.py` | Correcto |
