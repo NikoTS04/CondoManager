@@ -1,0 +1,212 @@
+schemas:
+  UUID:
+    type: string
+    format: uuid
+  Dinero:
+    type: string
+    pattern: '^(?:0|[1-9][0-9]{0,9})\.[0-9]{2}$'
+    description: Importe Decimal serializado como cadena; NUMERIC(12,2), no float.
+  EstadoEgreso:
+    type: string
+    enum: [BORRADOR, PENDIENTE_APROBACION, APROBADO, RECHAZADO, PAGO_PARCIAL, PAGADO, CANCELADO]
+  CrearEgresoRequest:
+    type: object
+    additionalProperties: false
+    required: [concepto_id, descripcion, justificacion, moneda, fecha_gasto, monto_solicitado]
+    properties:
+      concepto_id: {$ref: '#/schemas/UUID'}
+      proveedor_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      contrato_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      presupuesto_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      item_presupuesto_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      descripcion: {type: string, minLength: 1, maxLength: 500}
+      justificacion: {type: string, minLength: 1, maxLength: 2000}
+      moneda: {type: string, enum: [PEN, USD]}
+      fecha_gasto: {type: string, format: date}
+      monto_pactado: {anyOf: [{$ref: '#/schemas/Dinero'}, {type: 'null'}]}
+      monto_solicitado: {$ref: '#/schemas/Dinero'}
+  EditarEgresoRequest:
+    type: object
+    additionalProperties: false
+    required: [version_esperada]
+    properties:
+      version_esperada: {type: integer, minimum: 1}
+      concepto_id: {$ref: '#/schemas/UUID'}
+      proveedor_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      contrato_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      presupuesto_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      item_presupuesto_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      descripcion: {type: string, minLength: 1, maxLength: 500}
+      justificacion: {type: string, minLength: 1, maxLength: 2000}
+      fecha_gasto: {type: string, format: date}
+      monto_pactado: {anyOf: [{$ref: '#/schemas/Dinero'}, {type: 'null'}]}
+      monto_solicitado: {$ref: '#/schemas/Dinero'}
+  Egreso:
+    type: object
+    additionalProperties: false
+    required: [id, condominio_id, concepto_id, proveedor_id, contrato_id, descripcion, justificacion, moneda, fecha_gasto, monto_solicitado, estado, version, creado_por, creado_en, actualizado_en]
+    properties:
+      id: {$ref: '#/schemas/UUID'}
+      condominio_id: {$ref: '#/schemas/UUID'}
+      concepto_id: {$ref: '#/schemas/UUID'}
+      proveedor_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      contrato_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      concepto_codigo: {type: string}
+      categoria: {type: string}
+      proveedor: {anyOf: [{$ref: '#/schemas/ProveedorResumen'}, {type: 'null'}]}
+      descripcion: {type: string}
+      justificacion: {type: string}
+      moneda: {type: string, enum: [PEN, USD]}
+      fecha_gasto: {type: string, format: date}
+      monto_pactado: {anyOf: [{$ref: '#/schemas/Dinero'}, {type: 'null'}]}
+      monto_solicitado: {$ref: '#/schemas/Dinero'}
+      monto_aprobado: {anyOf: [{$ref: '#/schemas/Dinero'}, {type: 'null'}]}
+      monto_pagado: {$ref: '#/schemas/Dinero'}
+      estado: {$ref: '#/schemas/EstadoEgreso'}
+      version: {type: integer, minimum: 1}
+      creado_por: {$ref: '#/schemas/UUID'}
+      creado_en: {type: string, format: date-time}
+      actualizado_en: {type: string, format: date-time}
+      documentos: {type: array, items: {$ref: '#/schemas/DocumentoFinanciero'}}
+      aprobaciones: {type: array, items: {$ref: '#/schemas/AprobacionEgreso'}}
+      pagos: {type: array, items: {$ref: '#/schemas/PagoEgreso'}}
+  ProveedorResumen:
+    type: object
+    additionalProperties: false
+    required: [id, condominio_id, ruc, razon_social, activo]
+    properties:
+      id: {$ref: '#/schemas/UUID'}
+      condominio_id: {$ref: '#/schemas/UUID'}
+      ruc: {type: string, pattern: '^[0-9]{11}$'}
+      razon_social: {type: string}
+      activo: {type: boolean}
+  DocumentoFinanciero:
+    type: object
+    additionalProperties: false
+    required: [id, condominio_id, egreso_id, tipo, archivo_nombre, mime, tamano_bytes, sha256, creado_por, creado_en]
+    properties:
+      id: {$ref: '#/schemas/UUID'}
+      condominio_id: {$ref: '#/schemas/UUID'}
+      egreso_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      tipo: {type: string, enum: [SUSTENTO, EVIDENCIA_PAGO, APERTURA_CAJA]}
+      archivo_nombre: {type: string}
+      mime: {type: string}
+      tamano_bytes: {type: integer, minimum: 1}
+      sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+      creado_por: {$ref: '#/schemas/UUID'}
+      creado_en: {type: string, format: date-time}
+  AprobacionEgreso:
+    type: object
+    additionalProperties: false
+    required: [id, egreso_id, version_egreso, monto_revisado, decision, actor_id, creado_en]
+    properties:
+      id: {$ref: '#/schemas/UUID'}
+      egreso_id: {$ref: '#/schemas/UUID'}
+      version_egreso: {type: integer, minimum: 1}
+      monto_revisado: {$ref: '#/schemas/Dinero'}
+      decision: {type: string, enum: [APROBAR, RECHAZAR]}
+      motivo: {type: [string, 'null']}
+      vigente: {type: boolean}
+      actor_id: {$ref: '#/schemas/UUID'}
+      creado_en: {type: string, format: date-time}
+  DecisionAprobacionRequest:
+    type: object
+    additionalProperties: false
+    required: [decision, version_esperada]
+    properties:
+      decision: {type: string, enum: [APROBAR, RECHAZAR]}
+      version_esperada: {type: integer, minimum: 1}
+      motivo: {type: string, maxLength: 2000}
+  PresentarEgresoRequest:
+    type: object
+    additionalProperties: false
+    required: [version_esperada]
+    properties:
+      version_esperada: {type: integer, minimum: 1}
+  PagoEgreso:
+    type: object
+    additionalProperties: false
+    required: [id, egreso_id, cuenta_id, monto, fecha_pago, referencia, documento_id, estado, actor_id, creado_en]
+    properties:
+      id: {$ref: '#/schemas/UUID'}
+      egreso_id: {$ref: '#/schemas/UUID'}
+      cuenta_id: {$ref: '#/schemas/UUID'}
+      monto: {$ref: '#/schemas/Dinero'}
+      fecha_pago: {type: string, format: date}
+      referencia: {type: string}
+      documento_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      estado: {type: string, enum: [CONFIRMADO, FALLIDO, REVERSADO]}
+      actor_id: {$ref: '#/schemas/UUID'}
+      movimiento_caja_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+      creado_en: {type: string, format: date-time}
+  ConfirmarPagoRequest:
+    type: object
+    additionalProperties: false
+    required: [cuenta_id, monto, fecha_pago, referencia, documento_id]
+    properties:
+      cuenta_id: {$ref: '#/schemas/UUID'}
+      monto: {$ref: '#/schemas/Dinero'}
+      fecha_pago: {type: string, format: date}
+      referencia: {type: string, minLength: 1, maxLength: 200}
+      documento_id: {$ref: '#/schemas/UUID'}
+  IntentoPagoFallidoRequest:
+    type: object
+    additionalProperties: false
+    required: [cuenta_id, monto, fecha_pago, referencia, motivo]
+    properties:
+      cuenta_id: {$ref: '#/schemas/UUID'}
+      monto: {$ref: '#/schemas/Dinero'}
+      fecha_pago: {type: string, format: date}
+      referencia: {type: string, minLength: 1, maxLength: 200}
+      motivo: {type: string, minLength: 1, maxLength: 2000}
+      documento_id: {anyOf: [{$ref: '#/schemas/UUID'}, {type: 'null'}]}
+  ReversoRequest:
+    type: object
+    additionalProperties: false
+    required: [motivo]
+    properties:
+      motivo: {type: string, minLength: 1, maxLength: 2000}
+  ConfiguracionAprobacion:
+    type: object
+    additionalProperties: false
+    required: [condominio_id, umbral, pagos_parciales_habilitados, version, configurada]
+    properties:
+      condominio_id: {$ref: '#/schemas/UUID'}
+      umbral: {anyOf: [{$ref: '#/schemas/Dinero'}, {type: 'null'}]}
+      pagos_parciales_habilitados: {type: boolean, default: false}
+      version: {type: integer, minimum: 1}
+      configurada: {type: boolean}
+  ConfigurarAprobacionRequest:
+    type: object
+    additionalProperties: false
+    required: [umbral, pagos_parciales_habilitados, version_esperada]
+    properties:
+      umbral: {$ref: '#/schemas/Dinero'}
+      pagos_parciales_habilitados: {type: boolean, default: false}
+      version_esperada: {type: integer, minimum: 1}
+  AperturaCajaRequest:
+    type: object
+    additionalProperties: false
+    required: [cuenta_referencia, moneda, saldo, fecha_corte, referencia, documento_id]
+    properties:
+      cuenta_referencia: {type: string, minLength: 1, maxLength: 100, description: Alias no sensible; nunca credenciales bancarias.}
+      moneda: {type: string, enum: [PEN, USD]}
+      saldo: {$ref: '#/schemas/Dinero'}
+      fecha_corte: {type: string, format: date}
+      referencia: {type: string, minLength: 1, maxLength: 200}
+      documento_id: {$ref: '#/schemas/UUID'}
+  CajaResumen:
+    type: object
+    additionalProperties: false
+    required: [cuentas, movimientos]
+    properties:
+      cuentas: {type: array, items: {type: object}}
+      movimientos: {type: array, items: {type: object}}
+  Error:
+    type: object
+    additionalProperties: false
+    required: [error_code, mensaje]
+    properties:
+      error_code: {type: string}
+      mensaje: {type: string}
+      detalles: {type: object}

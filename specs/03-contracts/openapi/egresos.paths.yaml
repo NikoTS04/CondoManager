@@ -1,0 +1,410 @@
+paths:
+  /condominios/{condominio_id}/egresos:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listarEgresos
+      tags: [Egresos y caja]
+      x-implementation-status: parcial
+      parameters:
+        - {name: fecha_desde, in: query, schema: {type: string, format: date}}
+        - {name: fecha_hasta, in: query, schema: {type: string, format: date}}
+        - {name: estado, in: query, schema: {$ref: './egresos.schemas.yaml#/schemas/EstadoEgreso'}}
+        - {name: proveedor_id, in: query, schema: {type: string, format: uuid}}
+        - {name: concepto_id, in: query, schema: {type: string, format: uuid}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 25}}
+      responses:
+        '200':
+          description: Página filtrada dentro del condominio.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: './egresos.schemas.yaml#/schemas/Egreso'}}
+                  hay_mas: {type: boolean}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+    post:
+      operationId: crearEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: parcial
+      description: Implementado CON-51 crea BORRADOR sin pago ni movimiento de caja. Mientras CON-48/49 no esté integrado, proveedor_id/contrato_id no nulos responden PROVEEDOR_NO_DISPONIBLE; sus FKs se agregan en revisión descendiente posterior.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/CrearEgresoRequest'}
+      responses:
+        '201':
+          description: Egreso BORRADOR creado.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/Egreso'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: obtenerEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: parcial
+      responses:
+        '200':
+          description: Detalle del egreso con historial autorizado.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/Egreso'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+    patch:
+      operationId: editarEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: parcial
+      description: Solo BORRADOR; exige version_esperada. Las mutaciones incrementan versión y auditan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/EditarEgresoRequest'}
+      responses:
+        '200':
+          description: Borrador actualizado.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/Egreso'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}/documentos:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: adjuntarDocumentoEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: parcial
+      description: En CON-51 solo se admite tipo SUSTENTO sobre egresos BORRADOR; EVIDENCIA_PAGO queda pendiente de CON-52. PNG/JPEG/PDF se validan por contenido con VOUCHER_MAX_BYTES y se guardan en storage privado.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [archivo, tipo]
+              properties:
+                archivo: {type: string, format: binary}
+                tipo: {type: string, enum: [SUSTENTO, EVIDENCIA_PAGO]}
+      responses:
+        '201':
+          description: Metadatos de documento privado; no expone URL ni ruta interna.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/DocumentoFinanciero'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '413': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '415': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '503': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}/documentos/{documento_id}:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: documento_id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: consultarDocumentoEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: parcial
+      responses:
+        '200':
+          description: Binario privado inline; Cache-Control no-store y X-Content-Type-Options nosniff.
+          content:
+            application/pdf: {schema: {type: string, format: binary}}
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '503': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}/presentar:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: presentarEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/PresentarEgresoRequest'}
+      responses:
+        '200':
+          description: Egreso pasa a PENDIENTE_APROBACION.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/Egreso'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}/aprobaciones:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: decidirAprobacionEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/DecisionAprobacionRequest'}
+      responses:
+        '200':
+          description: Decisión persistida con estado vigente e historial.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/Egreso'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}/cancelar:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: cancelarEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version_esperada, motivo]
+              properties:
+                version_esperada: {type: integer, minimum: 1}
+                motivo: {type: string, minLength: 1, maxLength: 2000}
+      responses:
+        '200': {description: Egreso cancelado sin borrar su historial.}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/configuracion-aprobacion:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: consultarConfiguracionAprobacionEgresos
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      responses:
+        '200':
+          description: Umbral null indica configuración pendiente; no se asume default.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/ConfiguracionAprobacion'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+    put:
+      operationId: configurarAprobacionEgresos
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/ConfigurarAprobacionRequest'}
+      responses:
+        '200':
+          description: Configuración auditada/versionada.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/ConfiguracionAprobacion'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}/pagos:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: confirmarPagoEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      description: Confirma transferencia ya ejecutada. Requiere apertura conciliada y evidencia previamente adjuntada al egreso. Pago, ledger y auditoría son atómicos.
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 100}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/ConfirmarPagoRequest'}
+      responses:
+        '201':
+          description: Pago confirmado y movimiento de caja único.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/PagoEgreso'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}/pagos/intentos-fallidos:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: registrarIntentoPagoFallido
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      description: Conserva el resultado fallido de la ejecución bancaria sin registrar movimiento de caja.
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 100}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/IntentoPagoFallidoRequest'}
+      responses:
+        '201':
+          description: Intento FALLIDO persistido sin afectación de caja.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/PagoEgreso'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/egresos/{egreso_id}/pagos/{pago_id}/reversos:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: egreso_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: pago_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: revertirPagoEgreso
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 100}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/ReversoRequest'}
+      responses:
+        '201': {description: Reverso con movimiento compensatorio y auditoría.}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/caja:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: moneda, in: query, schema: {type: string, enum: [PEN, USD]}}
+      - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 25}}
+    get:
+      operationId: consultarCajaOperativa
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      description: Ledger operativo independiente de fondos de moras; saldo derivado, sin apertura automática.
+      responses:
+        '200':
+          description: Cuentas, saldos y movimientos del condominio.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/CajaResumen'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/caja/documentos:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: adjuntarEvidenciaAperturaCaja
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [archivo]
+              properties:
+                archivo: {type: string, format: binary}
+      responses:
+        '201':
+          description: Documento privado de apertura, aún no asociado a una apertura.
+          content:
+            application/json:
+              schema: {$ref: './egresos.schemas.yaml#/schemas/DocumentoFinanciero'}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '413': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '415': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '503': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/caja/documentos/{documento_id}:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: documento_id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: consultarEvidenciaAperturaCaja
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      responses:
+        '200': {description: Binario privado inline; Cache-Control no-store.}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '404': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '503': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+  /condominios/{condominio_id}/caja/aperturas:
+    parameters:
+      - {name: condominio_id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: registrarAperturaCaja
+      tags: [Egresos y caja]
+      x-implementation-status: pendiente
+      description: Apertura explícita por condominio/moneda con saldo conciliado y evidencia; nunca importa saldo histórico automáticamente.
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 100}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './egresos.schemas.yaml#/schemas/AperturaCajaRequest'}
+      responses:
+        '201': {description: Apertura y movimiento inicial auditados.}
+        '401': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '403': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '409': {$ref: './sprint-2.paths.yaml#/responses/Error'}
+        '422': {$ref: './sprint-2.paths.yaml#/responses/Error'}
