@@ -6,23 +6,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
 from src.core.security import require_role
-from src.modules.excepciones.service import (
+from src.modules.excepciones.schemas import (
     DetalleExcepcionDTO,
-    ExcepcionesService,
     PaginaExcepcionesDTO,
     ResolucionDTO,
     SolicitudResolucion,
 )
+from src.modules.excepciones.service import ExcepcionesService
 
 router = APIRouter(prefix="/excepciones", tags=["Excepciones"])
-UsuarioJunta = Annotated[dict, Depends(require_role(["ADMIN_JUNTA"]))]
+UsuarioOperativo = Annotated[dict, Depends(require_role(["ADMIN_JUNTA", "SUPERADMIN"]))]
 Sesion = Annotated[AsyncSession, Depends(get_db_session, use_cache=False)]
 
 
 @router.get("", response_model=PaginaExcepcionesDTO)
 async def listar_excepciones(
     response: Response,
-    usuario: UsuarioJunta,
+    usuario: UsuarioOperativo,
     session: Sesion,
     offset: Annotated[int, Query(ge=0, le=2_147_483_647)] = 0,
     limit: Annotated[int, Query(ge=1, le=50)] = 25,
@@ -32,7 +32,9 @@ async def listar_excepciones(
 
 
 @router.get("/{id}", response_model=DetalleExcepcionDTO)
-async def consultar_excepcion(id: UUID, response: Response, usuario: UsuarioJunta, session: Sesion):
+async def consultar_excepcion(
+    id: UUID, response: Response, usuario: UsuarioOperativo, session: Sesion
+):
     response.headers["Cache-Control"] = "private, no-store"
     return await ExcepcionesService(session).detalle(usuario, id)
 
@@ -43,7 +45,7 @@ async def resolver_excepcion(
     solicitud: SolicitudResolucion,
     clave: Annotated[UUID, Header(alias="Idempotency-Key")],
     response: Response,
-    usuario: UsuarioJunta,
+    usuario: UsuarioOperativo,
     session: Sesion,
 ):
     response.headers["Cache-Control"] = "private, no-store"

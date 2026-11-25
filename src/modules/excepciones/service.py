@@ -2,10 +2,8 @@
 
 from datetime import UTC, datetime
 from hashlib import sha256
-from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,87 +11,26 @@ from src.core.authorization import contexto_consulta, denegar
 from src.core.errors import APIError
 from src.core.models_audit import AuditoriaLogORM
 from src.core.security import validar_sesion
+from src.modules.excepciones.jobs import ExcepcionesJobService
+from src.modules.excepciones.schemas import (
+    Accion,
+    DetalleExcepcionDTO,
+    EfectoCorreo,
+    Estado,
+    EvidenciaCorreo,
+    ExcepcionDTO,
+    PaginaExcepcionesDTO,
+    ResolucionDTO,
+    SolicitudResolucion,
+)
 from src.modules.notificaciones.models import AlertaNotificacion, Notificacion
 from src.modules.notificaciones.persistencia import NotificacionesPersistentesService
 from src.modules.notificaciones.schemas import ReenviarNotificacionRequest
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
 
-Accion = Literal["REENVIAR_CORREO", "CERRAR_CON_MOTIVO"]
-Estado = Literal["ABIERTA", "EN_PROCESO", "RESUELTA", "FALLIDA"]
 AUDITORIA_RESOLUCION = "EXCEPCION_CORREO_RESUELTA"
 CAUSAS_CON_REENVIO = {"ERROR_DEFINITIVO", "INTENTOS_AGOTADOS", "DESTINATARIO_INVALIDO"}
-
-
-class SolicitudResolucion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    accion: Accion
-    motivo: Annotated[
-        str,
-        StringConstraints(
-            strip_whitespace=True, min_length=1, max_length=500, pattern=r"^[^\x00]+$"
-        ),
-    ]
-    nuevo_destinatario: (
-        Annotated[
-            str,
-            StringConstraints(
-                strip_whitespace=True, min_length=1, max_length=320, pattern=r"^[^\x00]+$"
-            ),
-        ]
-        | None
-    ) = None
-
-    @model_validator(mode="after")
-    def destinatario_segun_accion(self):
-        if (self.accion == "REENVIAR_CORREO") != (self.nuevo_destinatario is not None):
-            raise ValueError("El contacto corregido se requiere únicamente para reenviar.")
-        return self
-
-
-class ExcepcionDTO(BaseModel):
-    id: UUID
-    origen: Literal["CORREO", "JOB"]
-    operacion_id: str
-    causa: str
-    prioridad: Literal["ALTA", "MEDIA"]
-    estado: Estado
-    creada_en: datetime
-
-
-class EfectoCorreo(BaseModel):
-    operacion_id: str
-    ciclo: int
-    estado_operacion: str
-
-
-class ResolucionDTO(BaseModel):
-    id: UUID
-    accion: Accion
-    motivo: str
-    actor_id: str
-    fecha: datetime
-    estado: Estado
-    efecto: EfectoCorreo
-
-
-class EvidenciaCorreo(BaseModel):
-    tipo_evento: str
-    ciclo_fallido: int
-    ciclo_actual: int
-    estado_operacion: str
-
-
-class DetalleExcepcionDTO(ExcepcionDTO):
-    evidencia: EvidenciaCorreo
-    historial: list[ResolucionDTO]
-    acciones_permitidas: list[Accion]
-    requiere_revision_correo: bool
-
-
-class PaginaExcepcionesDTO(BaseModel):
-    items: list[ExcepcionDTO]
-    hay_mas: bool
 
 
 def estado_excepcion(alerta: AlertaNotificacion, aviso: Notificacion) -> Estado:
@@ -176,6 +113,8 @@ class ExcepcionesService:
         )
 
     async def listar(self, usuario: dict, offset: int, limit: int) -> PaginaExcepcionesDTO:
+        if usuario["rol"] == "SUPERADMIN":
+            return await ExcepcionesJobService(self.db).listar(offset, limit)
         consulta = self.consulta(contexto_consulta(usuario)).order_by(
             AlertaNotificacion.atendida_en.is_not(None),
             AlertaNotificacion.creada_en.desc(),
@@ -209,6 +148,8 @@ class ExcepcionesService:
         ).all()
 
     async def detalle(self, usuario: dict, id: UUID) -> DetalleExcepcionDTO:
+        if usuario["rol"] == "SUPERADMIN":
+            return await ExcepcionesJobService(self.db).detalle(id)
         alerta, aviso = await self._caso(contexto_consulta(usuario), id)
         return DetalleExcepcionDTO(
             **resumen(alerta, aviso).model_dump(),
@@ -226,8 +167,11 @@ class ExcepcionesService:
     async def resolver(
         self, usuario: dict, id: UUID, clave: UUID, solicitud: SolicitudResolucion
     ) -> ResolucionDTO:
+        if usuario["rol"] == "SUPERADMIN":
+            return await ExcepcionesJobService(self.db).resolver(usuario, id, clave, solicitud)
         cid = contexto_consulta(usuario)
-        huella = sha256(solicitud.model_dump_json().encode()).hexdigest()
+        # Conserva la huella de los comandos de correo registrados antes de CON-66 jobs.
+        huella = sha256(solicitud.model_dump_json(exclude={"responsable"}).encode()).hexdigest()
         async with self.db.begin():
             identidad = SQLAlchemyUsuariosRepository(self.db)
             if await identidad.contexto(cid, bloquear=True) is None:

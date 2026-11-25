@@ -14,6 +14,7 @@ from src.core.database import AsyncSessionLocal
 from src.core.errors import APIError
 from src.modules.alertas_contratos.service import evaluar_contratos
 from src.modules.cuotas.worker import emitir_pendientes
+from src.modules.excepciones.jobs import finalizar_reintento, tomar_reintento
 from src.modules.notificaciones.worker import recuperar_eventos
 from src.modules.pagos.worker import evaluar_moras_diarias, limpiar_pendientes
 
@@ -69,7 +70,9 @@ async def ejecutar_notificaciones():
         if not await db.scalar(text("SELECT pg_try_advisory_xact_lock(189561)")):
             raise APIError(409, "JOB_EN_CURSO", "Ya existe una ejecución de notificaciones.")
         await registrar_job("EN_CURSO")
+        intento_id = None
         try:
+            intento_id = await tomar_reintento(AsyncSessionLocal)
             await recuperar_inciertos()
             await recuperar_eventos()
             await generar_recordatorios()
@@ -78,9 +81,12 @@ async def ejecutar_notificaciones():
                 if not await procesar_uno(solo_proveedor=True):
                     break
                 procesadas += 1
-        except BaseException:
+        except BaseException as exc:
+            resultado = "FALLIDO" if isinstance(exc, Exception) else "INCIERTO"
+            await finalizar_reintento(AsyncSessionLocal, intento_id, resultado)
             await registrar_job("INCOMPLETO")
             raise
+        await finalizar_reintento(AsyncSessionLocal, intento_id, "COMPLETADO")
         await registrar_job("COMPLETADO")
         return {"estado": "COMPLETADO", "procesadas": procesadas}
 
