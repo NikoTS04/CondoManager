@@ -58,6 +58,23 @@ el envío falla de forma trazable y genera alerta, sin revertir el control de ac
 ENVIADO acredita aceptación, no entrega. Una aceptación incierta requiere revisión
 antes de reenvío; el contrato conserva los intentos/reintentos existentes de CON-78.
 
+## Aviso de cuenta activada (CON-78)
+
+Al consumir la invitación (`POST /auth/activar`) se encola, en la misma transacción que
+la activación, un aviso `CuentaActivadaEvent` (finalidad SEGURIDAD, canal EMAIL,
+transporte PROVEEDOR, departamento nulo). Su identidad lógica deriva de la invitación
+(`evento_id = uuid5(CuentaActivadaEvent:<invitación>)`, `operacion_id = invitación`),
+por lo que `uq_notificacion_logica` impide un segundo aviso aunque se reintente la
+activación. El cuerpo nunca contiene token ni contraseña; incluye el enlace a `/login`
+derivado de `ACTIVACION_WEB_URL` solo si esa URL es válida (sin enlace en caso contrario).
+
+Revalidación al despachar: el worker solo envía si la invitación sigue consumida y no
+revocada, la cuenta continúa activa sin activación pendiente, el email del destinatario
+no cambió y el condominio y el rol contextual siguen vigentes. En caso contrario la fila
+queda `FALLIDO_PERMANENTE` con `DESTINATARIO_REVOCADO_O_CONTACTO_MODIFICADO` y alerta
+`DESTINATARIO_INVALIDO`, sin llegar al transporte. Sigue la política de reintentos y de
+aceptación incierta de CON-78 (Mailjet).
+
 ## Relevos
 
 Solo SuperAdmin releva Junta. El saliente deja de ser ADMIN_JUNTA y el rol final es

@@ -75,3 +75,20 @@ Mientras no exista proveedor real, el transporte `SIMULADO` interpreta el destin
 `usuario+falla{n}@dominio` responde 503 mientras los intentos acumulados sean menores
 o iguales que `n`, y `usuario+rebote@dominio` responde 550. Solo acredita `ENVIADO`.
 Entrega y resultados: [CON-32/34/36/37](../../../docs/sprints/CON-32-34-36-37-notificaciones.md).
+
+## 5. Revalidación del recordatorio al despachar (CON-33)
+
+Los recordatorios (`NOTIF_RECORDATORIO_PREVIO`, `NOTIF_CORTE_HOY`) se encolan con
+`recordatorio_vencimiento` y `recordatorio_dias`, pero su elegibilidad se decide al
+despachar, antes de registrar el intento y dentro de la misma transacción: el worker lee
+la cuota con `FOR SHARE`. Un pago que ya modificó la cuota sin confirmar hace esperar al
+worker, que al continuar relee el saldo vigente; así no se avisa una deuda saldada en
+paralelo.
+
+| Situación al despachar | Resultado |
+| :--- | :--- |
+| Política del condominio deshabilitada | `OMITIDO` / `RECORDATORIOS_DESHABILITADOS` |
+| Cuota inexistente, sin saldo o con vencimiento distinto al encolado | `OMITIDO` / `RECORDATORIO_SIN_DEUDA` |
+| Cuota con saldo vigente | Se re-renderiza el monto pendiente actual y se envía |
+
+`OMITIDO` es terminal: no crea intento de transporte ni alerta, y no se inventa entrega.
