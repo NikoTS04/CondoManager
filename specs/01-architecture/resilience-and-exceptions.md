@@ -48,7 +48,7 @@ En la reserva de áreas comunes (ej. dos residentes intentando reservar la zona 
 | **Reclamo por Mora Indebida:** El residente pagó antes del corte, pero reportó el voucher tarde. | El sistema aplicó la mora en la fecha de corte por no haber registro previo. | El administrador cuenta con la función `Exonerar Mora / Revertir Penalidad`, la cual anula la mora mediante un asiento compensatorio auditado. |
 | **Falla en Notificaciones Masivas:** La cuota mensual no pudo ser enviada a 10 departamentos por caída de correo. | El sistema identifica los 10 envíos fallidos y los aisla en la cola de contingencia. | El administrador visualiza el botón `Reintentar Envíos Pendientes` en el módulo de comunicaciones. |
 
-## 4. Bandeja de Junta para fallos de correo (CON-66)
+## 4. Bandeja de excepciones operativas (CON-66)
 
 El primer recorrido usa alertas de correo operativo persistidas. Junta consulta
 el origen, el motivo, la prioridad, el estado, la referencia de la notificación
@@ -64,4 +64,14 @@ La aceptación incierta se consulta en el flujo de revisión de correo existente
 
 La decisión, el efecto sobre el aviso, el actor y el motivo se guardan juntos.
 Una repetición con la misma clave recupera la decisión original sin iniciar
-otro ciclo. El origen job y sus acciones se integran con CON-86.
+otro ciclo.
+
+Los jobs globales se gestionan con `SUPERADMIN`, siguiendo el alcance de
+CON-68. El detalle muestra la tarea, el ciclo del fallo y la correlación
+disponible. SuperAdmin puede cerrar con motivo o dejar una solicitud interna
+de información con responsable. El job de notificaciones admite un reintento
+manual por alerta si su ejecución está habilitada. El próximo ciclo normal
+del job toma el intento bajo el bloqueo existente. Su resultado confirma el
+cierre o deja registrado un fallo. Una interrupción sin resultado confirmado
+queda como intento incierto para revisión humana. Se conservan las decisiones
+y la referencia de cada intento.

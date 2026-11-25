@@ -56,6 +56,12 @@ detalle muestra posteriormente su resultado vigente. La API devuelve 404
 para casos de otro condominio y 409 si la acción ya no procede o la clave
 se reutiliza con otros datos.
 
+Para `SUPERADMIN`, los mismos endpoints consultan los jobs globales.
+`REINTENTAR_JOB` registra la referencia del intento que tomará el job de
+notificaciones en su próximo ciclo. `SOLICITAR_INFORMACION` exige un
+`responsable` y deja el caso `PENDIENTE_INFORMACION`. El detalle conserva
+la solicitud y el estado operativo de cada decisión.
+
 ### Registro de incidencias (CON-53)
 
 `POST /incidencias` admite multipart con `departamento_id`, `ubicacion`,
