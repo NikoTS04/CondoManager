@@ -383,6 +383,12 @@ La exclusión concurrente utiliza lock SQL estable sobre el área, no solo un í
   `uq_alerta_notificacion_tipo (notificacion_id, ciclo, tipo)`, que hace idempotente
   la creación. Índice parcial `idx_alerta_abierta (condominio_id, creada_en)
   WHERE atendida_en IS NULL`. RLS habilitado.
+  CON-84 (migración `20261125_0025`): `origen_tipo` VARCHAR(10) NOT NULL (`CORREO`|`JOB`),
+  `origen_id` VARCHAR(100) NOT NULL (id de la notificación o nombre del job),
+  `referencia_correlacion` VARCHAR(64) nullable (la llena CON-82); `notificacion_id` y
+  `condominio_id` pasan a admitir NULL solo para `JOB` (`ck_alerta_origen`); nuevo tipo
+  `JOB_FALLO_DEFINITIVO`; la unicidad pasa a `uq_alerta_origen_tipo
+  (origen_tipo, origen_id, ciclo, tipo)`.
 
 Las tablas tienen RLS habilitado sin políticas públicas: el acceso del prototipo
 se realiza exclusivamente por la API con conexión privilegiada y autorización

@@ -36,8 +36,8 @@ El sistema aborta inmediatamente los reintentos:
 
 ## 3. Alertas Administrativas (CON-37)
 
-Cada alerta se asocia a una notificación y a su ciclo; es idempotente por
-`(notificacion_id, ciclo, tipo)`, de modo que un nuevo ciclo manual que vuelve a
+Cada alerta se asocia a su origen (`origen_tipo` + `origen_id`, CON-84) y a su ciclo; es
+idempotente por `(origen_tipo, origen_id, ciclo, tipo)`, de modo que un nuevo ciclo manual que vuelve a
 fallar genera otra alerta. El mensaje no contiene contactos ni datos sensibles.
 
 | Tipo | Origen |
@@ -47,6 +47,7 @@ fallar genera otra alerta. El mensaje no contiene contactos ni datos sensibles.
 | `ACEPTACION_INCIERTA` | Intento interrumpido sin resultado conocido; no se reenvía solo. |
 | `DESTINATARIO_INVALIDO` | El contacto del destinatario no es utilizable. |
 | `PROVEEDOR_NO_CONFIGURADO` | Transporte de proveedor sin configuración. |
+| `JOB_FALLO_DEFINITIVO` | Un job agotó sus reintentos (CON-84); origen `JOB`. |
 
 Atención: `POST /api/v1/notificaciones/alertas/{alerta_id}/atender` (SuperAdmin o
 Junta del contexto; el Auditor solo consulta con `GET /api/v1/notificaciones/alertas`)

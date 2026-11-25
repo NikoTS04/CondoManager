@@ -413,8 +413,8 @@ paths:
       operationId: listarAlertasNotificacion
       tags: [Notificaciones y Comunicaciones]
       summary: Consultar alertas administrativas por fallos permanentes de notificación
-      description: SUPERADMIN, ADMIN_JUNTA y AUDITOR en su contexto; los residentes no acceden. Sin estado se devuelven las alertas ABIERTAS. Los mensajes no contienen contactos ni datos sensibles.
-      x-historias: [CON-37]
+      description: SUPERADMIN, ADMIN_JUNTA y AUDITOR en su contexto; los residentes no acceden. Sin estado se devuelven las alertas ABIERTAS. Los mensajes no contienen contactos ni datos sensibles. Cada alerta indica su origen (origen_tipo, origen_id) y una referencia de correlación opcional; las de job no tienen condominio y no se listan aquí.
+      x-historias: [CON-37, CON-84]
       x-implementation-status: implementado
       parameters:
         - {$ref: '#/parameters/Contexto'}
