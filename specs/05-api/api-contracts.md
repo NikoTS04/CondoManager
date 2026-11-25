@@ -535,6 +535,145 @@ Contrato completo: [reservas del Sprint 2](sprint-2-contratos.md#4-catálogo-dis
 | `POST /reservas` | UUID de condominio, área y departamento; `fecha_reserva`, `hora_inicio`, `hora_fin`. `201` tras commit, `403 DEUDA_MORA_ACTIVA`, `409 HORARIO_NO_DISPONIBLE`. |
 | `POST /reservas/{reserva_id}/cancelar` | Motivo opcional, permiso desde sesión; `200` idempotente con fecha original y estado real del ajuste económico. |
 
+### CON-51 y CON-52 — Egresos, aprobaciones, pagos y caja
+
+**Estado:** contrato objetivo; CON-51 registro/consulta/edición y sustento `SUSTENTO` parcialmente implementados en la rama de CON-51/52. Presentación, aprobación, pagos, caja y CON-52 siguen pendientes. Dominio: [DOM-06](../02-domains/06-egresos-proveedores/spec.md).
+OpenAPI: [egresos.paths.yaml](../03-contracts/openapi/egresos.paths.yaml) y
+[egresos.schemas.yaml](../03-contracts/openapi/egresos.schemas.yaml). El contrato de
+integración con CON-48/49 está en
+[docs/sprints/CON-48-49-51-52-integracion.md](../../docs/sprints/CON-48-49-51-52-integracion.md).
+
+#### Reglas comunes
+
+- Todas las rutas requieren JWT. `ADMIN_JUNTA` opera en su condominio;
+  `SUPERADMIN` en el contexto autorizado/seleccionado. `AUDITOR` puede consultar,
+  pero no mutar. `RESIDENTE` no accede al módulo.
+- Todas las mutaciones derivan actor/contexto del JWT, validan pertenencia real
+  del recurso y escriben auditoría en la misma transacción.
+- Dinero en request/response como cadena `0.00`, moneda `PEN|USD`, persistencia
+  `NUMERIC(12,2)`/`Decimal`. No aceptar `float`, exponentes ni más de dos decimales.
+- `concepto_id` debe ser un `ConceptoPresupuestal` activo del condominio.
+  `proveedor_id` y `contrato_id` son UUID nullable. Si se proporcionan, servicio
+  valida contexto y relación proveedor-contrato. Antes de integrar CON-48/49 no
+  existe FK física; se agregará después mediante migración sobre la cabeza Alembic
+  vigente, nunca con tabla placeholder o revisión paralela.
+- En esta entrega, el módulo de proveedores no está integrado: los gastos sin
+  proveedor/contrato son válidos; referencias UUID no nulas responden
+  `409 PROVEEDOR_NO_DISPONIBLE`. La política no crea datos simulados.
+- Crear/editar borradores no necesita política de aprobación ni apertura de caja.
+  Presentar requiere política configurada. Confirmar pago requiere apertura de
+  caja conciliada y saldo suficiente.
+- El umbral no tiene valor predeterminado. La política inicial prohíbe
+  autoaprobación, requiere una aprobación por debajo/igual al umbral y dos
+  aprobaciones de personas distintas por encima. Cambio de monto crea versión y
+  las aprobaciones previas dejan de autorizarla. Roles actuales: `ADMIN_JUNTA`,
+  `SUPERADMIN`, `AUDITOR`; no se crea rol nuevo.
+- Pagos parciales soportados por modelo, deshabilitados por defecto. Deshabilitados,
+  solo se confirma el total pendiente; habilitados, la suma no excede el monto
+  aprobado vigente. La habilitación la debe ratificar Tesorería.
+
+#### Egresos
+
+| Método y ruta | Permiso | Entrada / resultado |
+|---|---|---|
+| `GET /condominios/{condominio_id}/egresos` | Junta/Auditor contexto | Filtros `fecha_desde`, `fecha_hasta`, `estado`, `proveedor_id`, `concepto_id`, `offset`, `limit`; lista paginada. |
+| `POST /condominios/{condominio_id}/egresos` | Junta escritura | JSON con concepto, descripción, justificación, importe solicitado, moneda, fecha del gasto y referencias opcionales; `201 BORRADOR`. No crea pago ni salida de caja. |
+| `GET /condominios/{condominio_id}/egresos/{egreso_id}` | Junta/Auditor contexto | Detalle, estado, versión, proveedor (campos de lectura), documentos, aprobaciones, pagos e historial. |
+| `PATCH /condominios/{condominio_id}/egresos/{egreso_id}` | Junta escritura | Solo `BORRADOR`, `version_esperada` obligatoria; `200`. Cambio de importe incrementa versión. |
+| `POST /condominios/{condominio_id}/egresos/{egreso_id}/documentos` | Junta escritura | Multipart `archivo`, `tipo`; CON-51 acepta `SUSTENTO` en egreso `BORRADOR`; `EVIDENCIA_PAGO` queda para CON-52. `201` con metadatos y UUID, no URL pública. |
+| `GET /condominios/{condominio_id}/egresos/{egreso_id}/documentos/{documento_id}` | Junta/Auditor contexto | Contenido inline privado, `Cache-Control: no-store`. |
+| `POST /condominios/{condominio_id}/egresos/{egreso_id}/presentar` | Junta escritura | `{version_esperada}`; exige sustento y política configurada; `200 PENDIENTE_APROBACION`. |
+| `POST /condominios/{condominio_id}/egresos/{egreso_id}/aprobaciones` | Junta escritura | `{decision: APROBAR|RECHAZAR, version_esperada, motivo?}`; rechazo requiere motivo; `200` historial/estado resultante. |
+| `POST /condominios/{condominio_id}/egresos/{egreso_id}/cancelar` | Junta escritura | `{version_esperada, motivo}`; solo sin pagos confirmados; `200 CANCELADO`. |
+
+El request de creación acepta `concepto_id`, `proveedor_id?`, `contrato_id?`,
+`presupuesto_id?`, `item_presupuesto_id?`, `descripcion`, `justificacion`,
+`moneda`, `fecha_gasto`, `monto_solicitado` y `monto_pactado?`. `monto_pactado`
+expresa la obligación acordada antes de un eventual incremento; ambos importes
+deben ser positivos y el monto solicitado es el objeto de aprobación. Las claves
+`presupuesto_id`/`item_presupuesto_id` son ambas nulas o ambas presentes y solo
+vinculan el gasto presupuestado: no alteran ni el snapshot aprobado ni caja.
+
+#### Aprobación
+
+`GET /condominios/{condominio_id}/egresos/configuracion-aprobacion` devuelve
+`umbral: string|null`, `version`, `pagos_parciales_habilitados` y estado de
+configuración. Si aún no hay umbral, no se inventa uno: presentación/aprobación
+responde `409 APROBACION_CONFIGURACION_REQUERIDA`.
+
+`PUT` sobre la misma ruta configura `umbral` explícito, `pagos_parciales_habilitados`
+(inicialmente `false`) y `version_esperada`; requiere rol administrativo existente,
+contexto y auditoría. La asignación final de administración de esta política debe
+ratificarse con Tesorería. No hay rol adicional.
+
+Un registrador no puede aprobar su egreso (`403 REGISTRADOR_NO_PUEDE_APROBAR`).
+La decisión se vincula a versión e importe. La aprobación única requerida hasta
+el umbral deja estado `APROBADO`; sobre el umbral, la primera mantiene
+`PENDIENTE_APROBACION` y la siguiente, de otro actor, habilita `APROBADO`.
+Rechazar conserva actor, motivo, importe y versión. Una aprobación repetida por el
+mismo actor/versión responde `409 APROBACION_DUPLICADA`.
+
+#### Pagos y caja
+
+| Método y ruta | Permiso | Entrada / resultado |
+|---|---|---|
+| `GET /condominios/{condominio_id}/caja` | Junta/Auditor contexto | Cuentas, moneda, saldo derivado y movimientos paginados. |
+| `POST /condominios/{condominio_id}/caja/documentos` | Junta escritura | Multipart con evidencia privada de apertura; devuelve `documento_id`, sin URL pública. |
+| `GET /condominios/{condominio_id}/caja/documentos/{documento_id}` | Junta/Auditor contexto | Lectura privada inline de evidencia de apertura. |
+| `POST /condominios/{condominio_id}/caja/aperturas` | Junta escritura con permiso vigente | Alias/referencia no sensible de cuenta, saldo conciliado, moneda, fecha de corte, referencia de conciliación y `documento_id` de sustento; requiere `Idempotency-Key`; `201`. Sin apertura previa para esa cuenta. |
+| `POST /condominios/{condominio_id}/egresos/{egreso_id}/pagos` | Junta escritura | `Idempotency-Key`; cuenta, monto, fecha real, referencia bancaria y `documento_id` tipo `EVIDENCIA_PAGO`; `201` confirmado y movimiento único. |
+| `POST /condominios/{condominio_id}/egresos/{egreso_id}/pagos/intentos-fallidos` | Junta escritura | `Idempotency-Key`; cuenta, monto, fecha, referencia, motivo y evidencia opcional; conserva `FALLIDO` sin movimiento de caja. |
+| `POST /condominios/{condominio_id}/egresos/{egreso_id}/pagos/{pago_id}/reversos` | Junta escritura con permiso vigente | `Idempotency-Key` y motivo; inserta reverso compensatorio y conserva el pago original. |
+
+La evidencia se carga primero al egreso como `EVIDENCIA_PAGO`; la confirmación
+referencia su UUID. El archivo debe pertenecer al mismo egreso y no estar ya
+consumido. Pago confirmado, movimiento de caja y auditoría son una sola
+transacción. Un intento bancario fallido se conserva mediante la ruta de intento
+fallido, sin movimiento de caja. La salida se reconoce al confirmar en sistema con fecha local
+Lima; la fecha bancaria se conserva aparte. Un reverso restaura el saldo pagable
+neto (confirmados menos reversados) sin exceder el monto aprobado y recalcula el
+estado del egreso; no elimina el movimiento original.
+
+**Implementación CON-51 (parcial):** los endpoints de alta, listado/filtrado,
+detalle, edición de borrador y sustento privado están registrados por FastAPI.
+El sustento reutiliza el adapter de storage privado y la validación binaria
+existentes (PDF/JPEG/PNG, `VOUCHER_MAX_BYTES`); el DTO nunca expone la clave de
+storage. Solo se acepta `SUSTENTO`; la evidencia de pago depende de CON-52.
+El `POST` crea únicamente `BORRADOR` y persiste auditoría con el gasto. Presentar
+el egreso y cualquier mutación de caja no se declaran implementados por esta entrega.
+
+#### Estados
+
+- Egreso: `BORRADOR`, `PENDIENTE_APROBACION`, `APROBADO`, `RECHAZADO`,
+  `PAGO_PARCIAL`, `PAGADO`, `CANCELADO`.
+- Presentar: BORRADOR → PENDIENTE_APROBACION. Aprobar solo llega a APROBADO
+  cuando cumple la política. Rechazar pasa a RECHAZADO. Corrección de rechazado
+  retorna a BORRADOR en nueva versión; historial no se borra.
+- Confirmar un pago mueve APROBADO → PAGO_PARCIAL o PAGADO según saldo y política.
+  Cancelar solo es posible antes de pagos confirmados. Un pago efectuado no se
+  cancela borrando: se revierte mediante compensación.
+- Pago: `CONFIRMADO`, `FALLIDO`, `REVERSADO`. Solo CONFIRMADO afecta caja;
+  REVERSADO requiere movimiento compensatorio.
+- Caja: libro inmutable independiente de `movimientos_fondo_moras`. No hay
+  saldo inicial automático. Sin apertura conciliada responde
+  `409 CAJA_NO_CONFIGURADA`; sin saldo responde `409 CAJA_SALDO_INSUFICIENTE`.
+
+Errores comunes: `401 NO_AUTENTICADO`, `403 ACCESO_DENEGADO`/`REGISTRADOR_NO_PUEDE_APROBAR`,
+`404 EGRESO_NO_ENCONTRADO` (incluye recurso fuera de contexto), `409`
+`EGRESO_VERSION_OBSOLETA`, `EGRESO_ESTADO_INVALIDO`,
+`APROBACION_CONFIGURACION_REQUERIDA`, `APROBACION_DUPLICADA`,
+`IDEMPOTENCIA_CONFLICTO`, `CAJA_NO_CONFIGURADA`, `CAJA_SALDO_INSUFICIENTE`,
+`PAGO_EXCEDE_APROBADO`, `PAGO_YA_REVERSADO`, `422 DATOS_EGRESO_INVALIDOS`,
+`413 ARCHIVO_DEMASIADO_GRANDE`, `415 FORMATO_NO_SOPORTADO`, `503 ALMACENAMIENTO_NO_DISPONIBLE`.
+Errores monetarios y de transacción nunca exponen datos de otros condominios.
+
+En el incremento CON-51 se usan además `409 PROVEEDOR_NO_DISPONIBLE` mientras
+CON-48/49 no esté integrado, `409 EGRESO_CONFLICTO_CONCURRENCIA`,
+`409 EGRESO_NO_EDITABLE`, `422 CONCEPTO_PRESUPUESTAL_NO_DISPONIBLE`,
+`422 ITEM_PRESUPUESTAL_NO_COINCIDE` y `422 FILTRO_FECHAS_INVALIDO`.
+`409 CON52_NO_DISPONIBLE` identifica el envío de `EVIDENCIA_PAGO` hasta que se
+implemente su flujo en CON-52.
+
 La respuesta de creación es `Reserva`: `id`, `condominio_id`, `area_id`, `area_nombre` opcional, `departamento_id`, fecha, horas, `zona_horaria`, `costo_reserva`, `moneda`, `estado` y `creado_en`. Nuevas reservas usan horas `HH:MM:00` en America/Lima; las históricas sin marca local conservan interpretación UTC. Intervalos `[inicio, fin)`; cancelación voluntaria con `>= 24h` tras convertir el inicio según su zona. `es_admin` del cliente no concede privilegios. Se conservan `400 HORARIO_INVALIDO` y `409 AREA_INACTIVA` de CON-39.
 
 ### 2.6 Notificaciones — Alejandro

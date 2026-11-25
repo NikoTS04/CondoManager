@@ -3,8 +3,8 @@
 ## 1. Ficha del Proceso
 - **Identificador:** PROC-06
 - **Responsable del Módulo:** **Tesorería / Administración**
-- **Estado:** En Especificación
-- **Versión:** 1.0
+- **Estado:** Contrato CON-51/52 definido; CON-51 parcial, CON-52 pendiente
+- **Versión:** 1.2
 - **Módulos Vinculados:** PROC-03 (Notificaciones), PROC-08 (Reportes)
 
 ---
@@ -77,6 +77,81 @@ tesorería/auditoría, no por residentes ajenos; conservar versiones históricas
 - **Alertas Automáticas:**
   - A los **60 días** antes del vencimiento: Notificación preventiva a la Junta para evaluar renovación o cotización con otros postores.
   - A los **30 días** antes del vencimiento: Alerta prioritaria en el dashboard administrativo para gestión de addenda o nuevo acuerdo.
+
+### 4.3 Contrato CON-51/52: egreso, aprobación, pago y caja
+
+El contrato detallado está en [Dominio 06](../02-domains/06-egresos-proveedores/spec.md),
+los escenarios en [egresos.feature](../02-domains/06-egresos-proveedores/features/egresos.feature) y los contratos de API/OpenAPI en
+[`api-contracts.md`](../05-api/api-contracts.md#con-51-y-con-52-egresos-aprobaciones-pagos-y-caja).
+La integración con CON-48/49 se rige por
+[`CON-48-49-51-52-integracion.md`](../../docs/sprints/CON-48-49-51-52-integracion.md).
+
+- Egresos viven en `src/modules/egresos/`, separados de la conciliación de
+  ingresos residentes (`src/modules/pagos/`), del presupuesto aprobado y del
+  ledger de fondos de moras.
+- `concepto_id` referencia el `ConceptoPresupuestal` existente. No se crea otro
+  catálogo. La referencia a un ítem/periodo presupuestal es opcional y no implica
+  que el gasto esté pagado ni modifica el presupuesto aprobado.
+- `proveedor_id` UUID nullable y `contrato_id` UUID nullable. El servicio valida
+  contexto y relación proveedor-contrato. El desarrollo del módulo no espera la
+  integración de CON-48/49: inicialmente estas referencias no tienen FK física;
+  su FK se incorpora en migración posterior a integrar las tablas proveedoras.
+  No se crean tablas ficticias ni cabezas Alembic paralelas.
+- El registrador no puede aprobar su propio egreso. La política de aprobación se
+  configura por condominio, no tiene umbral numérico predeterminado y requiere
+  aprobación distinta del registrador. Sobre el umbral requiere una aprobación
+  adicional de otra persona distinta. No se introducen roles nuevos: se usan los
+  roles existentes `ADMIN_JUNTA`/`SUPERADMIN`; `AUDITOR` solo consulta. La
+  autorización concreta de configuración queda auditable y contextual.
+- Si falta configuración de aprobación, se permite crear/editar borradores y
+  consultar, pero no presentar para aprobación ni decidir hasta configurar la
+  política. El importe aprobado queda ligado a su versión; editarlo invalida las
+  aprobaciones vigentes sin borrar su historia.
+- Aprobar no afecta caja. Después de la ejecución bancaria, Tesorería registra
+  fecha efectiva, importe, referencia, cuenta y evidencia. Confirmar se bloquea
+  hasta que exista apertura conciliada de caja para esa cuenta/moneda.
+- Caja operativa usa ledger independiente de `movimientos_fondo_moras`. El saldo
+  se deriva de movimientos; el saldo inicial exige apertura explícita, actor,
+  fecha de corte y sustento conciliado. No se infiere de cuotas emitidas ni de
+  fondos de moras.
+- Pagos parciales están soportados en el diseño, pero la configuración inicial
+  es deshabilitada. Mientras esté deshabilitada, solo se acepta el saldo total
+  aprobado pendiente. Si se habilita, los pagos acumulados no pueden exceder el
+  aprobado. Claves de idempotencia, locks y transacción atómica impiden doble
+  afectación. Reversos son movimientos compensatorios; nunca borrado de pagos o
+  ledger.
+- Registro de egreso no crea movimiento de caja. Una cobertura de moras modifica
+  exclusivamente su fondo y presupuesto según PROC-01; no genera un pago al
+  proveedor ni un segundo egreso.
+
+### 4.4 Estados de CON-51/52
+
+**Egreso:** `BORRADOR`, `PENDIENTE_APROBACION`, `APROBADO`, `RECHAZADO`,
+`PAGO_PARCIAL`, `PAGADO`, `CANCELADO`.
+
+- Crear: `BORRADOR`.
+- Presentar con sustento requerido y política configurada: `BORRADOR` →
+  `PENDIENTE_APROBACION`.
+- Aprobar: conserva `PENDIENTE_APROBACION` hasta reunir el número de aprobaciones
+  requerido; entonces pasa a `APROBADO`.
+- Rechazar con motivo: `PENDIENTE_APROBACION` → `RECHAZADO`.
+- Reabrir para corrección: `RECHAZADO` → `BORRADOR`, con nueva versión y
+  preservación del rechazo.
+- Confirmar pago: `APROBADO` → `PAGO_PARCIAL` o `PAGADO`, según saldo pendiente y
+  política de pagos parciales.
+- Cancelar: solo un egreso sin pagos confirmados puede pasar a `CANCELADO`, con
+  motivo. Egresos pagados se corrigen mediante reverso compensatorio.
+- Editar importe incrementa versión, invalida decisiones vigentes y exige volver
+  a presentar. El historial anterior permanece inmutable.
+
+**Pago:** `CONFIRMADO`, `FALLIDO`, `REVERSADO`. Un fallo externo se registra sin
+salida de caja; un reverso produce movimiento compensatorio referenciado al pago
+original. El pago confirmado y el movimiento de caja son atómicos.
+
+**Conflictos:** versión/estado obsoleto, aprobaciones suficientes/duplicadas,
+clave de idempotencia incompatible, caja sin apertura, saldo insuficiente y
+exceso del monto aprobado responden `409` con códigos estables documentados en
+el contrato API.
 
 #### 4.2.1 Alertas contractuales de 60 y 30 días (CON-50)
 
