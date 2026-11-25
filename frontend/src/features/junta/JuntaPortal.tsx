@@ -23,6 +23,7 @@ import { MorasSection } from "@/features/junta/MorasSection";
 import { PresupuestoMensual, type PresupuestoAprobado } from "@/features/junta/PresupuestoMensual";
 import { ResumenSection } from "@/features/junta/ResumenSection";
 import ConfiguracionCondominio from "@/features/junta/ConfiguracionCondominio";
+import { SaludAlertasSection } from "@/features/junta/SaludAlertasSection";
 import { UsuariosSection } from "@/features/junta/UsuariosSection";
 import { AreasSection } from "@/features/junta/AreasSection";
 import {
@@ -445,6 +446,13 @@ export default function JuntaPortal() {
           )}
           {section === "excepciones" && esJunta && condominioActivoId && (
             <ExcepcionesSection key={condominioActivoId} onRevisarCorreo={() => navegar("comunicados")} />
+          )}
+          {section === "salud" && (
+            <SaludAlertasSection
+              key={`${condominioActivoId ?? "global"}:${user?.rol}`}
+              esSuperAdmin={isSuperAdmin}
+              condominioId={condominioActivoId}
+            />
           )}
           {section === "comunicados" && (
             <ComunicadosSection

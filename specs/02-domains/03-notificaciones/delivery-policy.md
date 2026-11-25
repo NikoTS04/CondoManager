@@ -36,8 +36,8 @@ El sistema aborta inmediatamente los reintentos:
 
 ## 3. Alertas Administrativas (CON-37)
 
-Cada alerta se asocia a una notificación y a su ciclo; es idempotente por
-`(notificacion_id, ciclo, tipo)`, de modo que un nuevo ciclo manual que vuelve a
+Cada alerta se asocia a su origen (`origen_tipo` + `origen_id`, CON-84) y a su ciclo; es
+idempotente por `(origen_tipo, origen_id, ciclo, tipo)`, de modo que un nuevo ciclo manual que vuelve a
 fallar genera otra alerta. El mensaje no contiene contactos ni datos sensibles.
 
 | Tipo | Origen |
@@ -47,12 +47,27 @@ fallar genera otra alerta. El mensaje no contiene contactos ni datos sensibles.
 | `ACEPTACION_INCIERTA` | Intento interrumpido sin resultado conocido; no se reenvía solo. |
 | `DESTINATARIO_INVALIDO` | El contacto del destinatario no es utilizable. |
 | `PROVEEDOR_NO_CONFIGURADO` | Transporte de proveedor sin configuración. |
+| `JOB_FALLO_DEFINITIVO` | Un job agotó sus reintentos (CON-84); origen `JOB`. |
 
 Atención: `POST /api/v1/notificaciones/alertas/{alerta_id}/atender` (SuperAdmin o
 Junta del contexto; el Auditor solo consulta con `GET /api/v1/notificaciones/alertas`)
 es idempotente y registra la auditoría `NOTIFICACION_ALERTA_ATENDIDA`. El reenvío
 manual con contacto corregido (`POST /api/v1/notificaciones/reenviar/{log_id}`)
 atiende en la misma transacción las alertas abiertas de esa notificación.
+
+## 3.1 Avisos con destinatario externo o contacto faltante (Sprint 4)
+
+Contrato de CON-47 y CON-55; ver el [catálogo](../../03-contracts/events/domain-events-catalog.md).
+
+- Un aviso a un contacto de proveedor sigue la misma política de reintentos (1, +2, +10
+  y +30 min), de aceptación incierta y de alertas que cualquier otro correo.
+- Un destinatario sin correo utilizable no se encola ni se inventa: la vista de Junta
+  lo informa como `CONTACTO_FALTANTE`. Junta corrige el dato en el directorio o en el
+  usuario; el aviso se genera con el flujo de reenvío, no con un duplicado automático.
+- Un rebote definitivo conserva `ERROR_DEFINITIVO` y se muestra junto al ticket o
+  bloqueo de origen; el mensaje de la alerta no contiene contactos.
+- `ENVIADO` solo acredita aceptación del transporte. El resumen de un bloqueo o de
+  una asignación nunca lo presenta como entregado.
 
 ## 4. Transporte Simulado Determinista
 

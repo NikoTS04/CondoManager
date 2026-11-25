@@ -1,6 +1,7 @@
 """Ejecución Hobby diaria, sin procesos permanentes ni entrega de correo ficticia."""
 
 import asyncio
+import logging
 import os
 import secrets
 from datetime import UTC, datetime
@@ -11,11 +12,17 @@ from sqlalchemy import text
 from src.core.config import settings
 from src.core.database import AsyncSessionLocal
 from src.core.errors import APIError
+from src.modules.alertas_contratos.service import evaluar_contratos
 from src.modules.cuotas.worker import emitir_pendientes
 from src.modules.notificaciones.worker import recuperar_eventos
 from src.modules.pagos.worker import evaluar_moras_diarias, limpiar_pendientes
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Hobby ejecuta cada job una vez al día y no reintenta solo: un fallo agota el único intento.
+# CON-85 aportará el contador real de intentos y su máximo.
+MAX_INTENTOS_JOB = 1
 
 
 async def registrar_job(estado):
@@ -36,6 +43,20 @@ async def registrar_job(estado):
             await db.execute(update(EstadoJobNotificaciones).where(
                 EstadoJobNotificaciones.nombre == "correo"
             ).values(fin=ahora, estado=estado))
+
+
+async def registrar_fallo_definitivo_job(nombre, intentos=1, maximo=MAX_INTENTOS_JOB):
+    """Alerta idempotente del fallo definitivo de un job (CON-84), fuera de su transacción.
+
+    Nunca propaga errores: la respuesta del cron no debe cambiar por no poder alertar.
+    """
+    from src.modules.notificaciones.alertas import crear_alerta_job
+
+    try:
+        async with AsyncSessionLocal() as db, db.begin():
+            await crear_alerta_job(db, nombre, intentos, maximo)
+    except Exception:
+        logger.exception("No se pudo registrar la alerta del job %s", nombre)
 
 
 async def ejecutar_notificaciones():
@@ -78,6 +99,7 @@ async def notificaciones(response: Response, authorization: str | None = Header(
     except APIError:
         raise
     except Exception:
+        await registrar_fallo_definitivo_job("notificaciones")
         raise APIError(503, "JOB_INCOMPLETO", "Cola pendiente de recuperación.") from None
     response.headers["Cache-Control"] = "no-store"
     return resultado
@@ -90,6 +112,7 @@ async def ejecutar_diario():
         await emitir_pendientes(estricto=True)
         await evaluar_moras_diarias(estricto=True)
         await recuperar_eventos()
+        await evaluar_contratos(estricto=True)
         await limpiar_pendientes()
 
 
@@ -107,6 +130,7 @@ async def diario(response: Response, authorization: str | None = Header(None)):
     except APIError:
         raise
     except Exception:
+        await registrar_fallo_definitivo_job("diario")
         raise APIError(503, "JOB_INCOMPLETO", "Ejecución incompleta; requiere reintento.") from None
     response.headers["Cache-Control"] = "no-store"
     return {"estado": "COMPLETADO", "correo_enviado": False}

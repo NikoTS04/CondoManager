@@ -12,6 +12,7 @@ import {
   Clock3,
   Users,
   CalendarDays,
+  Activity,
   CircleAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -29,7 +30,8 @@ export type JuntaSection =
   | "moras"
   | "incidencias"
   | "excepciones"
-  | "comunicados";
+  | "comunicados"
+  | "salud";
 
 const NAV_ITEMS = [
   { id: "resumen", label: "Resumen", Icon: LayoutDashboard },
@@ -44,6 +46,7 @@ const NAV_ITEMS = [
   { id: "incidencias", label: "Incidencias", Icon: ClipboardList },
   { id: "excepciones", label: "Excepciones", Icon: CircleAlert },
   { id: "comunicados", label: "Comunicados", Icon: Bell },
+  { id: "salud", label: "Salud y alertas", Icon: Activity },
 ] as const;
 
 interface JuntaNavProps {

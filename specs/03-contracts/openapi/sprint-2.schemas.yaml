@@ -224,16 +224,19 @@ schemas:
   AlertaNotificacion:
     type: object
     additionalProperties: false
-    required: [id, notificacion_id, condominio_id, departamento_id, departamento_numero, tipo_evento, ciclo, tipo, mensaje, estado, creada_en, atendida_en, atendida_por]
+    required: [id, notificacion_id, origen_tipo, origen_id, referencia_correlacion, condominio_id, departamento_id, departamento_numero, tipo_evento, ciclo, tipo, mensaje, estado, creada_en, atendida_en, atendida_por]
     properties:
       id: {$ref: '#/schemas/UUID'}
-      notificacion_id: {$ref: '#/schemas/UUID'}
+      notificacion_id: {type: [string, 'null'], format: uuid, description: Nulo cuando el origen es un job.}
+      origen_tipo: {type: string, enum: [CORREO, JOB]}
+      origen_id: {type: string, maxLength: 100, description: Id de la notificación o nombre del job.}
+      referencia_correlacion: {type: [string, 'null'], maxLength: 64, description: Referencia opcional de correlación (CON-82).}
       condominio_id: {$ref: '#/schemas/UUID'}
       departamento_id: {type: [string, 'null'], format: uuid}
       departamento_numero: {type: string}
       tipo_evento: {type: string}
       ciclo: {type: integer, minimum: 1}
-      tipo: {type: string, enum: [ERROR_DEFINITIVO, INTENTOS_AGOTADOS, ACEPTACION_INCIERTA, DESTINATARIO_INVALIDO, PROVEEDOR_NO_CONFIGURADO]}
+      tipo: {type: string, enum: [ERROR_DEFINITIVO, INTENTOS_AGOTADOS, ACEPTACION_INCIERTA, DESTINATARIO_INVALIDO, PROVEEDOR_NO_CONFIGURADO, JOB_FALLO_DEFINITIVO]}
       mensaje: {type: string, description: Texto operativo sin contactos ni datos sensibles.}
       estado: {type: string, enum: [ABIERTA, ATENDIDA]}
       creada_en: {$ref: '#/schemas/InstanteUTC'}

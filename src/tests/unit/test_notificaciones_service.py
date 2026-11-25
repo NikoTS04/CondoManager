@@ -63,6 +63,15 @@ def test_renderizado_todas_las_plantillas():
         "remitente": "Junta Directiva Villa Bonita 3",
         "incidencia_id": "c782fd84-5ee1-4b5d-b7ff-114a2ed9f8e7",
         "enlace": "https://condominio.example/incidencias/c782fd84-5ee1-4b5d-b7ff-114a2ed9f8e7",
+        "codigo_ticket": "c782fd84-5ee1-4b5d-b7ff-114a2ed9f8e7",
+        "estado": "ASIGNADO",
+        "proveedor": "Servicios Eléctricos SAC",
+        "condominio": "Villa Bonita 3",
+        "ubicacion": "Pasillo piso 2",
+        "categoria": "Iluminación",
+        "prioridad": "ALTA",
+        "descripcion": "Luminaria averiada",
+        "plazo": "2026-12-05",
     }
 
     for tipo_evento in PLANTILLAS_CONFIG.keys():

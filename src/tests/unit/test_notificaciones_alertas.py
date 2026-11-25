@@ -38,7 +38,7 @@ def test_resto_de_destinos_responde_200_con_clave_estable(destino):
 
 
 def test_mensajes_incluyen_departamento_y_no_contactos():
-    for tipo in TIPOS_ALERTA:
+    for tipo in set(TIPOS_ALERTA) - {"JOB_FALLO_DEFINITIVO"}:  # el de job no es de correo
         for canal in ("EMAIL", "WHATSAPP", "SMS", "PUSH"):
             texto = mensaje_alerta(tipo, canal, "402")
             assert "402" in texto and "@" not in texto

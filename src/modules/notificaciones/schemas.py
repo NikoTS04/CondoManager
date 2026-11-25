@@ -140,6 +140,12 @@ class TipoAlertaEnum(str, Enum):
     ACEPTACION_INCIERTA = "ACEPTACION_INCIERTA"
     DESTINATARIO_INVALIDO = "DESTINATARIO_INVALIDO"
     PROVEEDOR_NO_CONFIGURADO = "PROVEEDOR_NO_CONFIGURADO"
+    JOB_FALLO_DEFINITIVO = "JOB_FALLO_DEFINITIVO"
+
+
+class OrigenAlertaEnum(str, Enum):
+    CORREO = "CORREO"
+    JOB = "JOB"
 
 
 class EstadoAlertaEnum(str, Enum):
@@ -149,8 +155,11 @@ class EstadoAlertaEnum(str, Enum):
 
 class AlertaNotificacionDTO(BaseModel):
     id: uuid.UUID
-    notificacion_id: uuid.UUID
-    condominio_id: str
+    notificacion_id: Optional[uuid.UUID]
+    origen_tipo: OrigenAlertaEnum
+    origen_id: str
+    referencia_correlacion: Optional[str]
+    condominio_id: Optional[str]
     departamento_id: str | None
     departamento_numero: str
     tipo_evento: str

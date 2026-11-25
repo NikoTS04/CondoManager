@@ -17,6 +17,7 @@ from alembic.operations import Operations
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, inspect, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from src.core.database import get_db_session
 from src.core.errors import APIError
@@ -31,7 +32,12 @@ from src.modules.cuotas.saldos.models import AplicacionSaldoFavor
 from src.modules.cuotas.saldos.service import ActorSaldoFavor, SaldosFavorService
 from src.modules.cuotas.schemas import EmitirLoteRequest
 from src.modules.cuotas.worker import emitir_pendientes, publicar_pendientes
-from src.tests.usuarios_db import REVISIONES_API
+from src.tests.usuarios_db import (
+    REVISIONES_API,
+    borrar_base_plantilla,
+    crear_base_plantilla,
+    worker_id,
+)
 
 pytestmark = pytest.mark.usefixtures("autorizacion_aislada")
 
@@ -53,20 +59,40 @@ def migrar(conn, revisiones=REVISIONES):
 
 @asynccontextmanager
 async def base_emision(revisiones=None):
-    revisiones = REVISIONES_API if revisiones is None else revisiones
     url = os.getenv("CON11_TEST_DATABASE_URL") or os.getenv("CON13_TEST_DATABASE_URL")
     if not url:
         pytest.skip(
             "Defina CON11_TEST_DATABASE_URL o CON13_TEST_DATABASE_URL (PostgreSQL de pruebas)."
         )
-    esquema = f"con11_{uuid4().hex}"
-    admin = create_async_engine(url)
-    engine = create_async_engine(url, connect_args={"server_settings": {"search_path": esquema}})
+    if revisiones is None:
+        clonada = await crear_base_plantilla(
+            url, prefijo="con11", esquema="app_tpl", revisiones=REVISIONES_API, con_seed=False
+        )
+        if clonada is not None:
+            db_url, esquema, db_name = clonada
+            engine = create_async_engine(
+                db_url,
+                poolclass=NullPool,
+                connect_args={"server_settings": {"search_path": esquema}},
+            )
+            try:
+                yield async_sessionmaker(engine, expire_on_commit=False)
+            finally:
+                await engine.dispose()
+                await borrar_base_plantilla(url, db_name)
+            return
+
+    revs = REVISIONES_API if revisiones is None else revisiones
+    esquema = f"con11_{worker_id()}_{uuid4().hex[:16]}"
+    admin = create_async_engine(url, poolclass=NullPool)
+    engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": esquema}}
+    )
     try:
         async with admin.begin() as conn:
             await conn.execute(text(f'CREATE SCHEMA "{esquema}"'))
             await conn.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
-            await conn.run_sync(lambda c: migrar(c, revisiones))
+            await conn.run_sync(lambda c: migrar(c, revs))
         yield async_sessionmaker(engine, expire_on_commit=False)
     finally:
         await engine.dispose()

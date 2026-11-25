@@ -597,6 +597,10 @@ paths:
     $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1despachar'
   /notificaciones/reenviar/{log_id}:
     $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1reenviar~1%7Blog_id%7D'
+  /monitoreo/salud:
+    $ref: './monitoreo.paths.yaml#/paths/~1monitoreo~1salud'
+  /monitoreo/alertas:
+    $ref: './monitoreo.paths.yaml#/paths/~1monitoreo~1alertas'
   /notificaciones/alertas:
     $ref: './sprint-2.paths.yaml#/paths/~1notificaciones~1alertas'
   /notificaciones/alertas/{alerta_id}/atender:
