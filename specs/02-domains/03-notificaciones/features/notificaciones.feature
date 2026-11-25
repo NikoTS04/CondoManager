@@ -17,13 +17,3 @@ Característica: Orquestación y despacho de notificaciones multicanal
     Entonces el estado de la notificación cambia a "REINTENTANDO"
     Y se programa un segundo intento para dentro de 2 minutos
     Y el contador de intentos se incrementa a 2
-
-  Scenario: Un recordatorio de una cuota pagada antes del despacho no se envía
-    Given un recordatorio de vencimiento en cola para una cuota con saldo
-    When la cuota queda pagada antes de que el worker lo despache
-    Then el recordatorio queda OMITIDO por falta de deuda sin intento de transporte ni alerta
-
-  Scenario: Un pago en curso hace esperar al despacho del recordatorio
-    Given un recordatorio en cola y un pago de la cuota aún sin confirmar
-    When el worker intenta despacharlo
-    Then espera a la confirmación del pago y relee el saldo antes de decidir

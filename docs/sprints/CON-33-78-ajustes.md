@@ -36,8 +36,8 @@ lógica de recordatorios duplicada, porque la implementación de Nicolás ya los
 
 ## Especificaciones y pruebas
 
-- `specs/02-domains/05-usuarios-rbac/invitacion-y-relevo.md` y `features/invitacion_relevo.feature`.
-- `specs/02-domains/03-notificaciones/delivery-policy.md` (§5) y `features/notificaciones.feature`.
+- `specs/02-domains/05-usuarios-rbac/invitacion-y-relevo.md` y `features/cuenta_activada.feature`.
+- `specs/02-domains/03-notificaciones/delivery-policy.md` (§5) y `features/recordatorio_revalidacion.feature`.
 - `src/tests/integration/test_identidad_sprint3_db.py`: aviso único e idempotente, envío sin
   secretos, URL inválida sin enlace, revalidación con cuenta desactivada.
 - `src/tests/integration/test_recordatorio_revalidacion_db.py`: cuota pagada y vencimiento
