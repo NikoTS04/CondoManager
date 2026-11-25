@@ -1,0 +1,108 @@
+paths:
+  /excepciones:
+    get:
+      tags: [Excepciones]
+      operationId: listarExcepciones
+      summary: Listar excepciones operativas de Junta
+      description: Consulta paginada del condominio activo. La primera entrega se alimenta de alertas de correo.
+      parameters:
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, maximum: 2147483647, default: 0}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 50, default: 25}}
+      responses:
+        '200':
+          description: Página de excepciones
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hay_mas]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Excepcion'}}
+                  hay_mas: {type: boolean}
+        '403': {description: Solo Junta puede consultar esta bandeja.}
+  /excepciones/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [Excepciones]
+      operationId: consultarExcepcion
+      summary: Consultar el detalle de una excepción
+      description: Muestra evidencia autorizada, historial de decisiones y acciones disponibles según el origen.
+      responses:
+        '200':
+          description: Caso operativo y detalle
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Excepcion'
+                  - type: object
+                    required: [evidencia, historial, acciones_permitidas, requiere_revision_correo]
+                    properties:
+                      evidencia: {type: object, description: Evidencia operativa sin cuerpo ni contacto del correo.}
+                      historial: {type: array, items: {$ref: '#/components/schemas/Resolucion'}}
+                      acciones_permitidas: {type: array, items: {$ref: '#/components/schemas/Accion'}}
+                      requiere_revision_correo: {type: boolean}
+        '404': {description: Caso inexistente o ajeno al contexto.}
+  /excepciones/{id}/resoluciones:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [Excepciones]
+      operationId: resolverExcepcion
+      summary: Registrar una decisión sobre un fallo
+      description: Aplica el efecto sobre el proceso de origen y registra la decisión una sola vez por clave.
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accion, motivo]
+              additionalProperties: false
+              properties:
+                accion: {$ref: '#/components/schemas/Accion'}
+                motivo: {type: string, minLength: 1, maxLength: 500}
+                nuevo_destinatario: {type: [string, 'null'], maxLength: 320, description: Obligatorio para REENVIAR_CORREO.}
+      responses:
+        '200':
+          description: Resultado de la decisión persistida
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Resolucion'}
+        '403': {description: Rol sin permiso para resolver excepciones.}
+        '404': {description: Caso inexistente o ajeno al contexto.}
+        '409': {description: Acción no permitida en el estado actual o clave ya usada con otro contenido.}
+        '422': {description: Datos inválidos o contacto fuera del alcance autorizado.}
+components:
+  parameters:
+    Id: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+  schemas:
+    Accion:
+      type: string
+      enum: [REENVIAR_CORREO, CERRAR_CON_MOTIVO]
+    Excepcion:
+      type: object
+      required: [id, origen, operacion_id, causa, prioridad, estado, creada_en]
+      properties:
+        id: {type: string, format: uuid}
+        origen: {type: string, enum: [CORREO, JOB]}
+        operacion_id: {type: string}
+        causa: {type: string}
+        prioridad: {type: string, enum: [ALTA, MEDIA]}
+        estado: {$ref: '#/components/schemas/Estado'}
+        creada_en: {type: string, format: date-time}
+    Estado:
+      type: string
+      enum: [ABIERTA, EN_PROCESO, RESUELTA, FALLIDA]
+    Resolucion:
+      type: object
+      required: [id, accion, motivo, actor_id, fecha, estado, efecto]
+      properties:
+        id: {type: string, format: uuid}
+        accion: {$ref: '#/components/schemas/Accion'}
+        motivo: {type: string}
+        actor_id: {type: string}
+        fecha: {type: string, format: date-time}
+        estado: {$ref: '#/components/schemas/Estado'}
+        efecto: {type: object, description: Operación afectada y resultado al registrar la decisión.}

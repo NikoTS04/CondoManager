@@ -27,6 +27,7 @@ from src.modules.cuotas.estado_cuenta import router as estado_cuenta_router
 from src.modules.cuotas.presupuestos.router import router as presupuestos_router
 from src.modules.cuotas.prorrateo_api import router as prorrateo_router
 from src.modules.cuotas.router import router as cuotas_router
+from src.modules.excepciones.router import router as excepciones_router
 from src.modules.incidencias.router import router as incidencias_router
 from src.modules.notificaciones.eventos_mailjet import router as eventos_mailjet_router
 from src.modules.notificaciones.router import router as notificaciones_router
@@ -92,6 +93,7 @@ app.include_router(areas_router, prefix="/api/v1")
 app.include_router(bloqueos_router, prefix="/api/v1")
 app.include_router(notificaciones_router, prefix="/api/v1")
 app.include_router(incidencias_router, prefix="/api/v1")
+app.include_router(excepciones_router, prefix="/api/v1")
 app.include_router(eventos_mailjet_router, prefix="/api/v1")
 
 
