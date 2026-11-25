@@ -626,3 +626,12 @@ Contrato de job Supabase Cron y callback autenticado Mailjet:
 [Mailjet productivo](vercel-services-mailjet.md). OpenAPI:
 [`mailjet.paths.yaml`](../03-contracts/openapi/mailjet.paths.yaml).
 La API de despacho conserva 202: confirma persistencia en cola, no recepción.
+# CON-68 — Salud y alertas visibles
+
+`GET /api/v1/monitoreo/salud` (solo SUPERADMIN): estado de `api`, `postgresql`, `redis` y
+`correo` según el perfil (`ok`/`error`/`deshabilitado`) y último inicio, fin, duración y
+resultado de cada job. Siempre 200; nunca expone URLs ni credenciales. Sin caché.
+`GET /api/v1/monitoreo/alertas` (SUPERADMIN, ADMIN_JUNTA, AUDITOR): alertas con `componente`,
+`operacion` y `referencia_diagnostico`; las de job solo las ve SUPERADMIN. `limit`, `offset`,
+`estado`, `condominio_id`. Detalle: [notificaciones §9](../02-domains/03-notificaciones/spec.md)
+y [`monitoreo.paths.yaml`](../03-contracts/openapi/monitoreo.paths.yaml).
