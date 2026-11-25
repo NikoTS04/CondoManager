@@ -20,8 +20,10 @@ Permitir a los residentes reportar desperfectos, averías o incidencias en área
 $$\text{REGISTRADO} \longrightarrow \text{ASIGNADO} \longrightarrow \text{EN\_PROCESO} \longrightarrow \text{RESUELTO} \longrightarrow \text{CERRADO}$$
 
 1. **Apertura por Residente (CON-53):** El vecino indica ubicación (torre, piso o área), categoría, descripción y urgencia percibida (Baja, Media, Alta o Urgente). Puede adjuntar una foto JPEG o PNG de hasta 3 MiB. Se registra la incidencia con un ID único y estado `REGISTRADO` en su departamento activo. Si la foto es inválida, el reporte se guarda sin ella y se informa al residente.
-2. **Asignación por Administración:** El administrador evalúa la falla y asigna el ticket al proveedor correspondiente registrado en PROC-06.
-3. **Resolución y Cierre:** El contratista repara la falla, se ingresa el costo de repuestos si aplica, y el residente confirma su conformidad y calificación de atención.
+2. **Clasificación por Junta (CON-54):** Una cuenta `ADMIN_JUNTA` del condominio confirma o corrige la categoría y fija la prioridad (Baja, Media, Alta o Urgente). El ticket sigue `REGISTRADO` y conserva los datos declarados por el residente. La bandeja resalta y coloca primero los tickets urgentes pendientes, usando la prioridad confirmada o, mientras se revisan, la urgencia reportada.
+3. **Rechazo (CON-54):** Junta puede pasar un ticket `REGISTRADO` a `RECHAZADO` con un motivo obligatorio que el reportante puede consultar. Un rechazo es terminal en este flujo. Una revisión con versión desactualizada se rechaza. Las decisiones y sus valores previos y posteriores se guardan en auditoría en la misma transacción.
+4. **Asignación por Administración:** El administrador evalúa la falla y asigna el ticket al proveedor correspondiente registrado en PROC-06.
+5. **Resolución y Cierre:** El contratista repara la falla, se ingresa el costo de repuestos si aplica, y el residente confirma su conformidad y calificación de atención.
 
 El registro guarda la auditoría y encola un correo por cada cuenta activa con
 rol `ADMIN_JUNTA` en el condominio del residente, en la misma transacción. El

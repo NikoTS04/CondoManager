@@ -1,4 +1,4 @@
-"""Registro idempotente de incidencias y aviso transaccional a Junta."""
+"""Registro de incidencias y revisión administrativa con auditoría."""
 
 import asyncio
 import json
@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 from uuid import UUID
 
 from fastapi import UploadFile
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
@@ -22,13 +22,30 @@ from src.core.errors import APIError
 from src.core.roles import RolUsuario
 from src.core.security import validar_sesion
 from src.modules.incidencias.models import Incidencia
-from src.modules.incidencias.schemas import CrearIncidencia
+from src.modules.incidencias.schemas import CrearIncidencia, RechazarIncidencia, RevisarIncidencia
 from src.modules.notificaciones.repository import AVISO_INCIDENCIA, NotificacionesRepository
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.pagos.storage import VoucherStorage
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
 
 MAX_EVIDENCIA = 3 * 1024 * 1024
+
+
+def contexto_junta(usuario: dict) -> UUID:
+    if usuario["rol"] != RolUsuario.ADMIN_JUNTA:
+        denegar("Solo Junta puede gestionar la bandeja de incidencias.")
+    return contexto_consulta(usuario)
+
+
+def estado_revision(incidencia: Incidencia) -> dict:
+    return {
+        "incidencia_id": str(incidencia.id),
+        "estado_ticket": incidencia.estado,
+        "categoria_confirmada": incidencia.categoria_confirmada,
+        "prioridad": incidencia.prioridad,
+        "motivo_rechazo": incidencia.motivo_rechazo,
+        "version": incidencia.version,
+    }
 
 
 async def preparar_evidencia(
@@ -157,6 +174,78 @@ class IncidenciasService:
                 contexto={"incidencia_id": str(incidencia.id), "enlace": enlace},
             )
         return len(destinatarios)
+
+    async def listar(self, usuario: dict, *, offset: int, limit: int) -> dict:
+        cid = contexto_junta(usuario)
+        prioridad = func.coalesce(Incidencia.prioridad, Incidencia.urgencia)
+        orden = case(
+            (Incidencia.estado == "RECHAZADO", 2),
+            (prioridad == "URGENTE", 0),
+            else_=1,
+        )
+        registros = (
+            await self.session.scalars(
+                select(Incidencia)
+                .where(Incidencia.condominio_id == cid)
+                .order_by(orden, Incidencia.creado_en.desc(), Incidencia.id.desc())
+                .offset(offset)
+                .limit(limit + 1)
+            )
+        ).all()
+        return {"items": registros[:limit], "hay_mas": len(registros) > limit}
+
+    async def revisar(
+        self, usuario: dict, incidencia_id: UUID, revision: RevisarIncidencia
+    ) -> Incidencia:
+        cid = contexto_junta(usuario)
+        identidad = SQLAlchemyUsuariosRepository(self.session)
+        if await identidad.contexto(cid, bloquear=True) is None:
+            denegar()
+        vigente = await validar_sesion(usuario, identidad)
+
+        incidencia = await self.session.scalar(
+            select(Incidencia)
+            .where(Incidencia.id == incidencia_id, Incidencia.condominio_id == cid)
+            .with_for_update()
+        )
+        if incidencia is None:
+            raise APIError(404, "INCIDENCIA_NO_ENCONTRADA", "La incidencia no está disponible.")
+        if incidencia.estado != "REGISTRADO":
+            raise APIError(
+                409, "INCIDENCIA_NO_EDITABLE", "La incidencia ya no está disponible para revisión."
+            )
+        if incidencia.version != revision.version:
+            raise APIError(
+                409, "VERSION_DESACTUALIZADA", "El reporte cambió. Consulta la última versión."
+            )
+
+        anterior = estado_revision(incidencia)
+        if isinstance(revision, RechazarIncidencia):
+            incidencia.estado = "RECHAZADO"
+            incidencia.motivo_rechazo = revision.motivo
+            accion, motivo = "RECHAZO_TICKET_INCIDENCIA", revision.motivo
+        else:
+            if (
+                incidencia.categoria_confirmada == revision.categoria
+                and incidencia.prioridad == revision.prioridad
+            ):
+                return incidencia
+            incidencia.categoria_confirmada = revision.categoria
+            incidencia.prioridad = revision.prioridad
+            accion, motivo = "CLASIFICACION_TICKET_INCIDENCIA", "REVISION_JUNTA"
+
+        incidencia.version += 1
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            vigente,
+            cid,
+            incidencia.departamento_id,
+            accion,
+            motivo,
+            anterior,
+            estado_revision(incidencia),
+        )
+        await self.session.commit()
+        return incidencia
 
     async def consultar(
         self, usuario: dict, incidencia_id: UUID, *, incluir_evidencia: bool = False

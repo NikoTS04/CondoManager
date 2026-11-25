@@ -16,6 +16,7 @@ import { CuotasSection } from "@/features/junta/CuotasSection";
 import { AsistenteEmision } from "@/features/junta/AsistenteEmision";
 import { distribucionValida } from "@/features/junta/calculos";
 import { EstructuraCondominio } from "@/features/junta/EstructuraCondominio";
+import { IncidenciasSection } from "@/features/junta/IncidenciasSection";
 import { JuntaNav, JUNTA_NAV_ITEMS, type JuntaSection } from "@/features/junta/JuntaNav";
 import { MorasSection } from "@/features/junta/MorasSection";
 import { PresupuestoMensual, type PresupuestoAprobado } from "@/features/junta/PresupuestoMensual";
@@ -47,6 +48,7 @@ export default function JuntaPortal() {
   const { user } = useAuth();
   const isAuditor = user?.rol === "AUDITOR";
   const isSuperAdmin = user?.rol === "SUPERADMIN";
+  const esJunta = user?.rol === "ADMIN_JUNTA";
 
   const [section, setSection] = useState<JuntaSection>("resumen");
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
@@ -71,6 +73,19 @@ export default function JuntaPortal() {
   const revisionContexto = useRef(0);
   const contextoActual = useRef(condominioActivoId);
   contextoActual.current = condominioActivoId;
+
+  useEffect(() => {
+    if (esJunta && window.location.hash === "#incidencias") setSection("incidencias");
+  }, [esJunta]);
+
+  function navegar(destino: JuntaSection) {
+    setSection(destino);
+    if (destino === "incidencias" || window.location.hash === "#incidencias") {
+      const url = new URL(window.location.href);
+      url.hash = destino === "incidencias" ? "incidencias" : "";
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }
 
   const loadData = useCallback(async () => {
     if (contextoActual.current !== condominioActivoId) return;
@@ -288,7 +303,7 @@ export default function JuntaPortal() {
               isSuperAdmin={isSuperAdmin}
               isAuditor={isAuditor}
               pendientes={loadError || loading ? 0 : pendientes.length}
-              onNavigate={setSection}
+              onNavigate={navegar}
             />
           </div>
         </aside>
@@ -297,9 +312,11 @@ export default function JuntaPortal() {
           <PageHeader
             title={seccionTitulo}
             description={condominioActivoId ? isSuperAdmin ? <span className="break-all text-xs">Condominio · {condominioActivoId}</span> : undefined : "Selecciona un condominio en Configuración para consultar sus datos."}
-            actions={<Button variant="secondary" loading={loading} onClick={() => void loadData()} icon={<RefreshCw className="h-4 w-4" aria-hidden />}>Actualizar</Button>}
+            actions={section !== "incidencias" && (
+              <Button variant="secondary" loading={loading} onClick={() => void loadData()} icon={<RefreshCw className="h-4 w-4" aria-hidden />}>Actualizar</Button>
+            )}
           />
-          {loadError && (
+          {loadError && section !== "incidencias" && (
             <Alert
               tone="danger"
               title="No se pudieron cargar los datos"
@@ -312,7 +329,7 @@ export default function JuntaPortal() {
               {loadError}
             </Alert>
           )}
-          {feedback && (
+          {feedback && section !== "incidencias" && (
             <Alert
               key={`${feedbackTone}:${feedback}`}
               tone={feedbackTone}
@@ -335,7 +352,7 @@ export default function JuntaPortal() {
               departamentos={departamentosRegistrados}
               comprobantesPendientes={pendientes.length}
               presupuesto={presupuesto}
-              onNavigate={setSection}
+              onNavigate={navegar}
             />
           )}
           {section === "configuracion" && isSuperAdmin && (
@@ -418,6 +435,9 @@ export default function JuntaPortal() {
               departamentos={departamentosRegistrados}
               loading={loading}
             />
+          )}
+          {section === "incidencias" && esJunta && condominioActivoId && (
+            <IncidenciasSection key={condominioActivoId} />
           )}
           {section === "comunicados" && (
             <ComunicadosSection

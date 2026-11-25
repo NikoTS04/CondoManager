@@ -4,6 +4,7 @@ import {
   Bell,
   Building2,
   ClipboardCheck,
+  ClipboardList,
   Coins,
   FileCheck2,
   LayoutDashboard,
@@ -25,6 +26,7 @@ export type JuntaSection =
   | "cuotas"
   | "conciliacion"
   | "moras"
+  | "incidencias"
   | "comunicados";
 
 const NAV_ITEMS = [
@@ -37,6 +39,7 @@ const NAV_ITEMS = [
   { id: "cuotas", label: "Distribución y emisión", Icon: Coins },
   { id: "conciliacion", label: "Conciliación", Icon: FileCheck2 },
   { id: "moras", label: "Moras", Icon: Clock3 },
+  { id: "incidencias", label: "Incidencias", Icon: ClipboardList },
   { id: "comunicados", label: "Comunicados", Icon: Bell },
 ] as const;
 
@@ -49,7 +52,11 @@ interface JuntaNavProps {
 }
 
 export function JuntaNav({ section, isSuperAdmin, isAuditor, pendientes, onNavigate }: JuntaNavProps) {
-  const items = NAV_ITEMS.filter((item) => (!("superAdmin" in item) || isSuperAdmin) && (!("administracion" in item) || !isAuditor));
+  const items = NAV_ITEMS.filter((item) =>
+    (!("superAdmin" in item) || isSuperAdmin) &&
+    (!("administracion" in item) || !isAuditor) &&
+    (item.id !== "incidencias" || (!isSuperAdmin && !isAuditor)),
+  );
 
   return (
     <nav

@@ -55,6 +55,20 @@ que exceda 3 MiB se descarta y la respuesta informa `advertencia_evidencia`.
 solicitante sea el reportante con vínculo activo o Junta del mismo condominio.
 Los reportes fuera de alcance devuelven 404. [OpenAPI de incidencias](../03-contracts/openapi/incidencias.paths.yaml).
 
+### Clasificación de incidencias (CON-54)
+
+`GET /incidencias?offset=0&limit=25` lista tickets del condominio de Junta.
+Devuelve `items` y `hay_mas`. Ordena primero los tickets urgentes pendientes,
+luego los demás pendientes y por último los rechazados, con los más recientes
+primero dentro de cada grupo.
+`PATCH /incidencias/{incidencia_id}/revision` requiere `ADMIN_JUNTA` y recibe
+`accion`, `version` y los datos de la acción. `CLASIFICAR` recibe `categoria`
+y `prioridad`. `RECHAZAR` recibe `motivo` obligatorio. Una versión
+desactualizada o un estado distinto de `REGISTRADO` devuelve 409. El reporte
+original conserva la categoría y urgencia que declaró el residente. El detalle
+incluye la categoría confirmada, la prioridad, el motivo de rechazo y la versión.
+Reenviar el reporte de CON-53 devuelve el comprobante original de registro.
+
 ### CON-81 — disponibilidad del despliegue
 
 GET `/health` y `/api/v1/health` conservan su respuesta de liveness HTTP.

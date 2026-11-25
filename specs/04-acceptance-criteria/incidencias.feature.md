@@ -15,3 +15,19 @@
 - **Evidencia inválida.** Dado un reporte completo con una foto inválida,
   cuando se envía, entonces el archivo se rechaza, el reporte se conserva
   sin foto y se muestra el motivo en la confirmación.
+
+## CON-54 — Clasificar y priorizar tickets
+
+- **Prioridad efectiva.** Dado un reporte urgente pendiente, cuando Junta le
+  confirma otra prioridad o eleva otro reporte a urgente, entonces la bandeja
+  refleja la prioridad vigente y coloca los urgentes pendientes primero.
+- **Trazabilidad.** Dado un reporte registrado, cuando Junta corrige su
+  categoría y prioridad, entonces se conserva el reporte original y queda
+  registrada la decisión con actor, fecha y valores previos y posteriores.
+- **Rechazo.** Dado un reporte registrado, cuando Junta lo rechaza con motivo,
+  entonces queda `RECHAZADO`, el reportante puede leer el motivo y una
+  revisión posterior se rechaza. Una solicitud sin motivo se rechaza sin
+  modificar el reporte.
+- **Permisos y concurrencia.** Dado un reporte registrado, cuando lo revisa un
+  residente, una Junta ajena o una Junta con una versión desactualizada, la
+  decisión se rechaza y se conserva la última versión válida.

@@ -35,6 +35,8 @@ paths:
     $ref: './incidencias.paths.yaml#/paths/~1incidencias'
   /incidencias/{incidencia_id}:
     $ref: './incidencias.paths.yaml#/paths/~1incidencias~1%7Bincidencia_id%7D'
+  /incidencias/{incidencia_id}/revision:
+    $ref: './incidencias.paths.yaml#/paths/~1incidencias~1%7Bincidencia_id%7D~1revision'
   /incidencias/{incidencia_id}/evidencia:
     $ref: './incidencias.paths.yaml#/paths/~1incidencias~1%7Bincidencia_id%7D~1evidencia'
   /notificaciones/audiencia:

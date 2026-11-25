@@ -135,3 +135,141 @@ async def test_foto_corrupta_conserva_el_reporte(api_usuarios):
     detalle = await client.get(ruta, headers=headers)
     assert detalle.status_code == 200 and detalle.json()["descripcion"] == registro["descripcion"]
     assert (await client.get(f"{ruta}/evidencia", headers=headers)).status_code == 404
+
+
+def clasificacion(categoria="Electricidad", prioridad="URGENTE", version=1):
+    return {
+        "accion": "CLASIFICAR",
+        "categoria": categoria,
+        "prioridad": prioridad,
+        "version": version,
+    }
+
+
+async def test_bandeja_prioriza_los_urgentes_segun_revision_y_conserva_original(api_usuarios):
+    client, base = api_usuarios
+    headers = await residente(client)
+    original_urgente = (await reportar(client, headers, urgencia="URGENTE")).json()
+    otro = (
+        await reportar(
+            client,
+            {**headers, "Idempotency-Key": str(uuid4())},
+            ubicacion="Torre A, entrada",
+        )
+    ).json()
+    junta = await login(client, JUNTA, "Admin123!")
+
+    inicial = await client.get(RUTA, headers=junta, params={"limit": 1})
+    assert inicial.status_code == 200, inicial.text
+    assert inicial.json()["items"][0]["id"] == original_urgente["id"]
+    assert inicial.json()["hay_mas"] is True
+    cambio = await client.patch(
+        f"{RUTA}/{otro['id']}/revision",
+        headers=junta,
+        json=clasificacion(),
+    )
+    baja = await client.patch(
+        f"{RUTA}/{original_urgente['id']}/revision",
+        headers=junta,
+        json=clasificacion(prioridad="BAJA"),
+    )
+    assert cambio.status_code == baja.status_code == 200, (cambio.text, baja.text)
+    actual = cambio.json()
+    assert actual["categoria"] == "Iluminación" and actual["categoria_confirmada"] == "Electricidad"
+    assert actual["urgencia"] == "MEDIA" and actual["prioridad"] == "URGENTE"
+    assert actual["estado"] == "REGISTRADO" and actual["version"] == 2
+    bandeja = await client.get(RUTA, headers=junta)
+    assert [item["id"] for item in bandeja.json()["items"]] == [otro["id"], original_urgente["id"]]
+    async with base.sessions() as db:
+        fila = await db.scalar(
+            select(AuditoriaLogORM).where(
+                AuditoriaLogORM.accion_ejecutada == "CLASIFICACION_TICKET_INCIDENCIA",
+                AuditoriaLogORM.estado_posterior["incidencia_id"].astext == otro["id"],
+            )
+        )
+        assert fila.actor_id == str(id_demo(JUNTA))
+        assert fila.estado_anterior["prioridad"] is None
+        assert fila.estado_posterior["prioridad"] == "URGENTE"
+
+
+async def test_rechazo_es_terminal_y_el_residente_ve_el_motivo(api_usuarios):
+    client, base = api_usuarios
+    headers = await residente(client)
+    creado = await reportar(client, headers)
+    ruta = f"{RUTA}/{creado.json()['id']}"
+    junta = await login(client, JUNTA, "Admin123!")
+    decision = {"accion": "RECHAZAR", "version": 1}
+    incompleto = await client.patch(
+        f"{ruta}/revision", headers=junta, json={**decision, "motivo": " "}
+    )
+    assert incompleto.status_code == 422, incompleto.text
+    motivo = "El desperfecto corresponde a un predio vecino."
+    rechazo = await client.patch(
+        f"{ruta}/revision", headers=junta, json={**decision, "motivo": motivo}
+    )
+    assert rechazo.status_code == 200, rechazo.text
+    detalle = await client.get(ruta, headers=headers)
+    assert detalle.json()["estado"] == "RECHAZADO"
+    assert detalle.json()["motivo_rechazo"] == motivo
+    revision = await client.patch(
+        f"{ruta}/revision",
+        headers=junta,
+        json=clasificacion(version=detalle.json()["version"]),
+    )
+    assert revision.status_code == 409 and revision.json()["error_code"] == "INCIDENCIA_NO_EDITABLE"
+    reintento = await reportar(client, headers)
+    assert reintento.status_code == 200 and reintento.json() == creado.json()
+    async with base.sessions() as db:
+        fila = await db.scalar(
+            select(AuditoriaLogORM).where(
+                AuditoriaLogORM.accion_ejecutada == "RECHAZO_TICKET_INCIDENCIA"
+            )
+        )
+        assert fila.motivo == motivo and fila.estado_posterior["estado_ticket"] == "RECHAZADO"
+
+
+async def test_solo_junta_del_condominio_puede_listar_y_revisar(api_usuarios):
+    client, base = api_usuarios
+    headers = await residente(client)
+    creado = await reportar(client, headers)
+    ruta = f"{RUTA}/{creado.json()['id']}"
+    assert (await client.get(RUTA, headers=headers)).status_code == 403
+    assert (
+        await client.patch(f"{ruta}/revision", headers=headers, json=clasificacion())
+    ).status_code == 403
+
+    otro = await otro_condominio(base)
+    async with base.sessions() as db, db.begin():
+        db.add(UsuarioRol(usuario_id=id_demo(JUNTA), condominio_id=otro, rol="ADMIN_JUNTA"))
+    junta_ajena = await login(client, JUNTA, "Admin123!", condominio_id=str(otro))
+    assert (await client.get(RUTA, headers=junta_ajena)).json() == {"items": [], "hay_mas": False}
+    assert (
+        await client.patch(f"{ruta}/revision", headers=junta_ajena, json=clasificacion())
+    ).status_code == 404
+
+
+async def test_dos_revisiones_de_la_misma_version_guardan_una_decision(api_usuarios):
+    client, base = api_usuarios
+    creado = await reportar(client, await residente(client))
+    ruta = f"{RUTA}/{creado.json()['id']}"
+    junta = await login(client, JUNTA, "Admin123!")
+    respuestas = await asyncio.gather(
+        client.patch(f"{ruta}/revision", headers=junta, json=clasificacion()),
+        client.patch(
+            f"{ruta}/revision", headers=junta, json=clasificacion("Infraestructura", "ALTA")
+        ),
+    )
+    assert {respuesta.status_code for respuesta in respuestas} == {200, 409}
+    ganadora = next(r.json() for r in respuestas if r.status_code == 200)
+    conflicto = next(r.json() for r in respuestas if r.status_code == 409)
+    assert conflicto["error_code"] == "VERSION_DESACTUALIZADA"
+    assert (await client.get(ruta, headers=junta)).json() == ganadora
+    async with base.sessions() as db:
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(AuditoriaLogORM)
+                .where(AuditoriaLogORM.accion_ejecutada == "CLASIFICACION_TICKET_INCIDENCIA")
+            )
+            == 1
+        )

@@ -1,10 +1,10 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import UploadFile
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class Urgencia(StrEnum):
@@ -14,6 +14,12 @@ class Urgencia(StrEnum):
     URGENTE = "URGENTE"
 
 
+Categoria = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=80, pattern=r"^[^\x00]+$"),
+]
+
+
 class CrearIncidencia(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -21,7 +27,7 @@ class CrearIncidencia(BaseModel):
     ubicacion: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)
     ]
-    categoria: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    categoria: Categoria
     descripcion: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
     ]
@@ -29,7 +35,7 @@ class CrearIncidencia(BaseModel):
     evidencia: UploadFile | None = None
 
 
-class IncidenciaDTO(BaseModel):
+class ReporteIncidenciaDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -38,10 +44,50 @@ class IncidenciaDTO(BaseModel):
     categoria: str
     descripcion: str
     urgencia: Urgencia
-    estado: str
     creado_en: datetime
     tiene_evidencia: bool
 
 
-class RegistroIncidenciaDTO(IncidenciaDTO):
+class RegistroIncidenciaDTO(ReporteIncidenciaDTO):
+    estado: Literal["REGISTRADO"] = "REGISTRADO"
     advertencia_evidencia: str | None = None
+
+
+class IncidenciaDTO(ReporteIncidenciaDTO):
+    estado: Literal["REGISTRADO", "RECHAZADO"]
+    categoria_confirmada: str | None
+    prioridad: Urgencia | None
+    motivo_rechazo: str | None
+    version: int
+
+
+class BandejaIncidenciasDTO(BaseModel):
+    items: list[IncidenciaDTO]
+    hay_mas: bool
+
+
+class RevisionIncidencia(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Annotated[int, Field(ge=1, strict=True)]
+
+
+class ClasificarIncidencia(RevisionIncidencia):
+    accion: Literal["CLASIFICAR"]
+    categoria: Categoria
+    prioridad: Urgencia
+
+
+class RechazarIncidencia(RevisionIncidencia):
+    accion: Literal["RECHAZAR"]
+    motivo: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True, min_length=1, max_length=1000, pattern=r"^[^\x00]+$"
+        ),
+    ]
+
+
+RevisarIncidencia = Annotated[
+    ClasificarIncidencia | RechazarIncidencia, Field(discriminator="accion")
+]

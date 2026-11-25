@@ -559,21 +559,42 @@ async function recursoRequest<T>(ruta: string, init: RequestInit = {}): Promise<
 
 export type UrgenciaIncidencia = "BAJA" | "MEDIA" | "ALTA" | "URGENTE";
 
-export interface Incidencia {
+export const NIVELES_INCIDENCIA: Record<UrgenciaIncidencia, string> = {
+  BAJA: "Baja", MEDIA: "Media", ALTA: "Alta", URGENTE: "Urgente",
+};
+
+interface ReporteIncidencia {
   id: string;
   departamento_id: string;
   ubicacion: string;
   categoria: string;
   descripcion: string;
   urgencia: UrgenciaIncidencia;
-  estado: "REGISTRADO";
   creado_en: string;
   tiene_evidencia: boolean;
 }
 
-export interface RegistroIncidencia extends Incidencia {
+export interface Incidencia extends ReporteIncidencia {
+  estado: "REGISTRADO" | "RECHAZADO";
+  categoria_confirmada: string | null;
+  prioridad: UrgenciaIncidencia | null;
+  motivo_rechazo: string | null;
+  version: number;
+}
+
+export interface RegistroIncidencia extends ReporteIncidencia {
+  estado: "REGISTRADO";
   advertencia_evidencia: string | null;
 }
+
+export interface BandejaIncidencias {
+  items: Incidencia[];
+  hay_mas: boolean;
+}
+
+export type RevisionIncidencia =
+  | { accion: "CLASIFICAR"; version: number; categoria: string; prioridad: UrgenciaIncidencia }
+  | { accion: "RECHAZAR"; version: number; motivo: string };
 
 export function registrarIncidencia(datos: FormData, clave: string): Promise<RegistroIncidencia> {
   return recursoRequest("/incidencias", {
@@ -585,6 +606,19 @@ export function registrarIncidencia(datos: FormData, clave: string): Promise<Reg
 
 export function consultarIncidencia(id: string, signal?: AbortSignal): Promise<Incidencia> {
   return recursoRequest(`/incidencias/${encodeURIComponent(id)}`, { signal });
+}
+
+export function listarIncidencias(
+  offset: number, limit: number, signal?: AbortSignal,
+): Promise<BandejaIncidencias> {
+  return recursoRequest(`/incidencias?offset=${offset}&limit=${limit}`, { signal });
+}
+
+export function revisarIncidencia(id: string, revision: RevisionIncidencia): Promise<Incidencia> {
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/revision`, {
+    method: "PATCH",
+    body: JSON.stringify(revision),
+  });
 }
 
 export async function descargarFotoIncidencia(id: string): Promise<void> {
