@@ -54,20 +54,14 @@ class MockProveedoresRepository:
         self.proveedores[p.id] = p
         return p
 
-    async def obtener_por_id(
-        self, condominio_id: UUID, proveedor_id: UUID
-    ) -> Proveedor | None:
+    async def obtener_por_id(self, condominio_id: UUID, proveedor_id: UUID) -> Proveedor | None:
         p = self.proveedores.get(proveedor_id)
         if p and p.condominio_id == condominio_id:
-            p.contratos = [
-                c for c in self.contratos.values() if c.proveedor_id == p.id
-            ]
+            p.contratos = [c for c in self.contratos.values() if c.proveedor_id == p.id]
             return p
         return None
 
-    async def obtener_por_ruc(
-        self, condominio_id: UUID, ruc: str
-    ) -> Proveedor | None:
+    async def obtener_por_ruc(self, condominio_id: UUID, ruc: str) -> Proveedor | None:
         if not ruc or "\x00" in ruc:
             return None
         for p in self.proveedores.values():
@@ -106,7 +100,9 @@ class MockProveedoresRepository:
         if request.razon_social is not None:
             proveedor.razon_social = request.razon_social.strip()
         if request.nombre_comercial is not None:
-            proveedor.nombre_comercial = request.nombre_comercial.strip() if request.nombre_comercial else None
+            proveedor.nombre_comercial = (
+                request.nombre_comercial.strip() if request.nombre_comercial else None
+            )
         if request.rubro is not None:
             proveedor.rubro = request.rubro.strip().upper()
         if request.contacto_nombre is not None:
@@ -144,8 +140,12 @@ class MockProveedoresRepository:
             moneda=request.moneda,
             fecha_inicio=request.fecha_inicio,
             fecha_fin=request.fecha_fin,
-            contacto_emergencia=request.contacto_emergencia.strip() if request.contacto_emergencia else None,
-            contacto_emergencia_telefono=request.contacto_emergencia_telefono.strip() if request.contacto_emergencia_telefono else None,
+            contacto_emergencia=request.contacto_emergencia.strip()
+            if request.contacto_emergencia
+            else None,
+            contacto_emergencia_telefono=request.contacto_emergencia_telefono.strip()
+            if request.contacto_emergencia_telefono
+            else None,
             estado="VIGENTE",
             version_actual=1,
             creado_por=creado_por,
@@ -162,9 +162,7 @@ class MockProveedoresRepository:
     ) -> ContratoProveedor | None:
         c = self.contratos.get(contrato_id)
         if c and c.condominio_id == condominio_id:
-            c.versiones = [
-                doc for (cid, _), doc in self.documentos.items() if cid == c.id
-            ]
+            c.versiones = [doc for (cid, _), doc in self.documentos.items() if cid == c.id]
             c.proveedor = self.proveedores.get(c.proveedor_id)
             return c
         return None
@@ -183,9 +181,7 @@ class MockProveedoresRepository:
                 continue
             if estado and c.estado != estado.strip().upper():
                 continue
-            c.versiones = [
-                doc for (cid, _), doc in self.documentos.items() if cid == c.id
-            ]
+            c.versiones = [doc for (cid, _), doc in self.documentos.items() if cid == c.id]
             c.proveedor = self.proveedores.get(c.proveedor_id)
             resultado.append(c)
         return sorted(resultado, key=lambda x: x.fecha_fin)
@@ -200,9 +196,15 @@ class MockProveedoresRepository:
         if request.fecha_fin is not None:
             contrato.fecha_fin = request.fecha_fin
         if request.contacto_emergencia is not None:
-            contrato.contacto_emergencia = request.contacto_emergencia.strip() if request.contacto_emergencia else None
+            contrato.contacto_emergencia = (
+                request.contacto_emergencia.strip() if request.contacto_emergencia else None
+            )
         if request.contacto_emergencia_telefono is not None:
-            contrato.contacto_emergencia_telefono = request.contacto_emergencia_telefono.strip() if request.contacto_emergencia_telefono else None
+            contrato.contacto_emergencia_telefono = (
+                request.contacto_emergencia_telefono.strip()
+                if request.contacto_emergencia_telefono
+                else None
+            )
         if request.estado is not None:
             contrato.estado = request.estado
 
@@ -485,3 +487,370 @@ async def test_rechazo_archivo_no_pdf(service):
         await service.subir_documento_version(cid, contrato.id, bad_file, uid)
     assert exc_info.value.status_code == 422
     assert exc_info.value.error_code == "FORMATO_NO_PERMITIDO"
+
+
+@pytest.mark.asyncio
+async def test_proveedores_service_metodos_completos():
+    repo = MockProveedoresRepository()
+    service = ProveedoresService(repo)
+    cid = uuid4()
+    uid = uuid4()
+
+    # 1. Registrar proveedor
+    prov = await service.registrar_proveedor(
+        cid,
+        CrearProveedorRequest(
+            ruc="20999888771",
+            razon_social="Servicios Generales SAC",
+            nombre_comercial="ServiGen",
+            rubro="SEGURIDAD",
+            contacto_nombre="Marcos Diaz",
+            contacto_telefono="999111222",
+            contacto_email="marcos@servigen.pe",
+            direccion="Av. Central 456",
+            notas="Proveedor homologado",
+        ),
+        uid,
+    )
+    assert prov.ruc == "20999888771"
+
+    # 2. RUC duplicado en mismo condominio
+    with pytest.raises(APIError) as exc:
+        await service.registrar_proveedor(
+            cid,
+            CrearProveedorRequest(
+                ruc="20999888771",
+                razon_social="Otra Razon SAC",
+                rubro="SEGURIDAD",
+                contacto_nombre="Otro",
+                contacto_telefono="999888777",
+                contacto_email="otro@test.com",
+            ),
+            uid,
+        )
+    assert exc.value.status_code == 409
+
+    # 3. Listar proveedores con filtros
+    lista = await service.listar_proveedores(cid, activo=True, rubro="SEGURIDAD", buscar="ServiGen")
+    assert len(lista) == 1
+
+    # 4. Obtener detalle de proveedor
+    detalle = await service.obtener_proveedor(cid, prov.id)
+    assert detalle.id == prov.id
+    assert detalle.total_contratos == 0
+
+    # 5. Actualizar proveedor
+    actualizado = await service.actualizar_proveedor(
+        cid,
+        prov.id,
+        ActualizarProveedorRequest(
+            razon_social="ServiGen Corp SAC",
+            rubro="MANTENIMIENTO",
+            activo=True,
+        ),
+    )
+    assert actualizado.razon_social == "ServiGen Corp SAC"
+
+    # 6. Registrar contrato
+    hoy = date.today()
+    ct = await service.registrar_contrato(
+        cid,
+        prov.id,
+        CrearContratoRequest(
+            numero_contrato="CTR-SEG-2026",
+            tipo_documento="CONTRATO_SERVICIO",
+            descripcion="Vigilancia 24/7",
+            monto_mensual=Decimal("4500.00"),
+            moneda="PEN",
+            fecha_inicio=hoy,
+            fecha_fin=hoy + timedelta(days=120),
+            contacto_emergencia="Central Alarma",
+            contacto_emergencia_telefono="014445555",
+        ),
+        uid,
+    )
+    assert ct.numero_contrato == "CTR-SEG-2026"
+
+    # 7. Contrato con fechas invertidas (validado por Pydantic)
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        CrearContratoRequest(
+            numero_contrato="CTR-INV-001",
+            tipo_documento="CONTRATO_SERVICIO",
+            descripcion="Invalido",
+            fecha_inicio=hoy + timedelta(days=30),
+            fecha_fin=hoy,
+        )
+
+    # 8. Listar contratos
+    cts = await service.listar_contratos(cid, proveedor_id=prov.id, estado="VIGENTE")
+    assert len(cts) == 1
+
+    # 9. Obtener contrato detalle
+    ct_det = await service.obtener_contrato(cid, ct.id)
+    assert ct_det.id == ct.id
+
+    # 10. Actualizar contrato
+    ct_act = await service.actualizar_contrato(
+        cid,
+        ct.id,
+        ActualizarContratoRequest(
+            descripcion="Vigilancia reforzada",
+            monto_mensual=Decimal("5000.00"),
+            estado="POR_VENCER",
+        ),
+    )
+    assert ct_act.monto_mensual == Decimal("5000.00")
+
+    # 11. Subir documento PDF valido
+    pdf_valido = UploadFile(
+        file=BytesIO(b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"),
+        filename="contrato_vigilancia.pdf",
+    )
+    doc_v1 = await service.subir_documento_version(cid, ct.id, pdf_valido, uid)
+    assert doc_v1.version == 1
+
+    # 12. Subir segunda version con motivo
+    pdf_v2 = UploadFile(
+        file=BytesIO(b"%PDF-1.4\n2 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"),
+        filename="contrato_adenda.pdf",
+    )
+    doc_v2 = await service.subir_documento_version(
+        cid, ct.id, pdf_v2, uid, motivo_reemplazo="Adenda de incremento salarial"
+    )
+    assert doc_v2.version == 2
+    assert doc_v2.motivo_reemplazo == "Adenda de incremento salarial"
+
+    # 13. Descargar versiones
+    contenido, mime, nombre = await service.descargar_documento_version(cid, ct.id, 1)
+    assert mime == "application/pdf"
+    assert contenido.startswith(b"%PDF")
+
+    # 14. Descargar version inexistente -> 404
+    with pytest.raises(APIError) as exc:
+        await service.descargar_documento_version(cid, ct.id, 999)
+    assert exc.value.status_code == 404
+
+    # 15. Archivo vacio -> 422
+    vacio = UploadFile(file=BytesIO(b""), filename="empty.pdf")
+    with pytest.raises(APIError) as exc:
+        await service.subir_documento_version(cid, ct.id, vacio, uid)
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_proveedores_repository_cobertura():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.modules.proveedores.repository import (
+        SQLAlchemyProveedoresRepository,
+        get_proveedores_repository,
+    )
+
+    session = AsyncMock()
+    session.add = MagicMock()
+    mock_scalars = MagicMock()
+    mock_scalars.all.return_value = []
+    session.scalars.return_value = mock_scalars
+    session.scalar.return_value = None
+
+    repo = SQLAlchemyProveedoresRepository(session)
+    cid = uuid4()
+    uid = uuid4()
+
+    # crear_proveedor
+    req_prov = CrearProveedorRequest(
+        ruc="20123456789",
+        razon_social="Test SAC",
+        rubro="LIMPIEZA",
+        contacto_nombre="Juan",
+        contacto_telefono="999888777",
+        contacto_email="juan@test.com",
+    )
+    p = await repo.crear_proveedor(cid, req_prov, uid)
+    assert p.ruc == "20123456789"
+    assert session.add.called
+    assert session.flush.called
+
+    # obtener_por_id & obtener_por_ruc
+    await repo.obtener_por_id(cid, p.id)
+    await repo.obtener_por_ruc(cid, "20123456789")
+    await repo.obtener_por_ruc(cid, "")
+    await repo.obtener_por_ruc(cid, "20123456789\x00")
+
+    # listar_proveedores
+    await repo.listar_proveedores(cid, activo=True, rubro="LIMPIEZA", buscar="test")
+
+    # actualizar_proveedor
+    act_prov = ActualizarProveedorRequest(
+        razon_social="Updated SAC",
+        nombre_comercial="Brand",
+        rubro="MANTENIMIENTO",
+        contacto_nombre="Carlos",
+        contacto_telefono="999888777",
+        contacto_email="carlos@test.com",
+        direccion="Av 123",
+        activo=False,
+        notas="nota",
+    )
+    await repo.actualizar_proveedor(p, act_prov)
+    assert p.version == 2
+
+    # crear_contrato
+    req_ct = CrearContratoRequest(
+        numero_contrato="CTR-001",
+        tipo_documento="CONTRATO_SERVICIO",
+        descripcion="Limpieza general",
+        monto_mensual=Decimal("1500.00"),
+        moneda="PEN",
+        fecha_inicio=date.today(),
+        fecha_fin=date.today() + timedelta(days=365),
+        contacto_emergencia="Admin",
+        contacto_emergencia_telefono="999",
+    )
+    c = await repo.crear_contrato(cid, p.id, req_ct, uid)
+    assert c.numero_contrato == "CTR-001"
+
+    # obtener_contrato_por_id & listar_contratos
+    await repo.obtener_contrato_por_id(cid, c.id)
+    await repo.listar_contratos(cid, proveedor_id=p.id, estado="VIGENTE")
+
+    # actualizar_contrato
+    act_ct = ActualizarContratoRequest(
+        descripcion="Desc update",
+        monto_mensual=Decimal("1800.00"),
+        fecha_fin=date.today() + timedelta(days=400),
+        contacto_emergencia="Em",
+        contacto_emergencia_telefono="123",
+        estado="POR_VENCER",
+    )
+    await repo.actualizar_contrato(c, act_ct)
+
+    # agregar_version_documento (primera version)
+    c.versiones = []
+    v1 = await repo.agregar_version_documento(
+        c, "doc.pdf", "application/pdf", 100, "hash", b"%PDF-1.4", uid, "Inicial"
+    )
+    assert v1.version == 1
+
+    # agregar_version_documento (segunda version)
+    c.versiones = [v1]
+    v2 = await repo.agregar_version_documento(
+        c, "doc2.pdf", "application/pdf", 120, "hash2", b"%PDF-1.4-v2", uid, "Reemplazo"
+    )
+    assert v2.version == 2
+
+    # obtener_version_documento & obtener_version_por_id
+    await repo.obtener_version_documento(c.id, 1)
+    await repo.obtener_version_por_id(v1.id)
+
+    # get_proveedores_repository dependency
+    repo_dep = await get_proveedores_repository(session)
+    assert repo_dep.session == session
+
+
+@pytest.mark.asyncio
+async def test_router_proveedores_directo():
+    from src.core.roles import RolUsuario
+    from src.modules.proveedores import router as r
+
+    repo = MockProveedoresRepository()
+    service = ProveedoresService(repo)
+    cid = uuid4()
+    uid = uuid4()
+    actor_admin = {
+        "sub": str(uid),
+        "rol": RolUsuario.ADMIN_JUNTA,
+        "condominio_id": str(cid),
+    }
+
+    # registrar proveedor
+    p_dto = await r.registrar_proveedor(
+        cid=cid,
+        payload=CrearProveedorRequest(
+            ruc="20556677889",
+            razon_social="Jardines del Peru SAC",
+            rubro="JARDINERIA",
+            contacto_nombre="Pedro Gomez",
+            contacto_telefono="988776655",
+            contacto_email="pedro@jardines.pe",
+        ),
+        actor=actor_admin,
+        service=service,
+    )
+    assert p_dto.ruc == "20556677889"
+
+    # listar proveedores
+    lista = await r.listar_proveedores(cid=cid, actor=actor_admin, service=service)
+    assert len(lista) == 1
+
+    # obtener proveedor
+    pid = p_dto.id if isinstance(p_dto.id, UUID) else UUID(str(p_dto.id))
+    det = await r.obtener_proveedor(cid=cid, proveedor_id=pid, actor=actor_admin, service=service)
+    assert str(det.id) == str(pid)
+
+    # actualizar proveedor
+    act = await r.actualizar_proveedor(
+        cid=cid,
+        proveedor_id=pid,
+        payload=ActualizarProveedorRequest(razon_social="Jardines del Norte SAC"),
+        actor=actor_admin,
+        service=service,
+    )
+    assert act.razon_social == "Jardines del Norte SAC"
+
+    # registrar contrato
+    hoy = date.today()
+    c_dto = await r.registrar_contrato(
+        cid=cid,
+        proveedor_id=pid,
+        payload=CrearContratoRequest(
+            numero_contrato="CTR-JARD-01",
+            tipo_documento="CONTRATO_SERVICIO",
+            descripcion="Mantenimiento areas verdes",
+            fecha_inicio=hoy,
+            fecha_fin=hoy + timedelta(days=180),
+        ),
+        actor=actor_admin,
+        service=service,
+    )
+    assert c_dto.numero_contrato == "CTR-JARD-01"
+
+    # listar contratos proveedor y condominio
+    ct_id = c_dto.id if isinstance(c_dto.id, UUID) else UUID(str(c_dto.id))
+    await r.listar_contratos_proveedor(
+        cid=cid, proveedor_id=pid, actor=actor_admin, service=service
+    )
+    await r.listar_contratos_condominio(cid=cid, actor=actor_admin, service=service)
+
+    # obtener y actualizar contrato
+    await r.obtener_contrato(cid=cid, contrato_id=ct_id, actor=actor_admin, service=service)
+    await r.actualizar_contrato(
+        cid=cid,
+        contrato_id=ct_id,
+        payload=ActualizarContratoRequest(descripcion="Nueva descripcion"),
+        actor=actor_admin,
+        service=service,
+    )
+
+    # subir y descargar version
+    pdf = UploadFile(file=BytesIO(b"%PDF-1.4\ncontent\n%%EOF"), filename="doc.pdf")
+    doc_ver = await r.subir_documento_version(
+        cid=cid,
+        contrato_id=ct_id,
+        archivo=pdf,
+        actor=actor_admin,
+        service=service,
+    )
+    assert doc_ver.version == 1
+
+    resp = await r.descargar_documento_version(
+        cid=cid,
+        contrato_id=ct_id,
+        version=1,
+        actor=actor_admin,
+        service=service,
+    )
+    assert resp.status_code == 200
+    assert resp.media_type == "application/pdf"

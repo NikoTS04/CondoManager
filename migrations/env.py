@@ -45,6 +45,11 @@ from src.modules.pagos.models_persistencia import (  # noqa: F401
     EventoPagoOutbox,
     RevisionPago,
 )
+from src.modules.proveedores.models import (  # noqa: F401
+    ContratoProveedor,
+    DocumentoContratoVersion,
+    Proveedor,
+)
 from src.modules.reservas.areas.models import AreaComun  # noqa: F401
 from src.modules.reservas.models import (  # noqa: F401
     CancelacionReserva,

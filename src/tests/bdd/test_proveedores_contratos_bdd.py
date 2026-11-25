@@ -10,7 +10,6 @@ from uuid import uuid4
 import pytest
 
 try:
-    from fastapi.testclient import TestClient
     from pytest_bdd import given, parsers, scenarios, then, when
 
     HAS_BDD_RUNTIME = True
@@ -77,9 +76,7 @@ def step_registrar_proveedor(context):
         contacto_email="cramos@servicios.pe",
     )
     context["proveedor"] = asyncio.run(
-        context["service"].registrar_proveedor(
-            context["cid"], req, context["uid_junta"]
-        )
+        context["service"].registrar_proveedor(context["cid"], req, context["uid_junta"])
     )
 
 
@@ -108,11 +105,7 @@ def step_proveedor_existente(context, ruc):
         contacto_telefono="911222333",
         contacto_email="jsilva@base.pe",
     )
-    asyncio.run(
-        context["service"].registrar_proveedor(
-            context["cid"], req, context["uid_junta"]
-        )
-    )
+    asyncio.run(context["service"].registrar_proveedor(context["cid"], req, context["uid_junta"]))
 
 
 @when(parsers.parse('otro integrante intenta registrar un proveedor con el mismo RUC "{ruc}"'))
@@ -127,9 +120,7 @@ def step_intenta_duplicar_ruc(context, ruc):
     )
     try:
         asyncio.run(
-            context["service"].registrar_proveedor(
-                context["cid"], req, context["uid_junta"]
-            )
+            context["service"].registrar_proveedor(context["cid"], req, context["uid_junta"])
         )
     except APIError as e:
         context["error"] = e
@@ -167,13 +158,15 @@ def step_dado_proveedor(context):
         contacto_email="lucia@ascensores.pe",
     )
     context["proveedor"] = asyncio.run(
-        context["service"].registrar_proveedor(
-            context["cid"], req, context["uid_junta"]
-        )
+        context["service"].registrar_proveedor(context["cid"], req, context["uid_junta"])
     )
 
 
-@when(parsers.parse("la Junta registra un contrato de servicio con fecha de inicio y fecha de fin a {dias:d} días"))
+@when(
+    parsers.parse(
+        "la Junta registra un contrato de servicio con fecha de inicio y fecha de fin a {dias:d} días"
+    )
+)
 def step_registrar_contrato_dias(context, dias):
     hoy = date.today()
     req = CrearContratoRequest(
@@ -214,9 +207,7 @@ def step_dado_contrato_vigente(context):
         contacto_email="mdiaz@seguridad360.pe",
     )
     p = asyncio.run(
-        context["service"].registrar_proveedor(
-            context["cid"], req_p, context["uid_junta"]
-        )
+        context["service"].registrar_proveedor(context["cid"], req_p, context["uid_junta"])
     )
     hoy = date.today()
     req_c = CrearContratoRequest(
@@ -229,9 +220,7 @@ def step_dado_contrato_vigente(context):
         fecha_fin=hoy + timedelta(days=180),
     )
     context["contrato"] = asyncio.run(
-        context["service"].registrar_contrato(
-            context["cid"], p.id, req_c, context["uid_junta"]
-        )
+        context["service"].registrar_contrato(context["cid"], p.id, req_c, context["uid_junta"])
     )
 
 
@@ -280,16 +269,12 @@ def step_verificar_v2(context):
 @then("la versión 1 anterior se conserva intacta en el historial para auditoría")
 def step_conserva_v1(context):
     b1, m1, n1 = asyncio.run(
-        context["service"].descargar_documento_version(
-            context["cid"], context["contrato"].id, 1
-        )
+        context["service"].descargar_documento_version(context["cid"], context["contrato"].id, 1)
     )
     assert b1 == b"%PDF-1.4\nContrato Original Firmado\n%%EOF"
 
     b2, m2, n2 = asyncio.run(
-        context["service"].descargar_documento_version(
-            context["cid"], context["contrato"].id, 2
-        )
+        context["service"].descargar_documento_version(context["cid"], context["contrato"].id, 2)
     )
     assert b2 == b"%PDF-1.5\nAddenda Incremento Personal\n%%EOF"
 
@@ -302,9 +287,7 @@ def step_dado_auditor(context):
 
 @when("consulta el directorio de proveedores y contratos")
 def step_auditor_consulta(context):
-    context["lista_auditor"] = asyncio.run(
-        context["service"].listar_proveedores(context["cid"])
-    )
+    context["lista_auditor"] = asyncio.run(context["service"].listar_proveedores(context["cid"]))
 
 
 @then("puede visualizar la información y descargar los documentos")

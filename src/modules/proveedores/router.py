@@ -200,12 +200,13 @@ async def subir_documento_version(
     service: ProveedoresService = Depends(_servicio),
 ):
     autorizar_condominio(actor, cid, escritura=True)
+    motivo = motivo_reemplazo if isinstance(motivo_reemplazo, str) else None
     return await service.subir_documento_version(
         condominio_id=cid,
         contrato_id=contrato_id,
         archivo=archivo,
         usuario_id=UUID(actor["sub"]),
-        motivo_reemplazo=motivo_reemplazo,
+        motivo_reemplazo=motivo,
     )
 
 
