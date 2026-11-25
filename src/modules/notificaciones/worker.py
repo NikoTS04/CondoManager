@@ -204,7 +204,15 @@ async def procesar_uno(
         if log.tipo_evento in ("NOTIF_RECORDATORIO_PREVIO", "NOTIF_CORTE_HOY"):
             from src.modules.cuotas.models import CuotaMantenimiento
 
-            cuota = await db.get(CuotaMantenimiento, log.operacion_id)
+            # CON-33: la elegibilidad se decide bajo FOR SHARE de la cuota. Un pago que ya
+            # modificó la fila (sin confirmar) hace esperar al worker y, al confirmarse, se
+            # relee el saldo vigente; así nunca se avisa una deuda saldada en paralelo.
+            cuota = await db.get(
+                CuotaMantenimiento,
+                log.operacion_id,
+                with_for_update={"read": True},
+                populate_existing=True,
+            )
             from src.modules.notificaciones.models import PoliticaNotificaciones
             politica = await db.get(PoliticaNotificaciones, log.condominio_id)
             if politica and not politica.habilitado:
