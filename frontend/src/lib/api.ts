@@ -1380,3 +1380,217 @@ export function resolverCorreoIncierto(id: string, datos: {
   return recursoRequest(`/notificaciones/${encodeURIComponent(id)}/resolver-incierto`,
     { method: "POST", body: JSON.stringify(datos) });
 }
+
+// ==============================================================================
+// PROVEEDORES Y CONTRATOS (CON-48, CON-49)
+// ==============================================================================
+
+export interface Proveedor {
+  id: string;
+  condominio_id: string;
+  ruc: string;
+  razon_social: string;
+  nombre_comercial: string | null;
+  rubro: string;
+  contacto_nombre: string;
+  contacto_telefono: string;
+  contacto_email: string;
+  direccion: string | null;
+  activo: boolean;
+  notas: string | null;
+  version: number;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface ProveedorDetalle extends Proveedor {
+  total_contratos: number;
+  contratos_vigentes: number;
+  egresos_vinculados: number;
+  incidencias_vinculadas: number;
+}
+
+export interface CrearProveedorPayload {
+  ruc: string;
+  razon_social: string;
+  nombre_comercial?: string | null;
+  rubro: string;
+  contacto_nombre: string;
+  contacto_telefono: string;
+  contacto_email: string;
+  direccion?: string | null;
+  notas?: string | null;
+}
+
+export interface ActualizarProveedorPayload {
+  razon_social?: string;
+  nombre_comercial?: string | null;
+  rubro?: string;
+  contacto_nombre?: string;
+  contacto_telefono?: string;
+  contacto_email?: string;
+  direccion?: string | null;
+  activo?: boolean;
+  notas?: string | null;
+}
+
+export interface DocumentoVersion {
+  id: string;
+  contrato_id: string;
+  version: number;
+  archivo_nombre: string;
+  archivo_mime: string;
+  archivo_tamano_bytes: number;
+  hash_sha256: string;
+  motivo_reemplazo: string | null;
+  subido_por: string;
+  subido_en: string;
+}
+
+export interface Contrato {
+  id: string;
+  condominio_id: string;
+  proveedor_id: string;
+  numero_contrato: string;
+  tipo_documento: "CONTRATO_SERVICIO" | "POLIZA_SEGURO" | "ADDENDA" | "ACTA_CONFORMIDAD";
+  descripcion: string;
+  monto_mensual: string | null;
+  moneda: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  contacto_emergencia: string | null;
+  contacto_emergencia_telefono: string | null;
+  estado: "VIGENTE" | "POR_VENCER" | "VENCIDO" | "RENOVADO" | "CANCELADO";
+  version_actual: number;
+  dias_restantes: number;
+  tiene_documento: boolean;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface ContratoDetalle extends Contrato {
+  proveedor_ruc: string;
+  proveedor_razon_social: string;
+  versiones: DocumentoVersion[];
+}
+
+export interface CrearContratoPayload {
+  numero_contrato: string;
+  tipo_documento?: "CONTRATO_SERVICIO" | "POLIZA_SEGURO" | "ADDENDA" | "ACTA_CONFORMIDAD";
+  descripcion: string;
+  monto_mensual?: string | null;
+  moneda?: "PEN" | "USD";
+  fecha_inicio: string;
+  fecha_fin: string;
+  contacto_emergencia?: string | null;
+  contacto_emergencia_telefono?: string | null;
+}
+
+export function listarProveedores(
+  condominioId: string,
+  filtros?: { activo?: boolean; rubro?: string; buscar?: string }
+): Promise<Proveedor[]> {
+  const params = new URLSearchParams();
+  if (filtros?.activo !== undefined) params.append("activo", String(filtros.activo));
+  if (filtros?.rubro) params.append("rubro", filtros.rubro);
+  if (filtros?.buscar) params.append("buscar", filtros.buscar);
+  const qs = params.toString();
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/proveedores${qs ? `?${qs}` : ""}`);
+}
+
+export function crearProveedor(
+  condominioId: string,
+  payload: CrearProveedorPayload
+): Promise<Proveedor> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/proveedores`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function obtenerProveedor(
+  condominioId: string,
+  proveedorId: string
+): Promise<ProveedorDetalle> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/proveedores/${encodeURIComponent(proveedorId)}`);
+}
+
+export function actualizarProveedor(
+  condominioId: string,
+  proveedorId: string,
+  payload: ActualizarProveedorPayload
+): Promise<Proveedor> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/proveedores/${encodeURIComponent(proveedorId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listarContratos(
+  condominioId: string,
+  filtros?: { proveedorId?: string; estado?: string }
+): Promise<Contrato[]> {
+  const params = new URLSearchParams();
+  if (filtros?.proveedorId) params.append("proveedor_id", filtros.proveedorId);
+  if (filtros?.estado) params.append("estado", filtros.estado);
+  const qs = params.toString();
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/contratos${qs ? `?${qs}` : ""}`);
+}
+
+export function crearContrato(
+  condominioId: string,
+  proveedorId: string,
+  payload: CrearContratoPayload
+): Promise<Contrato> {
+  return recursoRequest(
+    `/condominios/${encodeURIComponent(condominioId)}/proveedores/${encodeURIComponent(proveedorId)}/contratos`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function obtenerContrato(
+  condominioId: string,
+  contratoId: string
+): Promise<ContratoDetalle> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}`);
+}
+
+export async function subirDocumentoContrato(
+  condominioId: string,
+  contratoId: string,
+  archivo: File,
+  motivoReemplazo?: string
+): Promise<DocumentoVersion> {
+  const formData = new FormData();
+  formData.append("archivo", archivo);
+  if (motivoReemplazo) formData.append("motivo_reemplazo", motivoReemplazo);
+
+  const headers = getAuthHeaders();
+  delete headers["Content-Type"]; // Dejar que el navegador genere el boundary multipart
+
+  const res = await fetchProtegido(
+    `/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}/versiones`,
+    {
+      method: "POST",
+      headers,
+      body: formData,
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) {
+    const payload = data.detail && typeof data.detail === "object" ? data.detail : data;
+    throw new ApiError(obtenerMensajeError(payload, "No se pudo subir el documento."), res.status, obtenerCodigoError(payload));
+  }
+  return data;
+}
+
+export function urlDescargaDocumentoContrato(
+  condominioId: string,
+  contratoId: string,
+  version: number
+): string {
+  return `${API_BASE}/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}/versiones/${version}/descargar`;
+}

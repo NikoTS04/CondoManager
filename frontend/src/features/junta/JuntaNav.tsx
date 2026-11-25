@@ -2,6 +2,7 @@
 
 import {
   Bell,
+  Briefcase,
   Building2,
   ClipboardCheck,
   ClipboardList,
@@ -27,6 +28,7 @@ export type JuntaSection =
   | "cuotas"
   | "conciliacion"
   | "moras"
+  | "proveedores"
   | "incidencias"
   | "excepciones"
   | "comunicados";
@@ -41,6 +43,7 @@ const NAV_ITEMS = [
   { id: "cuotas", label: "Distribución y emisión", Icon: Coins },
   { id: "conciliacion", label: "Conciliación", Icon: FileCheck2 },
   { id: "moras", label: "Moras", Icon: Clock3 },
+  { id: "proveedores", label: "Proveedores y contratos", Icon: Briefcase },
   { id: "incidencias", label: "Incidencias", Icon: ClipboardList },
   { id: "excepciones", label: "Excepciones", Icon: CircleAlert },
   { id: "comunicados", label: "Comunicados", Icon: Bell },

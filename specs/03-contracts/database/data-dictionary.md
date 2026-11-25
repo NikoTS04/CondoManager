@@ -480,3 +480,25 @@ SolvenciaRestablecidaEvent v1; se confirma junto con el pago.
 `notificaciones_logs`: añade recordatorio_vencimiento (DATE),
 recordatorio_dias (INTEGER) y estado OMITIDO. No se modifica dinero ni se
 convierte el historial SIMULADO. Downgrade rechaza pérdida de operación.
+
+
+# Extensión 0025 — Directorio de Proveedores y Contratos (CON-48, CON-49)
+
+- `proveedores`: UUID PK, `condominio_id` FK RESTRICT indexado, `ruc` VARCHAR(11) indexado,
+  `razon_social` VARCHAR(200), `nombre_comercial` VARCHAR(200) nullable, `rubro` VARCHAR(100),
+  `contacto_nombre` VARCHAR(150), `contacto_telefono` VARCHAR(50), `contacto_email` VARCHAR(120),
+  `direccion` TEXT nullable, `activo` BOOLEAN default true, `notas` TEXT nullable,
+  `creado_por` UUID FK RESTRICT, `creado_en` TIMESTAMPTZ, `actualizado_en` TIMESTAMPTZ, `version` INTEGER.
+  Restricción de unicidad: `uq_proveedor_condominio_ruc` (condominio_id, ruc). Check `length(ruc) = 11`.
+- `contratos_proveedor`: UUID PK, `condominio_id` FK RESTRICT, `proveedor_id` FK RESTRICT,
+  `numero_contrato` VARCHAR(100), `tipo_documento` VARCHAR(50) CHECK ('CONTRATO_SERVICIO', 'POLIZA_SEGURO', 'ADDENDA', 'ACTA_CONFORMIDAD'),
+  `descripcion` TEXT, `monto_mensual` NUMERIC(12,2) nullable, `moneda` VARCHAR(3) default 'PEN',
+  `fecha_inicio` DATE, `fecha_fin` DATE indexado (CHECK fecha_fin >= fecha_inicio),
+  `contacto_emergencia` VARCHAR(150) nullable, `contacto_emergencia_telefono` VARCHAR(50) nullable,
+  `estado` VARCHAR(30) default 'VIGENTE' CHECK ('VIGENTE', 'POR_VENCER', 'VENCIDO', 'RENOVADO', 'CANCELADO'),
+  `version_actual` INTEGER default 1, `creado_por` UUID FK RESTRICT, `creado_en` TIMESTAMPTZ, `actualizado_en` TIMESTAMPTZ.
+- `documentos_contrato_version`: UUID PK, `contrato_id` FK CASCADE indexado, `version` INTEGER,
+  `archivo_nombre` VARCHAR(255), `archivo_mime` VARCHAR(100) default 'application/pdf',
+  `archivo_tamano_bytes` INTEGER (>0), `hash_sha256` VARCHAR(64), `archivo_binario` BYTEA deferred,
+  `motivo_reemplazo` TEXT nullable, `subido_por` UUID FK RESTRICT, `subido_en` TIMESTAMPTZ.
+  Unicidad: `uq_documento_contrato_version` (contrato_id, version).

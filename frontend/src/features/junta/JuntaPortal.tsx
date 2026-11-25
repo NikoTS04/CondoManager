@@ -24,6 +24,7 @@ import { PresupuestoMensual, type PresupuestoAprobado } from "@/features/junta/P
 import { ResumenSection } from "@/features/junta/ResumenSection";
 import ConfiguracionCondominio from "@/features/junta/ConfiguracionCondominio";
 import { UsuariosSection } from "@/features/junta/UsuariosSection";
+import { ProveedoresSection } from "@/features/junta/ProveedoresSection";
 import { AreasSection } from "@/features/junta/AreasSection";
 import {
   conciliarComprobante,
@@ -282,7 +283,10 @@ export default function JuntaPortal() {
   }
 
   const seccionTitulo = navActual?.label ?? "Resumen";
-  const cargaIndependiente = section === "incidencias" || section === "excepciones";
+  const cargaIndependiente =
+    section === "incidencias" ||
+    section === "excepciones" ||
+    section === "proveedores";
   const comprobanteConfirmado = confirmacion?.kind === "comprobante"
     ? comprobantes.find((comprobante) => comprobante.id === confirmacion.id)
     : undefined;
@@ -438,6 +442,13 @@ export default function JuntaPortal() {
             <MorasSection
               departamentos={departamentosRegistrados}
               loading={loading}
+            />
+          )}
+          {section === "proveedores" && condominioActivoId && (
+            <ProveedoresSection
+              key={condominioActivoId}
+              condominioId={condominioActivoId}
+              esSuperAdmin={isSuperAdmin}
             />
           )}
           {section === "incidencias" && esJunta && condominioActivoId && (
