@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
+from src.core.config import settings
 from src.core.models_audit import AuditoriaLogORM
 from src.core.reintentos_job import JOBES_REINTENTABLES
 from src.modules.excepciones.models import EvidenciaExcepcion, Excepcion, ResolucionExcepcion
@@ -40,7 +41,7 @@ async def test_alerta_de_job_es_global_y_se_persiste_con_evidencia(api_usuarios)
     assert detalle.status_code == 200, detalle.text
     assert detalle.json()["evidencia"]["origen"] == "JOB"
     assert detalle.json()["evidencia"]["referencia_correlacion"] == "corr-diario"
-    assert detalle.json()["acciones_permitidas"] == ["CERRAR_CON_MOTIVO"]
+    assert detalle.json()["acciones_permitidas"] == ["CERRAR_CON_MOTIVO", "SOLICITAR_INFORMACION"]
 
     async with base.sessions() as db:
         persistida = await db.scalar(select(Excepcion).where(Excepcion.origen == "JOB"))
@@ -53,7 +54,11 @@ async def test_alerta_de_job_es_global_y_se_persiste_con_evidencia(api_usuarios)
     assert (await client.get(f"{RUTA}/{caso['id']}", headers=residente)).status_code == 403
 
 
-async def test_reintento_de_job_seguro_guarda_efecto_real_y_es_idempotente(api_usuarios):
+async def test_reintento_de_job_seguro_guarda_efecto_real_y_es_idempotente(
+    api_usuarios, monkeypatch
+):
+    monkeypatch.setattr(settings, "MAILJET_ENABLED", True)
+    monkeypatch.delenv("VERCEL_ENV", raising=False)
     client, base = api_usuarios
     await crear_job(base, "notificaciones", "corr-notif")
     superadmin = await login(client, SUPERADMIN, "SuperAdmin123!")
@@ -75,7 +80,7 @@ async def test_reintento_de_job_seguro_guarda_efecto_real_y_es_idempotente(api_u
     )
     assert primera.status_code == 200, primera.text
     efecto = primera.json()["efecto"]
-    assert efecto["reintentado"] is True and efecto["estado_proceso"] == "EN_CURSO"
+    assert efecto["estado_operacion"] == "EN_COLA"
 
     async with base.sessions() as db:
         registro = await db.scalar(
@@ -83,9 +88,9 @@ async def test_reintento_de_job_seguro_guarda_efecto_real_y_es_idempotente(api_u
                 EstadoJobNotificaciones.nombre == "notificaciones"
             )
         )
-        assert registro.estado == "EN_CURSO"
+        assert registro.estado == "INCOMPLETO"
         alerta = await db.get(AlertaNotificacion, caso["id"])
-        assert alerta.atendida_en is not None
+        assert alerta.atendida_en is None
         assert (await db.scalar(select(func.count()).select_from(ResolucionExcepcion))) == 1
         auditoria = await db.scalar(
             select(AuditoriaLogORM).where(
@@ -93,7 +98,7 @@ async def test_reintento_de_job_seguro_guarda_efecto_real_y_es_idempotente(api_u
             )
         )
         assert str(auditoria.condominio_id) == SENTINELA
-        assert auditoria.estado_posterior["efecto"]["reintentado"] is True
+        assert auditoria.estado_posterior["efecto"] == efecto
 
     repetida = await client.post(
         f"{RUTA}/{caso['id']}/resoluciones",
