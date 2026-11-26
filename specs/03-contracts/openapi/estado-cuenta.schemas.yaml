@@ -27,6 +27,7 @@ schemas:
         - PAGO_APROBADO
         - APLICACION_CREDITO
         - DISTRIBUCION_PAGO
+        - CARGO_INCIDENCIA
         title: Tipo
         type: string
       descripcion:

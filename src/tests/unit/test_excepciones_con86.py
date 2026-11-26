@@ -38,4 +38,4 @@ def test_el_resumen_de_un_job_expone_componente_y_operacion():
 def test_migracion_0030_es_la_cabeza_sobre_la_0029():
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
     assert scripts.get_revision("20261130_0030").down_revision == "20261129_0029"
-    assert scripts.get_heads() == ["20261130_0030"]
+    assert scripts.get_heads() == ["20261203_0033"]

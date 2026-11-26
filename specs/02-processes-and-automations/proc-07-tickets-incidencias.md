@@ -42,6 +42,35 @@ por autor y vínculo activo.
 
 ---
 
+## 3.1 Proveedores y cargos por incidencia
+
+- La asignación selecciona un proveedor activo del directorio del mismo condominio.
+  Backend obtiene nombre y correo del directorio, conservando las instantáneas históricas.
+- Cada actualización con monto positivo admite un reparto independiente. Registrar el
+  costo no genera deuda: Junta previsualiza y confirma con concepto público y motivo,
+  separados de comentarios y evidencias internos.
+- Por monto se elige alcance `TODOS` (departamentos activos) o `SELECCIONADOS` (lista
+  no vacía, sin duplicados, del mismo condominio), y método `EQUITATIVA` o `POR_ALICUOTA`.
+  Las alícuotas se normalizan entre los participantes.
+- Se calcula con Decimal: piso a centavos, remanente por mayor residuo, desempate por
+  UUID ascendente. El desglose debe sumar exactamente el monto original.
+- La previsualización incluye huella de monto, participantes y coeficientes. Publicar
+  exige huella vigente y clave idempotente. Un monto admite un único reparto.
+  Reintentar devuelve el original sin recalcular ni duplicar cargos.
+- Se guardan participantes, coeficientes, importes, actor, fecha y auditoría. No se editan
+  ni borran cargos publicados; futuras correcciones requieren un contrato compensatorio.
+  Cambiar coeficientes o reabrir el ticket no modifica las deudas.
+- El residente consulta solo cargos de sus vínculos activos, aunque no sea el reportante.
+  Recibir un cargo no autoriza consultar el ticket, comentarios ni evidencias privados.
+- Puede reportar un comprobante para uno, varios o todos los cargos pendientes de UN
+  departamento. La selección es persistente y su suma debe coincidir con el comprobante.
+  No se mezclan cargos con cuotas en el mismo comprobante en este incremento.
+- Solo aprobar cancela los importes seleccionados; observar/rechazar no paga. Si otro
+  comprobante pagó un destino, se rechaza la aprobación sin reasignar fondos.
+- Los pagos dirigidos no participan en prelación/reconstrucción de cuotas, no generan
+  saldo a favor ni moras y no cambian por sí solos la solvencia para reservas.
+  Se integran cargos y abonos al estado de cuenta. No se habilitan envíos ni pasarelas.
+
 ## 4. Mejora Futura Propuesta: Clasificación y Asignación con IA + RPA
 
 > **Estado:** Propuesta pendiente (`TIC-06`). No implementada.

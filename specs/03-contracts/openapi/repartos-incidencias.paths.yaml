@@ -1,0 +1,167 @@
+paths:
+  preview:
+    parameters:
+      - $ref: '#/components/parameters/Incidencia'
+      - $ref: '#/components/parameters/Costo'
+    post:
+      operationId: previsualizarRepartoIncidencia
+      tags: [Incidencias]
+      summary: Previsualizar un reparto por costo sin generar deuda
+      description: Solo Junta del condominio. Conserva centavos exactos y devuelve una huella.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConfigurarReparto'}
+      responses:
+        '200':
+          description: Desglose calculado sin persistencia financiera
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reparto'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: No existe un costo positivo en el condominio.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  reparto:
+    parameters:
+      - $ref: '#/components/parameters/Incidencia'
+      - $ref: '#/components/parameters/Costo'
+    get:
+      operationId: consultarRepartoIncidencia
+      tags: [Incidencias]
+      summary: Consultar la instantánea publicada de un costo
+      description: Solo Junta del condominio; no recalcula coeficientes.
+      responses:
+        '200':
+          description: Reparto publicado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reparto'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: No hay reparto publicado.}
+    post:
+      operationId: publicarRepartoIncidencia
+      tags: [Incidencias]
+      summary: Confirmar un reparto y generar cargos independientes
+      description: Junta confirma una huella vigente. No edita cuotas ni habilita envíos.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ConfigurarReparto'
+                - type: object
+                  required: [huella]
+                  properties:
+                    huella: {type: string, pattern: '^[a-f0-9]{64}$'}
+      responses:
+        '201':
+          description: Cargos publicados y auditados
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reparto'}
+        '200':
+          description: Reparto previo recuperado sin duplicar cargos
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reparto'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: Costo no disponible.}
+        '409': {description: Huella obsoleta o costo/clave ya publicados.}
+        '422': {$ref: './condomanager.openapi.yaml#/components/responses/Error422'}
+  cargos:
+    get:
+      operationId: listarCargosIncidencias
+      tags: [Pagos y Conciliación]
+      summary: Consultar cargos del departamento autorizado
+      description: Solo vínculos activos o administración contextual; no expone comentarios privados.
+      parameters:
+        - name: departamento_id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Cargos pendientes o pagados
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Cargo'}
+        '403': {$ref: './condomanager.openapi.yaml#/components/responses/Error403'}
+        '404': {description: Departamento no disponible.}
+components:
+  parameters:
+    Incidencia:
+      name: incidencia_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Costo:
+      name: actualizacion_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    Dinero:
+      type: string
+      pattern: '^\d+\.\d{2}$'
+    ConfigurarReparto:
+      type: object
+      required: [alcance, metodo, concepto, motivo]
+      properties:
+        alcance: {type: string, enum: [TODOS, SELECCIONADOS]}
+        metodo: {type: string, enum: [EQUITATIVA, POR_ALICUOTA]}
+        concepto: {type: string, minLength: 1, maxLength: 200}
+        motivo: {type: string, minLength: 1, maxLength: 500}
+        departamento_ids:
+          type: array
+          default: []
+          maxItems: 10000
+          uniqueItems: true
+          items: {type: string, format: uuid}
+    Reparto:
+      type: object
+      required: [incidencia_id, actualizacion_id, concepto, motivo, alcance, metodo, monto, moneda, huella, participantes]
+      properties:
+        id: {type: [string, 'null'], format: uuid}
+        incidencia_id: {type: string, format: uuid}
+        actualizacion_id: {type: string, format: uuid}
+        concepto: {type: string}
+        motivo: {type: string}
+        alcance: {type: string, enum: [TODOS, SELECCIONADOS]}
+        metodo: {type: string, enum: [EQUITATIVA, POR_ALICUOTA]}
+        monto: {$ref: '#/components/schemas/Dinero'}
+        moneda: {type: string, enum: [PEN, USD]}
+        huella: {type: string, pattern: '^[a-f0-9]{64}$'}
+        participantes:
+          type: array
+          items:
+            type: object
+            required: [departamento_id, numero, edificio, coeficiente, monto]
+            properties:
+              departamento_id: {type: string, format: uuid}
+              numero: {type: string}
+              edificio: {type: string}
+              coeficiente: {type: string, pattern: '^\d+\.\d{4}$'}
+              monto: {$ref: '#/components/schemas/Dinero'}
+    Cargo:
+      type: object
+      additionalProperties: false
+      required: [id, incidencia_id, actualizacion_id, concepto, moneda, monto, pagado, pendiente, estado]
+      properties:
+        id: {type: string, format: uuid}
+        incidencia_id: {type: string, format: uuid}
+        actualizacion_id: {type: string, format: uuid}
+        concepto: {type: string}
+        moneda: {type: string, enum: [PEN, USD]}
+        monto: {$ref: '#/components/schemas/Dinero'}
+        pagado: {$ref: '#/components/schemas/Dinero'}
+        pendiente: {$ref: '#/components/schemas/Dinero'}
+        estado: {type: string, enum: [PENDIENTE, PAGADO]}

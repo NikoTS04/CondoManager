@@ -117,6 +117,13 @@ schemas:
     required: [departamento_id, banco, numero_operacion, fecha_operacion, monto, archivo_voucher]
     properties:
       departamento_id: {$ref: '#/schemas/UUID'}
+      cargos_incidencia_ids:
+        type: array
+        default: []
+        maxItems: 100
+        uniqueItems: true
+        items: {$ref: '#/schemas/UUID'}
+        description: Destinos explícitos de una unidad; vacía conserva la prelación de cuotas.
       banco:
         type: string
         minLength: 1
@@ -156,6 +163,9 @@ schemas:
     properties:
       id: {$ref: '#/schemas/UUID'}
       departamento_id: {$ref: '#/schemas/UUID'}
+      cargos_incidencia_ids:
+        type: array
+        items: {$ref: '#/schemas/UUID'}
       banco: {type: string}
       numero_operacion: {type: string}
       fecha_operacion: {type: string, format: date}

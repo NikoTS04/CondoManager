@@ -16,6 +16,11 @@ from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.core.security import get_current_user
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor
+from src.modules.incidencias.reparto_models import (
+    CargoIncidencia,
+    DestinoPagoIncidencia,
+    RepartoIncidencia,
+)
 from src.modules.pagos.contabilidad import CERO, saldo_en_mora
 from src.modules.pagos.models import ComprobantePago, ImputacionPago
 from src.modules.pagos.models_mora import (
@@ -45,6 +50,7 @@ class MovimientoCuenta(BaseModel):
         "PAGO_APROBADO",
         "APLICACION_CREDITO",
         "DISTRIBUCION_PAGO",
+        "CARGO_INCIDENCIA",
     ]
     descripcion: str
     importe: DineroCuenta
@@ -144,10 +150,24 @@ def proyectar_cuenta(
     hoy,
     limite=50,
     offset=0,
+    cargos=(),
+    repartos=(),
+    destinos=(),
 ):
     """No escribe ni reconstruye el motor. Una diferencia real no se tapa con un ajuste."""
     cuotas_por_id = {c.id: c for c in cuotas}
     aprobados = {p.id: p for p in pagos if p.estado == "APROBADO"}
+    por_reparto = {r.id: r for r in repartos}
+    por_cargo = {c.id: c for c in cargos}
+    cargos_por_pago, abonado_cargo = defaultdict(lambda: CERO), defaultdict(lambda: CERO)
+    destinos_por_pago = defaultdict(set)
+    for destino in destinos:
+        if destino.comprobante_id in aprobados:
+            if destino.cargo_id not in por_cargo:
+                inconsistente()
+            cargos_por_pago[destino.comprobante_id] += destino.monto
+            abonado_cargo[destino.cargo_id] += destino.monto
+            destinos_por_pago[destino.comprobante_id].add(str(destino.cargo_id))
     mora_neta, pagos_diarios, pagos_legacy, credito_aplicado = (
         defaultdict(lambda: CERO) for _ in range(4)
     )
@@ -265,8 +285,14 @@ def proyectar_cuenta(
     for p in aprobados.values():
         if p.conciliado_en is None:
             inconsistente()
+        elegidos = set(getattr(p, "cargos_incidencia_ids", []) or [])
+        if elegidos != destinos_por_pago[p.id] or (
+            elegidos
+            and (p.id in gestionados or legacy_por_pago[p.id] or cargos_por_pago[p.id] != p.monto)
+        ):
+            inconsistente()
         if p.id not in gestionados:
-            credito = p.monto - legacy_por_pago[p.id]
+            credito = p.monto - legacy_por_pago[p.id] - cargos_por_pago[p.id]
             if credito < CERO:
                 inconsistente()
             credito_generado += credito
@@ -280,6 +306,17 @@ def proyectar_cuenta(
             -p.monto,
             pago=p.id,
             fecha_operacion=p.fecha_operacion,
+        )
+    for cargo in cargos:
+        if cargo.pagado != abonado_cargo[cargo.id] or cargo.reparto_id not in por_reparto:
+            inconsistente()
+        reparto = por_reparto[cargo.reparto_id]
+        agregar(
+            "CARGO_INCIDENCIA",
+            cargo.id,
+            reparto.creado_en,
+            reparto.concepto,
+            cargo.monto,
         )
     abonos_historicos = CERO
     for c in cuotas:
@@ -312,6 +349,7 @@ def proyectar_cuenta(
             abonos += Decimal(m["abono"])
             seleccionados.append(m)
     deuda = sum((c.monto_total_exigible - c.monto_pagado for c in cuotas), CERO)
+    deuda += sum((c.monto - c.pagado for c in por_cargo.values()), CERO)
     if saldo != deuda - depto.saldo_a_favor:
         inconsistente()
     pendientes = [
@@ -375,6 +413,7 @@ class EstadoCuentaService:
                 return list(await self.session.scalars(select(modelo).where(filtro)))
 
             pagos = await filas(ComprobantePago, ComprobantePago.departamento_id == did)
+            cargos = await filas(CargoIncidencia, CargoIncidencia.departamento_id == did)
             pids = [p.id for p in pagos]
             devengos = await filas(DevengoMora, DevengoMora.cuota_id.in_(cids))
             return proyectar_cuenta(
@@ -382,6 +421,13 @@ class EstadoCuentaService:
                 condominio=condominio,
                 cuotas=cuotas,
                 pagos=pagos,
+                cargos=cargos,
+                repartos=await filas(
+                    RepartoIncidencia, RepartoIncidencia.id.in_([c.reparto_id for c in cargos])
+                ),
+                destinos=await filas(
+                    DestinoPagoIncidencia, DestinoPagoIncidencia.comprobante_id.in_(pids)
+                ),
                 imputaciones=await filas(ImputacionPago, ImputacionPago.comprobante_id.in_(pids)),
                 gestionados=set(
                     await self.session.scalars(

@@ -11,7 +11,6 @@ from alembic.operations import Operations
 from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.pagos.models import ComprobantePago
 from src.modules.pagos.models_persistencia import ArchivoVoucher, RevisionPago
 from src.modules.pagos.persistencia import PagosPersistentesService
 from src.modules.usuarios.demo import id_demo
@@ -38,19 +37,20 @@ async def test_migracion_conserva_resultado_y_asocia_evidencia(db_usuarios):
             "departamento_habilitado_reservas": False,
         }
         async with AsyncSession(bind=conn, expire_on_commit=False) as db:
-            db.add(
-                ComprobantePago(
-                    id=cid,
-                    departamento_id=did(),
-                    banco_origen="BCP",
-                    numero_operacion="0001",
-                    fecha_operacion=date(2026, 10, 15),
-                    monto="170.00",
-                    url_voucher=nombre,
-                    idempotency_hash="f" * 64,
-                    estado="OBSERVADO",
-                    motivo_rechazo="Motivo público",
-                )
+            # El esquema histórico no tiene las columnas que añadió el ORM posterior.
+            await db.execute(
+                text("""INSERT INTO comprobantes_pago
+                (id,departamento_id,banco_origen,numero_operacion,fecha_operacion,monto,
+                 url_voucher,idempotency_hash,estado,motivo_rechazo,creado_en)
+                VALUES (:id,:did,'BCP','0001',:fecha,170.00,:nombre,:hash,
+                        'OBSERVADO','Motivo público',now())"""),
+                {
+                    "id": cid,
+                    "did": did(),
+                    "fecha": date(2026, 10, 15),
+                    "nombre": nombre,
+                    "hash": "f" * 64,
+                },
             )
             await db.flush()
             db.add(
@@ -88,7 +88,14 @@ async def test_migracion_conserva_resultado_y_asocia_evidencia(db_usuarios):
                 PagosPersistentesService.resultado_revision(revision).motivo_rechazo
                 == "Motivo público"
             )
-            pago = await db.get(ComprobantePago, cid)
+            pago = (
+                await db.execute(
+                    text(
+                        "SELECT idempotency_hash,numero_operacion FROM comprobantes_pago WHERE id=:id"
+                    ),
+                    {"id": cid},
+                )
+            ).one()
             assert pago.idempotency_hash == "f" * 64 and pago.numero_operacion == "0001"
             db.add(
                 ArchivoVoucher(

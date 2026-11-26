@@ -133,8 +133,6 @@ class AsignarIncidencia(BaseModel):
         proveedor = self.responsable_proveedor_id is not None
         if interno == proveedor:
             raise ValueError("Indica exactamente un responsable: interno o proveedor.")
-        if proveedor and not self.proveedor_nombre:
-            raise ValueError("El proveedor requiere un nombre.")
         if proveedor and self.proveedor_nombre and "\x00" in self.proveedor_nombre:
             raise ValueError("El nombre del proveedor no es válido.")
         if self.correo_proveedor and (

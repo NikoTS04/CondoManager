@@ -9,8 +9,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql as pg
 
-revision = "20261127_0027"
-down_revision = "20261126_0026"
+revision = "20261202_0032"
+down_revision = "20261201_0031"
 branch_labels = None
 depends_on = None
 
@@ -360,6 +360,7 @@ def upgrade():
             ondelete="RESTRICT",
         ),
         sa.UniqueConstraint("pago_id", name="uq_reverso_pago_unico"),
+        sa.UniqueConstraint("condominio_id", "id", name="uq_reverso_pago_contexto"),
         sa.UniqueConstraint("condominio_id", "idempotency_key", name="uq_reverso_pago_idempotency"),
         sa.CheckConstraint("monto > 0", name="ck_reverso_pago_monto"),
         sa.CheckConstraint("request_hash ~ '^[a-f0-9]{64}$'", name="ck_reverso_pago_request_hash"),

@@ -13,8 +13,10 @@ from src.modules.notificaciones.avisos_contrato import (
 )
 from src.modules.notificaciones.models import Notificacion
 from src.modules.notificaciones.worker import procesar_uno
+from src.modules.proveedores.models import Proveedor
 from src.modules.usuarios.demo import id_demo
 from src.modules.usuarios.models import UsuarioRol
+from src.modules.usuarios.piloto import CONDOMINIO_PILOTO_ID
 from src.tests.integration.test_alta_usuarios_db import login, otro_condominio
 from src.tests.integration.test_incidencias_db import JUNTA, RESIDENTE, RUTA, reportar, residente
 
@@ -23,6 +25,23 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 
 async def junta(client):
     return await login(client, JUNTA, "Admin123!")
+
+
+async def proveedor_directorio(base, id, email="contacto@proveedor.test", cid=CONDOMINIO_PILOTO_ID):
+    async with base.sessions() as db, db.begin():
+        db.add(
+            Proveedor(
+                id=id,
+                condominio_id=cid,
+                ruc="20123456789",
+                razon_social="Servicios del Norte",
+                rubro="MANTENIMIENTO",
+                contacto_nombre="Contacto",
+                contacto_telefono="999888777",
+                contacto_email=email,
+                creado_por=id_demo(JUNTA),
+            )
+        )
 
 
 def asignacion_body(*, responsable=None, proveedor=None, version=1, **cambios):
@@ -135,13 +154,14 @@ async def test_asignacion_a_proveedor_externo_no_expone_datos_del_residente(api_
     client, base = api_usuarios
     headers = await junta(client)
     proveedor = uuid4()
+    await proveedor_directorio(base, proveedor)
     iid, datos = await reportar_y_asignar(
         client,
         headers,
         proveedor={
             "responsable_proveedor_id": str(proveedor),
             "proveedor_nombre": "Servicios del Norte",
-            "correo_proveedor": "contacto@proveedor.test",
+            "correo_proveedor": "no-usar@cliente.test",
         },
     )
     assert datos["avisos_encolados"] == 2
@@ -176,11 +196,13 @@ async def test_asignacion_a_proveedor_externo_no_expone_datos_del_residente(api_
 async def test_contacto_faltante_y_permisos_de_avisos(api_usuarios):
     client, base = api_usuarios
     headers = await junta(client)
+    proveedor = uuid4()
+    await proveedor_directorio(base, proveedor, email="")
     iid, datos = await reportar_y_asignar(
         client,
         headers,
         proveedor={
-            "responsable_proveedor_id": str(uuid4()),
+            "responsable_proveedor_id": str(proveedor),
             "proveedor_nombre": "Servicios sin correo",
         },
     )
@@ -250,3 +272,26 @@ async def test_asignacion_concurrente_guarda_una_sola_decision(api_usuarios):
                 .where(AuditoriaLogORM.accion_ejecutada == "ASIGNACION_TICKET_INCIDENCIA")
             )
         ) == 1
+
+
+@pytest.mark.parametrize("estado", ["INEXISTENTE", "INACTIVO", "OTRO_CONDOMINIO"])
+async def test_proveedor_debe_ser_activo_y_del_condominio(api_usuarios, estado):
+    client, base = api_usuarios
+    headers = await junta(client)
+    iid = (await reportar(client, await residente(client))).json()["id"]
+    pid = uuid4()
+    if estado != "INEXISTENTE":
+        cid = await otro_condominio(base) if estado == "OTRO_CONDOMINIO" else CONDOMINIO_PILOTO_ID
+        await proveedor_directorio(base, pid, cid=cid)
+        if estado == "INACTIVO":
+            async with base.sessions() as db, db.begin():
+                proveedor = await db.get(Proveedor, pid)
+                proveedor.activo = False
+    respuesta = await client.post(
+        f"{RUTA}/{iid}/asignacion",
+        headers={**headers, "Idempotency-Key": str(uuid4())},
+        json=asignacion_body(proveedor={"responsable_proveedor_id": str(pid)}),
+    )
+    assert respuesta.status_code == 403, respuesta.text
+    async with base.sessions() as db:
+        assert await db.scalar(select(func.count()).select_from(AsignacionIncidencia)) == 0

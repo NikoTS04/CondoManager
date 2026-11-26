@@ -53,6 +53,7 @@ from src.modules.notificaciones.models import AlertaNotificacion, Notificacion
 from src.modules.notificaciones.repository import AVISO_INCIDENCIA, NotificacionesRepository
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.pagos.storage import VoucherStorage
+from src.modules.proveedores.models import Proveedor
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
 from src.shared.decimal_types import redondear_moneda
 
@@ -383,6 +384,23 @@ class IncidenciasService:
                     "El responsable no está activo en este condominio.",
                 )
 
+        proveedor = None
+        if solicitud.responsable_proveedor_id is not None:
+            proveedor = await self.session.scalar(
+                select(Proveedor)
+                .where(
+                    Proveedor.id == solicitud.responsable_proveedor_id,
+                    Proveedor.condominio_id == cid,
+                    Proveedor.activo.is_(True),
+                )
+                .with_for_update()
+            )
+            if proveedor is None:
+                raise APIError(
+                    403,
+                    "PROVEEDOR_NO_AUTORIZADO",
+                    "Seleccione un proveedor activo del directorio de este condominio.",
+                )
         anterior = estado_revision(incidencia)
         asignacion = AsignacionIncidencia(
             condominio_id=cid,
@@ -394,8 +412,10 @@ class IncidenciasService:
             hash_solicitud=huella,
             responsable_usuario_id=solicitud.responsable_usuario_id,
             responsable_proveedor_id=solicitud.responsable_proveedor_id,
-            proveedor_nombre=solicitud.proveedor_nombre,
-            correo_proveedor=solicitud.correo_proveedor,
+            proveedor_nombre=(proveedor.nombre_comercial or proveedor.razon_social)
+            if proveedor
+            else None,
+            correo_proveedor=proveedor.contacto_email if proveedor else None,
             plazo=solicitud.plazo,
             nota=solicitud.nota,
         )

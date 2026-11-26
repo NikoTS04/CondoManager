@@ -13,6 +13,8 @@ from scripts import reconciliar_esquema_20261026, reconciliar_esquema_legacy
 async def fijar_esquema_pre_identidad(conn, monkeypatch):
     def preparar(connection):
         with Operations.context(MigrationContext.configure(connection)):
+            import_module("migrations.versions.20261203_0033_repartos_incidencias").downgrade()
+            import_module("migrations.versions.20261202_0032_egresos_caja").downgrade()
             import_module(
                 "migrations.versions.20261125_0025_alertas_fallos_definitivos"
             ).downgrade()

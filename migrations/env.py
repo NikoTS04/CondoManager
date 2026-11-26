@@ -20,6 +20,11 @@ from src.modules.cuotas.presupuestos.models import PresupuestoMensual  # noqa: F
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor  # noqa: F401
 from src.modules.egresos import models as egresos_models  # noqa: F401
 from src.modules.incidencias.models import Incidencia  # noqa: F401
+from src.modules.incidencias.reparto_models import (  # noqa: F401
+    CargoIncidencia,
+    DestinoPagoIncidencia,
+    RepartoIncidencia,
+)
 from src.modules.notificaciones.models import (  # noqa: F401
     AlertaNotificacion,
     EventoConsumido,

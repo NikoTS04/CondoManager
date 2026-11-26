@@ -35,6 +35,12 @@ tags:
   - name: Egresos y caja
     description: CON-51 registro/consulta/sustento parcialmente implementado; aprobación, pagos y caja objetivo CON-52 pendientes.
 paths:
+  /incidencias/{incidencia_id}/costos/{actualizacion_id}/reparto/previsualizacion:
+    $ref: './repartos-incidencias.paths.yaml#/paths/preview'
+  /incidencias/{incidencia_id}/costos/{actualizacion_id}/reparto:
+    $ref: './repartos-incidencias.paths.yaml#/paths/reparto'
+  /pagos/cargos-incidencias:
+    $ref: './repartos-incidencias.paths.yaml#/paths/cargos'
   /excepciones:
     $ref: './excepciones.paths.yaml#/paths/~1excepciones'
   /excepciones/{id}:
