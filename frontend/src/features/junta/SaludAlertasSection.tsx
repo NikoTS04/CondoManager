@@ -26,6 +26,8 @@ const RESULTADO_JOB: Record<EjecucionJob["resultado"], { texto: string; tono: To
 };
 const PAGINA = 25;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function formatDuracion(segundos: number | null): string {
   if (segundos === null) return "—";
   if (segundos < 60) return `${Math.round(segundos * 10) / 10} s`;
@@ -109,7 +111,7 @@ export function ListaAlertas({
               <p>{a.mensaje}</p>
               <dl className="grid gap-x-4 gap-y-1 text-sm text-muted sm:grid-cols-[auto_1fr]">
                 <dt>Referencia de diagnóstico</dt>
-                <dd className="break-all font-mono">{a.referencia_diagnostico.origen_tipo}</dd>
+                <dd className="break-all font-mono">{a.referencia_diagnostico.origen_tipo}{a.referencia_diagnostico.origen_id && !UUID_RE.test(a.referencia_diagnostico.origen_id) ? `:${a.referencia_diagnostico.origen_id}` : ""}</dd>
                 <dt>Correlación</dt>
                 <dd className="break-all font-mono">{a.referencia_diagnostico.referencia_correlacion ?? "Sin correlación aún"}</dd>
                 <dt>Estado</dt>
