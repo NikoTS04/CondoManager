@@ -44,30 +44,30 @@ debe cumplir el productor pendiente (`Contrato`).
 
 ## CON-55 — Confirmación de la asignación
 
-- **Aviso al residente** · Contrato (`NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE`). Dada
+- **Aviso al residente** · Implementado (`NOTIF_INCIDENCIA_ASIGNADA_RESIDENTE`). Dada
   una asignación confirmada, cuando se guarda, entonces se encola un aviso al
   reportante con el código del ticket, el estado `ASIGNADO` y el enlace de
   seguimiento.
-- **Aviso al proveedor** · Contrato (`NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR`).
+- **Aviso al proveedor** · Implementado (`NOTIF_INCIDENCIA_ASIGNADA_PROVEEDOR`).
   Dada una asignación a un proveedor externo con correo registrado, cuando se
   confirma, entonces se encola un aviso a ese contacto con el código del ticket,
   ubicación, categoría, prioridad, descripción y plazo, sin datos personales del
   residente.
-- **Referencia a la asignación** · Contrato. Dada una asignación confirmada,
+- **Referencia a la asignación** · Implementado. Dada una asignación confirmada,
   cuando se repite la confirmación, entonces no se crean avisos nuevos: ambos
   llevan el ID de la asignación como `evento_id`.
-- **Reasignación** · Contrato. Dado un ticket ya asignado, cuando Junta confirma
+- **Reasignación** · Implementado. Dado un ticket ya asignado, cuando Junta confirma
   otra asignación, entonces se encolan avisos nuevos asociados a la nueva
   asignación y los anteriores se conservan.
-- **Contacto faltante** · Contrato. Dado un proveedor sin correo, cuando se
+- **Contacto faltante** · Implementado. Dado un proveedor sin correo, cuando se
   confirma la asignación, entonces el aviso al residente se encola, el del
   proveedor no se crea y Junta ve `CONTACTO_FALTANTE` para ese destinatario.
-- **Fallo de entrega** · Contrato. Dado un aviso al proveedor que rebota (550),
+- **Fallo de entrega** · Implementado. Dado un aviso al proveedor que rebota (550),
   cuando se agotan o descartan los reintentos, entonces queda `FALLIDO_PERMANENTE`,
   se crea la alerta `ERROR_DEFINITIVO` y Junta lo ve junto a la asignación.
-- **Visibilidad del resultado** · Contrato. Dada una asignación con avisos,
+- **Visibilidad del resultado** · Implementado. Dada una asignación con avisos,
   cuando Junta consulta el ticket, entonces ve por destinatario el estado del
   aviso, sin tratar `ENVIADO` como entregado. Un Residente no consulta los avisos
   del proveedor.
-- **Permisos y aislamiento** · Contrato. Dado un ticket de otro condominio, cuando
+- **Permisos y aislamiento** · Implementado. Dado un ticket de otro condominio, cuando
   Junta consulta sus avisos, entonces recibe 404.

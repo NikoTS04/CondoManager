@@ -173,13 +173,13 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
                 <dt className="text-muted">Resultado de la operación</dt>
                 <dd>{RESULTADOS[caso.evidencia.estado_operacion] ?? caso.evidencia.estado_operacion}</dd>
               </div>
-              {"referencia_correlacion" in caso.evidencia && (
+              {(caso.origen === "JOB" || caso.evidencia.referencia_correlacion) && (
                 <div className="sm:col-span-2">
                   <dt className="text-muted">Referencia de diagnóstico</dt>
                   <dd className="break-all">{caso.evidencia.referencia_correlacion ?? "Sin referencia"}</dd>
                 </div>
               )}
-              {"intento_id" in caso.evidencia && caso.evidencia.intento_id && (
+              {caso.evidencia.intento_id && (
                 <div className="sm:col-span-2">
                   <dt className="text-muted">Referencia del nuevo intento</dt>
                   <dd className="break-all">{caso.evidencia.intento_id}</dd>
@@ -205,19 +205,22 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Historial de decisiones</h3>
                 <ul className="space-y-3">
-                  {caso.historial.map((registro) => (
-                    <li key={registro.id} className="border-l-2 border-line pl-3 text-sm">
-                      <p className="font-medium">{ACCIONES[registro.accion]} · {formatDateTime(registro.fecha)}</p>
-                      <p className="whitespace-pre-wrap break-words">{registro.motivo}</p>
-                      {caso.origen === "JOB" && (
-                        <p className="text-xs text-muted">Resultado · {RESULTADOS[registro.efecto.estado_operacion] ?? registro.efecto.estado_operacion}</p>
-                      )}
-                      {"responsable" in registro.efecto && registro.efecto.responsable && (
-                        <p className="break-words text-xs text-muted">Responsable {registro.efecto.responsable}</p>
-                      )}
-                      <p className="break-all text-xs text-muted">Actor {registro.actor_id}</p>
-                    </li>
-                  ))}
+                  {caso.historial.map((registro) => {
+                    const resultado = registro.efecto.estado_operacion ?? registro.efecto.estado_proceso;
+                    return (
+                      <li key={registro.id} className="border-l-2 border-line pl-3 text-sm">
+                        <p className="font-medium">{ACCIONES[registro.accion]} · {formatDateTime(registro.fecha)}</p>
+                        <p className="whitespace-pre-wrap break-words">{registro.motivo}</p>
+                        {resultado && (
+                          <p className="text-xs text-muted">Resultado · {RESULTADOS[resultado] ?? resultado}</p>
+                        )}
+                        {registro.efecto.responsable && (
+                          <p className="break-words text-xs text-muted">Responsable {registro.efecto.responsable}</p>
+                        )}
+                        <p className="break-all text-xs text-muted">Actor {registro.actor_id}</p>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

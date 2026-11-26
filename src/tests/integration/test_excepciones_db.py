@@ -10,7 +10,7 @@ from src.core import jobs
 from src.core.config import settings
 from src.core.models_audit import AuditoriaLogORM
 from src.modules.excepciones.jobs import tomar_reintento
-from src.modules.excepciones.models import ResolucionJob
+from src.modules.excepciones.models import ResolucionExcepcion
 from src.modules.excepciones.service import AUDITORIA_RESOLUCION
 from src.modules.notificaciones import recordatorios, worker
 from src.modules.notificaciones.alertas import ciclo_job, crear_alerta_job
@@ -242,4 +242,4 @@ async def test_job_interrumpido_conserva_referencia_y_resultado_incierto(api_usu
     assert detalle["evidencia"]["estado_operacion"] == "INCIERTO"
     assert "REINTENTAR_JOB" not in detalle["acciones_permitidas"]
     async with base.sessions() as db:
-        assert await db.scalar(select(func.count()).select_from(ResolucionJob)) == 1
+        assert await db.scalar(select(func.count()).select_from(ResolucionExcepcion)) == 1

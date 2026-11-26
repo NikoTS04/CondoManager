@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
@@ -68,6 +68,17 @@ class EfectoJob(BaseModel):
     responsable: str | None
 
 
+class EfectoJobHistorico(BaseModel):
+    nombre: str
+    estado_proceso: str
+    reintentado: bool
+
+
+class EfectoCierre(BaseModel):
+    operacion_id: str
+    estado_operacion: str
+
+
 class ResolucionDTO(BaseModel):
     id: UUID
     accion: Accion
@@ -75,26 +86,23 @@ class ResolucionDTO(BaseModel):
     actor_id: str
     fecha: datetime
     estado: Estado
-    efecto: EfectoCorreo | EfectoJob
+    efecto: EfectoCorreo | EfectoJob | EfectoJobHistorico | EfectoCierre
 
 
-class EvidenciaCorreo(BaseModel):
+class EvidenciaDTO(BaseModel):
     tipo_evento: str
     ciclo_fallido: int
     ciclo_actual: int
     estado_operacion: str
-
-
-class EvidenciaJob(BaseModel):
-    nombre: str
-    ciclo_fallido: int
+    origen: Literal["CORREO", "JOB"]
+    operacion_id: str
     referencia_correlacion: str | None
-    intento_id: UUID | None
-    estado_operacion: str
+    intento_id: UUID | None = None
+    detalle: dict[str, Any]
 
 
 class DetalleExcepcionDTO(ExcepcionDTO):
-    evidencia: EvidenciaCorreo | EvidenciaJob
+    evidencia: EvidenciaDTO
     historial: list[ResolucionDTO]
     acciones_permitidas: list[Accion]
     requiere_revision_correo: bool

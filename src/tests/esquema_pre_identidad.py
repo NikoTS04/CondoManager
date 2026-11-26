@@ -8,16 +8,15 @@ from alembic.operations import Operations
 from sqlalchemy import MetaData
 
 from scripts import reconciliar_esquema_20261026, reconciliar_esquema_legacy
+from src.tests.usuarios_db import REVISIONES_API
 
 
 async def fijar_esquema_pre_identidad(conn, monkeypatch):
     def preparar(connection):
         with Operations.context(MigrationContext.configure(connection)):
-            import_module(
-                "migrations.versions.20261125_0025_alertas_fallos_definitivos"
-            ).downgrade()
-            import_module("migrations.versions.20261121_0022_notificaciones_completas").downgrade()
-            import_module("migrations.versions.20261113_0021_invitaciones_identidad").downgrade()
+            inicio = REVISIONES_API.index("20261113_0021_invitaciones_identidad")
+            for nombre in reversed(REVISIONES_API[inicio:]):
+                import_module("migrations.versions." + nombre).downgrade()
         # Fuente independiente del ORM actual: esquema canónico construido por migraciones.
         esperado = MetaData()
         esperado.reflect(connection)

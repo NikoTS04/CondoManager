@@ -38,7 +38,7 @@ paths:
                   - type: object
                     required: [evidencia, historial, acciones_permitidas, requiere_revision_correo]
                     properties:
-                      evidencia: {type: object, description: Evidencia operativa sin cuerpo ni contacto del correo.}
+                      evidencia: {$ref: '#/components/schemas/Evidencia'}
                       historial: {type: array, items: {$ref: '#/components/schemas/Resolucion'}}
                       acciones_permitidas: {type: array, items: {$ref: '#/components/schemas/Accion'}}
                       requiere_revision_correo: {type: boolean}
@@ -73,7 +73,7 @@ paths:
               schema: {$ref: '#/components/schemas/Resolucion'}
         '403': {description: Rol sin permiso para resolver excepciones.}
         '404': {description: Caso inexistente o ajeno al contexto.}
-        '409': {description: Acción no permitida, clave ya usada con otro contenido o reintento activo del mismo job.}
+        '409': {description: 'Acción no permitida, clave ya usada con otro contenido o reintento activo del mismo job.'}
         '422': {description: Datos inválidos o contacto fuera del alcance autorizado.}
 components:
   parameters:
@@ -106,4 +106,42 @@ components:
         actor_id: {type: string}
         fecha: {type: string, format: date-time}
         estado: {$ref: '#/components/schemas/Estado'}
-        efecto: {type: object, description: Operación afectada y resultado registrado.}
+        efecto:
+          anyOf:
+            - $ref: '#/components/schemas/EfectoCorreo'
+            - $ref: '#/components/schemas/EfectoJob'
+            - $ref: '#/components/schemas/EfectoJobHistorico'
+    EfectoCorreo:
+      type: object
+      required: [operacion_id, ciclo, estado_operacion]
+      properties:
+        operacion_id: {type: string}
+        ciclo: {type: integer}
+        estado_operacion: {type: string, enum: [EN_COLA, ENVIADO, ENTREGADO, REINTENTANDO, FALLIDO_PERMANENTE, OMITIDO]}
+    EfectoJob:
+      type: object
+      required: [operacion_id, estado_operacion]
+      properties:
+        operacion_id: {type: string}
+        estado_operacion: {type: string}
+        intento_id: {type: [string, 'null'], format: uuid}
+        responsable: {type: [string, 'null']}
+    EfectoJobHistorico:
+      type: object
+      required: [nombre, estado_proceso, reintentado]
+      properties:
+        nombre: {type: string}
+        estado_proceso: {type: string}
+        reintentado: {type: boolean}
+    Evidencia:
+      type: object
+      required: [origen, operacion_id, ciclo_fallido, ciclo_actual, estado_operacion]
+      properties:
+        origen: {type: string, enum: [CORREO, JOB]}
+        operacion_id: {type: string}
+        ciclo_fallido: {type: integer}
+        ciclo_actual: {type: integer}
+        intento_id: {type: [string, 'null'], format: uuid}
+        referencia_correlacion: {type: [string, 'null'], maxLength: 64}
+        estado_operacion: {type: string}
+        detalle: {type: object}

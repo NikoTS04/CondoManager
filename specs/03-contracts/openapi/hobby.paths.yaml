@@ -60,7 +60,7 @@ paths:
         '403': {description: Rol o contexto denegado}
         '404': {description: Área no encontrada}
         '409': {description: Intervalo afecta reservas confirmadas}
-        '422': {description: Intervalo sin zona, no futuro, invertido o motivo inválido}
+        '422': {description: 'Intervalo sin zona, no futuro, invertido o motivo inválido'}
   /condominios/{cid}/areas/{aid}/bloqueos/{bid}:
     parameters:
       - {name: cid, in: path, required: true, schema: {type: string, format: uuid}}

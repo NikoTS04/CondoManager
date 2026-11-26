@@ -1,10 +1,12 @@
-"""Registro de incidencias y revisión administrativa con auditoría."""
+"""Registro, asignación y revisión de incidencias con auditoría."""
 
 import asyncio
 import json
+from datetime import UTC, datetime
 from hashlib import sha256
 from urllib.parse import urljoin
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import UploadFile
 from sqlalchemy import Select, and_, case, func, select
@@ -21,12 +23,38 @@ from src.core.config import settings
 from src.core.errors import APIError
 from src.core.roles import RolUsuario
 from src.core.security import validar_sesion
-from src.modules.incidencias.models import Incidencia
-from src.modules.incidencias.schemas import CrearIncidencia, RechazarIncidencia, RevisarIncidencia
+from src.modules.incidencias.estados import ESTADOS_ASIGNABLES, transicion_permitida
+from src.modules.incidencias.models import (
+    ActualizacionIncidencia,
+    AsignacionIncidencia,
+    Incidencia,
+)
+from src.modules.incidencias.schemas import (
+    ActualizacionDTO,
+    AsignarIncidencia,
+    AvisoAsignacionDTO,
+    CerrarAdministrativamente,
+    ConfirmarIncidencia,
+    CrearIncidencia,
+    HistorialIncidenciasDTO,
+    ReabrirIncidencia,
+    RechazarIncidencia,
+    RegistrarResolucion,
+    RegistrarSeguimiento,
+    RevisarIncidencia,
+)
+from src.modules.notificaciones.avisos_contrato import (
+    AVISO_ASIGNACION_PROVEEDOR,
+    AVISO_ASIGNACION_RESIDENTE,
+    RolAvisoAsignacion,
+    clave_asignacion,
+)
+from src.modules.notificaciones.models import AlertaNotificacion, Notificacion
 from src.modules.notificaciones.repository import AVISO_INCIDENCIA, NotificacionesRepository
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.pagos.storage import VoucherStorage
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
+from src.shared.decimal_types import redondear_moneda
 
 MAX_EVIDENCIA = 3 * 1024 * 1024
 
@@ -45,7 +73,26 @@ def estado_revision(incidencia: Incidencia) -> dict:
         "prioridad": incidencia.prioridad,
         "motivo_rechazo": incidencia.motivo_rechazo,
         "version": incidencia.version,
+        "asignacion_actual_id": str(incidencia.asignacion_actual_id)
+        if incidencia.asignacion_actual_id
+        else None,
+        "responsable_usuario_id": str(incidencia.responsable_usuario_id)
+        if incidencia.responsable_usuario_id
+        else None,
+        "responsable_proveedor_id": str(incidencia.responsable_proveedor_id)
+        if incidencia.responsable_proveedor_id
+        else None,
+        "plazo": incidencia.plazo.isoformat() if incidencia.plazo else None,
+        "calificacion": incidencia.calificacion,
+        "motivo_reapertura": incidencia.motivo_reapertura,
+        "fecha_cierre": incidencia.fecha_cierre.isoformat() if incidencia.fecha_cierre else None,
     }
+
+
+def contexto_lectura(usuario: dict) -> UUID:
+    if usuario["rol"] not in (RolUsuario.ADMIN_JUNTA, RolUsuario.AUDITOR):
+        denegar("Solo Junta o Auditor puede consultar los avisos de asignación.")
+    return contexto_consulta(usuario)
 
 
 def reportes_propios(usuario: dict):
@@ -58,7 +105,7 @@ def reportes_propios(usuario: dict):
 async def preparar_evidencia(
     archivo: UploadFile | None,
 ) -> tuple[bytes | None, str | None, str | None]:
-    if archivo is None:
+    if archivo is None or not archivo.filename:
         return None, None, None
     limite = min(MAX_EVIDENCIA, settings.VOUCHER_MAX_BYTES)
     try:
@@ -267,11 +314,577 @@ class IncidenciasService:
         await self.session.commit()
         return incidencia
 
+    async def asignar(
+        self,
+        usuario: dict,
+        incidencia_id: UUID,
+        solicitud: AsignarIncidencia,
+        clave: UUID,
+    ) -> tuple[Incidencia, AsignacionIncidencia, int, bool]:
+        cid = contexto_junta(usuario)
+        identidad = SQLAlchemyUsuariosRepository(self.session)
+        if await identidad.contexto(cid, bloquear=True) is None:
+            denegar()
+        vigente = await validar_sesion(usuario, identidad)
+
+        incidencia = await self.session.scalar(
+            select(Incidencia)
+            .where(Incidencia.id == incidencia_id, Incidencia.condominio_id == cid)
+            .with_for_update()
+        )
+        if incidencia is None:
+            raise APIError(404, "INCIDENCIA_NO_ENCONTRADA", "La incidencia no está disponible.")
+
+        huella = sha256(
+            json.dumps(
+                {**solicitud.model_dump(mode="json"), "incidencia_id": str(incidencia.id)},
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        previa = await self.session.scalar(
+            select(AsignacionIncidencia).where(
+                AsignacionIncidencia.condominio_id == cid,
+                AsignacionIncidencia.incidencia_id == incidencia.id,
+                AsignacionIncidencia.clave_idempotencia == clave,
+            )
+        )
+        if previa is not None:
+            if previa.hash_solicitud != huella:
+                raise APIError(
+                    409, "CLAVE_IDEMPOTENCIA_REUTILIZADA", "La clave pertenece a otra asignación."
+                )
+            return incidencia, previa, await self._contar_avisos(previa), False
+
+        if incidencia.estado not in ESTADOS_ASIGNABLES or not transicion_permitida(
+            incidencia.estado, "ASIGNADO"
+        ):
+            raise APIError(
+                409, "INCIDENCIA_NO_ASIGNABLE", "El ticket ya no admite una nueva asignación."
+            )
+        if incidencia.version != solicitud.version:
+            raise APIError(
+                409, "VERSION_DESACTUALIZADA", "El reporte cambió. Consulta la última versión."
+            )
+        if solicitud.plazo <= datetime.now(UTC):
+            raise APIError(422, "PLAZO_INVALIDO", "El plazo debe ser una fecha futura.")
+
+        if solicitud.responsable_usuario_id is not None:
+            responsable = await identidad.por_id(solicitud.responsable_usuario_id)
+            rol = await identidad.rol_usuario(solicitud.responsable_usuario_id, cid)
+            if (
+                responsable is None
+                or not responsable.esta_activo
+                or rol is None
+                or not rol.es_activo
+            ):
+                raise APIError(
+                    403,
+                    "RESPONSABLE_NO_AUTORIZADO",
+                    "El responsable no está activo en este condominio.",
+                )
+
+        anterior = estado_revision(incidencia)
+        asignacion = AsignacionIncidencia(
+            condominio_id=cid,
+            incidencia_id=incidencia.id,
+            reportante_id=incidencia.reportante_id,
+            departamento_id=incidencia.departamento_id,
+            actor_id=UUID(str(usuario["sub"])),
+            clave_idempotencia=clave,
+            hash_solicitud=huella,
+            responsable_usuario_id=solicitud.responsable_usuario_id,
+            responsable_proveedor_id=solicitud.responsable_proveedor_id,
+            proveedor_nombre=solicitud.proveedor_nombre,
+            correo_proveedor=solicitud.correo_proveedor,
+            plazo=solicitud.plazo,
+            nota=solicitud.nota,
+        )
+        self.session.add(asignacion)
+        await self.session.flush()
+
+        incidencia.estado = "ASIGNADO"
+        incidencia.asignacion_actual_id = asignacion.id
+        incidencia.responsable_usuario_id = asignacion.responsable_usuario_id
+        incidencia.responsable_proveedor_id = asignacion.responsable_proveedor_id
+        incidencia.proveedor_nombre = asignacion.proveedor_nombre
+        incidencia.correo_proveedor = asignacion.correo_proveedor
+        incidencia.fecha_asignacion = asignacion.creado_en or datetime.now(UTC)
+        incidencia.plazo = asignacion.plazo
+        incidencia.version += 1
+
+        avisos = await self.encolar_avisos_asignacion(incidencia, asignacion)
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            vigente,
+            cid,
+            incidencia.departamento_id,
+            "ASIGNACION_TICKET_INCIDENCIA",
+            "ASIGNACION_JUNTA",
+            anterior,
+            {
+                **estado_revision(incidencia),
+                "asignacion_id": str(asignacion.id),
+                "avisos_encolados": avisos,
+            },
+        )
+        await self.session.commit()
+        return incidencia, asignacion, avisos, True
+
+    async def encolar_avisos_asignacion(
+        self, incidencia: Incidencia, asignacion: AsignacionIncidencia
+    ) -> int:
+        cid = incidencia.condominio_id
+        identidad = SQLAlchemyUsuariosRepository(self.session)
+        reportante = await identidad.por_id(incidencia.reportante_id)
+        departamento = await identidad.departamento(cid, incidencia.departamento_id)
+        condominio = await identidad.contexto(cid)
+        if reportante is None or departamento is None or condominio is None:
+            raise APIError(409, "ASIGNACION_SIN_CONTEXTO", "No se puede encolar el aviso.")
+
+        enlace = urljoin(settings.ACTIVACION_WEB_URL, f"/incidencias/{incidencia.id}")
+        cola = NotificacionesRepository(self.session)
+        residente = clave_asignacion(asignacion.id, RolAvisoAsignacion.RESIDENTE)
+        await cola.encolar(
+            cid=cid,
+            did=incidencia.departamento_id,
+            usuario=reportante,
+            contacto=reportante.email,
+            evento=residente.evento_id,
+            operacion=residente.operacion_id,
+            tipo=AVISO_ASIGNACION_RESIDENTE,
+            canal="EMAIL",
+            contexto={
+                "codigo_ticket": str(incidencia.id),
+                "estado": "ASIGNADO",
+                "enlace": enlace,
+                "nombre": reportante.nombre,
+                "dpto": departamento[0].numero,
+            },
+        )
+        avisos = 1
+        if asignacion.responsable_proveedor_id is not None and asignacion.correo_proveedor:
+            proveedor = clave_asignacion(asignacion.id, RolAvisoAsignacion.PROVEEDOR)
+            await cola.encolar(
+                cid=cid,
+                did=incidencia.departamento_id,
+                usuario=None,
+                contacto=asignacion.correo_proveedor,
+                evento=proveedor.evento_id,
+                operacion=proveedor.operacion_id,
+                tipo=AVISO_ASIGNACION_PROVEEDOR,
+                canal="EMAIL",
+                externo=asignacion.responsable_proveedor_id,
+                contexto={
+                    "codigo_ticket": str(incidencia.id),
+                    "proveedor": asignacion.proveedor_nombre,
+                    "condominio": condominio.nombre,
+                    "ubicacion": incidencia.ubicacion,
+                    "categoria": incidencia.categoria_confirmada or incidencia.categoria,
+                    "prioridad": incidencia.prioridad or incidencia.urgencia,
+                    "descripcion": incidencia.descripcion,
+                    "plazo": asignacion.plazo.astimezone(ZoneInfo("America/Lima")).strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
+                },
+            )
+            avisos += 1
+        return avisos
+
+    async def _contar_avisos(self, asignacion: AsignacionIncidencia) -> int:
+        return await self.session.scalar(
+            select(func.count())
+            .select_from(Notificacion)
+            .where(
+                Notificacion.evento_id == asignacion.id,
+                Notificacion.tipo_evento.in_(
+                    (AVISO_ASIGNACION_RESIDENTE, AVISO_ASIGNACION_PROVEEDOR)
+                ),
+            )
+        )
+
+    async def listar_avisos(
+        self, usuario: dict, incidencia_id: UUID, *, offset: int, limit: int
+    ) -> dict:
+        cid = contexto_lectura(usuario)
+        incidencia = await self.session.scalar(
+            select(Incidencia.id).where(
+                Incidencia.id == incidencia_id, Incidencia.condominio_id == cid
+            )
+        )
+        if incidencia is None:
+            raise APIError(404, "INCIDENCIA_NO_ENCONTRADA", "La incidencia no está disponible.")
+        asignaciones = (
+            await self.session.scalars(
+                select(AsignacionIncidencia)
+                .where(
+                    AsignacionIncidencia.condominio_id == cid,
+                    AsignacionIncidencia.incidencia_id == incidencia_id,
+                )
+                .order_by(AsignacionIncidencia.creado_en.desc(), AsignacionIncidencia.id.desc())
+                .offset(offset)
+                .limit(limit + 1)
+            )
+        ).all()
+        items: list[AvisoAsignacionDTO] = []
+        for asignacion in asignaciones[:limit]:
+            tipos = [
+                (RolAvisoAsignacion.RESIDENTE, AVISO_ASIGNACION_RESIDENTE),
+            ]
+            if asignacion.responsable_proveedor_id is not None:
+                tipos.append((RolAvisoAsignacion.PROVEEDOR, AVISO_ASIGNACION_PROVEEDOR))
+            for rol, tipo in tipos:
+                clave = clave_asignacion(asignacion.id, rol)
+                aviso = await self.session.scalar(
+                    select(Notificacion).where(
+                        Notificacion.evento_id == clave.evento_id,
+                        Notificacion.operacion_id == clave.operacion_id,
+                        Notificacion.tipo_evento == tipo,
+                    )
+                )
+                if aviso is None:
+                    items.append(
+                        AvisoAsignacionDTO(
+                            asignacion_id=asignacion.id,
+                            destinatario_tipo=rol.value,
+                            estado="CONTACTO_FALTANTE",
+                        )
+                    )
+                    continue
+                alerta = await self.session.scalar(
+                    select(AlertaNotificacion.id).where(
+                        AlertaNotificacion.notificacion_id == aviso.id,
+                        AlertaNotificacion.atendida_en.is_(None),
+                    )
+                )
+                items.append(
+                    AvisoAsignacionDTO(
+                        asignacion_id=asignacion.id,
+                        destinatario_tipo=rol.value,
+                        estado=aviso.estado,
+                        aviso_id=aviso.id,
+                        intentos=aviso.intentos,
+                        fecha_actualizacion=aviso.fecha_actualizacion,
+                        alerta_abierta=alerta is not None,
+                    )
+                )
+        return {"items": items, "hay_mas": len(asignaciones) > limit}
+
+    async def _incidencia_para_edicion(
+        self, usuario: dict, incidencia_id: UUID, version: int, destino: str
+    ) -> tuple[dict, Incidencia]:
+        cid = contexto_junta(usuario)
+        identidad = SQLAlchemyUsuariosRepository(self.session)
+        if await identidad.contexto(cid, bloquear=True) is None:
+            denegar()
+        vigente = await validar_sesion(usuario, identidad)
+        incidencia = await self.session.scalar(
+            select(Incidencia)
+            .where(Incidencia.id == incidencia_id, Incidencia.condominio_id == cid)
+            .with_for_update()
+        )
+        if incidencia is None:
+            raise APIError(404, "INCIDENCIA_NO_ENCONTRADA", "La incidencia no está disponible.")
+        if not transicion_permitida(incidencia.estado, destino):
+            raise APIError(
+                409, "INCIDENCIA_NO_EDITABLE", "El estado actual no permite esta actualización."
+            )
+        if incidencia.version != version:
+            raise APIError(
+                409, "VERSION_DESACTUALIZADA", "El reporte cambió. Consulta la última versión."
+            )
+        return vigente, incidencia
+
+    async def registrar_avance(
+        self,
+        usuario: dict,
+        incidencia_id: UUID,
+        solicitud: RegistrarSeguimiento,
+        archivo=None,
+    ) -> tuple[Incidencia, str | None]:
+        vigente, incidencia = await self._incidencia_para_edicion(
+            usuario, incidencia_id, solicitud.version, "EN_PROCESO"
+        )
+        if any("\x00" in campo for campo in (solicitud.comentario, solicitud.repuesto or "")):
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        evidencia, mime, advertencia = await preparar_evidencia(archivo)
+        anterior = estado_revision(incidencia)
+        estado_anterior = incidencia.estado
+        if estado_anterior == "ASIGNADO":
+            incidencia.estado = "EN_PROCESO"
+        incidencia.version += 1
+        actualizacion = ActualizacionIncidencia(
+            condominio_id=incidencia.condominio_id,
+            incidencia_id=incidencia.id,
+            actor_id=UUID(str(usuario["sub"])),
+            tipo="COSTO" if solicitud.monto is not None else "COMENTARIO",
+            descripcion=solicitud.comentario,
+            publico=solicitud.publico,
+            repuesto=solicitud.repuesto,
+            monto=redondear_moneda(solicitud.monto) if solicitud.monto is not None else None,
+            estado_anterior=estado_anterior,
+            estado_nuevo=incidencia.estado,
+            evidencia=evidencia,
+            evidencia_mime=mime,
+        )
+        self.session.add(actualizacion)
+        await self.session.flush()
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            vigente,
+            incidencia.condominio_id,
+            incidencia.departamento_id,
+            "SEGUIMIENTO_TICKET_INCIDENCIA",
+            "AVANCE_JUNTA",
+            anterior,
+            {
+                **estado_revision(incidencia),
+                "actualizacion_id": str(actualizacion.id),
+                "monto": str(actualizacion.monto) if actualizacion.monto else None,
+            },
+        )
+        await self.session.commit()
+        return incidencia, advertencia
+
+    async def registrar_resolucion(
+        self,
+        usuario: dict,
+        incidencia_id: UUID,
+        solicitud: RegistrarResolucion,
+        archivo=None,
+    ) -> tuple[Incidencia, str | None]:
+        vigente, incidencia = await self._incidencia_para_edicion(
+            usuario, incidencia_id, solicitud.version, "RESUELTO"
+        )
+        if any("\x00" in campo for campo in (solicitud.descripcion, solicitud.repuesto or "")):
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        evidencia, mime, advertencia = await preparar_evidencia(archivo)
+        anterior = estado_revision(incidencia)
+        estado_anterior = incidencia.estado
+        incidencia.estado = "RESUELTO"
+        incidencia.version += 1
+        actualizacion = ActualizacionIncidencia(
+            condominio_id=incidencia.condominio_id,
+            incidencia_id=incidencia.id,
+            actor_id=UUID(str(usuario["sub"])),
+            tipo="COSTO" if solicitud.monto is not None else "COMENTARIO",
+            descripcion=solicitud.descripcion,
+            publico=solicitud.publico,
+            repuesto=solicitud.repuesto,
+            monto=redondear_moneda(solicitud.monto) if solicitud.monto is not None else None,
+            estado_anterior=estado_anterior,
+            estado_nuevo=incidencia.estado,
+            evidencia=evidencia,
+            evidencia_mime=mime,
+        )
+        self.session.add(actualizacion)
+        await self.session.flush()
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            vigente,
+            incidencia.condominio_id,
+            incidencia.departamento_id,
+            "RESOLUCION_TICKET_INCIDENCIA",
+            "RESOLUCION_JUNTA",
+            anterior,
+            {
+                **estado_revision(incidencia),
+                "actualizacion_id": str(actualizacion.id),
+                "monto": str(actualizacion.monto) if actualizacion.monto else None,
+            },
+        )
+        await self.session.commit()
+        return incidencia, advertencia
+
+    async def historial(
+        self, usuario: dict, incidencia_id: UUID, *, offset: int, limit: int
+    ) -> HistorialIncidenciasDTO:
+        incidencia = await self.consultar(usuario, incidencia_id)
+        consulta = select(ActualizacionIncidencia).where(
+            ActualizacionIncidencia.incidencia_id == incidencia.id
+        )
+        if usuario["rol"] == RolUsuario.RESIDENTE:
+            consulta = consulta.where(ActualizacionIncidencia.publico.is_(True))
+        actualizaciones = (
+            await self.session.scalars(
+                consulta.order_by(
+                    ActualizacionIncidencia.creado_en.desc(), ActualizacionIncidencia.id.desc()
+                )
+                .offset(offset)
+                .limit(limit + 1)
+            )
+        ).all()
+        return HistorialIncidenciasDTO(
+            items=[ActualizacionDTO.model_validate(item) for item in actualizaciones[:limit]],
+            hay_mas=len(actualizaciones) > limit,
+        )
+
+    async def evidencia_actualizacion(
+        self, usuario: dict, incidencia_id: UUID, actualizacion_id: UUID
+    ) -> ActualizacionIncidencia:
+        await self.consultar(usuario, incidencia_id)
+        actualizacion = await self.session.scalar(
+            select(ActualizacionIncidencia)
+            .where(
+                ActualizacionIncidencia.id == actualizacion_id,
+                ActualizacionIncidencia.incidencia_id == incidencia_id,
+            )
+            .options(undefer(ActualizacionIncidencia.evidencia))
+        )
+        if actualizacion is None or (
+            usuario["rol"] == RolUsuario.RESIDENTE and not actualizacion.publico
+        ):
+            raise APIError(404, "EVIDENCIA_NO_ENCONTRADA", "La evidencia no está disponible.")
+        return actualizacion
+
+    async def _incidencia_residente(
+        self, usuario: dict, incidencia_id: UUID, version: int, destino: str
+    ) -> tuple[dict, Incidencia]:
+        if usuario["rol"] != RolUsuario.RESIDENTE:
+            denegar("Solo el reportante puede confirmar o reabrir su incidencia.")
+        cid = contexto_consulta(usuario)
+        identidad = SQLAlchemyUsuariosRepository(self.session)
+        if await identidad.contexto(cid, bloquear=True) is None:
+            denegar()
+        vigente = await validar_sesion(usuario, identidad)
+        incidencia = await self.session.scalar(
+            select(Incidencia)
+            .where(
+                Incidencia.id == incidencia_id,
+                Incidencia.condominio_id == cid,
+                reportes_propios(vigente),
+            )
+            .with_for_update()
+        )
+        if incidencia is None:
+            raise APIError(404, "INCIDENCIA_NO_ENCONTRADA", "La incidencia no está disponible.")
+        if incidencia.estado != "RESUELTO" or not transicion_permitida(incidencia.estado, destino):
+            raise APIError(
+                409, "INCIDENCIA_NO_EDITABLE", "El ticket no está listo para esta decisión."
+            )
+        if incidencia.version != version:
+            raise APIError(
+                409, "VERSION_DESACTUALIZADA", "El reporte cambió. Consulta la última versión."
+            )
+        return vigente, incidencia
+
+    async def _decidir(
+        self,
+        *,
+        vigente: dict,
+        incidencia: Incidencia,
+        actor_id: UUID,
+        destino: str,
+        descripcion: str,
+        publico: bool,
+        accion: str,
+        motivo: str,
+        calificacion: int | None = None,
+        reapertura: str | None = None,
+    ) -> Incidencia:
+        anterior = estado_revision(incidencia)
+        ahora = datetime.now(UTC)
+        estado_anterior = incidencia.estado
+        incidencia.estado = destino
+        incidencia.version += 1
+        if destino == "CERRADO":
+            incidencia.fecha_cierre = ahora
+            incidencia.cerrado_por = actor_id
+            if calificacion is not None:
+                incidencia.calificacion = calificacion
+        if destino == "EN_PROCESO":
+            incidencia.motivo_reapertura = reapertura
+        actualizacion = ActualizacionIncidencia(
+            condominio_id=incidencia.condominio_id,
+            incidencia_id=incidencia.id,
+            actor_id=actor_id,
+            tipo="CAMBIO_ESTADO",
+            descripcion=descripcion,
+            publico=publico,
+            estado_anterior=estado_anterior,
+            estado_nuevo=destino,
+        )
+        self.session.add(actualizacion)
+        await self.session.flush()
+        await SQLAlchemyPagosRepository(self.session).auditar(
+            vigente,
+            incidencia.condominio_id,
+            incidencia.departamento_id,
+            accion,
+            motivo,
+            anterior,
+            {
+                **estado_revision(incidencia),
+                "actualizacion_id": str(actualizacion.id),
+                "actor_id": str(actor_id),
+            },
+        )
+        await self.session.commit()
+        return incidencia
+
+    async def confirmar(
+        self, usuario: dict, incidencia_id: UUID, solicitud: ConfirmarIncidencia
+    ) -> Incidencia:
+        if "\x00" in (solicitud.comentario or ""):
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        vigente, incidencia = await self._incidencia_residente(
+            usuario, incidencia_id, solicitud.version, "CERRADO"
+        )
+        descripcion = f"Confirmación del residente. Calificación: {solicitud.calificacion}/5."
+        if solicitud.comentario:
+            descripcion = f"{descripcion} {solicitud.comentario}"
+        return await self._decidir(
+            vigente=vigente,
+            incidencia=incidencia,
+            actor_id=UUID(str(usuario["sub"])),
+            destino="CERRADO",
+            descripcion=descripcion,
+            publico=True,
+            accion="CIERRE_CONFORME_TICKET",
+            motivo="CONFIRMACION_RESIDENTE",
+            calificacion=solicitud.calificacion,
+        )
+
+    async def reabrir(
+        self, usuario: dict, incidencia_id: UUID, solicitud: ReabrirIncidencia
+    ) -> Incidencia:
+        if "\x00" in solicitud.motivo:
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        vigente, incidencia = await self._incidencia_residente(
+            usuario, incidencia_id, solicitud.version, "EN_PROCESO"
+        )
+        return await self._decidir(
+            vigente=vigente,
+            incidencia=incidencia,
+            actor_id=UUID(str(usuario["sub"])),
+            destino="EN_PROCESO",
+            descripcion=f"Reapertura del residente: {solicitud.motivo}",
+            publico=True,
+            accion="REAPERTURA_TICKET_INCIDENCIA",
+            motivo=solicitud.motivo,
+            reapertura=solicitud.motivo,
+        )
+
+    async def cerrar_administrativamente(
+        self, usuario: dict, incidencia_id: UUID, solicitud: CerrarAdministrativamente
+    ) -> Incidencia:
+        if "\x00" in solicitud.motivo:
+            raise APIError(422, "DATOS_INVALIDOS", "Revise el texto ingresado.")
+        vigente, incidencia = await self._incidencia_para_edicion(
+            usuario, incidencia_id, solicitud.version, "CERRADO"
+        )
+        return await self._decidir(
+            vigente=vigente,
+            incidencia=incidencia,
+            actor_id=UUID(str(usuario["sub"])),
+            destino="CERRADO",
+            descripcion=f"Cierre administrativo: {solicitud.motivo}",
+            publico=True,
+            accion="CIERRE_ADMINISTRATIVO_TICKET",
+            motivo=solicitud.motivo,
+        )
+
     async def consultar(
         self, usuario: dict, incidencia_id: UUID, *, incluir_evidencia: bool = False
     ) -> Incidencia:
         rol = usuario["rol"]
-        if rol not in (RolUsuario.RESIDENTE, RolUsuario.ADMIN_JUNTA):
+        if rol not in (RolUsuario.RESIDENTE, RolUsuario.ADMIN_JUNTA, RolUsuario.AUDITOR):
             denegar()
         query = select(Incidencia).where(
             Incidencia.id == incidencia_id,

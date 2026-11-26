@@ -5,7 +5,7 @@ paths:
       description: SuperAdmin/Junta/Auditor contextual; residentes denegados.
       parameters: [{$ref: '#/components/parameters/Condominio'}]
       responses:
-        '200': {description: Contactos elegibles con usuario, unidad, edificio y correo.}
+        '200': {description: 'Contactos elegibles con usuario, unidad, edificio y correo.'}
         '403': {description: Contexto o rol no permitido.}
   /notificaciones/comunicados/previsualizar:
     post:
@@ -17,7 +17,7 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/Previsualizacion'}
       responses:
-        '201': {description: UUID de borrador, contenido, destinatarios, cantidad y fechas.}
+        '201': {description: 'UUID de borrador, contenido, destinatarios, cantidad y fechas.'}
         '403': {description: Rol/contexto no permitido.}
         '422': {description: Datos o filtros ajenos al contexto.}
   /notificaciones/comunicados/{id}/confirmar:
@@ -26,7 +26,7 @@ paths:
       parameters: [{$ref: '#/components/parameters/Id'}]
       description: Administración; confirmación transaccional e idempotente del mismo UUID.
       responses:
-        '202': {description: Mismo lote confirmado, nunca acredita entrega.}
+        '202': {description: 'Mismo lote confirmado, nunca acredita entrega.'}
         '403': {description: Sin permiso contextual.}
         '404': {description: Borrador inexistente.}
         '409': {description: Audiencia cambiada o vista caducada tras 15 minutos.}
@@ -65,7 +65,7 @@ paths:
       operationId: consultarSupresionCorreo
       parameters: [{$ref: '#/components/parameters/Condominio'}]
       responses:
-        '200': {description: Últimos 500 contactos suprimidos del contexto, motivo y fecha.}
+        '200': {description: 'Últimos 500 contactos suprimidos del contexto, motivo y fecha.'}
   /notificaciones/contactos-bloqueados/{cid}/reactivar:
     post:
       operationId: reactivarContactoCorreo
@@ -94,17 +94,17 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/Resolucion'}
       responses:
-        '200': {description: Resolución humana auditada, estado y ciclo.}
+        '200': {description: 'Resolución humana auditada, estado y ciclo.'}
         '403': {description: Sin permiso de administración contextual.}
         '404': {description: Notificación inexistente.}
-        '409': {description: Ciclo cambiado, intento en curso, contacto bloqueado o no elegible.}
-        '422': {description: Falta MessageID, referencia o confirmación explícita.}
+        '409': {description: 'Ciclo cambiado, intento en curso, contacto bloqueado o no elegible.'}
+        '422': {description: 'Falta MessageID, referencia o confirmación explícita.'}
   /notificaciones/operacion:
     get:
       operationId: supervisarColaCorreo
       parameters: [{$ref: '#/components/parameters/Condominio'}]
       responses:
-        '200': {description: Conteos contextuales, cola más antigua, inciertos, alertas y último job; revisión si no hay éxito reciente en 5 minutos.}
+        '200': {description: 'Conteos contextuales, cola más antigua, inciertos, alertas y último job; revisión si no hay éxito reciente en 5 minutos.'}
 components:
   parameters:
     Condominio:

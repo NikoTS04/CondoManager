@@ -18,7 +18,11 @@ from src.modules.cuotas.distribucion.models import ConfiguracionDistribucion  # 
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, LoteCuotas  # noqa: F401
 from src.modules.cuotas.presupuestos.models import PresupuestoMensual  # noqa: F401
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor  # noqa: F401
-from src.modules.excepciones.models import ResolucionJob  # noqa: F401
+from src.modules.excepciones.models import (  # noqa: F401
+    EvidenciaExcepcion,
+    Excepcion,
+    ResolucionExcepcion,
+)
 from src.modules.incidencias.models import Incidencia  # noqa: F401
 from src.modules.notificaciones.models import (  # noqa: F401
     AlertaNotificacion,

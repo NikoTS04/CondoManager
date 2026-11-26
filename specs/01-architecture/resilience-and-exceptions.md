@@ -66,12 +66,24 @@ La decisión, el efecto sobre el aviso, el actor y el motivo se guardan juntos.
 Una repetición con la misma clave recupera la decisión original sin iniciar
 otro ciclo.
 
-Los jobs globales se gestionan con `SUPERADMIN`, siguiendo el alcance de
-CON-68. El detalle muestra la tarea, el ciclo del fallo y la correlación
-disponible. SuperAdmin puede cerrar con motivo o dejar una solicitud interna
-de información con responsable. El job de notificaciones admite un reintento
-manual por alerta si su ejecución está habilitada. El próximo ciclo normal
-del job toma el intento bajo el bloqueo existente. Su resultado confirma el
-cierre o deja registrado un fallo. Una interrupción sin resultado confirmado
-queda como intento incierto para revisión humana. Se conservan las decisiones
-y la referencia de cada intento.
+## 5. Persistencia y ejecución de resoluciones (CON-86)
+
+CON-86 convierte cada alerta en un caso persistido con evidencia autorizada,
+historial de decisiones y ejecución de acciones sobre el proceso de origen.
+Además de los fallos de correo, la bandeja incluye los
+`JOB_FALLO_DEFINITIVO` (`origen_tipo = JOB`), que no tienen condominio:
+`SUPERADMIN` los consulta y resuelve de forma global. Para conservar la
+bitácora inmutable con los siete campos, esas decisiones se registran con el
+condominio centinela `3709ed64-791a-5cd8-99c7-142ab3ee590c`, creado por la
+migración `20261130_0030` y sin usuarios ni roles asociados.
+
+SuperAdmin puede cerrar un job con motivo o solicitar información a un
+responsable. `REINTENTAR_JOB` se ofrece para el job de notificaciones cuando
+está habilitado. Registra un único intento por alerta y encola como máximo
+uno activo por job. El próximo ciclo consume la solicitud bajo el bloqueo del
+job, guarda el resultado real y solo cierra la alerta si completa la ejecución.
+Un intento interrumpido queda como incierto para revisión humana. Una decisión se
+guarda en `excepciones_resoluciones` con clave de idempotencia y huella única
+por caso; repetir la clave devuelve la decisión registrada y no ejecuta dos veces
+la acción. La evidencia conserva componente, operación, ciclo, referencia de
+correlación y error saneado del proveedor, sin correos ni secretos.

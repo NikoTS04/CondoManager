@@ -24,15 +24,15 @@ No se crearon migraciones ni se modificó OpenAPI (los endpoints de lectura son 
 
 - **CON-47 (Brandon):** encolar un aviso por reserva en la transacción del bloqueo con
   `clave_reserva_afectada`, exponer el resumen y tratar el titular sin contacto.
-- **CON-55 (Jerson):** encolar los dos avisos al confirmar la asignación con
-  `clave_asignacion` y exponer `GET /incidencias/{id}/avisos`.
-- **Posible migración (no creada; la cadena 0025/0026 está reservada):**
-  `notificaciones_logs.usuario_destinatario_id` es NOT NULL con FK y entra en la
-  unicidad, así que el correo a un proveedor externo no se puede encolar sin cambio
-  de esquema. `notificaciones_alertas.notificacion_id` también es NOT NULL, por lo que
-  `CONTACTO_FALTANTE` se deriva al leer y no se persiste. Debe decidirlo quien lleve
-  la cadena de migraciones.
-- Actualizar OpenAPI al implementar los endpoints de lectura.
+- ~~**CON-55 (Jerson):** encolar los dos avisos al confirmar la asignación con
+  `clave_asignacion` y exponer `GET /incidencias/{id}/avisos`.~~ Entregado:
+  `POST /incidencias/{id}/asignacion` y `GET /incidencias/{id}/avisos`.
+- **Migración `20261127_0027`:** `notificaciones_logs.usuario_destinatario_id`
+  pasó a nullable y se añadió `destinatario_externo_id` con unicidad que contempla
+  `NULL`, de modo que el correo al proveedor externo sí se puede encolar.
+  `notificaciones_alertas.notificacion_id` sigue siendo NOT NULL, por lo que
+  `CONTACTO_FALTANTE` se deriva al leer y no se persiste.
+- OpenAPI actualizado con los dos endpoints de CON-55; el de CON-47 sigue pendiente.
 
 ## Dudas de negocio (sin resolver; no se inventaron reglas)
 

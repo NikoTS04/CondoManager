@@ -10,11 +10,24 @@
   proceso hasta que exista un resultado de envío.
 - Dado un envío cuya aceptación es incierta, cuando Junta consulta el caso,
   entonces lo revisa mediante el flujo existente de correo.
-- Dado un fallo de un job global, cuando SuperAdmin abre la bandeja, entonces
-  ve el detalle. Junta no puede consultarlo ni actuar sobre él.
-- Dado un fallo del job de notificaciones habilitado, cuando SuperAdmin
-  reintenta y repite la solicitud, entonces el programador toma un único
-  intento. El resultado queda ligado al caso y se registra como incierto
-  si la ejecución anterior quedó interrumpida.
+
+## CON-86 — Persistencia y resolución trazable
+
+- Dado un fallo de correo, cuando se abre o resuelve, entonces el caso se
+  persiste con evidencia del proceso de origen, su ciclo y su referencia de
+  correlación, y el historial conserva actor, motivo, clave y efecto real.
+- Dado un `JOB_FALLO_DEFINITIVO`, cuando `SUPERADMIN` abre la bandeja, entonces
+  ve el componente, la operación y la referencia de diagnóstico; Junta no ve
+  ese caso y un residente tampoco.
+- Dado un fallo del job de notificaciones habilitado, cuando `SUPERADMIN`
+  solicita un reintento y repite la clave, entonces el próximo ciclo consume
+  una sola solicitud. El caso muestra el resultado real y registra un intento
+  como incierto si la ejecución anterior quedó interrumpida.
+- Dado el job `diario` (no registrado como seguro), cuando se consultan sus
+  acciones, entonces puede cerrarse o quedar pendiente de información y se
+  rechaza un reintento.
 - Dado un job abierto, cuando SuperAdmin solicita información con motivo y
   responsable, entonces aparece pendiente y conserva la solicitud en el historial.
+- Dado un caso con fallo definitivo de correo, cuando se corrige el contacto y
+  se reenvía, entonces se guarda el nuevo ciclo y la bandeja distingue
+  `ENVIADO` de `ENTREGADO` hasta tener confirmación.
