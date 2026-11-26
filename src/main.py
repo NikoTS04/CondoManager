@@ -35,6 +35,7 @@ from src.modules.notificaciones.monitoreo import router as monitoreo_router
 from src.modules.notificaciones.router import router as notificaciones_router
 from src.modules.pagos.fondos_api import router as fondos_router
 from src.modules.pagos.router import router as pagos_router
+from src.modules.proveedores.router import router as proveedores_router
 from src.modules.reservas.areas.router import router as areas_router
 from src.modules.reservas.bloqueos import router as bloqueos_router
 from src.modules.reservas.router import router as reservas_router
@@ -97,6 +98,7 @@ app.include_router(notificaciones_router, prefix="/api/v1")
 app.include_router(monitoreo_router, prefix="/api/v1")
 app.include_router(incidencias_router, prefix="/api/v1")
 app.include_router(excepciones_router, prefix="/api/v1")
+app.include_router(proveedores_router, prefix="/api/v1")
 app.include_router(eventos_mailjet_router, prefix="/api/v1")
 app.include_router(egresos_router, prefix="/api/v1")
 

@@ -128,6 +128,10 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
         codigo = "DATOS_EMISION_INVALIDOS"
     elif "/presupuestos" in path:
         codigo = "DATOS_PRESUPUESTO_INVALIDOS"
+    elif "/proveedores" in path:
+        codigo = "DATOS_PROVEEDOR_INVALIDOS"
+    elif "/contratos" in path:
+        codigo = "DATOS_CONTRATO_INVALIDOS"
     elif path.startswith("/api/v1/condominios"):
         codigo = (
             "DATOS_ESTRUCTURA_INVALIDOS"
