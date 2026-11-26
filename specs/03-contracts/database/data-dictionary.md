@@ -496,23 +496,67 @@ destinatario_rol; fecha_fin DATE y dias_restantes INTEGER observados; motivo TEX
 omitido_por_umbral INTEGER nullable; fecha_evaluacion DATE; creado_en TIMESTAMPTZ.
 Única por (contrato_id, vigencia, umbral_dias). Sin importes. Downgrade elimina la tabla.
 
-# Extensión 0031 — Directorio de Proveedores y Contratos (CON-48, CON-49)
+# Contrato objetivo CON-51/52 — egresos, aprobación, pagos y caja
 
-- `proveedores`: UUID PK, `condominio_id` FK RESTRICT indexado, `ruc` VARCHAR(11) indexado,
-  `razon_social` VARCHAR(200), `nombre_comercial` VARCHAR(200) nullable, `rubro` VARCHAR(100),
-  `contacto_nombre` VARCHAR(150), `contacto_telefono` VARCHAR(50), `contacto_email` VARCHAR(120),
-  `direccion` TEXT nullable, `activo` BOOLEAN default true, `notas` TEXT nullable,
-  `creado_por` UUID FK RESTRICT, `creado_en` TIMESTAMPTZ, `actualizado_en` TIMESTAMPTZ, `version` INTEGER.
-  Restricción de unicidad: `uq_proveedor_condominio_ruc` (condominio_id, ruc). Check `length(ruc) = 11`.
-- `contratos_proveedor`: UUID PK, `condominio_id` FK RESTRICT, `proveedor_id` FK RESTRICT,
-  `numero_contrato` VARCHAR(100), `tipo_documento` VARCHAR(50) CHECK ('CONTRATO_SERVICIO', 'POLIZA_SEGURO', 'ADDENDA', 'ACTA_CONFORMIDAD'),
-  `descripcion` TEXT, `monto_mensual` NUMERIC(12,2) nullable, `moneda` VARCHAR(3) default 'PEN',
-  `fecha_inicio` DATE, `fecha_fin` DATE indexado (CHECK fecha_fin >= fecha_inicio),
-  `contacto_emergencia` VARCHAR(150) nullable, `contacto_emergencia_telefono` VARCHAR(50) nullable,
-  `estado` VARCHAR(30) default 'VIGENTE' CHECK ('VIGENTE', 'POR_VENCER', 'VENCIDO', 'RENOVADO', 'CANCELADO'),
-  `version_actual` INTEGER default 1, `creado_por` UUID FK RESTRICT, `creado_en` TIMESTAMPTZ, `actualizado_en` TIMESTAMPTZ.
-- `documentos_contrato_version`: UUID PK, `contrato_id` FK CASCADE indexado, `version` INTEGER,
-  `archivo_nombre` VARCHAR(255), `archivo_mime` VARCHAR(100) default 'application/pdf',
-  `archivo_tamano_bytes` INTEGER (>0), `hash_sha256` VARCHAR(64), `archivo_binario` BYTEA deferred,
-  `motivo_reemplazo` TEXT nullable, `subido_por` UUID FK RESTRICT, `subido_en` TIMESTAMPTZ.
-  Unicidad: `uq_documento_contrato_version` (contrato_id, version).
+**Estado: contrato objetivo; no implementado ni migrado.** El módulo vive en
+`src/modules/egresos/`. Las tablas de este apartado no deben confundirse con
+`comprobantes_pago`, `presupuestos_mensuales` o `movimientos_fondo_moras`.
+
+- `egresos`: `id UUID PK`; `condominio_id UUID FK RESTRICT`; `concepto_id UUID FK
+  RESTRICT` a `conceptos_presupuestales`; `proveedor_id UUID NULL` y
+  `contrato_id UUID NULL`; `presupuesto_id UUID NULL` y `item_presupuesto_id UUID
+  NULL` (ambos nulos o presentes); `descripcion`, `justificacion`; `moneda` PEN/USD;
+  `fecha_gasto DATE`; `monto_pactado NUMERIC(12,2) NULL`,
+  `monto_solicitado NUMERIC(12,2)`, `monto_aprobado NUMERIC(12,2) NULL`,
+  `monto_pagado NUMERIC(12,2)`; `estado`; `version INTEGER > 0`; `creado_por UUID
+  FK RESTRICT`; `creado_en`, `actualizado_en TIMESTAMPTZ`. Checks de importes,
+  moneda, versión y estado. Índices de contexto/fecha/estado, concepto y proveedor.
+  La categoría deriva del concepto; no se duplica catálogo.
+- `proveedor_id`/`contrato_id` son UUID nullable desde la primera versión del
+  contrato. Mientras CON-48/49 no esté integrada, no tienen FK física; servicio
+  comprueba las referencias contra el contrato de integración cuando el proveedor
+  esté disponible. Tras integrar tablas reales, una revisión Alembic posterior
+  valida datos y añade las FKs. No se crean tablas ficticias ni se modifica una
+  revisión ya aplicada.
+- `documentos_financieros`: UUID PK; `condominio_id` FK RESTRICT; `egreso_id UUID
+  NULL` FK RESTRICT; tipo `SUSTENTO|EVIDENCIA_PAGO|APERTURA_CAJA`; nombre de archivo
+  controlado por servidor, MIME validado, tamaño positivo y limitado, SHA-256,
+  referencia privada, `creado_por` FK usuario RESTRICT y `creado_en`. CHECK:
+  `SUSTENTO`/`EVIDENCIA_PAGO` requiere egreso; `APERTURA_CAJA` no tiene egreso y
+  puede asociarse a una única apertura. Unicidad del hash/objeto según adapter,
+  historial append-only y control de uso de evidencia. Su acceso siempre se valida
+  contra condominio y recurso propietario.
+- `configuracion_aprobacion_egreso`: UUID PK, `condominio_id` único FK RESTRICT,
+  `umbral NUMERIC(12,2) NOT NULL` (sin default), `pagos_parciales_habilitados
+  BOOLEAN NOT NULL DEFAULT false`, `version INTEGER > 0`, actor y fecha de cambio.
+  La ausencia de fila significa no configurado; no se crea un umbral implícito.
+- `aprobaciones_egreso`: UUID PK, egreso FK RESTRICT, versión de egreso, importe
+  revisado NUMERIC(12,2), decisión, motivo, actor FK usuario, fecha UTC y marca de
+  vigencia para la versión. Registros append-only. Índice por egreso/versión/fecha;
+  una decisión del mismo actor para la misma versión no se duplica.
+- `cuentas_caja`: UUID PK, condominio FK RESTRICT, moneda, alias/referencia no
+  sensible, activa y fechas. Unicidad de identidad de cuenta dentro del
+  condominio; no guardar credenciales bancarias. La apertura explícita crea o
+  inicializa la cuenta lógica que identifica su alias y moneda.
+- `movimientos_caja`: UUID PK, cuenta FK RESTRICT, importe firmado NUMERIC(12,2),
+  tipo `APERTURA|PAGO_EGRESO|REVERSO_PAGO|AJUSTE_CONCILIADO`, referencia a egreso/
+  pago cuando aplica, actor, fecha bancaria y fecha de reconocimiento UTC/local
+  según política. Inmutable por trigger/política equivalente; saldo es SUM(importe).
+  UNIQUE por operación origen para impedir salida/reverso duplicados.
+- `pagos_egreso`: UUID PK, egreso/cuenta FK RESTRICT, documento FK RESTRICT nullable
+  solo para intentos fallidos, monto positivo, moneda, fecha de pago, referencia
+  bancaria, estado `CONFIRMADO|FALLIDO|REVERSADO`, actor, clave idempotente y huella
+  del request, movimiento de caja nullable solo para intento fallido, fechas.
+  UNIQUE por ámbito y clave; referencia de operación según alcance que confirme
+  Tesorería. Reversos referencian pago original y generan un movimiento
+  compensatorio, sin borrar el original. El neto pagado es confirmados menos
+  reversados; un reverso restaura saldo pendiente sin rebasar el aprobado.
+- `aperturas_caja` puede persistirse como operación de origen con cuenta, saldo,
+  moneda, fecha de corte, referencia, documento, actor y clave idempotente; genera
+  un único movimiento `APERTURA`. No se importa caja histórica automáticamente.
+
+Toda transición registra `auditoria_logs` con los siete campos, actor y contexto.
+La decisión exacta de atomicidad exige que egreso/pago, movimiento y auditoría se
+escriban en la misma transacción. Las escrituras de caja y aprobación se serializan
+con locks PostgreSQL; versión esperada evita lost updates. Los fondos de moras y
+sus aplicaciones permanecen en sus tablas 0020 y no se mezclan con caja operativa.

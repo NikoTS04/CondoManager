@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: CondoManager API
   description: Base del Sprint 2 acordada en CON-72 y extensiones de identidad del Sprint 3. x-implementation-status identifica operaciones pendientes o parciales; este documento no registra rutas en FastAPI. La versión identifica el contrato, no una Release del producto.
-  version: 2.7.0
+  version: 2.8.0
 x-contract-baseline: CON-72-2026-10-20
 x-contract-guide: ../../05-api/sprint-2-contratos.md
 x-account-statement-guide: ../../05-api/estado-de-cuenta.md
@@ -32,6 +32,8 @@ tags:
     description: Registro por residentes y consulta privada por el reportante y Junta.
   - name: Excepciones
     description: Consulta y resolución contextual de fallos operativos.
+  - name: Egresos y caja
+    description: CON-51 registro/consulta/sustento parcialmente implementado; aprobación, pagos y caja objetivo CON-52 pendientes.
 paths:
   /excepciones:
     $ref: './excepciones.paths.yaml#/paths/~1excepciones'
@@ -121,6 +123,36 @@ paths:
     $ref: './fondos-moras.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1aplicaciones-moras'
   /presupuestos/{presupuesto_id}/aplicaciones-moras/{aplicacion_id}:
     $ref: './fondos-moras.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1aplicaciones-moras~1%7Baplicacion_id%7D'
+  /condominios/{condominio_id}/egresos:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos'
+  /condominios/{condominio_id}/egresos/{egreso_id}:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D'
+  /condominios/{condominio_id}/egresos/{egreso_id}/documentos:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D~1documentos'
+  /condominios/{condominio_id}/egresos/{egreso_id}/documentos/{documento_id}:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D~1documentos~1%7Bdocumento_id%7D'
+  /condominios/{condominio_id}/egresos/{egreso_id}/presentar:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D~1presentar'
+  /condominios/{condominio_id}/egresos/{egreso_id}/aprobaciones:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D~1aprobaciones'
+  /condominios/{condominio_id}/egresos/{egreso_id}/cancelar:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D~1cancelar'
+  /condominios/{condominio_id}/egresos/{egreso_id}/pagos:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D~1pagos'
+  /condominios/{condominio_id}/egresos/{egreso_id}/pagos/intentos-fallidos:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D~1pagos~1intentos-fallidos'
+  /condominios/{condominio_id}/egresos/{egreso_id}/pagos/{pago_id}/reversos:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1%7Begreso_id%7D~1pagos~1%7Bpago_id%7D~1reversos'
+  /condominios/{condominio_id}/egresos/configuracion-aprobacion:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1egresos~1configuracion-aprobacion'
+  /condominios/{condominio_id}/caja:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1caja'
+  /condominios/{condominio_id}/caja/documentos:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1caja~1documentos'
+  /condominios/{condominio_id}/caja/documentos/{documento_id}:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1caja~1documentos~1%7Bdocumento_id%7D'
+  /condominios/{condominio_id}/caja/aperturas:
+    $ref: './egresos.paths.yaml#/paths/~1condominios~1%7Bcondominio_id%7D~1caja~1aperturas'
   /presupuestos/{presupuesto_id}/prorrateo/exportar:
     $ref: './prorrateo.paths.yaml#/paths/~1presupuestos~1%7Bpresupuesto_id%7D~1prorrateo~1exportar'
   /condominios/{condominio_id}/conceptos-presupuestales:
