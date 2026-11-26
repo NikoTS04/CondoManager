@@ -328,7 +328,6 @@ export default function ConfiguracionCondominio({
                     setMontoMoraFijo(configuracion.monto_mora_fijo || "0.00"); setTasaMoraPorcentaje(configuracion.tasa_mora_porcentaje || "0.0000");
                     setDiaVencimiento(String(configuracion.dia_vencimiento)); setDiasGracia(String(configuracion.dias_gracia));
                   }}>Editar política</Button>}
-                  <p className="mt-2 break-all font-mono text-xs">UUID: {configuracion.id}</p>
                 </div>
               </div>
             ) : (

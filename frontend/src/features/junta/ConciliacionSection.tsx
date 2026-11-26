@@ -333,8 +333,7 @@ export function ConciliacionSection({
                 {comprobantesMostrados.map((comprobante) => (
                   <tr key={comprobante.id} className="border-b border-line">
                     <th scope="row" className="p-3 text-left">
-                      {departamentos.find((d) => d.id === comprobante.departamento_id)?.numero ?? comprobante.departamento_id}
-                      <span className="mt-1 block text-xs font-normal text-muted">ID {comprobante.departamento_id}</span>
+                      {departamentos.find((d) => d.id === comprobante.departamento_id)?.numero ?? "—"}
                     </th>
                     <td className="p-3">
                       {comprobante.banco} · {comprobante.numero_operacion}

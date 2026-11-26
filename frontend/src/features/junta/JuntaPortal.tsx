@@ -507,7 +507,7 @@ export default function JuntaPortal() {
         {confirmacion?.kind === "comprobante" && (
           <div className="space-y-3">
             <p>
-              Comprobante del departamento {departamentosRegistrados.find((d) => d.id === comprobanteConfirmado?.departamento_id)?.numero ?? comprobanteConfirmado?.departamento_id}: {" "}
+              Comprobante del departamento {departamentosRegistrados.find((d) => d.id === comprobanteConfirmado?.departamento_id)?.numero ?? "—"}: {" "}
               {comprobanteConfirmado
                 ? <MoneyAmount value={comprobanteConfirmado.monto} />
                 : "—"}. La decisión actualizará su estado contable.

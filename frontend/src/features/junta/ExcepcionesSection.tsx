@@ -148,10 +148,6 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
             <p className="text-sm">{caso.causa}</p>
             {confirmacion && <Alert tone="success">{confirmacion}</Alert>}
             <dl className="grid gap-3 rounded-lg bg-canvas p-4 text-sm sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <dt className="text-muted">Operación de origen</dt>
-                <dd className="break-all font-medium">{caso.operacion_id}</dd>
-              </div>
               <div>
                 <dt className="text-muted">Ciclo del fallo</dt>
                 <dd>{caso.evidencia.ciclo_fallido}</dd>
@@ -198,7 +194,6 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
                     <li key={registro.id} className="border-l-2 border-line pl-3 text-sm">
                       <p className="font-medium">{ACCIONES[registro.accion]} · {formatDateTime(registro.fecha)}</p>
                       <p className="whitespace-pre-wrap break-words">{registro.motivo}</p>
-                      <p className="break-all text-xs text-muted">Actor {registro.actor_id}</p>
                     </li>
                   ))}
                 </ul>

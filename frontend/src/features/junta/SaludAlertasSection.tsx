@@ -109,7 +109,7 @@ export function ListaAlertas({
               <p>{a.mensaje}</p>
               <dl className="grid gap-x-4 gap-y-1 text-sm text-muted sm:grid-cols-[auto_1fr]">
                 <dt>Referencia de diagnóstico</dt>
-                <dd className="break-all font-mono">{a.referencia_diagnostico.origen_tipo}:{a.referencia_diagnostico.origen_id}</dd>
+                <dd className="break-all font-mono">{a.referencia_diagnostico.origen_tipo}</dd>
                 <dt>Correlación</dt>
                 <dd className="break-all font-mono">{a.referencia_diagnostico.referencia_correlacion ?? "Sin correlación aún"}</dd>
                 <dt>Estado</dt>
