@@ -244,7 +244,7 @@ export function ProveedoresSection({ condominioId }: Props) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Proveedores y Contratos (CON-48 / CON-49)
+            Proveedores y Contratos
           </h2>
           <p className="text-sm text-muted">
             Directorio oficial de contratistas, custodia digital de pólizas y alertas de vencimiento.
@@ -527,7 +527,7 @@ export function ProveedoresSection({ condominioId }: Props) {
       {modalNuevoProveedor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-xl">
-            <h3 className="mb-1 text-lg font-bold text-foreground">Registrar Nuevo Proveedor (CON-48)</h3>
+            <h3 className="mb-1 text-lg font-bold text-foreground">Registrar Nuevo Proveedor</h3>
             <p className="mb-4 text-xs text-muted">
               El RUC debe ser único dentro de este condominio.
             </p>
@@ -634,7 +634,7 @@ export function ProveedoresSection({ condominioId }: Props) {
       {modalNuevoContrato && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-xl">
-            <h3 className="mb-1 text-lg font-bold text-foreground">Nuevo Contrato o Póliza (CON-49)</h3>
+            <h3 className="mb-1 text-lg font-bold text-foreground">Nuevo Contrato o Póliza</h3>
             <p className="mb-4 text-xs text-muted">Vincular a un proveedor del directorio.</p>
             <form onSubmit={handleCrearContrato} className="space-y-4">
               <div>
