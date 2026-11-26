@@ -18,6 +18,7 @@ from src.modules.cuotas.distribucion.models import ConfiguracionDistribucion  # 
 from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, LoteCuotas  # noqa: F401
 from src.modules.cuotas.presupuestos.models import PresupuestoMensual  # noqa: F401
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor  # noqa: F401
+from src.modules.egresos import models as egresos_models  # noqa: F401
 from src.modules.excepciones.models import (  # noqa: F401
     EvidenciaExcepcion,
     Excepcion,
@@ -49,6 +50,11 @@ from src.modules.pagos.models_persistencia import (  # noqa: F401
     ArchivoVoucher,
     EventoPagoOutbox,
     RevisionPago,
+)
+from src.modules.proveedores.models import (  # noqa: F401
+    ContratoProveedor,
+    DocumentoContratoVersion,
+    Proveedor,
 )
 from src.modules.reservas.areas.models import AreaComun  # noqa: F401
 from src.modules.reservas.models import (  # noqa: F401

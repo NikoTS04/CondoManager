@@ -65,7 +65,9 @@ REVISIONES_API = (
     "20261128_0028_seguimiento_incidencias",
     "20261129_0029_cierre_incidencias",
     "20261130_0030_excepciones_persistidas",
-    "20261201_0031_reintentos_excepciones",
+    "20261201_0031_proveedores_contratos",
+    "20261202_0032_egresos_caja",
+    "20261203_0033_reintentos_excepciones",
 )
 
 _ROOT = Path(__file__).resolve().parents[2]
