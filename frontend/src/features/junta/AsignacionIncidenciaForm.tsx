@@ -10,6 +10,8 @@ import {
   ApiError,
   asignarIncidencia,
   listarUsuarios,
+  listarProveedores,
+  type Proveedor,
   type AsignacionIncidencia,
   type Incidencia,
 } from "@/lib/api";
@@ -22,7 +24,10 @@ interface Props {
 export function AsignacionIncidenciaForm({ incidencia, onAsignada }: Props) {
   const { user } = useAuth();
   const clave = useRef<string>(crypto.randomUUID());
-  const proveedorId = useRef<string>(crypto.randomUUID());
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [proveedorId, setProveedorId] = useState("");
+  const [cargandoProveedores, setCargandoProveedores] = useState(true);
+  const [errorProveedores, setErrorProveedores] = useState("");
   const [tipo, setTipo] = useState<"INTERNO" | "PROVEEDOR">("INTERNO");
   const [usuarios, setUsuarios] = useState<{ id: string; nombre: string; email: string }[]>([]);
   const [error, setError] = useState("");
@@ -43,6 +48,20 @@ export function AsignacionIncidenciaForm({ incidencia, onAsignada }: Props) {
       })
       .catch(() => undefined);
     return () => control.abort();
+  }, [user?.condominio_id]);
+
+  useEffect(() => {
+    if (!user?.condominio_id) return;
+    let vigente = true;
+    setCargandoProveedores(true);
+    setErrorProveedores("");
+    setProveedores([]);
+    setProveedorId("");
+    listarProveedores(user.condominio_id, { activo: true })
+      .then((lista) => { if (vigente) setProveedores(lista); })
+      .catch(() => { if (vigente) setErrorProveedores("No pudimos cargar el directorio de proveedores."); })
+      .finally(() => { if (vigente) setCargandoProveedores(false); });
+    return () => { vigente = false; };
   }, [user?.condominio_id]);
 
   async function guardar(evento: FormEvent<HTMLFormElement>) {
@@ -70,9 +89,7 @@ export function AsignacionIncidenciaForm({ incidencia, onAsignada }: Props) {
           }
         : {
             version: incidencia.version,
-            responsable_proveedor_id: proveedorId.current,
-            proveedor_nombre: String(datos.get("proveedor") ?? "").trim(),
-            correo_proveedor: String(datos.get("correo") ?? "").trim(),
+            responsable_proveedor_id: proveedorId,
             plazo: plazo.toISOString(),
             ...(nota ? { nota } : {}),
           };
@@ -114,12 +131,24 @@ export function AsignacionIncidenciaForm({ incidencia, onAsignada }: Props) {
             </Field>
           ) : (
             <>
-              <Field label="Nombre del proveedor" required>
-                <Input name="proveedor" maxLength={120} placeholder="Servicios del Norte" />
+              <Field label="Proveedor del directorio" required>
+                <Select required value={proveedorId}
+                  disabled={cargandoProveedores || proveedores.length === 0}
+                  onChange={(evento) => setProveedorId(evento.target.value)}>
+                  <option value="" disabled>{cargandoProveedores ? "Cargando proveedores…" : "Selecciona un proveedor activo"}</option>
+                  {proveedores.map((proveedor) => (
+                    <option key={proveedor.id} value={proveedor.id}>
+                      {proveedor.nombre_comercial || proveedor.razon_social} · {proveedor.ruc}
+                    </option>
+                  ))}
+                </Select>
               </Field>
-              <Field label="Correo de contacto" hint="Opcional; si se omite, Junta verá CONTACTO_FALTANTE.">
-                <Input name="correo" type="email" maxLength={320} placeholder="contacto@proveedor.pe" />
-              </Field>
+              {errorProveedores && <Alert tone="danger">{errorProveedores}</Alert>}
+              {!cargandoProveedores && !errorProveedores && proveedores.length === 0 &&
+                <p className="text-sm text-muted">Registra un proveedor activo en el directorio antes de asignarlo.</p>}
+              {proveedorId && <p className="text-sm text-muted">
+                Contacto: {proveedores.find((p) => p.id === proveedorId)?.contacto_email || "Sin correo registrado"}
+              </p>}
             </>
           )}
           <Field label="Plazo de atención" required>
@@ -128,7 +157,8 @@ export function AsignacionIncidenciaForm({ incidencia, onAsignada }: Props) {
           <Field label="Nota interna">
             <Textarea name="nota" maxLength={500} rows={2} />
           </Field>
-          <Button type="submit" loading={ocupada} loadingText="Guardando…">
+          <Button type="submit" loading={ocupada} loadingText="Guardando…"
+            disabled={tipo === "PROVEEDOR" && !proveedorId}>
             Confirmar asignación
           </Button>
         </form>

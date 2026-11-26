@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CreditCard, Send } from "lucide-react";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { MoneyInput } from "@/components/ui/MoneyInput";
@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
-import { isPositiveMoney } from "@/lib/money";
-import { reportarPago, type ComprobantePago } from "@/lib/api";
+import { addMoney, isPositiveMoney, formatMoney } from "@/lib/money";
+import { listarCargosIncidencias, reportarPago, type CargoIncidencia, type ComprobantePago } from "@/lib/api";
 
 function getTodayLima(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -37,6 +37,31 @@ export function ReportarPagoForm({
   const [montoPago, setMontoPago] = useState<string>("");
   const [fechaOperacion, setFechaOperacion] = useState<string>(getTodayLima());
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
+  const [destino, setDestino] = useState<"CUOTAS" | "INCIDENCIAS">("CUOTAS");
+  const [cargos, setCargos] = useState<CargoIncidencia[]>([]);
+  const [seleccion, setSeleccion] = useState<string[]>([]);
+  const [errorCargos, setErrorCargos] = useState("");
+  const [cargandoCargos, setCargandoCargos] = useState(true);
+  const [revisionCargos, setRevisionCargos] = useState(0);
+
+  useEffect(() => {
+    const control = new AbortController();
+    setSeleccion([]);
+    setCargos([]);
+    setErrorCargos("");
+    setCargandoCargos(true);
+    setDestino("CUOTAS");
+    setMontoPago("");
+    listarCargosIncidencias(departamentoId, control.signal)
+      .then((lista) => { if (!control.signal.aborted) setCargos(lista); })
+      .catch(() => { if (!control.signal.aborted) setErrorCargos("No pudimos consultar los cargos de incidencias."); })
+      .finally(() => { if (!control.signal.aborted) setCargandoCargos(false); });
+    return () => control.abort();
+  }, [departamentoId, revisionCargos]);
+
+  const pendientes = cargos.filter((c) => c.estado === "PENDIENTE");
+  const totalSeleccionado = addMoney(...pendientes.filter((c) => seleccion.includes(c.id)).map((c) => c.pendiente));
+  const montoReportado = destino === "INCIDENCIAS" ? totalSeleccionado : montoPago;
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,6 +84,11 @@ export function ReportarPagoForm({
     e.preventDefault();
     setAlertState(null);
     if (!departamentoId) return;
+    if (destino === "INCIDENCIAS" && (cargandoCargos || errorCargos || seleccion.length === 0)) {
+      setAlertState({ tone: "warning", title: "Selecciona los conceptos",
+        message: "Consulta los cargos pendientes y elige al menos uno antes de reportar." });
+      return;
+    }
     const errors: typeof fieldErrors = {};
 
     const cleanOp = numeroOperacion.trim();
@@ -66,7 +96,7 @@ export function ReportarPagoForm({
       errors.numeroOperacion = "Ingresa el número de operación bancaria.";
     }
 
-    if (!isPositiveMoney(montoPago)) {
+    if (!isPositiveMoney(montoReportado)) {
       errors.monto = "Ingresa un monto válido mayor a 0.";
     }
 
@@ -95,7 +125,8 @@ export function ReportarPagoForm({
         banco,
         numero_operacion: numeroOperacion.trim(),
         fecha_operacion: fechaOperacion,
-        monto: montoPago,
+        monto: montoReportado,
+        ...(destino === "INCIDENCIAS" ? { cargos_incidencia_ids: seleccion } : {}),
         archivo_voucher: voucherFile,
       });
 
@@ -113,6 +144,7 @@ export function ReportarPagoForm({
         setMontoPago("");
         setFechaOperacion(getTodayLima());
         setVoucherFile(null);
+        setRevisionCargos((n) => n + 1);
         if (onSuccess) onSuccess();
       } else {
         const err = res.errorCode || res.error || "";
@@ -172,6 +204,49 @@ export function ReportarPagoForm({
           )}
 
           <form onSubmit={handleFormSubmit} className="space-y-4">
+            <Field label="Destino del comprobante">
+              <Select value={destino} onChange={(e) => {
+                setDestino(e.target.value as "CUOTAS" | "INCIDENCIAS");
+                setFieldErrors({});
+              }}>
+                <option value="CUOTAS">Cuotas de mantenimiento</option>
+                <option value="INCIDENCIAS">Conceptos de incidencias</option>
+              </Select>
+            </Field>
+            {destino === "INCIDENCIAS" && (
+              <fieldset className="space-y-3 rounded-lg border border-line p-3">
+                <legend className="text-sm font-semibold">Elige los conceptos que pagaste</legend>
+                {cargandoCargos && <p role="status">Cargando conceptos…</p>}
+                {errorCargos && <Alert tone="danger">{errorCargos}</Alert>}
+                {!cargandoCargos && !errorCargos && (
+                  <>
+                    {pendientes.length > 0 && <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={seleccion.length === pendientes.length}
+                        onChange={(e) => setSeleccion(e.target.checked ? pendientes.map((c) => c.id) : [])} />
+                      Seleccionar todos los pendientes
+                    </label>}
+                    <ul className="max-h-64 space-y-2 overflow-y-auto">
+                      {cargos.map((c) => <li key={c.id}>
+                        <label className="flex items-start gap-2 text-sm">
+                          <input type="checkbox" disabled={c.estado === "PAGADO"}
+                            checked={seleccion.includes(c.id)}
+                            onChange={(e) => setSeleccion((actual) => e.target.checked
+                              ? [...actual, c.id] : actual.filter((id) => id !== c.id))} />
+                          <span>{c.concepto} · {formatMoney(c.pendiente, c.moneda)}
+                            <span className="block text-xs text-muted">
+                              Incidencia {c.incidencia_id.slice(0, 8)} · {c.estado === "PAGADO" ? "Pagado" : "Pendiente"}
+                            </span>
+                          </span>
+                        </label>
+                      </li>)}
+                    </ul>
+                    {cargos.length === 0 && <p className="text-sm text-muted">No tienes cargos de incidencias.</p>}
+                    <p className="font-semibold" aria-live="polite">Total seleccionado: {formatMoney(totalSeleccionado, cargos[0]?.moneda)}</p>
+                    <p className="text-xs text-muted">El comprobante se aplicará solo a estos conceptos cuando Junta lo apruebe. No incluye cuotas.</p>
+                  </>
+                )}
+              </fieldset>
+            )}
             <Field label="Canal o Banco de Pago" required>
               <Select value={banco} onChange={(e) => setBanco(e.target.value)}>
                 <option value="YAPE">Yape</option>
@@ -214,7 +289,7 @@ export function ReportarPagoForm({
                 hint="Monto exacto transferido"
                 error={fieldErrors.monto}
               >
-                <MoneyInput
+                {destino === "INCIDENCIAS" ? <p className="py-2 font-semibold">{formatMoney(montoReportado, cargos[0]?.moneda)}</p> : <MoneyInput
                   value={montoPago}
                   placeholder="0.00"
                   onValueChange={(val) => {
@@ -224,7 +299,7 @@ export function ReportarPagoForm({
                     }
                   }}
                   moneda="PEN"
-                />
+                />}
               </Field>
 
               <Field
@@ -278,14 +353,14 @@ export function ReportarPagoForm({
         <p>
           Estás por reportar un comprobante de pago por{" "}
           <strong className="text-brand-700">
-            <MoneyAmount value={montoPago || "0.00"} moneda="PEN" />
+            <MoneyAmount value={montoReportado || "0.00"} moneda={destino === "INCIDENCIAS" ? cargos[0]?.moneda : "PEN"} />
           </strong>{" "}
           para la <strong>unidad seleccionada</strong> en{" "}
           <strong>{banco}</strong> con el número de operación{" "}
           <strong className="tabular-nums">{numeroOperacion}</strong>.
         </p>
         <p className="text-xs text-muted mt-2">
-          La junta directiva revisará el voucher y conciliará tus cuotas. ¿Deseas continuar?
+          La junta revisará el voucher y lo aplicará a {destino === "INCIDENCIAS" ? "los conceptos seleccionados" : "tus cuotas"}. ¿Deseas continuar?
         </p>
       </ConfirmDialog>
     </>

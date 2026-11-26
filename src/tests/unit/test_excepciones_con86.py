@@ -45,4 +45,5 @@ def test_migracion_de_reintentos_extiende_la_persistencia_de_con86():
     assert scripts.get_revision("20261201_0031").down_revision == "20261130_0030"
     assert scripts.get_revision("20261202_0032").down_revision == "20261201_0031"
     assert scripts.get_revision("20261203_0033").down_revision == "20261202_0032"
-    assert scripts.get_heads() == ["20261203_0033"]
+    assert scripts.get_revision("20261204_0034").down_revision == "20261203_0033"
+    assert scripts.get_heads() == ["20261204_0034"]

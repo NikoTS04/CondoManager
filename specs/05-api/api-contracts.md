@@ -853,3 +853,25 @@ resultado de cada job. Siempre 200; nunca expone URLs ni credenciales. Sin cach�
 `operacion` y `referencia_diagnostico`; las de job solo las ve SUPERADMIN. `limit`, `offset`,
 `estado`, `condominio_id`. Detalle: [notificaciones §9](../02-domains/03-notificaciones/spec.md)
 y [`monitoreo.paths.yaml`](../03-contracts/openapi/monitoreo.paths.yaml).
+# Incremento PROC-07: reparto por costo y pago dirigido
+
+- `POST /incidencias/{iid}/costos/{actualizacion_id}/reparto/previsualizacion`:
+  Junta del condominio; JSON `{alcance: TODOS|SELECCIONADOS,
+  metodo: EQUITATIVA|POR_ALICUOTA, departamento_ids: UUID[], concepto, motivo}`.
+  Responde monto decimal textual, departamentos con coeficiente/importe y `huella`.
+- `POST /incidencias/{iid}/costos/{actualizacion_id}/reparto`:
+  mismos datos más `huella`; exige `Idempotency-Key` UUID. 201 creado/200 repetido;
+  409 huella obsoleta, clave reutilizada o costo ya publicado; 403 fuera de contexto.
+- `GET /incidencias/{iid}/costos/{actualizacion_id}/reparto`: Junta; instantánea publicada.
+- `GET /pagos/cargos-incidencias?departamento_id=UUID`: unidad autorizada; lista de
+  cargos con concepto público, incidencia de origen, monto, pagado, pendiente y estado.
+- `POST /pagos/reportar`: añade `cargos_incidencia_ids` opcional (lista multipart de
+  UUID, máximo 100, sin duplicados). Vacía mantiene el flujo de cuotas sin cambios.
+  No vacía exige suma exacta de saldos pendientes seleccionados, de una sola unidad.
+  Reutilizar el mismo comprobante con otros destinos devuelve 409.
+- Listado de comprobantes incluye `cargos_incidencia_ids`. Conciliar conserva el
+  contrato y devuelve el monto aplicado real. Pagos dirigidos quedan fuera del motor
+  de cuotas y no generan crédito. La cuenta integra cargo y pago sin doble cómputo.
+- Asignación acepta el identificador real del proveedor; nombre/correo enviados por
+  clientes antiguos se admiten por compatibilidad pero se resuelven desde el directorio.
+- Importes viajan como cadenas de dos decimales; lecturas privadas `no-store`.

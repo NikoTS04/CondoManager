@@ -22,6 +22,15 @@ from pydantic import (
 class ReportarPagoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     departamento_id: uuid.UUID
+    cargos_incidencia_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+
+    @field_validator("cargos_incidencia_ids")
+    @classmethod
+    def destinos_unicos(cls, valor):
+        if len(valor) != len(set(valor)):
+            raise ValueError("No repita cargos.")
+        return sorted(valor, key=str)
+
     banco: str = Field(..., min_length=1, max_length=50, json_schema_extra={"example": "YAPE"})
     numero_operacion: str = Field(
         ..., min_length=1, max_length=50, json_schema_extra={"example": "098412"}
@@ -95,6 +104,7 @@ class ComprobanteRecibidoResponse(BaseModel):
 class ComprobantePagoDTO(RespuestaMonetaria):
     id: uuid.UUID
     departamento_id: uuid.UUID
+    cargos_incidencia_ids: list[uuid.UUID] = Field(default_factory=list)
     banco: str
     numero_operacion: str
     fecha_operacion: date

@@ -10,6 +10,31 @@ const { outputText } = ts.transpileModule(source, {
 const api = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 const apiURL = (url) => new URL(url, "http://localhost");
 
+test("reparto conserva huella y clave; pago transmite destinos multipart separados", async (t) => {
+  const solicitudes = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    solicitudes.push({ url, init });
+    return new Response("{}");
+  });
+  const config = { alcance: "SELECCIONADOS", metodo: "POR_ALICUOTA",
+    departamento_ids: ["d1", "d2"], concepto: "Portón", motivo: "Gasto aprobado" };
+  await api.previsualizarReparto("iid", "aid", config);
+  await api.publicarReparto("iid", "aid", config, "huella-vigente", "clave-estable");
+  await api.publicarReparto("iid", "aid", config, "huella-vigente", "clave-estable");
+  assert.equal(solicitudes[0].url, "/api/v1/incidencias/iid/costos/aid/reparto/previsualizacion");
+  assert.equal(solicitudes[1].init.headers["idempotency-key"], "clave-estable");
+  assert.deepEqual(JSON.parse(solicitudes[1].init.body), { ...config, huella: "huella-vigente" });
+  assert.equal(solicitudes[1].init.body, solicitudes[2].init.body);
+  await api.reportarPago({ departamento_id: "d1", banco: "YAPE", numero_operacion: "123",
+    monto: "35.01", fecha_operacion: "2026-11-25",
+    archivo_voucher: new File(["evidencia"], "pago.png", { type: "image/png" }),
+    cargos_incidencia_ids: ["cargo-1", "cargo-2"] });
+  const form = solicitudes[3].init.body;
+  assert.deepEqual(form.getAll("cargos_incidencia_ids"), ["cargo-1", "cargo-2"]);
+  assert.equal(form.get("monto"), "35.01");
+  assert.equal(solicitudes[3].init.headers["Content-Type"], undefined);
+});
+
 test("correo completo mantiene contexto, confirmación estable y resolución explícita", async (t) => {
   const solicitudes = [];
   t.mock.method(globalThis, "fetch", async (url, init) => {

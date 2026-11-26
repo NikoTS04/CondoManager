@@ -10,6 +10,11 @@
 ---
 
 ## 2. Propósito y Alcance del Proceso
+Los cargos de incidencias de [PROC-07](proc-07-tickets-incidencias.md) admiten
+pago dirigido a uno o varios conceptos del mismo departamento. La selección se
+congela al reportar, se valida nuevamente al aprobar y queda excluida de la
+prelación y reconstrucción de cuotas. No genera crédito, mora ni solvencia nueva.
+
 Ampliación normativa pendiente de implementación:
 [mora diaria, fecha bancaria y fondos de moras](../02-domains/01-cuotas/prorrateo-y-mora-diaria.md).
 También incorpora visor privado PNG/JPEG/PDF sin guardado manual obligatorio.

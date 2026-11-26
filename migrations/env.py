@@ -25,6 +25,11 @@ from src.modules.excepciones.models import (  # noqa: F401
     ResolucionExcepcion,
 )
 from src.modules.incidencias.models import Incidencia  # noqa: F401
+from src.modules.incidencias.reparto_models import (  # noqa: F401
+    CargoIncidencia,
+    DestinoPagoIncidencia,
+    RepartoIncidencia,
+)
 from src.modules.notificaciones.models import (  # noqa: F401
     AlertaNotificacion,
     EventoConsumido,

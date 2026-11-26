@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { SkeletonList, EmptyState } from "@/components/ui/Feedback";
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
+import { DestinosPago } from "@/components/domain/DestinosPago";
 import { ComprobanteStatusChip } from "@/components/domain/ComprobanteStatusChip";
 import { VoucherDownloadButton } from "@/components/domain/VoucherDownloadButton";
 import { ConsultaResultadoPago } from "@/components/domain/ResultadoPago";
@@ -110,6 +111,7 @@ export function ComprobantesList({
                   <p className="text-xs text-muted">
                     Fecha de pago: {formatDate(comp.fecha_operacion)}
                   </p>
+                  <DestinosPago key={comp.id} comprobante={comp} />
                   {comp.motivo_rechazo && (
                     <p className="text-xs font-medium text-danger-700 bg-danger-50 rounded-md px-2 py-1 inline-block">
                       Motivo: {comp.motivo_rechazo}

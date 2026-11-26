@@ -47,7 +47,10 @@ class MoraDiariaService:
         comprobantes = list(
             await self.session.scalars(
                 select(ComprobantePago)
-                .where(ComprobantePago.departamento_id == departamento.id)
+                .where(
+                    ComprobantePago.departamento_id == departamento.id,
+                    ComprobantePago.cargos_incidencia_ids == [],
+                )
                 .order_by(ComprobantePago.id)
             )
         )

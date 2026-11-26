@@ -101,3 +101,44 @@
   cuando se intenta confirmar o reabrir, entonces se recibe 404; una versión
   desactualizada o un estado distinto de `RESUELTO` se rechaza con 409. Un ticket
   `CERRADO` es terminal.
+# Reparto independiente de costos y pago dirigido
+
+```gherkin
+Scenario Outline: Reparto por monto con alcance y método elegidos
+  Given un costo positivo y departamentos activos del mismo condominio
+  When Junta previsualiza y publica con alcance <alcance> y método <metodo>
+  Then se conserva la instantánea y la suma de cargos coincide exactamente con el costo
+  And repetir la confirmación devuelve el mismo reparto
+  Examples:
+    | alcance       | metodo       |
+    | TODOS         | EQUITATIVA   |
+    | TODOS         | POR_ALICUOTA |
+    | SELECCIONADOS | EQUITATIVA   |
+    | SELECCIONADOS | POR_ALICUOTA |
+
+Scenario: Cambio entre previsualización y publicación
+  Given una previsualización de un reparto
+  When cambian participantes o coeficientes antes de confirmar
+  Then se rechaza la publicación sin crear cargos
+
+Scenario: Pago individual o conjunto
+  Given varios cargos de incidencias pendientes de mi departamento
+  When reporto un comprobante por la suma de los cargos seleccionados
+  Then se conserva la selección y los cargos siguen pendientes
+  When Junta aprueba el comprobante
+  Then solo los cargos seleccionados quedan pagados
+  And repetir la aprobación no duplica efectos
+  And reconstruir moras de cuotas no redistribuye ese pago
+
+Scenario: Privacidad del cargo
+  Given un cargo derivado de un costo interno de una incidencia ajena
+  When el residente consulta sus cargos
+  Then ve su concepto público e importe sin comentarios ni evidencias internos
+  And no puede seleccionar cargos de otro departamento
+
+Scenario: Proveedor real del directorio
+  Given un proveedor activo del condominio
+  When Junta lo selecciona como responsable
+  Then se toma nombre y contacto del directorio
+  And se rechazan proveedores inexistentes, inactivos o de otro condominio
+```

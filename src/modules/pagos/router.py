@@ -7,10 +7,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Response
 from fastapi.responses import FileResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.authorization import autorizar_condominio
+from src.core.database import get_db_session
 from src.core.errors import APIError, ErrorResponse
 from src.core.security import get_current_user, require_role
+from src.modules.incidencias.reparto import CargoDTO, RepartosService
 from src.modules.pagos.persistencia import get_pagos_service
 from src.modules.pagos.schemas import (
     ComprobantePagoDTO,
@@ -27,6 +30,18 @@ from src.modules.pagos.solvencia import get_solvencia_service
 router = APIRouter(tags=["Pagos y Conciliación"])
 
 ESTADOS_COMPROBANTE_VALIDOS = {"EN_REVISION", "APROBADO", "OBSERVADO", "RECHAZADO"}
+
+
+@router.get("/pagos/cargos-incidencias", response_model=list[CargoDTO])
+async def listar_cargos_incidencias(
+    departamento_id: UUID,
+    response: Response,
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session, use_cache=False),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "Authorization"
+    return await RepartosService(session).cargos(user, departamento_id)
 
 
 @router.get("/pagos/comprobantes", response_model=list[ComprobantePagoDTO])

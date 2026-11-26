@@ -1,6 +1,7 @@
 """Pruebas de contrato/modelo sin base PostgreSQL ni infraestructura externa."""
 
 from decimal import Decimal
+from importlib.util import find_spec
 from pathlib import Path
 from uuid import uuid4
 
@@ -225,3 +226,4 @@ def test_migracion_de_egresos_se_aplica_despues_de_proveedores():
     scripts = ScriptDirectory.from_config(config)
     revision = scripts.get_revision("20261202_0032")
     assert revision.down_revision == "20261201_0031"
+    assert find_spec("src.modules.proveedores") is not None

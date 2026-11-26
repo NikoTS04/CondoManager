@@ -143,6 +143,7 @@ export interface Reserva {
 export interface ComprobantePago {
   id: string;
   departamento_id: string;
+  cargos_incidencia_ids?: string[];
   banco: string;
   numero_operacion: string;
   fecha_operacion: string;
@@ -714,9 +715,9 @@ export function resolverIncidencia(id: string, datos: FormData): Promise<Inciden
 }
 
 export function consultarHistorialIncidencia(
-  id: string, signal?: AbortSignal,
+  id: string, signal?: AbortSignal, offset = 0,
 ): Promise<{ items: ActualizacionIncidencia[]; hay_mas: boolean }> {
-  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/historial`, { signal });
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/historial?offset=${offset}`, { signal });
 }
 
 export function confirmarIncidencia(
@@ -1175,10 +1176,14 @@ export async function reportarPago(payload: {
   fecha_operacion: string;
   monto: string;
   archivo_voucher: File;
+  cargos_incidencia_ids?: string[];
 }): Promise<{ ok: boolean; error?: string; errorCode?: string; duplicado?: boolean }> {
   try {
     const form = new FormData();
-    for (const [campo, valor] of Object.entries(payload)) form.append(campo, valor);
+    for (const [campo, valor] of Object.entries(payload)) {
+      if (Array.isArray(valor)) valor.forEach((id) => form.append(campo, id));
+      else form.append(campo, valor);
+    }
     const headers = getAuthHeaders();
     delete headers["Content-Type"];
     const response = await fetchProtegido("/pagos/reportar", {
@@ -1193,6 +1198,67 @@ export async function reportarPago(payload: {
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
+}
+
+export interface ConfiguracionReparto {
+  alcance: "TODOS" | "SELECCIONADOS";
+  metodo: "EQUITATIVA" | "POR_ALICUOTA";
+  departamento_ids: string[];
+  concepto: string;
+  motivo: string;
+}
+
+export interface RepartoIncidencia {
+  id: string | null;
+  incidencia_id: string;
+  actualizacion_id: string;
+  concepto: string;
+  motivo: string;
+  alcance: ConfiguracionReparto["alcance"];
+  metodo: ConfiguracionReparto["metodo"];
+  monto: string;
+  moneda: "PEN" | "USD";
+  huella: string;
+  participantes: {
+    departamento_id: string; numero: string; edificio: string; coeficiente: string; monto: string;
+  }[];
+}
+
+export interface CargoIncidencia {
+  id: string;
+  incidencia_id: string;
+  actualizacion_id: string;
+  concepto: string;
+  moneda: "PEN" | "USD";
+  monto: string;
+  pagado: string;
+  pendiente: string;
+  estado: "PENDIENTE" | "PAGADO";
+}
+
+function rutaReparto(iid: string, aid: string) {
+  return `/incidencias/${encodeURIComponent(iid)}/costos/${encodeURIComponent(aid)}/reparto`;
+}
+
+export function consultarReparto(iid: string, aid: string): Promise<RepartoIncidencia> {
+  return recursoRequest(rutaReparto(iid, aid));
+}
+
+export function previsualizarReparto(iid: string, aid: string, datos: ConfiguracionReparto): Promise<RepartoIncidencia> {
+  return recursoRequest(`${rutaReparto(iid, aid)}/previsualizacion`, {
+    method: "POST", body: JSON.stringify(datos),
+  });
+}
+
+export function publicarReparto(iid: string, aid: string, datos: ConfiguracionReparto, huella: string, clave: string): Promise<RepartoIncidencia> {
+  return recursoRequest(rutaReparto(iid, aid), {
+    method: "POST", body: JSON.stringify({ ...datos, huella }),
+    headers: { "Idempotency-Key": clave },
+  });
+}
+
+export function listarCargosIncidencias(departamentoId: string, signal?: AbortSignal): Promise<CargoIncidencia[]> {
+  return recursoRequest(`/pagos/cargos-incidencias?departamento_id=${encodeURIComponent(departamentoId)}`, { signal });
 }
 
 export async function subsanarVoucher(comprobanteId: string, archivo: File): Promise<void> {
@@ -1266,7 +1332,7 @@ export interface MovimientoCuenta {
   fecha: string;
   registrado_en: string;
   fecha_operacion: string | null;
-  tipo: "EMISION_CUOTA" | "DEVENGO_MORA" | "AJUSTE_MORA" | "PAGO_APROBADO" | "APLICACION_CREDITO" | "DISTRIBUCION_PAGO";
+  tipo: "EMISION_CUOTA" | "DEVENGO_MORA" | "AJUSTE_MORA" | "PAGO_APROBADO" | "APLICACION_CREDITO" | "DISTRIBUCION_PAGO" | "CARGO_INCIDENCIA";
   descripcion: string;
   importe: string;
   cargo: string;

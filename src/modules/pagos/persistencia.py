@@ -13,6 +13,7 @@ from src.core.authorization import contexto_consulta, puede_ver_departamento, vi
 from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.modules.condominios.models import Condominio, Departamento, Edificio
+from src.modules.incidencias.reparto_models import CargoIncidencia, DestinoPagoIncidencia
 from src.modules.pagos.contabilidad import (
     CERO,
     MAX_MONEDA,
@@ -21,6 +22,7 @@ from src.modules.pagos.contabilidad import (
     validar_conservacion_pago,
 )
 from src.modules.pagos.fondos import FondosMorasService
+from src.modules.pagos.incidencias import aplicar_cargos, pendiente_incidencias, seleccionar_cargos
 from src.modules.pagos.models import ComprobantePago, ImputacionPago
 from src.modules.pagos.models_persistencia import ArchivoVoucher, EventoPagoOutbox, RevisionPago
 from src.modules.pagos.mora_diaria import MoraDiariaService
@@ -44,10 +46,13 @@ class PagosPersistentesService:
         self.storage = storage or get_voucher_storage()
 
     @staticmethod
-    def fotografia(depto, cuotas):
+    def fotografia(depto, cuotas, cargos=()):
         return {
             "saldo_a_favor": f"{depto.saldo_a_favor:.2f}",
             "estado_financiero": depto.estado_financiero,
+            "cargos_incidencia": {
+                str(c.id): {"monto": f"{c.monto:.2f}", "pagado": f"{c.pagado:.2f}"} for c in cargos
+            },
             "cuotas": {
                 str(c.id): {
                     "total": f"{c.monto_total_exigible:.2f}",
@@ -64,6 +69,7 @@ class PagosPersistentesService:
         return ComprobantePagoDTO(
             id=c.id,
             departamento_id=c.departamento_id,
+            cargos_incidencia_ids=c.cargos_incidencia_ids,
             banco=c.banco_origen,
             numero_operacion=c.numero_operacion,
             fecha_operacion=c.fecha_operacion,
@@ -214,6 +220,14 @@ class PagosPersistentesService:
                         "VOUCHER_UNIDAD_DISTINTA",
                         "El comprobante no puede reutilizarse en otra unidad.",
                     )
+                if sorted(previo.cargos_incidencia_ids) != [
+                    str(id) for id in request.cargos_incidencia_ids
+                ]:
+                    raise APIError(
+                        409,
+                        "VOUCHER_DESTINOS_DISTINTOS",
+                        "El comprobante ya se reportó con otros destinos.",
+                    )
                 if previo.estado == "APROBADO":
                     raise APIError(
                         409, "VOUCHER_YA_CONCILIADO", "El comprobante ya fue conciliado."
@@ -235,6 +249,16 @@ class PagosPersistentesService:
                     idempotency_hash=hash_id,
                     codigo="VOUCHER_EN_EVALUACION",
                 ), False
+            cargos = (
+                await seleccionar_cargos(
+                    self.session,
+                    request.cargos_incidencia_ids,
+                    depto.id,
+                    request.monto,
+                )
+                if request.cargos_incidencia_ids
+                else []
+            )
             async with self.archivo_nuevo(depto.id, archivo, usuario) as subida:
                 nuevo = ComprobantePago(
                     id=uuid4(),
@@ -243,12 +267,21 @@ class PagosPersistentesService:
                     numero_operacion=request.numero_operacion,
                     fecha_operacion=request.fecha_operacion,
                     monto=request.monto,
+                    cargos_incidencia_ids=[str(id) for id in request.cargos_incidencia_ids],
                     url_voucher=subida.nombre,
                     idempotency_hash=hash_id,
                     estado="EN_REVISION",
                 )
                 self.session.add(nuevo)
                 await self.session.flush()
+                for cargo in cargos:
+                    self.session.add(
+                        DestinoPagoIncidencia(
+                            comprobante_id=nuevo.id,
+                            cargo_id=cargo.id,
+                            monto=cargo.monto - cargo.pagado,
+                        )
+                    )
                 subida.comprobante_id = nuevo.id
                 await self.repo.auditar(
                     usuario,
@@ -261,6 +294,7 @@ class PagosPersistentesService:
                         "comprobante_id": str(nuevo.id),
                         "estado": nuevo.estado,
                         "monto": f"{nuevo.monto:.2f}",
+                        "cargos_incidencia_ids": nuevo.cargos_incidencia_ids,
                     },
                 )
                 self._evento(nuevo, condominio.id, "PagoReportadoEvent")
@@ -345,25 +379,46 @@ class PagosPersistentesService:
                 )
             ahora = datetime.now(UTC)
             hoy = fecha_lima()
-            anterior = {"estado": comprobante.estado, **self.fotografia(depto, cuotas)}
+            cargos = (
+                list(
+                    await self.session.scalars(
+                        select(CargoIncidencia)
+                        .where(
+                            CargoIncidencia.id.in_(
+                                [UUID(id) for id in comprobante.cargos_incidencia_ids]
+                            ),
+                            CargoIncidencia.departamento_id == depto.id,
+                        )
+                        .order_by(CargoIncidencia.id)
+                        .with_for_update()
+                    )
+                )
+                if comprobante.cargos_incidencia_ids
+                else []
+            )
+            anterior = {"estado": comprobante.estado, **self.fotografia(depto, cuotas, cargos)}
             estaba_en_mora = saldo_en_mora(cuotas, condominio.dias_gracia, hoy) > CERO
             total_aplicado, credito = CERO, CERO
             if request.decision == "APROBADO" and comprobante.fecha_operacion > hoy:
                 raise APIError(
                     422, "FECHA_BANCARIA_FUTURA", "La fecha bancaria no puede ser futura en Lima."
                 )
-            motor = await MoraDiariaService(self.session).reconstruir(
-                depto,
-                condominio,
-                cuotas,
-                usuario,
-                hoy,
-                nuevo=comprobante if request.decision == "APROBADO" else None,
-                pausar_revision=False,
-                ahora=ahora,
-            )
+            motor = None
+            if not comprobante.cargos_incidencia_ids:
+                motor = await MoraDiariaService(self.session).reconstruir(
+                    depto,
+                    condominio,
+                    cuotas,
+                    usuario,
+                    hoy,
+                    nuevo=comprobante if request.decision == "APROBADO" else None,
+                    pausar_revision=False,
+                    ahora=ahora,
+                )
             if request.decision == "APROBADO":
-                if motor is not None:
+                if comprobante.cargos_incidencia_ids:
+                    total_aplicado = await aplicar_cargos(self.session, comprobante)
+                elif motor is not None:
                     total_aplicado, credito = motor["monto_imputado"], motor["credito"]
                 else:
                     plan = plan_imputacion(cuotas, comprobante.monto, comprobante.fecha_operacion)
@@ -427,7 +482,8 @@ class PagosPersistentesService:
                 monto_imputado=total_aplicado,
                 nuevo_saldo_departamento=sum(
                     (c.monto_total_exigible - c.monto_pagado for c in cuotas), CERO
-                ),
+                )
+                + await pendiente_incidencias(self.session, depto.id),
                 saldo_a_favor_generado=credito,
                 departamento_habilitado_reservas=saldo_en_mora(cuotas, condominio.dias_gracia, hoy)
                 == CERO,
@@ -454,8 +510,9 @@ class PagosPersistentesService:
                 anterior,
                 {
                     **resultado.model_dump(mode="json"),
-                    **self.fotografia(depto, cuotas),
+                    **self.fotografia(depto, cuotas, cargos),
                     "fecha_operacion": comprobante.fecha_operacion.isoformat(),
+                    "cargos_incidencia_ids": comprobante.cargos_incidencia_ids,
                 },
             )
             evento = {
@@ -473,19 +530,34 @@ class PagosPersistentesService:
                     "resultado": revision.resultado,
                 },
             )
-            if request.decision == "APROBADO" and estaba_en_mora and resultado.departamento_habilitado_reservas:
+            if (
+                request.decision == "APROBADO"
+                and estaba_en_mora
+                and resultado.departamento_habilitado_reservas
+            ):
                 from src.modules.notificaciones.models import EventoSolvenciaOutbox
+
                 eid = uuid4()
-                self.session.add(EventoSolvenciaOutbox(
-                    id=eid, comprobante_id=id, payload={
-                        "event_id": str(eid), "event_type": "SolvenciaRestablecidaEvent",
-                        "schema_version": 1, "producer": "service.pagos",
-                        "occurred_at": ahora.isoformat(), "correlation_id": str(id),
-                        "causation_id": str(revision.id),
-                        "data": {"condominio_id": str(condominio.id),
-                                 "departamento_id": str(depto.id), "comprobante_id": str(id)},
-                    },
-                ))
+                self.session.add(
+                    EventoSolvenciaOutbox(
+                        id=eid,
+                        comprobante_id=id,
+                        payload={
+                            "event_id": str(eid),
+                            "event_type": "SolvenciaRestablecidaEvent",
+                            "schema_version": 1,
+                            "producer": "service.pagos",
+                            "occurred_at": ahora.isoformat(),
+                            "correlation_id": str(id),
+                            "causation_id": str(revision.id),
+                            "data": {
+                                "condominio_id": str(condominio.id),
+                                "departamento_id": str(depto.id),
+                                "comprobante_id": str(id),
+                            },
+                        },
+                    )
+                )
             await self.session.flush()
         return resultado
 
