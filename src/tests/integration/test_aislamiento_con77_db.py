@@ -40,7 +40,9 @@ async def huella(base):
         for tabla in sorted(Base.metadata.tables)
     ]
     async with base.sessions() as db:
-        rows = (await db.execute(text(" UNION ALL ".join(consultas)))).all()
+        # PostgreSQL puede devolver las ramas de UNION ALL en orden distinto.
+        filas_ordenadas = " UNION ALL ".join(consultas) + " ORDER BY tabla"
+        rows = (await db.execute(text(filas_ordenadas))).all()
     archivos = [
         (str(p.relative_to(settings.VOUCHERS_DIR)), hashlib.sha256(p.read_bytes()).hexdigest())
         for p in sorted(Path(settings.VOUCHERS_DIR).rglob("*"))
