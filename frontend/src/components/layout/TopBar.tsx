@@ -67,7 +67,7 @@ export default function TopBar() {
             </button>
           )}
         </div>
-        {user && <p className="w-full break-all border-t border-line pt-2 text-xs text-muted">{user.condominio_id ? `Condominio · ${user.condominio_id}` : "Administración global · selecciona un condominio en Junta"}</p>}
+        {user && <p className="w-full border-t border-line pt-2 text-xs text-muted">{user.condominio_id ? "Condominio asignado" : "Administración global · selecciona un condominio en Junta"}</p>}
       </div>
     </header>
   );

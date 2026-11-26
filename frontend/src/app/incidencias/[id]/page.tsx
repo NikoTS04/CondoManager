@@ -116,10 +116,6 @@ function DetalleIncidencia({ id }: { id: string }) {
                   <dt className="text-muted">Urgencia reportada</dt>
                   <dd className="font-medium">{NIVELES_INCIDENCIA[incidencia.urgencia]}</dd>
                 </div>
-                <div>
-                  <dt className="text-muted">Código</dt>
-                  <dd className="break-all font-medium">{incidencia.id}</dd>
-                </div>
                 {incidencia.prioridad && (
                   <>
                     <div>

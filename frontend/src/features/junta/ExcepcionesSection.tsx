@@ -161,10 +161,6 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
             <p className="text-sm">{caso.causa}</p>
             {confirmacion && <Alert tone="success">{confirmacion}</Alert>}
             <dl className="grid gap-3 rounded-lg bg-canvas p-4 text-sm sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <dt className="text-muted">Operación de origen</dt>
-                <dd className="break-all font-medium">{caso.operacion_id}</dd>
-              </div>
               <div>
                 <dt className="text-muted">Ciclo del fallo</dt>
                 <dd>{caso.evidencia.ciclo_fallido}</dd>
@@ -181,8 +177,8 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
               )}
               {caso.evidencia.intento_id && (
                 <div className="sm:col-span-2">
-                  <dt className="text-muted">Referencia del nuevo intento</dt>
-                  <dd className="break-all">{caso.evidencia.intento_id}</dd>
+                  <dt className="text-muted">Nuevo intento</dt>
+                  <dd>Reintento registrado</dd>
                 </div>
               )}
             </dl>
@@ -217,7 +213,6 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
                         {registro.efecto.responsable && (
                           <p className="break-words text-xs text-muted">Responsable {registro.efecto.responsable}</p>
                         )}
-                        <p className="break-all text-xs text-muted">Actor {registro.actor_id}</p>
                       </li>
                     );
                   })}

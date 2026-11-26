@@ -217,7 +217,7 @@ export function PresupuestoMensual({
       setMensaje(
         presupuestoId
           ? "Borrador actualizado y persistido correctamente."
-          : `Borrador persistido con UUID ${resultado.data.id}.`,
+          : "Borrador guardado correctamente.",
       );
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "No se pudo guardar el presupuesto.");
@@ -235,7 +235,7 @@ export function PresupuestoMensual({
       return;
     }
     if (!presupuestoId) {
-      setError("Primero guarde el borrador para obtener su UUID persistente.");
+      setError("Primero guarde el borrador antes de continuar.");
       return;
     }
     if (cambiosPendientes) {
@@ -398,7 +398,6 @@ export function PresupuestoMensual({
             <div className="rounded-lg bg-canvas p-4 text-sm">
               <p>Monto: {montoTotal ? <MoneyAmount value={montoTotal} moneda={moneda} /> : "Sin registrar"}</p>
               <p className="mt-1">Vencimiento: {fechaVencimiento || "Sin definir"}</p>
-              {presupuestoId && <p className="mt-1 break-all font-mono text-xs">UUID: {presupuestoId}</p>}
               {aprobadoPor && <p className="mt-1">Aprobado por: {aprobadoPor}</p>}
               {aprobadoEn && <p className="mt-1">Aprobado en: {new Date(aprobadoEn).toLocaleString("es-PE")}</p>}
             </div>

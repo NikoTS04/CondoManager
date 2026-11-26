@@ -13,7 +13,7 @@ export function ResultadoPago({ resultado }: { resultado: ResultadoRevisionPago 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="break-all text-xs text-muted">Comprobante {resultado.comprobante_id}</p>
+        <p className="text-xs text-muted">Resultado de la revisión</p>
         <ComprobanteStatusChip status={resultado.estado_final} />
       </div>
       <dl className="grid gap-4 rounded-lg bg-canvas p-4 sm:grid-cols-3">
