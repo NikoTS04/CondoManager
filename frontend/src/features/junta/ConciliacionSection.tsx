@@ -137,7 +137,7 @@ export function ConciliacionSection({
         <div className="mb-6 rounded-lg border border-line bg-surface-subtle p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Filtros de búsqueda (CON-24)
+              Filtros de búsqueda
             </span>
             {hayFiltrosActivos && (
               <button
