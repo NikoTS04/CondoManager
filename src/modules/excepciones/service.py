@@ -2,10 +2,8 @@
 
 from datetime import UTC, datetime
 from hashlib import sha256
-from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,115 +11,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.authorization import contexto_consulta, denegar
 from src.core.errors import APIError
 from src.core.models_audit import AuditoriaLogORM
-from src.core.reintentos_job import puede_reintentar_job
 from src.core.roles import RolUsuario
 from src.core.security import validar_sesion
 from src.modules.condominios.models import Condominio
-from src.modules.excepciones.models import EvidenciaExcepcion, Excepcion, ResolucionExcepcion
-from src.modules.notificaciones.models import (
-    AlertaNotificacion,
-    EstadoJobNotificaciones,
-    Notificacion,
+from src.modules.excepciones.jobs import (
+    RESULTADO_INICIAL,
+    RESULTADOS,
+    acciones_job,
+    comprobar_cola_job,
+    estado_job,
 )
+from src.modules.excepciones.models import EvidenciaExcepcion, Excepcion, ResolucionExcepcion
+from src.modules.excepciones.schemas import (
+    Accion,
+    DetalleExcepcionDTO,
+    EfectoCorreo,
+    EfectoJob,
+    Estado,
+    EvidenciaDTO,
+    ExcepcionDTO,
+    PaginaExcepcionesDTO,
+    ResolucionDTO,
+    SolicitudResolucion,
+)
+from src.modules.notificaciones.models import AlertaNotificacion, Notificacion
 from src.modules.notificaciones.persistencia import NotificacionesPersistentesService
 from src.modules.notificaciones.schemas import ReenviarNotificacionRequest
 from src.modules.pagos.repository import SQLAlchemyPagosRepository
 from src.modules.usuarios.repository import SQLAlchemyUsuariosRepository
 
-Accion = Literal["REENVIAR_CORREO", "REINTENTAR_JOB", "CERRAR_CON_MOTIVO"]
-Estado = Literal["ABIERTA", "EN_PROCESO", "RESUELTA", "FALLIDA"]
 AUDITORIA_RESOLUCION = "EXCEPCION_CORREO_RESUELTA"
 CAUSAS_CON_REENVIO = {"ERROR_DEFINITIVO", "INTENTOS_AGOTADOS", "DESTINATARIO_INVALIDO"}
 CONDOMINIO_SISTEMA = UUID("3709ed64-791a-5cd8-99c7-142ab3ee590c")
-
-
-class SolicitudResolucion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    accion: Accion
-    motivo: Annotated[
-        str,
-        StringConstraints(
-            strip_whitespace=True, min_length=1, max_length=500, pattern=r"^[^\x00]+$"
-        ),
-    ]
-    nuevo_destinatario: (
-        Annotated[
-            str,
-            StringConstraints(
-                strip_whitespace=True, min_length=1, max_length=320, pattern=r"^[^\x00]+$"
-            ),
-        ]
-        | None
-    ) = None
-
-    @model_validator(mode="after")
-    def destinatario_segun_accion(self):
-        if (self.accion == "REENVIAR_CORREO") != (self.nuevo_destinatario is not None):
-            raise ValueError("El contacto corregido se requiere únicamente para reenviar.")
-        return self
-
-
-class ExcepcionDTO(BaseModel):
-    id: UUID
-    origen: Literal["CORREO", "JOB"]
-    operacion_id: str
-    causa: str
-    prioridad: Literal["ALTA", "MEDIA"]
-    estado: Estado
-    creada_en: datetime
-
-
-class EfectoCorreo(BaseModel):
-    operacion_id: str
-    ciclo: int
-    estado_operacion: str
-
-
-class EfectoJob(BaseModel):
-    nombre: str
-    estado_proceso: str
-    reintentado: bool
-
-
-class EfectoCierre(BaseModel):
-    operacion_id: str
-    estado_operacion: str
-
-
-Efecto = EfectoCorreo | EfectoJob | EfectoCierre | dict[str, Any]
-
-
-class ResolucionDTO(BaseModel):
-    id: UUID
-    accion: Accion
-    motivo: str
-    actor_id: str
-    fecha: datetime
-    estado: Estado
-    efecto: Efecto
-
-
-class EvidenciaCorreo(BaseModel):
-    tipo_evento: str
-    ciclo_fallido: int
-    ciclo_actual: int
-    estado_operacion: str
-    origen: Literal["CORREO", "JOB"] = "CORREO"
-    operacion_id: str = ""
-    referencia_correlacion: str | None = None
-    detalle: dict[str, Any] = {}
-
-
-class DetalleExcepcionDTO(ExcepcionDTO):
-    evidencia: EvidenciaCorreo
-    historial: list[ResolucionDTO]
-    acciones_permitidas: list[Accion]
-    requiere_revision_correo: bool
-
-
-class PaginaExcepcionesDTO(BaseModel):
-    items: list[ExcepcionDTO]
-    hay_mas: bool
 
 
 def estado_excepcion(alerta: AlertaNotificacion, aviso: Notificacion) -> Estado:
@@ -158,11 +79,11 @@ def acciones_permitidas(alerta: AlertaNotificacion, aviso: Notificacion) -> list
     return ["CERRAR_CON_MOTIVO"]
 
 
-def estado_job(alerta: AlertaNotificacion) -> Estado:
-    return "ABIERTA" if alerta.atendida_en is None else "RESUELTA"
-
-
-def resumen(alerta: AlertaNotificacion, aviso: Notificacion | None) -> ExcepcionDTO:
+def resumen(
+    alerta: AlertaNotificacion,
+    aviso: Notificacion | None,
+    ultima: ResolucionExcepcion | None = None,
+) -> ExcepcionDTO:
     if aviso is None:
         return ExcepcionDTO(
             id=alerta.id,
@@ -170,7 +91,7 @@ def resumen(alerta: AlertaNotificacion, aviso: Notificacion | None) -> Excepcion
             operacion_id=alerta.origen_id,
             causa=alerta.mensaje,
             prioridad="ALTA",
-            estado=estado_job(alerta),
+            estado=estado_job(alerta, ultima),
             creada_en=alerta.creada_en,
         )
     return ExcepcionDTO(
@@ -182,14 +103,6 @@ def resumen(alerta: AlertaNotificacion, aviso: Notificacion | None) -> Excepcion
         estado=estado_excepcion(alerta, aviso),
         creada_en=alerta.creada_en,
     )
-
-
-def acciones_job(alerta: AlertaNotificacion) -> list[Accion]:
-    if alerta.atendida_en is not None:
-        return []
-    if puede_reintentar_job(alerta.origen_id):
-        return ["REINTENTAR_JOB", "CERRAR_CON_MOTIVO"]
-    return ["CERRAR_CON_MOTIVO"]
 
 
 def decision(registro: AuditoriaLogORM) -> ResolucionDTO:
@@ -239,7 +152,9 @@ class ExcepcionesService:
 
     @staticmethod
     def consulta_job():
-        return select(AlertaNotificacion).where(AlertaNotificacion.origen_tipo == "JOB")
+        return select(AlertaNotificacion).where(
+            AlertaNotificacion.origen_tipo == "JOB", AlertaNotificacion.condominio_id.is_(None)
+        )
 
     async def _asegurar_excepcion(
         self, alerta: AlertaNotificacion, aviso: Notificacion | None
@@ -282,72 +197,74 @@ class ExcepcionesService:
 
     async def listar(self, usuario: dict, offset: int, limit: int) -> PaginaExcepcionesDTO:
         es_superadmin = usuario["rol"] == RolUsuario.SUPERADMIN
-        cid = None if es_superadmin else contexto_consulta(usuario)
-        consulta = self.consulta(cid).order_by(
+        orden = (
             AlertaNotificacion.atendida_en.is_not(None),
             AlertaNotificacion.creada_en.desc(),
             AlertaNotificacion.id.desc(),
         )
-        filas = [
-            (alerta, aviso)
-            for alerta, aviso in (
-                await self.db.execute(consulta.offset(offset).limit(limit + 1))
-            ).all()
-        ]
         if es_superadmin:
-            consulta_job = self.consulta_job().order_by(
-                AlertaNotificacion.atendida_en.is_not(None),
-                AlertaNotificacion.creada_en.desc(),
-                AlertaNotificacion.id.desc(),
-            )
-            filas.extend(
+            filas = [
                 (alerta, None)
-                for alerta in (
-                    await self.db.scalars(consulta_job.offset(offset).limit(limit + 1))
-                ).all()
+                for alerta in await self.db.scalars(
+                    self.consulta_job().order_by(*orden).offset(offset).limit(limit + 1)
+                )
+            ]
+        else:
+            filas = (
+                await self.db.execute(
+                    self.consulta(contexto_consulta(usuario))
+                    .order_by(*orden)
+                    .offset(offset)
+                    .limit(limit + 1)
+                )
+            ).all()
+
+        casos = [
+            (alerta, aviso, await self._asegurar_excepcion(alerta, aviso))
+            for alerta, aviso in filas[:limit]
+        ]
+        ultimas = {}
+        if es_superadmin and casos:
+            resoluciones = await self.db.scalars(
+                select(ResolucionExcepcion)
+                .where(ResolucionExcepcion.excepcion_id.in_([caso.id for _, _, caso in casos]))
+                .distinct(ResolucionExcepcion.excepcion_id)
+                .order_by(
+                    ResolucionExcepcion.excepcion_id,
+                    ResolucionExcepcion.creado_en.desc(),
+                    ResolucionExcepcion.id.desc(),
+                )
             )
-            filas.sort(key=lambda fila: fila[0].creada_en, reverse=True)
-        visibles = filas[:limit]
-        for alerta, aviso in visibles:
-            await self._asegurar_excepcion(alerta, aviso)
+            ultimas = {registro.excepcion_id: registro for registro in resoluciones}
         return PaginaExcepcionesDTO(
-            items=[resumen(alerta, aviso) for alerta, aviso in visibles],
+            items=[resumen(alerta, aviso, ultimas.get(caso.id)) for alerta, aviso, caso in casos],
             hay_mas=len(filas) > limit,
         )
 
     async def _caso(self, usuario: dict, id: UUID):
         if usuario["rol"] == RolUsuario.SUPERADMIN:
-            alerta = await self.db.scalar(
-                select(AlertaNotificacion).where(AlertaNotificacion.id == id)
-            )
-            if alerta is None:
-                raise APIError(404, "EXCEPCION_NO_ENCONTRADA", "La excepción no está disponible.")
-            return alerta, (
-                await self.db.get(Notificacion, alerta.notificacion_id)
-                if alerta.notificacion_id is not None
-                else None
-            )
-        caso = (
-            await self.db.execute(
-                self.consulta(contexto_consulta(usuario)).where(AlertaNotificacion.id == id)
-            )
-        ).one_or_none()
+            alerta = await self.db.scalar(self.consulta_job().where(AlertaNotificacion.id == id))
+            caso = (alerta, None) if alerta is not None else None
+        else:
+            caso = (
+                await self.db.execute(
+                    self.consulta(contexto_consulta(usuario)).where(AlertaNotificacion.id == id)
+                )
+            ).one_or_none()
         if caso is None:
             raise APIError(404, "EXCEPCION_NO_ENCONTRADA", "La excepción no está disponible.")
         return caso
 
-    async def _historial(self, alerta: AlertaNotificacion):
-        excepcion = await self.db.scalar(select(Excepcion).where(Excepcion.alerta_id == alerta.id))
-        if excepcion is not None:
-            registros = (
-                await self.db.scalars(
-                    select(ResolucionExcepcion)
-                    .where(ResolucionExcepcion.excepcion_id == excepcion.id)
-                    .order_by(ResolucionExcepcion.creado_en.desc(), ResolucionExcepcion.id.desc())
-                )
-            ).all()
-            if registros:
-                return [decision_persistida(registro) for registro in registros]
+    async def _resoluciones(self, excepcion_id: UUID) -> list[ResolucionExcepcion]:
+        return list(
+            await self.db.scalars(
+                select(ResolucionExcepcion)
+                .where(ResolucionExcepcion.excepcion_id == excepcion_id)
+                .order_by(ResolucionExcepcion.creado_en.desc(), ResolucionExcepcion.id.desc())
+            )
+        )
+
+    async def _historial_correo_legacy(self, alerta: AlertaNotificacion):
         cid = alerta.condominio_id or CONDOMINIO_SISTEMA
         return (
             await self.db.scalars(
@@ -369,45 +286,49 @@ class ExcepcionesService:
             .where(EvidenciaExcepcion.excepcion_id == excepcion.id)
             .order_by(EvidenciaExcepcion.creado_en.desc())
         )
+        registros = await self._resoluciones(excepcion.id)
+        ultima = registros[0] if registros else None
+        intento = next(
+            (r for r in registros if r.accion == "REINTENTAR_JOB" and r.nombre_job), None
+        )
+        historial = [decision_persistida(registro) for registro in registros]
+        if aviso is not None:
+            claves = {str(registro.clave_idempotencia) for registro in registros}
+            historial.extend(
+                decision(registro)
+                for registro in await self._historial_correo_legacy(alerta)
+                if registro.estado_posterior.get("clave") not in claves
+            )
+            historial.sort(key=lambda registro: (registro.fecha, registro.id), reverse=True)
         return DetalleExcepcionDTO(
-            **resumen(alerta, aviso).model_dump(),
-            evidencia=EvidenciaCorreo(
+            **resumen(alerta, aviso, ultima).model_dump(),
+            evidencia=EvidenciaDTO(
                 tipo_evento=aviso.tipo_evento if aviso is not None else alerta.tipo,
                 ciclo_fallido=alerta.ciclo,
                 ciclo_actual=aviso.ciclo if aviso is not None else alerta.ciclo,
-                estado_operacion=aviso.estado if aviso is not None else (alerta.tipo or "JOB"),
+                estado_operacion=(
+                    aviso.estado
+                    if aviso is not None
+                    else intento.resultado_job
+                    if intento is not None
+                    else alerta.tipo
+                ),
                 origen=alerta.origen_tipo,
                 operacion_id=alerta.origen_id,
                 referencia_correlacion=alerta.referencia_correlacion,
-                detalle=(evidencia.detalle if evidencia is not None else {}),
+                intento_id=intento.id if intento else None,
+                detalle=evidencia.detalle if evidencia is not None else {},
             ),
-            historial=[
-                registro if isinstance(registro, ResolucionDTO) else decision(registro)
-                for registro in await self._historial(alerta)
-            ],
+            historial=historial,
             acciones_permitidas=(
-                acciones_permitidas(alerta, aviso) if aviso is not None else acciones_job(alerta)
+                acciones_permitidas(alerta, aviso)
+                if aviso is not None
+                else acciones_job(alerta, registros)
             ),
             requiere_revision_correo=(
                 requiere_revision_correo(alerta, aviso) if aviso is not None else False
             ),
         )
-
-    async def _reintentar_job(self, nombre: str) -> dict[str, Any]:
-        registro = await self.db.scalar(
-            select(EstadoJobNotificaciones)
-            .where(EstadoJobNotificaciones.nombre == nombre)
-            .with_for_update()
-        )
-        if registro is None:
-            return EfectoJob(
-                nombre=nombre, estado_proceso="SIN_REGISTRO", reintentado=False
-            ).model_dump()
-        registro.estado = "EN_CURSO"
-        registro.fin = None
-        return EfectoJob(
-            nombre=nombre, estado_proceso=registro.estado, reintentado=True
-        ).model_dump()
 
     @staticmethod
     def _atender_alerta_job(alerta: AlertaNotificacion, usuario: dict) -> None:
@@ -418,7 +339,11 @@ class ExcepcionesService:
         self, usuario: dict, id: UUID, clave: UUID, solicitud: SolicitudResolucion
     ) -> ResolucionDTO:
         es_superadmin = usuario["rol"] == RolUsuario.SUPERADMIN
-        huella = sha256(solicitud.model_dump_json().encode()).hexdigest()
+        huella = sha256(
+            solicitud.model_dump_json(
+                exclude={"responsable"} if solicitud.responsable is None else None
+            ).encode()
+        ).hexdigest()
         async with self.db.begin():
             identidad = SQLAlchemyUsuariosRepository(self.db)
             if es_superadmin:
@@ -434,45 +359,43 @@ class ExcepcionesService:
             await self.db.refresh(alerta, with_for_update=True)
             if aviso is not None:
                 await self.db.refresh(aviso, with_for_update=True)
-            es_job = alerta.origen_tipo == "JOB"
-            if es_job and not es_superadmin:
-                denegar("Solo SUPERADMIN puede resolver excepciones globales de job.")
-            if es_job and solicitud.accion == "REENVIAR_CORREO":
-                raise APIError(409, "ACCION_NO_DISPONIBLE", "Un job no se reenvía por correo.")
-
+            es_job = aviso is None
             excepcion = await self._asegurar_excepcion(alerta, aviso)
-            previa = await self.db.scalar(
-                select(ResolucionExcepcion).where(
-                    ResolucionExcepcion.excepcion_id == excepcion.id,
-                    ResolucionExcepcion.clave_idempotencia == clave,
-                )
+            historial = await self._resoluciones(excepcion.id)
+            previa = next(
+                (registro for registro in historial if registro.clave_idempotencia == clave), None
             )
             if previa is not None:
                 if previa.huella != huella:
                     raise APIError(409, "CLAVE_REUTILIZADA", "La clave pertenece a otra decisión.")
                 return decision_persistida(previa)
-            for registro in await self._historial(alerta):
-                if isinstance(registro, ResolucionDTO):
-                    continue
-                datos = registro.estado_posterior
-                if datos.get("clave") == str(clave):
-                    if datos["huella"] != huella:
-                        raise APIError(
-                            409, "CLAVE_REUTILIZADA", "La clave pertenece a otra decisión."
-                        )
-                    return decision(registro)
+            if aviso is not None:
+                for registro in await self._historial_correo_legacy(alerta):
+                    datos = registro.estado_posterior
+                    if datos.get("clave") == str(clave):
+                        if datos["huella"] != huella:
+                            raise APIError(
+                                409, "CLAVE_REUTILIZADA", "La clave pertenece a otra decisión."
+                            )
+                        return decision(registro)
 
-            permitidas = acciones_job(alerta) if es_job else acciones_permitidas(alerta, aviso)
+            permitidas = (
+                acciones_job(alerta, historial) if es_job else acciones_permitidas(alerta, aviso)
+            )
             if solicitud.accion not in permitidas:
                 raise APIError(
                     409, "ACCION_NO_DISPONIBLE", "La acción ya no está permitida para este caso."
                 )
 
             anterior = {
-                "estado": "ABIERTA",
-                "estado_operacion": aviso.estado if aviso is not None else "JOB_FALLO_DEFINITIVO",
+                "estado": estado_job(alerta, historial[0] if historial else None)
+                if es_job
+                else estado_excepcion(alerta, aviso),
+                "estado_operacion": aviso.estado if aviso is not None else alerta.tipo,
                 "ciclo": alerta.ciclo,
             }
+            resolucion_id = uuid4()
+            resultado_job = None
             if solicitud.accion == "REENVIAR_CORREO":
                 await NotificacionesPersistentesService(self.db).reencolar_bajo_bloqueo(
                     aviso,
@@ -485,11 +408,20 @@ class ExcepcionesService:
                     ciclo=aviso.ciclo,
                     estado_operacion=aviso.estado,
                 ).model_dump()
-            elif solicitud.accion == "REINTENTAR_JOB":
-                efecto = await self._reintentar_job(alerta.origen_id)
-                estado = "EN_PROCESO" if efecto["reintentado"] else "RESUELTA"
-                self._atender_alerta_job(alerta, usuario)
-            elif aviso is not None:
+            elif es_job:
+                if solicitud.accion == "REINTENTAR_JOB":
+                    await comprobar_cola_job(self.db, alerta.origen_id)
+                elif solicitud.accion == "CERRAR_CON_MOTIVO":
+                    self._atender_alerta_job(alerta, usuario)
+                resultado_job = RESULTADO_INICIAL[solicitud.accion]
+                estado = RESULTADOS[resultado_job]
+                efecto = EfectoJob(
+                    operacion_id=alerta.origen_id,
+                    estado_operacion="CERRADA" if resultado_job == "OMITIDO" else resultado_job,
+                    intento_id=resolucion_id if solicitud.accion == "REINTENTAR_JOB" else None,
+                    responsable=solicitud.responsable,
+                ).model_dump(mode="json")
+            else:
                 await self._cerrar(aviso, usuario)
                 estado = "RESUELTA"
                 efecto = EfectoCorreo(
@@ -497,16 +429,10 @@ class ExcepcionesService:
                     ciclo=aviso.ciclo,
                     estado_operacion=aviso.estado,
                 ).model_dump()
-            else:
-                self._atender_alerta_job(alerta, usuario)
-                estado = "RESUELTA"
-                efecto = EfectoCierre(
-                    operacion_id=alerta.origen_id, estado_operacion="CERRADA"
-                ).model_dump()
             excepcion.estado = estado
 
             registro = ResolucionExcepcion(
-                id=uuid4(),
+                id=resolucion_id,
                 excepcion_id=excepcion.id,
                 accion=solicitud.accion,
                 motivo=solicitud.motivo,
@@ -516,6 +442,8 @@ class ExcepcionesService:
                 huella=huella,
                 estado=estado,
                 creado_en=datetime.now(UTC),
+                nombre_job=alerta.origen_id if es_job else None,
+                resultado_job=resultado_job,
             )
             self.db.add(registro)
             self.db.add(

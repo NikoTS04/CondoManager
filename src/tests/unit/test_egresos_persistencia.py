@@ -1,6 +1,5 @@
 """Pruebas de contrato/modelo sin base PostgreSQL ni infraestructura externa."""
 
-import importlib.util
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -172,9 +171,9 @@ def test_estados_persistidos_rechazan_valores_no_contemplados():
 
 
 def test_historial_y_documentos_son_append_only_en_migracion():
-    script_path = Path("migrations/versions/20261127_0027_egresos_caja.py")
+    script_path = Path("migrations/versions/20261202_0032_egresos_caja.py")
     source = script_path.read_text(encoding="utf-8")
-    assert 'revision = "20261127_0027"' in source
+    assert 'revision = "20261202_0032"' in source
     for table in (
         "documentos_financieros",
         "aprobaciones_egreso",
@@ -221,10 +220,8 @@ def test_aprobacion_requiere_motivo_al_rechazar():
         RegistrarAprobacionRequest(decision="RECHAZAR", version_esperada=1)
 
 
-def test_migracion_es_descendiente_de_la_cabeza_vigente_y_unica():
+def test_migracion_de_egresos_se_aplica_despues_de_proveedores():
     config = Config("alembic.ini")
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == ["20261127_0027"]
-    revision = scripts.get_revision("20261127_0027")
-    assert revision.down_revision == "20261126_0026"
-    assert importlib.util.find_spec("src.modules.proveedores") is None
+    revision = scripts.get_revision("20261202_0032")
+    assert revision.down_revision == "20261201_0031"
