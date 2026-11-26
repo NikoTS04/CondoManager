@@ -9,36 +9,20 @@ las rutas protegidas ejercitan rechazos y las públicas sus implementaciones.
 import os
 
 import schemathesis
+from fastapi.testclient import TestClient
 from hypothesis import HealthCheck, settings
 from schemathesis.checks import not_a_server_error
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 os.environ["AUTH_STRICT_ENFORCEMENT"] = "true"
+# Readiness and route dependencies both use the application engine. Each
+# Schemathesis example may run in a separate event loop.
+os.environ["DB_NULL_POOL"] = "true"
 
-from src.core.config import settings as app_settings
-from src.core.database import get_db_session
 from src.main import app
 
-# Cada ejemplo de Schemathesis corre en un event loop distinto: compartir pool
-# reutilizaría conexiones asyncpg ligadas a un loop cerrado.
-_engine = create_async_engine(app_settings.DATABASE_URL, poolclass=NullPool)
-_sessions = async_sessionmaker(_engine, expire_on_commit=False)
-
-
-async def _sesion_por_peticion():
-    async with _sessions() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-
-
-app.dependency_overrides[get_db_session] = _sesion_por_peticion
-
-schema = schemathesis.openapi.from_asgi("/openapi.json", app)
+schema = schemathesis.openapi.from_asgi("/openapi.json", app).exclude(
+    path_regex=r"^/api/v1/jobs/(diario|notificaciones)$"
+)
 
 
 @schema.parametrize()
@@ -50,3 +34,16 @@ schema = schemathesis.openapi.from_asgi("/openapi.json", app)
 )
 def test_api_no_devuelve_errores_de_servidor(case):
     case.call_and_validate(checks=[not_a_server_error])
+
+
+def test_cron_rechaza_peticiones_sin_credencial_valida():
+    # Schemathesis filtra ejemplos de Authorization en estas rutas.
+    with TestClient(app) as client:
+        for method, path in (
+            ("GET", "/api/v1/jobs/diario"),
+            ("POST", "/api/v1/jobs/notificaciones"),
+        ):
+            for headers in ({}, {"Authorization": "Basic invalid"}):
+                response = client.request(method, path, headers=headers)
+                assert response.status_code == 401
+                assert response.json()["error_code"] == "CRON_NO_AUTORIZADO"

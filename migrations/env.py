@@ -19,6 +19,11 @@ from src.modules.cuotas.models import CuotaMantenimiento, EventoLoteOutbox, Lote
 from src.modules.cuotas.presupuestos.models import PresupuestoMensual  # noqa: F401
 from src.modules.cuotas.saldos.models import AplicacionSaldoFavor  # noqa: F401
 from src.modules.egresos import models as egresos_models  # noqa: F401
+from src.modules.excepciones.models import (  # noqa: F401
+    EvidenciaExcepcion,
+    Excepcion,
+    ResolucionExcepcion,
+)
 from src.modules.incidencias.models import Incidencia  # noqa: F401
 from src.modules.incidencias.reparto_models import (  # noqa: F401
     CargoIncidencia,

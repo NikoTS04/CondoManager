@@ -48,7 +48,7 @@ En la reserva de áreas comunes (ej. dos residentes intentando reservar la zona 
 | **Reclamo por Mora Indebida:** El residente pagó antes del corte, pero reportó el voucher tarde. | El sistema aplicó la mora en la fecha de corte por no haber registro previo. | El administrador cuenta con la función `Exonerar Mora / Revertir Penalidad`, la cual anula la mora mediante un asiento compensatorio auditado. |
 | **Falla en Notificaciones Masivas:** La cuota mensual no pudo ser enviada a 10 departamentos por caída de correo. | El sistema identifica los 10 envíos fallidos y los aisla en la cola de contingencia. | El administrador visualiza el botón `Reintentar Envíos Pendientes` en el módulo de comunicaciones. |
 
-## 4. Bandeja de Junta para fallos de correo (CON-66)
+## 4. Bandeja de excepciones operativas (CON-66)
 
 El primer recorrido usa alertas de correo operativo persistidas. Junta consulta
 el origen, el motivo, la prioridad, el estado, la referencia de la notificación
@@ -77,13 +77,13 @@ bitácora inmutable con los siete campos, esas decisiones se registran con el
 condominio centinela `3709ed64-791a-5cd8-99c7-142ab3ee590c`, creado por la
 migración `20261130_0030` y sin usuarios ni roles asociados.
 
-Las acciones permitidas son `CERRAR_CON_MOTIVO` para cualquier causa y
-`REENVIAR_CORREO` o `REINTENTAR_JOB` solo cuando el origen admite repetir con
-seguridad. `REINTENTAR_JOB` está restringido a procesos idempotentes registrados
-en `JOBES_REINTENTABLES`; el job `diario` queda fuera hasta CON-85. La ejecución
-revalida el estado del proceso de origen bajo bloqueo pesimista, guarda el
-resultado **real** de la acción y lo muestra en la bandeja. Una decisión se
+SuperAdmin puede cerrar un job con motivo o solicitar información a un
+responsable. `REINTENTAR_JOB` se ofrece para el job de notificaciones cuando
+está habilitado. Registra un único intento por alerta y encola como máximo
+uno activo por job. El próximo ciclo consume la solicitud bajo el bloqueo del
+job, guarda el resultado real y solo cierra la alerta si completa la ejecución.
+Un intento interrumpido queda como incierto para revisión humana. Una decisión se
 guarda en `excepciones_resoluciones` con clave de idempotencia y huella única
-por caso; repetir la clave devuelve la decisión original y no ejecuta dos veces
+por caso; repetir la clave devuelve la decisión registrada y no ejecuta dos veces
 la acción. La evidencia conserva componente, operación, ciclo, referencia de
 correlación y error saneado del proveedor, sin correos ni secretos.

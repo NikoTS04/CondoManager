@@ -46,21 +46,26 @@ Las operaciones siguen **HTTP REST con JSON**, con multipart para vouchers y res
 ### Bandeja de excepciones (CON-66 / CON-86)
 
 `GET /excepciones` devuelve una página con `items` y `hay_mas`. `ADMIN_JUNTA`
-ve los fallos de correo de su condominio; `SUPERADMIN` también ve los
+ve los fallos de correo de su condominio y `SUPERADMIN` ve los
 `JOB_FALLO_DEFINITIVO`, sin condominio, con componente, operación y referencia
 de diagnóstico. `GET /excepciones/{id}` añade `evidencia` (origen, ciclo,
 referencia de correlación y estado real del proceso), `historial`,
 `acciones_permitidas` y `requiere_revision_correo`.
 
 `POST /excepciones/{id}/resoluciones` exige `Idempotency-Key` UUID, `accion`,
-`motivo` y `nuevo_destinatario` cuando la acción es `REENVIAR_CORREO`. Las
-acciones son `REENVIAR_CORREO`, `REINTENTAR_JOB` (solo para procesos
-idempotentes registrados en `JOBES_REINTENTABLES`) y `CERRAR_CON_MOTIVO`.
-Devuelve la decisión persistida, con actor, motivo, clave, huella y el efecto
+`motivo` y `nuevo_destinatario` cuando la acción es `REENVIAR_CORREO`. Junta
+puede reenviar a un contacto autorizado o cerrar con motivo. El endpoint
+devuelve la decisión persistida, con actor, motivo y el efecto
 **real** sobre el proceso de origen. El detalle muestra después su resultado
-vigente. Una repetición con la misma clave devuelve la decisión original sin
+vigente. Una repetición con la misma clave devuelve la decisión registrada sin
 repetir la acción; con otra huella responde 409. La API devuelve 404 para
 casos fuera de alcance y 409 si la acción ya no procede.
+
+Para `SUPERADMIN`, los mismos endpoints consultan los jobs globales.
+`REINTENTAR_JOB` registra la referencia del intento que tomará el job de
+notificaciones en su próximo ciclo. `SOLICITAR_INFORMACION` exige un
+`responsable` y deja el caso `PENDIENTE_INFORMACION`. El detalle conserva
+la solicitud y el estado operativo de cada decisión.
 
 ### Registro de incidencias (CON-53)
 

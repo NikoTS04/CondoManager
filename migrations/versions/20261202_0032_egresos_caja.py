@@ -360,7 +360,7 @@ def upgrade():
             ondelete="RESTRICT",
         ),
         sa.UniqueConstraint("pago_id", name="uq_reverso_pago_unico"),
-        sa.UniqueConstraint("condominio_id", "id", name="uq_reverso_pago_contexto"),
+        sa.UniqueConstraint("condominio_id", "id", name="uq_reverso_pago_contexto_id"),
         sa.UniqueConstraint("condominio_id", "idempotency_key", name="uq_reverso_pago_idempotency"),
         sa.CheckConstraint("monto > 0", name="ck_reverso_pago_monto"),
         sa.CheckConstraint("request_hash ~ '^[a-f0-9]{64}$'", name="ck_reverso_pago_request_hash"),

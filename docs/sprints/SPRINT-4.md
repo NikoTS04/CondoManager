@@ -57,7 +57,7 @@ Al confirmar la asignación, el sistema **encola automáticamente** un correo al
 
 Para la primera entrega, la bandeja de CON-66/86 reúne un fallo definitivo de correo y uno de job. Junta consulta causa, operación y evidencia autorizada. Puede corregir el contacto y pedir un nuevo envío si el fallo anterior está confirmado, o cerrar el caso con motivo si ya avisó por otro canal. Una aceptación incierta conserva el flujo de revisión existente. Para un job, ofrecer reintento solo cuando el proceso de origen permita repetirlo con seguridad. Cada decisión guarda actor, motivo y resultado real de la acción. [Backlog transversal](../producto/Backlog-Jira-Historias-Usuario-CondoManager.md#trv-04--gestionar-una-bandeja-de-excepciones) · [Política de correo](../../specs/02-domains/03-notificaciones/delivery-policy.md)
 
-**Primer recorrido de CON-66.** En **Junta → Excepciones** se consultan los fallos de correo operativo, el resultado del aviso y su historial. Junta puede reenviar a un contacto autorizado o cerrar con motivo. El recorrido de jobs se integra con CON-86. [Escenarios de aceptación](../../specs/04-acceptance-criteria/excepciones.feature.md)
+**CON-66.** En **Junta → Excepciones**, Junta resuelve los fallos de correo de su condominio y SuperAdmin atiende los jobs globales. SuperAdmin puede pedir información a un responsable, cerrar con motivo o poner en cola un reintento del job de notificaciones para el siguiente ciclo. [Escenarios de aceptación](../../specs/04-acceptance-criteria/excepciones.feature.md)
 
 ## Reparto propuesto
 
