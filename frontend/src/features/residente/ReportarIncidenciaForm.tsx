@@ -72,7 +72,6 @@ export function ReportarIncidenciaForm({ departamentoId }: { departamentoId: str
         {resultado ? (
           <div className="space-y-4">
             <Alert tone="success" title="Incidencia registrada">
-              <span className="block break-all">Código {resultado.id}</span>
               <Link className="font-medium underline underline-offset-2" href={`/incidencias/${resultado.id}`}>
                 Ver reporte
               </Link>

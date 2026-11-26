@@ -27,6 +27,7 @@ from src.modules.cuotas.estado_cuenta import router as estado_cuenta_router
 from src.modules.cuotas.presupuestos.router import router as presupuestos_router
 from src.modules.cuotas.prorrateo_api import router as prorrateo_router
 from src.modules.cuotas.router import router as cuotas_router
+from src.modules.egresos.router import router as egresos_router
 from src.modules.excepciones.router import router as excepciones_router
 from src.modules.incidencias.router import router as incidencias_router
 from src.modules.notificaciones.eventos_mailjet import router as eventos_mailjet_router
@@ -34,6 +35,7 @@ from src.modules.notificaciones.monitoreo import router as monitoreo_router
 from src.modules.notificaciones.router import router as notificaciones_router
 from src.modules.pagos.fondos_api import router as fondos_router
 from src.modules.pagos.router import router as pagos_router
+from src.modules.proveedores.router import router as proveedores_router
 from src.modules.reservas.areas.router import router as areas_router
 from src.modules.reservas.bloqueos import router as bloqueos_router
 from src.modules.reservas.router import router as reservas_router
@@ -44,7 +46,7 @@ app = FastAPI(
     description="Sistema Automatizado de Gestión de Pagos, Morosidad y Reservas para Condominios (SDD)",
     version="0.1.0",
     responses={
-        codigo: {"model": ErrorResponse} for codigo in (400, 401, 403, 404, 409, 413, 415, 422)
+        codigo: {"model": ErrorResponse} for codigo in (400, 401, 403, 404, 409, 413, 415, 422, 503)
     },
 )
 
@@ -96,7 +98,9 @@ app.include_router(notificaciones_router, prefix="/api/v1")
 app.include_router(monitoreo_router, prefix="/api/v1")
 app.include_router(incidencias_router, prefix="/api/v1")
 app.include_router(excepciones_router, prefix="/api/v1")
+app.include_router(proveedores_router, prefix="/api/v1")
 app.include_router(eventos_mailjet_router, prefix="/api/v1")
+app.include_router(egresos_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["Sistema"])

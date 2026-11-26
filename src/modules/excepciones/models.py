@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Index, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,6 +34,18 @@ class ResolucionExcepcion(Base):
     __tablename__ = "excepciones_resoluciones"
     __table_args__ = (
         UniqueConstraint("excepcion_id", "clave_idempotencia", name="uq_resolucion_excepcion"),
+        Index(
+            "uq_excepcion_job_reintento",
+            "excepcion_id",
+            unique=True,
+            postgresql_where=text("accion = 'REINTENTAR_JOB' AND nombre_job IS NOT NULL"),
+        ),
+        Index(
+            "uq_excepcion_job_activo",
+            "nombre_job",
+            unique=True,
+            postgresql_where=text("resultado_job IN ('EN_COLA', 'EN_CURSO')"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -48,6 +60,10 @@ class ResolucionExcepcion(Base):
     huella: Mapped[str] = mapped_column(Text)
     estado: Mapped[str] = mapped_column(Text)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    nombre_job: Mapped[str | None] = mapped_column(Text)
+    resultado_job: Mapped[str | None] = mapped_column(Text)
+    inicio_job: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fin_job: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class EvidenciaExcepcion(Base):

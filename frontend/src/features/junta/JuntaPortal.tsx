@@ -25,6 +25,7 @@ import { ResumenSection } from "@/features/junta/ResumenSection";
 import ConfiguracionCondominio from "@/features/junta/ConfiguracionCondominio";
 import { SaludAlertasSection } from "@/features/junta/SaludAlertasSection";
 import { UsuariosSection } from "@/features/junta/UsuariosSection";
+import { ProveedoresSection } from "@/features/junta/ProveedoresSection";
 import { AreasSection } from "@/features/junta/AreasSection";
 import {
   conciliarComprobante,
@@ -78,8 +79,9 @@ export default function JuntaPortal() {
 
   useEffect(() => {
     const seccion = window.location.hash.slice(1);
-    if (esJunta && (seccion === "incidencias" || seccion === "excepciones")) setSection(seccion);
-  }, [esJunta]);
+    if (seccion === "incidencias" && esJunta) setSection(seccion);
+    if (seccion === "excepciones" && (esJunta || isSuperAdmin)) setSection(seccion);
+  }, [esJunta, isSuperAdmin]);
 
   function navegar(destino: JuntaSection) {
     setSection(destino);
@@ -283,7 +285,10 @@ export default function JuntaPortal() {
   }
 
   const seccionTitulo = navActual?.label ?? "Resumen";
-  const cargaIndependiente = section === "incidencias" || section === "excepciones";
+  const cargaIndependiente =
+    section === "incidencias" ||
+    section === "excepciones" ||
+    section === "proveedores";
   const comprobanteConfirmado = confirmacion?.kind === "comprobante"
     ? comprobantes.find((comprobante) => comprobante.id === confirmacion.id)
     : undefined;
@@ -316,7 +321,7 @@ export default function JuntaPortal() {
         <div id="main-content" className="min-w-0 space-y-6">
           <PageHeader
             title={seccionTitulo}
-            description={condominioActivoId ? isSuperAdmin ? <span className="break-all text-xs">Condominio · {condominioActivoId}</span> : undefined : "Selecciona un condominio en Configuración para consultar sus datos."}
+            description={section === "excepciones" && isSuperAdmin ? "Tareas automáticas globales." : condominioActivoId ? isSuperAdmin ? <span className="break-all text-xs">Condominio · {condominioActivoId}</span> : undefined : "Selecciona un condominio en Configuración para consultar sus datos."}
             actions={!cargaIndependiente && (
               <Button variant="secondary" loading={loading} onClick={() => void loadData()} icon={<RefreshCw className="h-4 w-4" aria-hidden />}>Actualizar</Button>
             )}
@@ -441,14 +446,18 @@ export default function JuntaPortal() {
               loading={loading}
             />
           )}
+          {section === "proveedores" && condominioActivoId && (
+            <ProveedoresSection
+              key={condominioActivoId}
+              condominioId={condominioActivoId}
+              esSuperAdmin={isSuperAdmin}
+            />
+          )}
           {section === "incidencias" && esJunta && condominioActivoId && (
             <IncidenciasSection key={condominioActivoId} />
           )}
-          {section === "excepciones" && (esJunta || isSuperAdmin) && (
-            <ExcepcionesSection
-              key={esJunta ? condominioActivoId ?? "junta" : "global"}
-              onRevisarCorreo={() => navegar("comunicados")}
-            />
+          {section === "excepciones" && (isSuperAdmin || (esJunta && condominioActivoId)) && (
+            <ExcepcionesSection key={isSuperAdmin ? "global" : condominioActivoId} onRevisarCorreo={() => navegar("comunicados")} />
           )}
           {section === "salud" && (
             <SaludAlertasSection
@@ -496,7 +505,7 @@ export default function JuntaPortal() {
         {confirmacion?.kind === "comprobante" && (
           <div className="space-y-3">
             <p>
-              Comprobante del departamento {departamentosRegistrados.find((d) => d.id === comprobanteConfirmado?.departamento_id)?.numero ?? comprobanteConfirmado?.departamento_id}: {" "}
+              Comprobante del departamento {departamentosRegistrados.find((d) => d.id === comprobanteConfirmado?.departamento_id)?.numero ?? "—"}: {" "}
               {comprobanteConfirmado
                 ? <MoneyAmount value={comprobanteConfirmado.monto} />
                 : "—"}. La decisión actualizará su estado contable.

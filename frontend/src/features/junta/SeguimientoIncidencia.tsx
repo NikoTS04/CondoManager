@@ -5,6 +5,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Input, Textarea } from "@/components/ui/Field";
+import { RepartoCosto } from "./RepartoCosto";
+import { isPositiveMoney } from "@/lib/money";
 import {
   ApiError,
   consultarHistorialIncidencia,
@@ -25,16 +27,33 @@ export function SeguimientoIncidencia({ incidencia, esJunta, onActualizada }: Pr
   const [historial, setHistorial] = useState<ActualizacionIncidencia[]>([]);
   const [error, setError] = useState("");
   const [ocupada, setOcupada] = useState(false);
+  const [hayMas, setHayMas] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
 
   useEffect(() => {
     const control = new AbortController();
     consultarHistorialIncidencia(incidencia.id, control.signal)
       .then((lista) => {
-        if (!control.signal.aborted) setHistorial(lista.items);
+        if (!control.signal.aborted) {
+          setHistorial(lista.items);
+          setHayMas(lista.hay_mas);
+        }
       })
       .catch(() => undefined);
     return () => control.abort();
   }, [incidencia.id, incidencia.version]);
+
+  async function cargarMas() {
+    setCargandoMas(true);
+    setError("");
+    try {
+      const lista = await consultarHistorialIncidencia(incidencia.id, undefined, historial.length);
+      setHistorial((previo) => [...previo, ...lista.items]);
+      setHayMas(lista.hay_mas);
+    } catch {
+      setError("No pudimos cargar los costos y avances anteriores.");
+    } finally { setCargandoMas(false); }
+  }
 
   async function guardar(evento: FormEvent<HTMLFormElement>, resolver: boolean) {
     evento.preventDefault();
@@ -79,6 +98,8 @@ export function SeguimientoIncidencia({ incidencia, esJunta, onActualizada }: Pr
                   <p className="mt-1 whitespace-pre-wrap break-words">{item.descripcion}</p>
                   {item.repuesto && <p className="mt-1 text-muted">Repuesto: {item.repuesto}</p>}
                   {item.monto && <p className="mt-1 text-muted">Monto: S/ {item.monto}</p>}
+                  {esJunta && item.monto && isPositiveMoney(item.monto) &&
+                    <RepartoCosto incidenciaId={incidencia.id} costoId={item.id} />}
                   {item.tiene_evidencia && (
                     <button
                       type="button"
@@ -97,6 +118,8 @@ export function SeguimientoIncidencia({ incidencia, esJunta, onActualizada }: Pr
             </ol>
           )}
           {error && <Alert tone="danger">{error}</Alert>}
+          {hayMas && <Button type="button" variant="secondary" loading={cargandoMas}
+            onClick={() => void cargarMas()}>Cargar avances y costos anteriores</Button>}
         </CardBody>
       </Card>
 

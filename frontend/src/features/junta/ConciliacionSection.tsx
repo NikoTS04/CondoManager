@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoneyAmount } from "@/components/domain/MoneyAmount";
+import { DestinosPago } from "@/components/domain/DestinosPago";
 import { VoucherDownloadButton } from "@/components/domain/VoucherDownloadButton";
 import { ComprobanteStatusChip } from "@/components/domain/ComprobanteStatusChip";
 import { Button } from "@/components/ui/Button";
@@ -333,11 +334,11 @@ export function ConciliacionSection({
                 {comprobantesMostrados.map((comprobante) => (
                   <tr key={comprobante.id} className="border-b border-line">
                     <th scope="row" className="p-3 text-left">
-                      {departamentos.find((d) => d.id === comprobante.departamento_id)?.numero ?? comprobante.departamento_id}
-                      <span className="mt-1 block text-xs font-normal text-muted">ID {comprobante.departamento_id}</span>
+                      {departamentos.find((d) => d.id === comprobante.departamento_id)?.numero ?? "—"}
                     </th>
                     <td className="p-3">
                       {comprobante.banco} · {comprobante.numero_operacion}
+                      <DestinosPago key={comprobante.id} comprobante={comprobante} />
                     </td>
                     <td className="p-3">{formatDate(comprobante.fecha_operacion)}</td>
                     <td className="p-3 text-right">

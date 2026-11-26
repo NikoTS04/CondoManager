@@ -8,6 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import get_db_session
 from src.core.errors import APIError
 from src.core.security import get_current_user
+from src.modules.incidencias.reparto import (
+    ConfigurarReparto,
+    PublicarReparto,
+    RepartoDTO,
+    RepartosService,
+)
 from src.modules.incidencias.schemas import (
     AsignacionDTO,
     AsignarIncidencia,
@@ -30,7 +36,67 @@ from src.modules.incidencias.service import IncidenciasService
 router = APIRouter(prefix="/incidencias", tags=["Incidencias"])
 
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+SessionReparto = Annotated[AsyncSession, Depends(get_db_session, use_cache=False)]
 UsuarioActual = Annotated[dict, Depends(get_current_user)]
+
+
+@router.post(
+    "/{incidencia_id}/costos/{actualizacion_id}/reparto/previsualizacion", response_model=RepartoDTO
+)
+async def previsualizar_reparto(
+    incidencia_id: UUID,
+    actualizacion_id: UUID,
+    solicitud: ConfigurarReparto,
+    response: Response,
+    usuario: UsuarioActual,
+    session: SessionReparto,
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return await RepartosService(session).previsualizar(
+        usuario,
+        incidencia_id,
+        actualizacion_id,
+        solicitud,
+    )
+
+
+@router.post(
+    "/{incidencia_id}/costos/{actualizacion_id}/reparto",
+    response_model=RepartoDTO,
+    status_code=201,
+    responses={200: {"model": RepartoDTO}},
+)
+async def publicar_reparto(
+    incidencia_id: UUID,
+    actualizacion_id: UUID,
+    solicitud: PublicarReparto,
+    clave: Annotated[UUID, Header(alias="Idempotency-Key")],
+    response: Response,
+    usuario: UsuarioActual,
+    session: SessionReparto,
+):
+    resultado, creado = await RepartosService(session).publicar(
+        usuario,
+        incidencia_id,
+        actualizacion_id,
+        solicitud,
+        clave,
+    )
+    response.status_code = 201 if creado else 200
+    response.headers["Cache-Control"] = "private, no-store"
+    return resultado
+
+
+@router.get("/{incidencia_id}/costos/{actualizacion_id}/reparto", response_model=RepartoDTO)
+async def consultar_reparto(
+    incidencia_id: UUID,
+    actualizacion_id: UUID,
+    response: Response,
+    usuario: UsuarioActual,
+    session: SessionReparto,
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return await RepartosService(session).consultar(usuario, incidencia_id, actualizacion_id)
 
 
 @router.post(

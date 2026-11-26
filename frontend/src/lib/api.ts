@@ -143,6 +143,7 @@ export interface Reserva {
 export interface ComprobantePago {
   id: string;
   departamento_id: string;
+  cargos_incidencia_ids?: string[];
   banco: string;
   numero_operacion: string;
   fecha_operacion: string;
@@ -714,9 +715,9 @@ export function resolverIncidencia(id: string, datos: FormData): Promise<Inciden
 }
 
 export function consultarHistorialIncidencia(
-  id: string, signal?: AbortSignal,
+  id: string, signal?: AbortSignal, offset = 0,
 ): Promise<{ items: ActualizacionIncidencia[]; hay_mas: boolean }> {
-  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/historial`, { signal });
+  return recursoRequest(`/incidencias/${encodeURIComponent(id)}/historial?offset=${offset}`, { signal });
 }
 
 export function confirmarIncidencia(
@@ -785,8 +786,8 @@ export class ApiError extends Error {
   }
 }
 
-export type AccionExcepcion = "REENVIAR_CORREO" | "REINTENTAR_JOB" | "CERRAR_CON_MOTIVO";
-type EstadoExcepcion = "ABIERTA" | "EN_PROCESO" | "RESUELTA" | "FALLIDA";
+export type AccionExcepcion = "REENVIAR_CORREO" | "CERRAR_CON_MOTIVO" | "REINTENTAR_JOB" | "SOLICITAR_INFORMACION";
+type EstadoExcepcion = "ABIERTA" | "EN_PROCESO" | "PENDIENTE_INFORMACION" | "RESUELTA" | "FALLIDA";
 
 export interface Excepcion {
   id: string;
@@ -805,11 +806,25 @@ interface ResolucionExcepcion {
   actor_id: string;
   fecha: string;
   estado: EstadoExcepcion;
-  efecto: { operacion_id?: string; ciclo?: number; estado_operacion?: string; nombre?: string; estado_proceso?: string; reintentado?: boolean };
+  efecto: {
+    operacion_id?: string;
+    estado_operacion?: string;
+    ciclo?: number;
+    intento_id?: string | null;
+    responsable?: string | null;
+    estado_proceso?: string;
+  };
 }
 
 export interface DetalleExcepcion extends Excepcion {
-  evidencia: { tipo_evento: string; ciclo_fallido: number; ciclo_actual: number; estado_operacion: string; origen: "CORREO" | "JOB"; operacion_id: string; referencia_correlacion: string | null; detalle: Record<string, unknown> };
+  evidencia: {
+    tipo_evento: string;
+    ciclo_fallido: number;
+    ciclo_actual: number;
+    estado_operacion: string;
+    referencia_correlacion: string | null;
+    intento_id: string | null;
+  };
   historial: ResolucionExcepcion[];
   acciones_permitidas: AccionExcepcion[];
   requiere_revision_correo: boolean;
@@ -824,6 +839,7 @@ export interface SolicitudResolucionExcepcion {
   accion: AccionExcepcion;
   motivo: string;
   nuevo_destinatario?: string;
+  responsable?: string;
 }
 
 export function listarExcepciones(offset: number, limit: number, signal?: AbortSignal): Promise<PaginaExcepciones> {
@@ -1160,10 +1176,14 @@ export async function reportarPago(payload: {
   fecha_operacion: string;
   monto: string;
   archivo_voucher: File;
+  cargos_incidencia_ids?: string[];
 }): Promise<{ ok: boolean; error?: string; errorCode?: string; duplicado?: boolean }> {
   try {
     const form = new FormData();
-    for (const [campo, valor] of Object.entries(payload)) form.append(campo, valor);
+    for (const [campo, valor] of Object.entries(payload)) {
+      if (Array.isArray(valor)) valor.forEach((id) => form.append(campo, id));
+      else form.append(campo, valor);
+    }
     const headers = getAuthHeaders();
     delete headers["Content-Type"];
     const response = await fetchProtegido("/pagos/reportar", {
@@ -1178,6 +1198,67 @@ export async function reportarPago(payload: {
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo reportar el pago." };
   }
+}
+
+export interface ConfiguracionReparto {
+  alcance: "TODOS" | "SELECCIONADOS";
+  metodo: "EQUITATIVA" | "POR_ALICUOTA";
+  departamento_ids: string[];
+  concepto: string;
+  motivo: string;
+}
+
+export interface RepartoIncidencia {
+  id: string | null;
+  incidencia_id: string;
+  actualizacion_id: string;
+  concepto: string;
+  motivo: string;
+  alcance: ConfiguracionReparto["alcance"];
+  metodo: ConfiguracionReparto["metodo"];
+  monto: string;
+  moneda: "PEN" | "USD";
+  huella: string;
+  participantes: {
+    departamento_id: string; numero: string; edificio: string; coeficiente: string; monto: string;
+  }[];
+}
+
+export interface CargoIncidencia {
+  id: string;
+  incidencia_id: string;
+  actualizacion_id: string;
+  concepto: string;
+  moneda: "PEN" | "USD";
+  monto: string;
+  pagado: string;
+  pendiente: string;
+  estado: "PENDIENTE" | "PAGADO";
+}
+
+function rutaReparto(iid: string, aid: string) {
+  return `/incidencias/${encodeURIComponent(iid)}/costos/${encodeURIComponent(aid)}/reparto`;
+}
+
+export function consultarReparto(iid: string, aid: string): Promise<RepartoIncidencia> {
+  return recursoRequest(rutaReparto(iid, aid));
+}
+
+export function previsualizarReparto(iid: string, aid: string, datos: ConfiguracionReparto): Promise<RepartoIncidencia> {
+  return recursoRequest(`${rutaReparto(iid, aid)}/previsualizacion`, {
+    method: "POST", body: JSON.stringify(datos),
+  });
+}
+
+export function publicarReparto(iid: string, aid: string, datos: ConfiguracionReparto, huella: string, clave: string): Promise<RepartoIncidencia> {
+  return recursoRequest(rutaReparto(iid, aid), {
+    method: "POST", body: JSON.stringify({ ...datos, huella }),
+    headers: { "Idempotency-Key": clave },
+  });
+}
+
+export function listarCargosIncidencias(departamentoId: string, signal?: AbortSignal): Promise<CargoIncidencia[]> {
+  return recursoRequest(`/pagos/cargos-incidencias?departamento_id=${encodeURIComponent(departamentoId)}`, { signal });
 }
 
 export async function subsanarVoucher(comprobanteId: string, archivo: File): Promise<void> {
@@ -1251,7 +1332,7 @@ export interface MovimientoCuenta {
   fecha: string;
   registrado_en: string;
   fecha_operacion: string | null;
-  tipo: "EMISION_CUOTA" | "DEVENGO_MORA" | "AJUSTE_MORA" | "PAGO_APROBADO" | "APLICACION_CREDITO" | "DISTRIBUCION_PAGO";
+  tipo: "EMISION_CUOTA" | "DEVENGO_MORA" | "AJUSTE_MORA" | "PAGO_APROBADO" | "APLICACION_CREDITO" | "DISTRIBUCION_PAGO" | "CARGO_INCIDENCIA";
   descripcion: string;
   importe: string;
   cargo: string;
@@ -1514,6 +1595,244 @@ export function resolverCorreoIncierto(id: string, datos: {
 }): Promise<{ estado: string; ciclo: number }> {
   return recursoRequest(`/notificaciones/${encodeURIComponent(id)}/resolver-incierto`,
     { method: "POST", body: JSON.stringify(datos) });
+}
+
+// ==============================================================================
+// PROVEEDORES Y CONTRATOS (CON-48, CON-49)
+// ==============================================================================
+
+export interface Proveedor {
+  id: string;
+  condominio_id: string;
+  ruc: string;
+  razon_social: string;
+  nombre_comercial: string | null;
+  rubro: string;
+  contacto_nombre: string;
+  contacto_telefono: string;
+  contacto_email: string;
+  direccion: string | null;
+  activo: boolean;
+  notas: string | null;
+  version: number;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface ProveedorDetalle extends Proveedor {
+  total_contratos: number;
+  contratos_vigentes: number;
+  egresos_vinculados: number;
+  incidencias_vinculadas: number;
+}
+
+export interface CrearProveedorPayload {
+  ruc: string;
+  razon_social: string;
+  nombre_comercial?: string | null;
+  rubro: string;
+  contacto_nombre: string;
+  contacto_telefono: string;
+  contacto_email: string;
+  direccion?: string | null;
+  notas?: string | null;
+}
+
+export interface ActualizarProveedorPayload {
+  razon_social?: string;
+  nombre_comercial?: string | null;
+  rubro?: string;
+  contacto_nombre?: string;
+  contacto_telefono?: string;
+  contacto_email?: string;
+  direccion?: string | null;
+  activo?: boolean;
+  notas?: string | null;
+}
+
+export interface DocumentoVersion {
+  id: string;
+  contrato_id: string;
+  version: number;
+  archivo_nombre: string;
+  archivo_mime: string;
+  archivo_tamano_bytes: number;
+  hash_sha256: string;
+  motivo_reemplazo: string | null;
+  subido_por: string;
+  subido_en: string;
+}
+
+export interface Contrato {
+  id: string;
+  condominio_id: string;
+  proveedor_id: string;
+  numero_contrato: string;
+  tipo_documento: "CONTRATO_SERVICIO" | "POLIZA_SEGURO" | "ADDENDA" | "ACTA_CONFORMIDAD";
+  descripcion: string;
+  monto_mensual: string | null;
+  moneda: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  contacto_emergencia: string | null;
+  contacto_emergencia_telefono: string | null;
+  estado: "VIGENTE" | "POR_VENCER" | "VENCIDO" | "RENOVADO" | "CANCELADO";
+  version_actual: number;
+  dias_restantes: number;
+  tiene_documento: boolean;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface ContratoDetalle extends Contrato {
+  proveedor_ruc: string;
+  proveedor_razon_social: string;
+  versiones: DocumentoVersion[];
+}
+
+export interface CrearContratoPayload {
+  numero_contrato: string;
+  tipo_documento?: "CONTRATO_SERVICIO" | "POLIZA_SEGURO" | "ADDENDA" | "ACTA_CONFORMIDAD";
+  descripcion: string;
+  monto_mensual?: string | null;
+  moneda?: "PEN" | "USD";
+  fecha_inicio: string;
+  fecha_fin: string;
+  contacto_emergencia?: string | null;
+  contacto_emergencia_telefono?: string | null;
+}
+
+export function listarProveedores(
+  condominioId: string,
+  filtros?: { activo?: boolean; rubro?: string; buscar?: string }
+): Promise<Proveedor[]> {
+  const params = new URLSearchParams();
+  if (filtros?.activo !== undefined) params.append("activo", String(filtros.activo));
+  if (filtros?.rubro) params.append("rubro", filtros.rubro);
+  if (filtros?.buscar) params.append("buscar", filtros.buscar);
+  const qs = params.toString();
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/proveedores${qs ? `?${qs}` : ""}`);
+}
+
+export function crearProveedor(
+  condominioId: string,
+  payload: CrearProveedorPayload
+): Promise<Proveedor> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/proveedores`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function obtenerProveedor(
+  condominioId: string,
+  proveedorId: string
+): Promise<ProveedorDetalle> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/proveedores/${encodeURIComponent(proveedorId)}`);
+}
+
+export function actualizarProveedor(
+  condominioId: string,
+  proveedorId: string,
+  payload: ActualizarProveedorPayload
+): Promise<Proveedor> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/proveedores/${encodeURIComponent(proveedorId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listarContratos(
+  condominioId: string,
+  filtros?: { proveedorId?: string; estado?: string }
+): Promise<Contrato[]> {
+  const params = new URLSearchParams();
+  if (filtros?.proveedorId) params.append("proveedor_id", filtros.proveedorId);
+  if (filtros?.estado) params.append("estado", filtros.estado);
+  const qs = params.toString();
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/contratos${qs ? `?${qs}` : ""}`);
+}
+
+export function crearContrato(
+  condominioId: string,
+  proveedorId: string,
+  payload: CrearContratoPayload
+): Promise<Contrato> {
+  return recursoRequest(
+    `/condominios/${encodeURIComponent(condominioId)}/proveedores/${encodeURIComponent(proveedorId)}/contratos`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function obtenerContrato(
+  condominioId: string,
+  contratoId: string
+): Promise<ContratoDetalle> {
+  return recursoRequest(`/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}`);
+}
+
+export interface ActualizarContratoPayload {
+  descripcion?: string;
+  monto_mensual?: string | null;
+  fecha_inicio?: string;
+  fecha_fin?: string;
+  contacto_emergencia?: string | null;
+  contacto_emergencia_telefono?: string | null;
+  estado?: "VIGENTE" | "POR_VENCER" | "VENCIDO" | "RENOVADO" | "CANCELADO";
+}
+
+export function actualizarContrato(
+  condominioId: string,
+  contratoId: string,
+  payload: ActualizarContratoPayload
+): Promise<Contrato> {
+  return recursoRequest(
+    `/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function subirDocumentoContrato(
+  condominioId: string,
+  contratoId: string,
+  archivo: File,
+  motivoReemplazo?: string
+): Promise<DocumentoVersion> {
+  const formData = new FormData();
+  formData.append("archivo", archivo);
+  if (motivoReemplazo) formData.append("motivo_reemplazo", motivoReemplazo);
+
+  const headers = getAuthHeaders();
+  delete headers["Content-Type"]; // Dejar que el navegador genere el boundary multipart
+
+  const res = await fetchProtegido(
+    `/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}/versiones`,
+    {
+      method: "POST",
+      headers,
+      body: formData,
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) {
+    const payload = data.detail && typeof data.detail === "object" ? data.detail : data;
+    throw new ApiError(obtenerMensajeError(payload, "No se pudo subir el documento."), res.status, obtenerCodigoError(payload));
+  }
+  return data;
+}
+
+export function urlDescargaDocumentoContrato(
+  condominioId: string,
+  contratoId: string,
+  version: number
+): string {
+  return `${API_BASE}/condominios/${encodeURIComponent(condominioId)}/contratos/${encodeURIComponent(contratoId)}/versiones/${version}/descargar`;
 }
 
 // CON-68: vista de salud y alertas visibles (solo lectura).

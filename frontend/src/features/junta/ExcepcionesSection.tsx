@@ -18,13 +18,15 @@ const TAMANO_PAGINA = 25;
 const ESTADOS: Record<Excepcion["estado"], { etiqueta: string; tono: Tone }> = {
   ABIERTA: { etiqueta: "Abierta", tono: "warning" },
   EN_PROCESO: { etiqueta: "En proceso", tono: "info" },
+  PENDIENTE_INFORMACION: { etiqueta: "Pendiente de información", tono: "warning" },
   RESUELTA: { etiqueta: "Resuelta", tono: "success" },
-  FALLIDA: { etiqueta: "Reenvío fallido", tono: "danger" },
+  FALLIDA: { etiqueta: "Intento sin éxito confirmado", tono: "danger" },
 };
 const ACCIONES: Record<AccionExcepcion, string> = {
   REENVIAR_CORREO: "Reenviar correo",
-  REINTENTAR_JOB: "Reintentar job",
   CERRAR_CON_MOTIVO: "Cerrar caso",
+  REINTENTAR_JOB: "Reintentar tarea",
+  SOLICITAR_INFORMACION: "Solicitar información",
 };
 const RESULTADOS: Record<string, string> = {
   EN_COLA: "En cola",
@@ -33,6 +35,17 @@ const RESULTADOS: Record<string, string> = {
   ENTREGADO: "Entregado",
   FALLIDO_PERMANENTE: "Fallo definitivo",
   OMITIDO: "Omitido",
+  EN_CURSO: "En curso",
+  COMPLETADO: "Completado",
+  FALLIDO: "Fallido",
+  INCIERTO: "Resultado incierto",
+  PENDIENTE_INFORMACION: "Información solicitada",
+};
+const CONFIRMACIONES: Record<AccionExcepcion, { boton: string; mensaje: string }> = {
+  REENVIAR_CORREO: { boton: "Poner en cola", mensaje: "Reenvío en cola. Actualiza para consultar el resultado." },
+  CERRAR_CON_MOTIVO: { boton: "Confirmar cierre", mensaje: "Caso cerrado." },
+  REINTENTAR_JOB: { boton: "Poner en cola", mensaje: "Reintento en cola para el próximo ciclo de notificaciones." },
+  SOLICITAR_INFORMACION: { boton: "Guardar solicitud", mensaje: "Solicitud registrada. El caso queda pendiente de información." },
 };
 
 function EstadoCaso({ estado }: { estado: Excepcion["estado"] }) {
@@ -148,30 +161,24 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
             <p className="text-sm">{caso.causa}</p>
             {confirmacion && <Alert tone="success">{confirmacion}</Alert>}
             <dl className="grid gap-3 rounded-lg bg-canvas p-4 text-sm sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <dt className="text-muted">Operación de origen</dt>
-                <dd className="break-all font-medium">{caso.operacion_id}</dd>
-              </div>
               <div>
                 <dt className="text-muted">Ciclo del fallo</dt>
                 <dd>{caso.evidencia.ciclo_fallido}</dd>
               </div>
               <div>
-                <dt className="text-muted">{caso.origen === "JOB" ? "Estado del job" : "Resultado del envío"}</dt>
+                <dt className="text-muted">Resultado de la operación</dt>
                 <dd>{RESULTADOS[caso.evidencia.estado_operacion] ?? caso.evidencia.estado_operacion}</dd>
               </div>
-              {caso.evidencia.referencia_correlacion && (
+              {(caso.origen === "JOB" || caso.evidencia.referencia_correlacion) && (
                 <div className="sm:col-span-2">
                   <dt className="text-muted">Referencia de diagnóstico</dt>
-                  <dd className="break-all font-medium">{caso.evidencia.referencia_correlacion}</dd>
+                  <dd className="break-all">{caso.evidencia.referencia_correlacion ?? "Sin referencia"}</dd>
                 </div>
               )}
-              {caso.historial[0] && (
+              {caso.evidencia.intento_id && (
                 <div className="sm:col-span-2">
-                  <dt className="text-muted">Resultado real de la última decisión</dt>
-                  <dd className="break-all font-medium">
-                    {caso.historial[0].efecto.estado_operacion ?? caso.historial[0].efecto.estado_proceso ?? "Registrado"}
-                  </dd>
+                  <dt className="text-muted">Nuevo intento</dt>
+                  <dd>Reintento registrado</dd>
                 </div>
               )}
             </dl>
@@ -194,13 +201,21 @@ function DetalleCaso({ id, revision, onActualizada, onRevisarCorreo }: {
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Historial de decisiones</h3>
                 <ul className="space-y-3">
-                  {caso.historial.map((registro) => (
-                    <li key={registro.id} className="border-l-2 border-line pl-3 text-sm">
-                      <p className="font-medium">{ACCIONES[registro.accion]} · {formatDateTime(registro.fecha)}</p>
-                      <p className="whitespace-pre-wrap break-words">{registro.motivo}</p>
-                      <p className="break-all text-xs text-muted">Actor {registro.actor_id}</p>
-                    </li>
-                  ))}
+                  {caso.historial.map((registro) => {
+                    const resultado = registro.efecto.estado_operacion ?? registro.efecto.estado_proceso;
+                    return (
+                      <li key={registro.id} className="border-l-2 border-line pl-3 text-sm">
+                        <p className="font-medium">{ACCIONES[registro.accion]} · {formatDateTime(registro.fecha)}</p>
+                        <p className="whitespace-pre-wrap break-words">{registro.motivo}</p>
+                        {resultado && (
+                          <p className="text-xs text-muted">Resultado · {RESULTADOS[resultado] ?? resultado}</p>
+                        )}
+                        {registro.efecto.responsable && (
+                          <p className="break-words text-xs text-muted">Responsable {registro.efecto.responsable}</p>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -215,18 +230,28 @@ function DecidirCaso({ caso, onGuardada }: { caso: DetalleExcepcion; onGuardada:
   const [accion, setAccion] = useState<AccionExcepcion>();
   const [motivo, setMotivo] = useState("");
   const [contacto, setContacto] = useState("");
+  const [responsable, setResponsable] = useState("");
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const bloqueado = useRef(false);
   const clave = useRef<{ solicitud: string; id: string }>();
   const email = useRef<HTMLInputElement>(null);
   const reenvio = accion === "REENVIAR_CORREO";
+  const pideInformacion = accion === "SOLICITAR_INFORMACION";
 
   async function confirmar() {
     if (!accion || bloqueado.current) return;
     if (!motivo.trim()) { setError("Ingresa el motivo de la decisión."); return; }
     if (reenvio && !email.current?.reportValidity()) return;
-    const datos = { accion, motivo: motivo.trim(), ...(reenvio && { nuevo_destinatario: contacto.trim() }) };
+    if (pideInformacion && !responsable.trim()) {
+      setError("Indica quién debe responder.");
+      return;
+    }
+    const datos = {
+      accion, motivo: motivo.trim(),
+      ...(reenvio && { nuevo_destinatario: contacto.trim() }),
+      ...(pideInformacion && { responsable: responsable.trim() }),
+    };
     const solicitud = JSON.stringify(datos);
     if (clave.current?.solicitud !== solicitud) clave.current = { solicitud, id: crypto.randomUUID() };
     bloqueado.current = true;
@@ -235,13 +260,7 @@ function DecidirCaso({ caso, onGuardada }: { caso: DetalleExcepcion; onGuardada:
     try {
       await resolverExcepcion(caso.id, datos, clave.current.id);
       setAccion(undefined);
-      onGuardada(
-        reenvio
-          ? "Reenvío en cola. Actualiza para consultar el resultado."
-          : accion === "REINTENTAR_JOB"
-            ? "Job marcado para reintento. Actualiza para ver el resultado."
-            : "Caso cerrado.",
-      );
+      onGuardada(CONFIRMACIONES[accion].mensaje);
     } catch (causa) {
       setError(causa instanceof ApiError ? causa.message : "No pudimos registrar la decisión. Inténtalo de nuevo.");
     } finally {
@@ -265,8 +284,8 @@ function DecidirCaso({ caso, onGuardada }: { caso: DetalleExcepcion; onGuardada:
       <ConfirmDialog
         open={!!accion}
         title={accion ? ACCIONES[accion] : "Resolver excepción"}
-        tone={reenvio ? "primary" : "danger"}
-        confirmLabel={reenvio ? "Poner en cola" : "Confirmar cierre"}
+        tone={accion === "CERRAR_CON_MOTIVO" ? "danger" : "primary"}
+        confirmLabel={accion ? CONFIRMACIONES[accion].boton : "Confirmar"}
         loading={guardando}
         onCancel={() => { if (!guardando) setAccion(undefined); }}
         onConfirm={() => void confirmar()}
@@ -277,7 +296,15 @@ function DecidirCaso({ caso, onGuardada }: { caso: DetalleExcepcion; onGuardada:
             <Input ref={email} type="email" value={contacto} maxLength={320} onChange={(event) => setContacto(event.target.value)} />
           </Field>
         )}
-        <Field label="Motivo" required>
+        {pideInformacion && (
+          <Field label="Responsable de responder" required>
+            <Input value={responsable} maxLength={120} onChange={(event) => setResponsable(event.target.value)} />
+          </Field>
+        )}
+        {accion === "REINTENTAR_JOB" && (
+          <p className="text-muted">El próximo ciclo de notificaciones tomará este reintento.</p>
+        )}
+        <Field label={pideInformacion ? "Información que falta" : "Motivo"} required>
           <Textarea value={motivo} onChange={(event) => setMotivo(event.target.value)} maxLength={500} />
         </Field>
       </ConfirmDialog>

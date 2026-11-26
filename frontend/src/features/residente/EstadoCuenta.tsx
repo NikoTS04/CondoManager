@@ -103,7 +103,7 @@ export function EstadoCuenta({ departamentoId }: { departamentoId: string }) {
                         <td className="whitespace-nowrap px-4 py-3 align-top">{formatDate(m.fecha)}{m.fecha_operacion && <span className="mt-1 block text-xs text-muted">{m.tipo === "PAGO_APROBADO" ? "Operación" : "Devengo"}: {formatDate(m.fecha_operacion)}</span>}</td>
                         <td className="px-4 py-3"><p className="font-medium">{m.descripcion}</p>
                           {m.periodo_cuota && <p className="text-xs text-muted">Periodo de cuota: {m.periodo_cuota}</p>}
-                          {m.comprobante_id && <p className="text-xs text-muted" title={m.comprobante_id}>Pago {m.comprobante_id.slice(0, 8)}</p>}
+                          
                           {(m.tipo === "DISTRIBUCION_PAGO" || m.tipo === "APLICACION_CREDITO") && <p className="mt-1 text-xs text-muted">Detalle: <MoneyAmount value={m.importe} moneda={data.moneda} />. No suma otro cargo o abono.</p>}
                         </td>
                         <td className="px-4 py-3 text-right align-top"><MoneyAmount value={m.cargo} moneda={data.moneda} /></td>

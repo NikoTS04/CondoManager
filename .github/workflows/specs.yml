@@ -59,6 +59,12 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U condo_user -d condomanager"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -72,7 +78,7 @@ jobs:
           uv run --extra dev python -m scripts.seed_areas_demo
       - name: Probar contrato generado contra FastAPI en modo ASGI
         # No sustituye validación de respuestas ni flujos autenticados completos.
-        # El login consulta PostgreSQL; las rutas públicas siguen sin Redis.
+        # Login y readiness consultan los servicios efímeros del check.
         run: uv run --extra dev --with schemathesis==4.22.1 python -m pytest -q scripts/ci/verify_api_contract.py
       - name: Verificar respuestas y eventos contra CON-72
         env:
